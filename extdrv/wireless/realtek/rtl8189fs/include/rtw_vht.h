@@ -103,10 +103,12 @@ extern const u16 _vht_max_mpdu_len[];
 #define VHT_SUP_CH_WIDTH_SET_MAX 3
 extern const u8 _vht_sup_ch_width_set_to_bw_cap[];
 #define vht_sup_ch_width_set_to_bw_cap(set) (((set) >= VHT_SUP_CH_WIDTH_SET_MAX) ? _vht_sup_ch_width_set_to_bw_cap[VHT_SUP_CH_WIDTH_SET_MAX] : _vht_sup_ch_width_set_to_bw_cap[(set)])
+#define VHT_MAX_AMPDU_LEN(f) ((1 << (13 + f)) - 1)
+
+#ifdef CONFIG_RTW_DEBUG
 extern const char *const _vht_sup_ch_width_set_str[];
 #define vht_sup_ch_width_set_str(set) (((set) >= VHT_SUP_CH_WIDTH_SET_MAX) ? _vht_sup_ch_width_set_str[VHT_SUP_CH_WIDTH_SET_MAX] : _vht_sup_ch_width_set_str[(set)])
 
-#define VHT_MAX_AMPDU_LEN(f) ((1 << (13 + f)) - 1)
 void dump_vht_cap_ie(void *sel, const u8 *ie, u32 ie_len);
 
 #define VHT_OP_CH_WIDTH_MAX 4
@@ -114,6 +116,12 @@ extern const char *const _vht_op_ch_width_str[];
 #define vht_op_ch_width_str(ch_width) (((ch_width) >= VHT_OP_CH_WIDTH_MAX) ? _vht_op_ch_width_str[VHT_OP_CH_WIDTH_MAX] : _vht_op_ch_width_str[(ch_width)])
 
 void dump_vht_op_ie(void *sel, const u8 *ie, u32 ie_len);
+#endif
+
+struct vht_bf_cap {
+	u8 is_mu_bfer;
+	u8 su_sound_dim;
+};
 
 struct vht_priv {
 	u8	vht_option;
@@ -121,7 +129,7 @@ struct vht_priv {
 	u8	ldpc_cap;
 	u8	stbc_cap;
 	u16	beamform_cap;
-	u8	ap_is_mu_bfer;
+	struct	vht_bf_cap ap_bf_cap;
 
 	u8	sgi_80m;/* short GI */
 	u8	ampdu_len;

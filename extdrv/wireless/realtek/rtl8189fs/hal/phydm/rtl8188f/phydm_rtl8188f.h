@@ -16,5 +16,6 @@
 #define __ODM_RTL8188F_H__
 
 s8 phydm_cck_rssi_8188f(struct dm_struct *dm, u8 lna_idx, u8 vga_idx);
+void odm_hw_setting_8188F(struct dm_struct *dm);
 
 #endif

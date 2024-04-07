@@ -1,8 +1,7 @@
 PWD := $(shell pwd)
 
 
-obj-m += ts_gsl/
-obj-m += ts_gt9xx/
+obj-m := ts_gsl/
 
 all:
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_DIR) M=$(PWD) modules

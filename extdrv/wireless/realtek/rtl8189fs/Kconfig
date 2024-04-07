@@ -1,5 +1,5 @@
 config RTL8189FS
 	tristate "Realtek 8189F SDIO WiFi"
-	default m
+	depends on USB
 	---help---
 	  Help message of RTL8189FS

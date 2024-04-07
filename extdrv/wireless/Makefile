@@ -5,7 +5,7 @@
 obj-$(CONFIG_WLAN_VENDOR_REALTEK) += realtek/
 obj-$(CONFIG_WLAN_VENDOR_BROADCOM) += broadcom/
 obj-$(CONFIG_WLAN_VENDOR_MEDIATEK) += mediatek/
-obj-$(CONFIG_WLAN_VENDOR_ICOMMSEMI) += icommsemi/
+obj-y += bluetooth/
 
 all:
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_DIR) M=$(shell pwd) modules

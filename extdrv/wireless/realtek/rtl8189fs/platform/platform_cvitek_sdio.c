@@ -18,12 +18,17 @@
  *
  ******************************************************************************/
 #include <drv_types.h>
+#include <linux/gpio.h>
 
-extern void sdhci_bus_scan(void);
-#ifndef ANDROID_2X
-extern int sdhci_device_attached(void);
-#endif
+extern int cvi_sdio_rescan(void);
+extern int cvi_get_wifi_pwr_on_gpio(void);
+extern int cvi_get_wifi_wakeup_gpio(void);
+// #ifndef ANDROID_2X
+// extern int sdhci_device_attached(void);
+// #endif
 
+static int gpio_power_on;
+// static int gpio_wake_up;
 /*
  * Return:
  *	0:	power on successfully
@@ -31,12 +36,31 @@ extern int sdhci_device_attached(void);
  */
 int platform_wifi_power_on(void)
 {
-	printk(KERN_INFO "Wifi sdio power on\n");
+	gpio_power_on = cvi_get_wifi_pwr_on_gpio();
+	if (gpio_power_on > 0)
+		gpio_direction_output(gpio_power_on, 1);
+	else {
+		printk("power on gpio request error!\n");
+		return -1;
+	}
+	printk("power on rtl8189.\n");
+	msleep(500);
+	cvi_sdio_rescan();
+	printk("[rtl8189es] %s: new card, power on.\n", __FUNCTION__);
 	return 0;
 }
 
 void platform_wifi_power_off(void)
 {
+	int err = 0;
+	if (gpio_power_on >= 0)
+	{
+		err = gpio_direction_output(gpio_power_on, 0);
+		if (err)
+		{
+			printk("%s: WL_PW_ON didn't output low\n", __FUNCTION__);
+			return ;
+		}
+	}
 	printk(KERN_INFO "Wifi sdio power off\n");
-
 }
