@@ -11,6 +11,7 @@
 #include <linux/cvi_comm_video.h>
 #include <base_cb.h>
 #include <base_ctx.h>
+#include <linux/pm.h>
 //#include <vi_sys.h>
 
 #include "../../common/dpu_debug.h"
@@ -162,6 +163,7 @@ int dpu_create_instance(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	mutex_init(&wdev->mutex);
+	mutex_init(&wdev->suspendLock);
 	// spin_lock_init(&wdev->lock);
 
 	for (i = 0; i < ARRAY_SIZE(clk_sys_name); ++i) {
@@ -417,23 +419,34 @@ static struct platform_device cvi_dpu_pdev = {
 #ifdef CONFIG_PM_SLEEP
 static int dpu_suspend(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	struct cvi_dpu_dev *wdev = dev_get_drvdata(dev);
+	if (!wdev)
+        return -ENODEV;
+	mutex_lock(&wdev->suspendLock);
+	wdev->bsuspend =CVI_TRUE;
+	mutex_unlock(&wdev->suspendLock);
+	if(wdev->clk_sys[1])
+		clk_disable_unprepare(wdev->clk_sys[1]);
 	return 0;
 }
 
 static int dpu_resume(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	struct cvi_dpu_dev *wdev = dev_get_drvdata(dev);
+	if (!wdev)
+        return -ENODEV;
+	if(wdev->clk_sys[1])
+		clk_prepare_enable(wdev->clk_sys[1]);
 
-	//VIP_CLK_RATIO_CONFIG(DPU, 0x10);
+	mutex_lock(&wdev->suspendLock);
+	wdev->bsuspend =CVI_FALSE;
+	mutex_unlock(&wdev->suspendLock);
 
 	return 0;
 }
+#endif
 
 static SIMPLE_DEV_PM_OPS(dpu_pm_ops, dpu_suspend, dpu_resume);
-#else
-static SIMPLE_DEV_PM_OPS(dpu_pm_ops, NULL, NULL);
-#endif
 
 //done
 static struct platform_driver cvi_dpu_driver = {

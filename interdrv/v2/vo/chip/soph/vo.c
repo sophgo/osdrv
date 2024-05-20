@@ -942,11 +942,6 @@ static s32 layer_process(struct cvi_vo_layer_ctx *pstLayerCtx)
 
 	pstLayerCtx->u32FrameIndex++;
 	pstLayerCtx->u32SrcFrameNum++;
-
-	u32ChnNum = _vo_get_chn_buffers(pstLayerCtx, blks);
-	if (!u32ChnNum)
-		return CVI_SUCCESS;
-
 	layer_frame_ctrl.s32SrcFrameRate = pstLayerCtx->u32LayerSrcFrameRate;
 	layer_frame_ctrl.s32DstFrameRate = pstLayerCtx->stLayerAttr.u32DispFrmRt;
 
@@ -1015,16 +1010,25 @@ static s32 layer_process(struct cvi_vo_layer_ctx *pstLayerCtx)
 
 		pstLayerCtx->u32DoneCnt++;
 
-	} else
+	} else {
 		return CVI_FAILURE;
+	}
+
+
+	mutex_lock(&pstLayerCtx->layer_lock);
+	u32ChnNum = _vo_get_chn_buffers(pstLayerCtx, blks);
+	if (!u32ChnNum) {
+		mutex_unlock(&pstLayerCtx->layer_lock);
+		return CVI_SUCCESS;
+	}
 
 	pstChnfg = (struct stitch_chn_cfg *)vmalloc(sizeof(struct stitch_chn_cfg) * u32ChnNum);
 	if (!pstChnfg) {
+		mutex_unlock(&pstLayerCtx->layer_lock);
 		CVI_TRACE_VO(CVI_DBG_ERR, "vmalloc fail.\n");
 		goto err0;
 	}
 
-	mutex_lock(&pstLayerCtx->layer_lock);
 	//Chn priority ctrl
 	for (i = 0; i < VO_MAX_CHN_NUM; i++) {
 		if (blks[i] == VB_INVALID_HANDLE)
@@ -1075,20 +1079,20 @@ static s32 layer_process(struct cvi_vo_layer_ctx *pstLayerCtx)
 			pstChnfg[n].rect_crop.height = stZoomRect.u32Height;
 
 			if (stZoomRect.s32X < 0) {
-				pstChnfg[n].rect_crop.left = 0;
+				pstChnfg[n].rect_crop.left = vb->buf.s16OffsetLeft;
 				pstChnfg[n].rect_crop.width = (stZoomRect.u32Width - ABS(stZoomRect.s32X));
 			}
 
-			if (stZoomRect.s32X + stZoomRect.u32Width > pstChnfg[n].src_size.width) {
+			if (pstChnfg[n].rect_crop.left + stZoomRect.u32Width > pstChnfg[n].src_size.width) {
 				pstChnfg[n].rect_crop.width = pstChnfg[n].src_size.width - pstChnfg[n].rect_crop.left;
 			}
 
 			if (stZoomRect.s32Y < 0) {
-				pstChnfg[n].rect_crop.top = 0;
+				pstChnfg[n].rect_crop.top = vb->buf.s16OffsetTop;
 				pstChnfg[n].rect_crop.height = (stZoomRect.u32Height - ABS(stZoomRect.s32Y));
 			}
 
-			if (stZoomRect.s32Y + stZoomRect.u32Height > pstChnfg[n].src_size.height) {
+			if (pstChnfg[n].rect_crop.top + stZoomRect.u32Height > pstChnfg[n].src_size.height) {
 				pstChnfg[n].rect_crop.height = pstChnfg[n].src_size.height - pstChnfg[n].rect_crop.top;
 			}
 
@@ -1100,10 +1104,10 @@ static s32 layer_process(struct cvi_vo_layer_ctx *pstLayerCtx)
 				pstChnfg[n].rect_crop.height = vb->buf.size.u32Height - vb->buf.s16OffsetTop - vb->buf.s16OffsetBottom;
 			}
 		} else if ((pstChnCtx->stChnZoomAttr.enZoomType == VO_CHN_ZOOM_IN_RATIO) && bNeedZoom) {
-			pstChnfg[n].rect_crop.left = stZoomRatio.u32Xratio * pstChnfg[n].src_size.width / 1000;
-			pstChnfg[n].rect_crop.top = stZoomRatio.u32Yratio * pstChnfg[n].src_size.height / 1000;
-			pstChnfg[n].rect_crop.width = stZoomRatio.u32WidthRatio * pstChnfg[n].src_size.width & ~0x01;
-			pstChnfg[n].rect_crop.height = stZoomRatio.u32HeightRatio * pstChnfg[n].src_size.height & ~0x01;
+			pstChnfg[n].rect_crop.left = vb->buf.s16OffsetLeft + stZoomRatio.u32Xratio * pstChnfg[n].src_size.width / 1000;
+			pstChnfg[n].rect_crop.top = vb->buf.s16OffsetTop + stZoomRatio.u32Yratio * pstChnfg[n].src_size.height / 1000;
+			pstChnfg[n].rect_crop.width = (stZoomRatio.u32WidthRatio * pstChnfg[n].src_size.width / 1000) & ~0x01;
+			pstChnfg[n].rect_crop.height = (stZoomRatio.u32HeightRatio * pstChnfg[n].src_size.height / 1000) & ~0x01;
 
 			if (pstChnfg[n].rect_crop.left + pstChnfg[n].rect_crop.width > pstChnfg[n].src_size.width) {
 				pstChnfg[n].rect_crop.width = pstChnfg[n].src_size.width - pstChnfg[n].rect_crop.left;
@@ -1272,7 +1276,7 @@ static s32 layer_process(struct cvi_vo_layer_ctx *pstLayerCtx)
 
 		if ((VoDev >= 0) &&
 			(gVoCtx->astDevCtx[VoDev].stPubAttr.enIntfType == VO_INTF_I80)) {
-			ret = _i80_transform_frame(gVoCtx->astDevCtx[VoDev].stPubAttr.sti80Cfg.fmt,
+			ret = _i80_transform_frame(gVoCtx->astDevCtx[VoDev].I80_param.fmt,
 					pstLayerCtx->stLayerAttr.enPixFormat, blk_next, pstDispBuf->blk_i80);
 			if (ret) {
 				CVI_TRACE_VO(CVI_DBG_INFO, "i80 transform NG.\n");
@@ -1871,7 +1875,7 @@ static long _vo_s_ctrl(struct cvi_vo_dev *vdev, struct vo_ext_control *p)
 	case VO_IOCTL_SET_CUSTOM_CSC: {
 		struct disp_csc_matrix cfg;
 		VO_LAYER VoLayer = p->reserved[0];
-		VO_DEV VoDev = VoLayer;
+		VO_DEV VoDev = gVoCtx->astLayerCtx[VoLayer].s32BindDevId;
 
 		if (VoDev >= VO_MAX_DEV_NUM) {
 			rc = -EINVAL;
@@ -2441,6 +2445,7 @@ s32 vo_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 		break;
 	}
 
+#if 0
 	case VO_CB_SET_RGN_COVEREX_CFG:
 	{
 		struct _rgn_coverex_cfg_cb_param *attr = (struct _rgn_coverex_cfg_cb_param *)arg;
@@ -2456,6 +2461,7 @@ s32 vo_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 
 		break;
 	}
+#endif
 
 	case VO_CB_GET_CHN_SIZE:
 	{
@@ -2697,6 +2703,10 @@ irqreturn_t vo_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+s32 default_overlay_bind_priority[VO_MAX_DEV_NUM][VO_MAX_OVERLAY_IN_DEV] = {
+	{VO_OVERLAY_G0, VO_OVERLAY_G2, VO_OVERLAY_G3},//dev0 bind G0 G2 G3
+	{VO_OVERLAY_G1, VO_OVERLAY_G4, VO_OVERLAY_G5},//dev1 bind G1 G4 G5
+};
 
 static s32 _vo_init_param(struct cvi_vo_ctx *ctx)
 {
@@ -2709,6 +2719,7 @@ static s32 _vo_init_param(struct cvi_vo_ctx *ctx)
 			disp_set_pattern(i, PAT_TYPE_FULL, PAT_COLOR_USR, rgb);
 			disp_set_frame_bgcolor(i, 0, 0, 0);
 		}
+		mutex_init(&ctx->astDevCtx[i].dev_lock);
 	}
 
 	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
@@ -2725,6 +2736,19 @@ static s32 _vo_init_param(struct cvi_vo_ctx *ctx)
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
 			mutex_init(&ctx->astLayerCtx[i].astChnCtx[j].gdc_lock);
 		}
+	}
+
+	for (i = 0; i < VO_MAX_DEV_NUM; ++i) {
+		for (j = 0; j < VO_MAX_OVERLAY_IN_DEV; ++j) {
+			ctx->astDevCtx[i].s32BindOverlayId[j] = default_overlay_bind_priority[i][j];
+			ctx->astOverlayCtx[default_overlay_bind_priority[i][j] - VO_MAX_LAYER_NUM].s32BindDevId = i;
+			ctx->astOverlayCtx[default_overlay_bind_priority[i][j] - VO_MAX_LAYER_NUM].u32Priority = 0;
+		}
+	}
+
+	for (i = 0; i < VO_MAX_OVERLAY_NUM; ++i) {
+		for (j = 0; j < RGN_MAX_NUM_VO; ++j)
+			ctx->astOverlayCtx[i].rgn_handle[j] = RGN_INVALID_HANDLE;
 	}
 
 	for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
@@ -2844,6 +2868,12 @@ s32 vo_recv_frame(MMF_CHN_S chn, VB_BLK blk)
 
 	jobs = &pstChnCtx->chn_jobs;
 	mutex_lock(&jobs->lock);
+	if (!jobs->inited){
+		mutex_unlock(&jobs->lock);
+		CVI_TRACE_VO(CVI_DBG_NOTICE, "layer(%d) chn(%d) jobs not initialized yet.\n",
+				chn.s32DevId, chn.s32ChnId);
+		return CVI_FAILURE;
+	}
 	if (FIFO_FULL(&jobs->waitq)) {
 		struct vb_s *vb_old = NULL;
 

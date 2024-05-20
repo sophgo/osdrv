@@ -39,5 +39,8 @@ struct cvi_stitch_dev {
 
 struct cvi_stitch_dev * stitch_get_dev(void);
 void stitch_enable_dev_clk(bool en);
+int stitch_suspend(struct device *dev);
+int stitch_resume(struct device *dev);
+bool is_stitch_suspended(void);
 
 #endif /* _STITCH_CORE_H_ */

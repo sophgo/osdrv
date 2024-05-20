@@ -15,9 +15,9 @@ static u8 _gop_get_bpp(enum disp_gop_format fmt)
 		(fmt == DISP_GOP_FMT_256LUT) ? 1 : 2;
 }
 
-static s32 vo_set_rgn_cfg(const u8 inst, const struct cvi_rgn_cfg *cfg, const struct disp_size *size)
+static s32 vo_set_rgn_cfg(const u8 inst, const u8 layer, const struct cvi_rgn_cfg *cfg, const struct disp_size *size)
 {
-	u8 i, layer = 0;
+	u8 i;
 	struct disp_gop_cfg *gop_cfg = disp_gop_get_cfg(inst, layer);
 	struct disp_gop_ow_cfg *ow_cfg;
 
@@ -81,6 +81,7 @@ static s32 vo_set_rgn_cfg(const u8 inst, const struct cvi_rgn_cfg *cfg, const st
 	return CVI_SUCCESS;
 }
 
+#if 0
 static void vo_set_rgn_coverex_cfg(u8 inst, struct cvi_rgn_coverex_cfg *cfg)
 {
 	s32 i;
@@ -104,25 +105,23 @@ static void vo_set_rgn_coverex_cfg(u8 inst, struct cvi_rgn_coverex_cfg *cfg)
 		disp_cover_set_cfg(inst, i, &sc_cover_cfg);
 	}
 }
+#endif
 
 static s32 _check_vo_status(VO_LAYER VoLayer)
 {
 	s32 ret = CVI_SUCCESS;
 
-	ret = CHECK_VO_LAYER_VALID(VoLayer);
+	ret = CHECK_VO_OVERLAY_VALID(VoLayer);
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	ret = CHECK_VO_LAYER_ENABLE(VoLayer);
-	if (ret != CVI_SUCCESS)
-		return ret;
 	return ret;
 }
 
 s32 vo_cb_get_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 {
 	s32 ret, i;
-	struct cvi_vo_layer_ctx *pstLayerCtx;
+	struct cvi_vo_overlay_ctx *pstOverlayCtx;
 
 	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, hdls);
 	if (ret != CVI_SUCCESS)
@@ -132,13 +131,10 @@ s32 vo_cb_get_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	pstLayerCtx = &gVoCtx->astLayerCtx[VoLayer];
+	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
 	if (enType == OVERLAY_RGN || enType == COVER_RGN) {
 		for (i = 0; i < RGN_MAX_NUM_VO; ++i)
-			hdls[i] = pstLayerCtx->rgn_handle[i];
-	} else if (enType == COVEREX_RGN) {
-		for (i = 0; i < RGN_COVEREX_MAX_NUM; ++i)
-			hdls[i] = pstLayerCtx->rgn_coverEx_handle[i];
+			hdls[i] = pstOverlayCtx->rgn_handle[i];
 	} else {
 		ret = CVI_ERR_VO_NOT_SUPPORT;
 	}
@@ -149,7 +145,7 @@ s32 vo_cb_get_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 s32 vo_cb_set_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 {
 	s32 ret, i;
-	struct cvi_vo_layer_ctx *pstLayerCtx;
+	struct cvi_vo_overlay_ctx *pstOverlayCtx;
 
 	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, hdls);
 	if (ret != CVI_SUCCESS)
@@ -159,13 +155,10 @@ s32 vo_cb_set_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	pstLayerCtx = &gVoCtx->astLayerCtx[VoLayer];
+	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
 	if (enType == OVERLAY_RGN || enType == COVER_RGN) {
 		for (i = 0; i < RGN_MAX_NUM_VO; ++i)
-			pstLayerCtx->rgn_handle[i] = hdls[i];
-	} else if (enType == COVEREX_RGN) {
-		for (i = 0; i < RGN_COVEREX_MAX_NUM; ++i)
-			pstLayerCtx->rgn_coverEx_handle[i] = hdls[i];
+			pstOverlayCtx->rgn_handle[i] = hdls[i];
 	} else {
 		ret = CVI_ERR_VO_NOT_SUPPORT;
 	}
@@ -175,10 +168,14 @@ s32 vo_cb_set_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
 
 s32 vo_cb_set_rgn_cfg(VO_LAYER VoLayer, struct cvi_rgn_cfg *cfg)
 {
-	s32 ret;
-	struct cvi_vo_layer_ctx *pstLayerCtx;
+	s32 ret, i;
+	struct cvi_vo_overlay_ctx *pstOverlayCtx;
+	struct cvi_vo_dev_ctx *pstDevCtx;
 	struct disp_timing *timing;
 	struct disp_size size;
+	VO_DEV VoDev;
+	VO_LAYER Overlay;
+	s32 VgopIndex = -1;
 
 	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, cfg);
 	if (ret != CVI_SUCCESS)
@@ -188,17 +185,39 @@ s32 vo_cb_set_rgn_cfg(VO_LAYER VoLayer, struct cvi_rgn_cfg *cfg)
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	pstLayerCtx = &gVoCtx->astLayerCtx[VoLayer];
-	memcpy(&pstLayerCtx->rgn_cfg, cfg, sizeof(*cfg));
+	Overlay = VoLayer - VO_MAX_LAYER_NUM;
+	pstOverlayCtx = &gVoCtx->astOverlayCtx[Overlay];
+	memcpy(&pstOverlayCtx->rgn_cfg, cfg, sizeof(*cfg));
 
-	timing = disp_get_timing(pstLayerCtx->s32BindDevId);
+	VoDev = pstOverlayCtx->s32BindDevId;
+	if (VoDev == -1) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind any Dev\n", VoLayer);
+		return CVI_ERR_VO_DEV_NOT_BINDED;
+	}
+
+	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+
+	mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+	for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+		if (pstDevCtx->s32BindOverlayId[i] == VoLayer) {
+			VgopIndex = i;
+		}
+	}
+	mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+
+	if (VgopIndex == -1)
+		return CVI_ERR_VO_DEV_NOT_BINDED;
+
+	timing = disp_get_timing(VoDev);
 	size.w = timing->hfde_end - timing->hfde_start + 1;
 	size.h = timing->vfde_end - timing->vfde_start + 1;
-	vo_set_rgn_cfg(pstLayerCtx->s32BindDevId, cfg, &size);
+
+	vo_set_rgn_cfg(pstOverlayCtx->s32BindDevId, VgopIndex, cfg, &size);
 
 	return CVI_SUCCESS;
 }
 
+#if 0
 s32 vo_cb_set_rgn_coverex_cfg(VO_LAYER VoLayer, struct cvi_rgn_coverex_cfg *cfg)
 {
 	s32 ret;
@@ -218,11 +237,14 @@ s32 vo_cb_set_rgn_coverex_cfg(VO_LAYER VoLayer, struct cvi_rgn_coverex_cfg *cfg)
 
 	return CVI_SUCCESS;
 }
+#endif
 
 s32 vo_cb_get_chn_size(VO_LAYER VoLayer, RECT_S *rect)
 {
 	s32 ret;
-	struct cvi_vo_layer_ctx *pstLayerCtx;
+	struct cvi_vo_overlay_ctx *pstOverlayCtx;
+	VO_DEV VoDev;
+	VO_LAYER VideoLayer;
 
 	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, rect);
 	if (ret != CVI_SUCCESS)
@@ -232,8 +254,19 @@ s32 vo_cb_get_chn_size(VO_LAYER VoLayer, RECT_S *rect)
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	pstLayerCtx = &gVoCtx->astLayerCtx[VoLayer];
-	memcpy(rect, &pstLayerCtx->stLayerAttr.stDispRect, sizeof(*rect));
+	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
+
+	VoDev = pstOverlayCtx->s32BindDevId;
+	if (VoDev == -1) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind any Dev\n", VoLayer);
+		return CVI_ERR_VO_DEV_NOT_BINDED;
+	}
+
+	mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+	VideoLayer = gVoCtx->astDevCtx[VoDev].s32BindLayerId;
+	mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+
+	memcpy(rect, &gVoCtx->astLayerCtx[VideoLayer].stLayerAttr.stDispRect, sizeof(*rect));
 
 	return CVI_SUCCESS;
 }

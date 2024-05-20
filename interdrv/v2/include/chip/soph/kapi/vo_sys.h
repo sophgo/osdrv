@@ -204,6 +204,7 @@ unsigned int vo_sys_reg_read(uintptr_t addr);
 void vo_sys_reg_write_mask(uintptr_t addr, u32 mask, u32 data);
 void vo_sys_set_offline(enum vo_sys_axi_bus bus, bool offline);
 void extern_axi_to_36bit(u32 high_bit);
+void reset_disp(void);
 
 union top_reset top_sys_get_reset(void);
 void top_sys_set_reset(union top_reset reset);

@@ -82,6 +82,8 @@ struct dwa_chn_frm_cfg {
 #define CVI_DWA_GET_WORK_JOB _IOR('D', 0x0a, struct dwa_handle_data)
 #define CVI_DWA_GET_CHN_FRM _IOWR('D', 0x0b, struct dwa_chn_frm_cfg)
 #define CVI_DWA_ADD_WAR_TASK _IOW('D', 0x0c, struct dwa_task_attr)
+#define CVI_DWA_SUSPEND _IO('D',0x0d)
+#define CVI_DWA_RESUME _IO('D',0x0e)
 
 #ifdef __cplusplus
 }

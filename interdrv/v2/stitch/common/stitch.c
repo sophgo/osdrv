@@ -1224,6 +1224,7 @@ static int stitch_event_handler_th(void *arg)
 	u8 i;
 	struct vb_jobs_t *jobs;
 	MMF_CHN_S chn = {.enModId = CVI_ID_STITCH};
+	enum stitch_handler_state enHdlState;
 
 	if (evt_ctx != &evt_hdl_ctx) {
 		CVI_TRACE_STITCH(CVI_DBG_ERR, "invalid thread(%s) param\n", __func__);
@@ -1238,6 +1239,10 @@ static int stitch_event_handler_th(void *arg)
 		if (ret < 0 || kthread_should_stop())
 			break;
 
+		//suspend
+		if (is_stitch_suspended())
+			continue;
+
 		/* timeout */
 		if (!ret && stitch_handler_is_idle())
 			continue;
@@ -1251,9 +1256,13 @@ static int stitch_event_handler_th(void *arg)
 		if (!stitch_ctx->isStarted)
 			continue;
 
-		if (atomic_read(&stitch_ctx->enHdlState) != STITCH_HANDLER_STATE_RUN &&
-			atomic_read(&stitch_ctx->enHdlState) != STITCH_HANDLER_STATE_RUN_STAGE2 &&
-			atomic_read(&stitch_ctx->enHdlState) != STITCH_HANDLER_STATE_DONE)
+		spin_lock_irqsave(&stitch_ctx->lock, flags);
+		enHdlState = (enum stitch_handler_state)atomic_read(&stitch_ctx->enHdlState);
+		spin_unlock_irqrestore(&stitch_ctx->lock, flags);
+
+		if (enHdlState != STITCH_HANDLER_STATE_RUN &&
+			enHdlState != STITCH_HANDLER_STATE_RUN_STAGE2 &&
+			enHdlState != STITCH_HANDLER_STATE_DONE)
 			continue;
 		/*if ((atomic_read(&stitch_ctx->enHdlState == STITCH_HANDLER_STATE_RUN_STAGE2)) {
 			stitch_hw_cfg_reg_stage2(evt_ctx);
@@ -1262,7 +1271,7 @@ static int stitch_event_handler_th(void *arg)
 		for (i = 0; i < stitch_ctx->src_num; i++) {
 			//if (atomic_read(&stitch_ctx->enHdlState) == STITCH_HANDLER_STATE_RUN && i >= STITCH_SRC_ID_2) //this is debug only bld img23
 				//break;
-			if (atomic_read(&stitch_ctx->enHdlState) == STITCH_HANDLER_STATE_RUN && i >= STITCH_SRC_ID_2)
+			if (enHdlState == STITCH_HANDLER_STATE_RUN && i >= STITCH_SRC_ID_2)
 				break;
 			chn.s32DevId = i;
 			jobs = &gStitchJobs.ins[chn.s32DevId];
@@ -1400,6 +1409,12 @@ s32 stitch_send_frame(STITCH_SRC_IDX src_idx, VIDEO_FRAME_INFO_S *pstVideoFrame,
 	MMF_CHN_S chn = {.enModId = CVI_ID_STITCH, .s32DevId = src_idx, .s32ChnId = 0};
 	VB_BLK blk;
 	s32 ret;
+	unsigned long flags;
+
+	if (is_stitch_suspended()) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch dev suspend\n");
+		return CVI_ERR_STITCH_NOT_PERM;
+	}
 
 	ret = STITCH_CHECK_INPUT_VIDEO_PARAM(src_idx, pstVideoFrame);
 	if (ret != CVI_SUCCESS)
@@ -1426,8 +1441,11 @@ s32 stitch_send_frame(STITCH_SRC_IDX src_idx, VIDEO_FRAME_INFO_S *pstVideoFrame,
 		return CVI_ERR_STITCH_BUSY;
 	}
 
-	if (src_idx == STITCH_SRC_ID_1)
+	if (src_idx == STITCH_SRC_ID_1) {
+		spin_lock_irqsave(&stitch_ctx->lock, flags);
 		atomic_set(&stitch_ctx->enHdlState, STITCH_HANDLER_STATE_RUN);
+		spin_unlock_irqrestore(&stitch_ctx->lock, flags);
+	}
 
 	CVI_TRACE_STITCH(CVI_DBG_INFO, "src_id[%d] phy_addr(%llx-%llx-%llx)\n", src_idx, pstVideoFrame->stVFrame.u64PhyAddr[0]
 		, pstVideoFrame->stVFrame.u64PhyAddr[1], pstVideoFrame->stVFrame.u64PhyAddr[2]);
@@ -1441,6 +1459,11 @@ s32 stitch_send_chn_frame(VIDEO_FRAME_INFO_S *pstVideoFrame, s32 s32MilliSec)
 	struct vb_s *vb;
 	struct vb_jobs_t *jobs;
 	s32 ret;
+
+	if (is_stitch_suspended()) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch dev suspend\n");
+		return CVI_ERR_STITCH_NOT_PERM;
+	}
 
 	ret = STITCH_CHECK_OUTPUT_VIDEO_PARAM(pstVideoFrame);
 	if (ret != CVI_SUCCESS)
@@ -1852,6 +1875,11 @@ s32 stitch_enable_dev(void)
 	if (!STITCH_CTX_IS_CREAT())
 		return CVI_ERR_STITCH_NOTREADY;
 
+	if (is_stitch_suspended()) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch is suspend.\n");
+		return CVI_ERR_STITCH_NOT_PERM;
+	}
+
 	if (stitch_ctx->isStarted) {
 		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch ctx is already start.\n");
 		return CVI_ERR_STITCH_NOTREADY;
@@ -1901,7 +1929,9 @@ s32 stitch_disable_dev(void)
 		return CVI_ERR_STITCH_NOTREADY;
 	}
 
+	spin_lock_irqsave(&stitch_ctx->lock, flags);
 	enHdlState = (enum stitch_handler_state)atomic_read(&stitch_ctx->enHdlState);
+	spin_unlock_irqrestore(&stitch_ctx->lock, flags);
 
 	if (enHdlState == STITCH_HANDLER_STATE_RUN || enHdlState == STITCH_HANDLER_STATE_RUN_STAGE2) {
 		stitch_ctx->evt = 0;
@@ -1996,6 +2026,10 @@ int stitch_thread_init(void)
 		goto workqueue_creat_fail;
 	}
 
+	ret = stitch_init();
+	if (ret)
+		pr_err("stitch ctx creat failed: %d\n", ret);
+
 kthread_fail:
 workqueue_creat_fail:
 	return ret;
@@ -2020,3 +2054,57 @@ void stitch_thread_deinit(void)
 	memset(&evt_hdl_ctx, 0, sizeof(evt_hdl_ctx));
 }
 
+s32 stitch_suspend_handler(void)
+{
+	enum stitch_handler_state hdlState;
+	int ret;
+	unsigned long flags;
+
+	if (!STITCH_CTX_IS_VALID(stitch_ctx))
+		stitch_init();
+
+	if (!evt_hdl_ctx.thread) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch thread not initialized yet\n");
+		return CVI_ERR_STITCH_NOTREADY;
+	}
+
+	spin_lock_irqsave(&stitch_ctx->lock, flags);
+	hdlState = (enum stitch_handler_state)atomic_read(&stitch_ctx->enHdlState);
+	spin_unlock_irqrestore(&stitch_ctx->lock, flags);
+
+	if (hdlState == STITCH_HANDLER_STATE_RUN || hdlState == STITCH_HANDLER_STATE_RUN_STAGE2) {
+		stitch_ctx->evt = 0;
+		ret = wait_event_interruptible_timeout(stitch_ctx->wq, stitch_ctx->evt, msecs_to_jiffies(IDLE_TIMEOUT_MS));
+		if (ret <= 0) {
+			CVI_TRACE_STITCH(CVI_DBG_ERR, "suspend dev timeout, out of [%d] ms, ret:%d\n", IDLE_TIMEOUT_MS, ret);
+			return CVI_ERR_STITCH_BUSY;
+		}
+	}
+
+	spin_lock_irqsave(&stitch_ctx->lock, flags);
+	atomic_set(&stitch_ctx->enHdlState, STITCH_HANDLER_STATE_SUSPEND);
+	spin_unlock_irqrestore(&stitch_ctx->lock, flags);
+
+	CVI_TRACE_STITCH(CVI_DBG_DEBUG, "suspend handler+\n");
+	return CVI_SUCCESS;
+}
+
+s32 stitch_resume_handler(void)
+{
+	unsigned long flags;
+
+	if (!STITCH_CTX_IS_VALID(stitch_ctx))
+		stitch_init();
+
+	if (!evt_hdl_ctx.thread) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch thread not initialized yet\n");
+		return CVI_ERR_STITCH_NOTREADY;
+	}
+
+	spin_lock_irqsave(&stitch_ctx->lock, flags);
+	atomic_set(&stitch_ctx->enHdlState, STITCH_HANDLER_STATE_RESUME);
+	spin_unlock_irqrestore(&stitch_ctx->lock, flags);
+
+	CVI_TRACE_STITCH(CVI_DBG_DEBUG, "resume handler+\n");
+	return CVI_SUCCESS;
+}

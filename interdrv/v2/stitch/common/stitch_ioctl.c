@@ -128,7 +128,6 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		case CVI_STITCH_DEV_DISABLE: {
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "cmd(0x%x) start enter\n", cmd);
 			ret = stitch_disable_dev();
 			break;
 		}
@@ -177,6 +176,20 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		case CVI_STITCH_DUMP_REGS: {
 			ret = stitch_dump_reg_info();
+			break;
+		}
+		case CVI_STITCH_SUSPEND: {
+			struct cvi_stitch_dev *dev
+				= container_of(filp->private_data, struct cvi_stitch_dev, miscdev);
+
+			ret = stitch_suspend(dev->miscdev.this_device);
+			break;
+		}
+		case CVI_STITCH_RESUME: {
+			struct cvi_stitch_dev *dev
+				= container_of(filp->private_data, struct cvi_stitch_dev, miscdev);
+
+			ret = stitch_resume(dev->miscdev.this_device);
 			break;
 		}
 		default: {

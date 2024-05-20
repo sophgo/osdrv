@@ -463,6 +463,19 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 				pvoCtx->astLayerCtx[i].u32OsdBwFail);
 	}
 
+	// gragphic layer status 1
+	seq_puts(m, "\n-------------------------------GRAPHIC LAYER STATUS 1-----------------------\n");
+	seq_printf(m, "%10s%10s%10s\n",
+		"LayerId", "BindDevId", "Prio");
+	for (i = VO_MAX_LAYER_NUM; i < VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM; ++i) {
+
+		seq_printf(m, "%8s%2d%10d%10d\n",
+				"#",
+				i,
+				pvoCtx->astOverlayCtx[i - VO_MAX_LAYER_NUM].s32BindDevId,
+				pvoCtx->astOverlayCtx[i - VO_MAX_LAYER_NUM].u32Priority);
+	}
+
 	// chn basic info
 	seq_puts(m, "\n-------------------------------CHN BASIC INFO 1---------------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s\n",

@@ -174,6 +174,7 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 	VPSS_MOD_PARAM_S stModParam;
 	struct cvi_vpss_ctx **pVpssCtx = vpss_get_ctx();
 	struct cvi_vpss_device *dev = (struct cvi_vpss_device *)m->private;
+	signed int proc_amp[PROC_AMP_MAX];
 
 	vpss_get_mod_param(&stModParam);
 
@@ -200,6 +201,25 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 				c,
 				pVpssCtx[i]->stGrpAttr.stFrameRate.s32SrcFrameRate,
 				pVpssCtx[i]->stGrpAttr.stFrameRate.s32DstFrameRate);
+		}
+	}
+
+	// VPSS GRP AMP CTRL
+	seq_puts(m, "\n-------------------------------VPSS GRP AMP CTRL------------------------------\n");
+	seq_printf(m, "%10s%15s%13s%15s%8s\n", "GrpID", "Brightness", "Contrast", "Saturation",
+				"Hue");
+	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
+		if (pVpssCtx[i] && pVpssCtx[i]->isCreated) {
+			vpss_get_proc_amp(i, proc_amp);
+
+			seq_printf(m, "%8s%2d%15d%13d%15d%8d\n",
+				"#",
+				i,
+				proc_amp[PROC_AMP_BRIGHTNESS],
+				proc_amp[PROC_AMP_CONTRAST],
+				proc_amp[PROC_AMP_SATURATION],
+				proc_amp[PROC_AMP_HUE]);
+
 		}
 	}
 

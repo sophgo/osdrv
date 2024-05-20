@@ -55,6 +55,9 @@ struct stitch_vb_pool_cfg {
 #define CVI_STITCH_DUMP_REGS _IO('S', 0x13)
 #define CVI_STITCH_RST _IO('S', 0x14)
 
+#define CVI_STITCH_SUSPEND _IO('S',0x15)
+#define CVI_STITCH_RESUME _IO('S',0x16)
+
 /* Internal use */
 
 #ifdef __cplusplus

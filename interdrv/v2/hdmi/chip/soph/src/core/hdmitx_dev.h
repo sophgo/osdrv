@@ -109,6 +109,11 @@ typedef struct {
 	u8 *mSwEncKey;
 } hdcpParams_t;
 
+typedef struct {
+    u32 scl_high_ns;
+    u32 scl_low_ns;
+} i2c_param_t;
+
 typedef struct hdmi_tx_dev{
 	char device_name[20];
 
@@ -126,6 +131,8 @@ typedef struct hdmi_tx_dev{
 	hdcpParams_t hdcp;
 
 	struct hdmitx_dev* dev_hdmi;
+
+	i2c_param_t i2c;
 
 	bool is_init;
 	bool is_deinit;

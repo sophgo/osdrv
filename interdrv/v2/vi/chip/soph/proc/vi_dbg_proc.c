@@ -319,8 +319,6 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
 		if (!vdev->ctx.isp_pipe_enable[raw_num])
 			continue;
-		if (_is_right_tile(ctx, raw_num))
-			continue;
 		sofCnt1[raw_num] = vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH0];
 		if (vdev->ctx.isp_pipe_cfg[raw_num].is_yuv_sensor) //YUV sensor
 			frmCnt1[raw_num] = vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0];
@@ -335,8 +333,6 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 	do {
 		for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
 			if (!vdev->ctx.isp_pipe_enable[raw_num])
-				continue;
-			if (_is_right_tile(ctx, raw_num))
 				continue;
 			sofCnt2[raw_num] = vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH0];
 			if (vdev->ctx.isp_pipe_cfg[raw_num].is_yuv_sensor) //YUV sensor
@@ -412,6 +408,7 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 			seq_printf(m, "VISofCh3Cnt\t\t:%4d\n", vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH3]);
 
 		if (ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe ||
+		    ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT ||
 		    ctx->isp_pipe_cfg[raw_num].is_tile) {
 			seq_printf(m, "VISpltWdmaCh0Cnt\t:%4d\n", vdev->splt_wdma_frm_num[raw_num][ISP_FE_CH0]);
 			seq_printf(m, "VISpltRdmaCh0Cnt\t:%4d\n", vdev->splt_rdma_frm_num[raw_num][ISP_FE_CH0]);
@@ -477,6 +474,7 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 
 		seq_printf(m, "[VI ISP_PIPE_%d Buf_Dbg_Info]\n", raw_num);
 		if (ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe ||
+		    ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT ||
 		    ctx->isp_pipe_cfg[raw_num].is_tile) {
 			seq_printf(m, "VISpltCh0OutBufEmpty\t:%4d\n",
 					isp_buf_empty(&splt_out_q[raw_num][ISP_SPLT_CHN0]));

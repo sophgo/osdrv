@@ -10,6 +10,7 @@
 
 #define YRATIO_SCALE         100
 #define VPSS_CMDQ_BUF_SIZE (0x8000)
+#define VPSS_WORK_MAX        8
 
 enum cvi_sc_flip_mode {
 	CVI_SC_FLIP_NO,
@@ -144,8 +145,10 @@ struct cvi_vpss_online_cb {
 	__u8 snr_num;
 	__u8 is_tile;
 	__u8 is_left_tile;
-	struct cvi_line in;
-	struct cvi_line out;
+	struct cvi_line l_in;
+	struct cvi_line l_out;
+	struct cvi_line r_in;
+	struct cvi_line r_out;
 };
 
 struct cvi_vpss_hw_cfg {
@@ -167,8 +170,10 @@ struct cvi_vpss_job {
 	bool is_tile;
 	bool is_work_on_r_tile;
 	bool is_v_tile;
+	struct cvi_vpss_online_cb online_param;
 	vpss_job_cb pfnJobCB;
 	void *data;
+	spinlock_t lock;
 	atomic_t enJobState;
 	__u32 vpss_dev_mask;
 	__u32 checksum[VPSS_MAX_CHN_NUM];

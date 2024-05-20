@@ -337,6 +337,7 @@ void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core)
 
 	atomic_set(&core->state, LDC_CORE_STATE_IDLE);
 	irq_coreid = (u8)core->dev_type;
+	CVI_TRACE_LDC(CVI_DBG_INFO, "core(%d) state set(%d)\n", irq_coreid, LDC_CORE_STATE_IDLE);
 
 	if (unlikely(irq_coreid) >= CVI_DEV_LDC_MAX)
 		return;
@@ -474,6 +475,8 @@ static void ldc_set_tsk_run_status(struct cvi_ldc_vdev *wdev, int top_id
 	, struct ldc_job *job, struct ldc_task *tsk)
 {
 	atomic_set(&wdev->core[top_id].state, LDC_CORE_STATE_RUNNING);
+	CVI_TRACE_LDC(CVI_DBG_INFO, "core(%d) state set(%d)\n", top_id, LDC_CORE_STATE_RUNNING);
+
 	atomic_set(&tsk->state, LDC_TASK_STATE_RUNNING);
 
 	ldc_proc_record_hw_tsk_start(job, tsk, top_id);
@@ -762,11 +765,11 @@ static int ldc_try_submit_hw(struct cvi_ldc_vdev *wdev, struct ldc_job *job
 		finish = ldc_is_finish(i);
 		state = atomic_read(&wdev->core[i].state);
 
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
+		CVI_TRACE_LDC(CVI_DBG_INFO, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
 
 		if ((state == LDC_CORE_STATE_IDLE) && finish) {
 			top_id = i;
-
+			//ldc_enable_dev_clk(top_id, true);
 			if (use_cmdq)
 				ldc_submit_hw_cmdq(wdev, top_id, job, tsk, tskq);
 			else
@@ -930,6 +933,10 @@ static int ldc_event_handler_th(void *data)
 		if (ret < 0 || kthread_should_stop())
 			break;
 
+		//suspend
+		if (is_ldc_suspended())
+			continue;
+
 		/* timeout */
 		if (!ret) {
 			if (atomic_read(&wdev->state) == LDC_DEV_STATE_STOP) {
@@ -938,6 +945,8 @@ static int ldc_event_handler_th(void *data)
 			} else if((atomic_read(&wdev->state) == LDC_DEV_STATE_RUNNING)
 				&& list_empty(&wdev->job_list)) {
 				timeout = idle_timeout;
+				atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
+				up(&wdev->sem);
 				continue;
 			} else {
 				ldc_try_reset_abort_job(wdev);
@@ -953,6 +962,8 @@ static int ldc_event_handler_th(void *data)
 
 		if (list_empty(&wdev->job_list)) {
 			CVI_TRACE_LDC(CVI_DBG_DEBUG, "job list empty\n");
+			atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
+			up(&wdev->sem);
 			goto continue_th;
 		}
 
@@ -967,7 +978,7 @@ static int ldc_event_handler_th(void *data)
 		}
 
 		if (!have_idle_job) { //have idle core but cur job is doing
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
+			CVI_TRACE_LDC(CVI_DBG_INFO, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
 				, job, job_tmp, job_tmp->coreid);
 			spin_unlock_irqrestore(&wdev->job_lock, flags);
 			goto continue_th;
@@ -978,7 +989,7 @@ static int ldc_event_handler_th(void *data)
 		spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 		ldc_proc_record_job_start(job);
-
+		atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
 		ldc_try_commit_job(wdev, job);
 
 continue_th:
@@ -1027,6 +1038,11 @@ s32 ldc_begin_job(struct cvi_ldc_vdev *wdev, struct gdc_handle_data *data)
 		LDC_CHECK_NULL_PTR(data);
 	if (ret)
 		return ret;
+
+	if (is_ldc_suspended()) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc dev suspend\n");
+		return CVI_ERR_GDC_NOT_PERMITTED;
+	}
 
 	job = kzalloc(sizeof(struct ldc_job), GFP_ATOMIC);
 	if (job == NULL) {
@@ -1097,7 +1113,7 @@ s32 ldc_end_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 			ret = 0;
 	}
 
-	CVI_TRACE_LDC(CVI_DBG_INFO, "job[%px] sync_io=%d, ret=%d\n", job, job->identity.syncIo, ret);
+	CVI_TRACE_LDC(CVI_DBG_INFO, "jobname[%s] sync_io=%d, ret=%d\n", job->identity.Name, job->identity.syncIo, ret);
 
 	if (job->identity.syncIo) {
 		kfree(job);
@@ -1144,6 +1160,7 @@ s32 ldc_cancel_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 				CVI_TRACE_LDC(CVI_DBG_DEBUG, "cancel work job(%px)\n", wait_job);
 				atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
 				atomic_set(&wdev->core[coreid].state, LDC_CORE_STATE_IDLE);
+				ldc_core_deinit(coreid);
 				needfreeJob = true;
 				ldc_cancel_cur_tsk(job);
 				list_del(&job->node);
@@ -1420,6 +1437,7 @@ int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
 	INIT_LIST_HEAD(&wdev->vb_doneq.doneq);
 	init_waitqueue_head(&wdev->wait);
 	sema_init(&wdev->vb_doneq.sem, 0);
+	sema_init(&wdev->sem, 0);
 
 	spin_lock_init(&wdev->job_lock);
 	wdev->core_num = LDC_DEV_MAX_CNT;
@@ -1490,5 +1508,54 @@ void cvi_ldc_sw_deinit(struct cvi_ldc_vdev *wdev)
 
 	list_del_init(&wdev->job_list);
 	list_del_init(&wdev->vb_doneq.doneq);
+}
+
+s32 ldc_suspend_handler(void)
+{
+	int ret;
+	struct cvi_ldc_vdev * dev = ldc_get_dev();
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
+		return CVI_ERR_GDC_NULL_PTR;
+	}
+
+	if (!dev->thread) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc thread not initialized yet\n");
+		return CVI_ERR_GDC_SYS_NOTREADY;
+	}
+
+	if (dev->job_cnt > 0 || !list_empty(&dev->job_list) || atomic_read(&dev->state) == LDC_DEV_STATE_RUNNING) {
+		sema_init(&dev->sem, 0);
+		ret = down_timeout(&dev->sem, msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS));
+		if (ret == -ETIME) {
+			CVI_TRACE_LDC(CVI_DBG_ERR, "get sem timeout, dev not idle yet\n");
+			return ret;
+		}
+	}
+	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
+
+	CVI_TRACE_LDC(CVI_DBG_DEBUG, "suspend handler+\n");
+	return CVI_SUCCESS;
+}
+
+s32 ldc_resume_handler(void)
+{
+	struct cvi_ldc_vdev * dev = ldc_get_dev();
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
+		return CVI_ERR_GDC_NULL_PTR;
+	}
+
+	if (!dev->thread) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc thread not initialized yet\n");
+		return CVI_ERR_GDC_SYS_NOTREADY;
+	}
+
+	atomic_set(&dev->state, LDC_DEV_STATE_RUNNING);
+
+	CVI_TRACE_LDC(CVI_DBG_DEBUG, "resume handler+\n");
+	return CVI_SUCCESS;
 }
 

@@ -931,6 +931,10 @@ static int dwa_event_handler_th(void *data)
 		if (ret < 0 || kthread_should_stop())
 			break;
 
+		//suspend
+		if (is_dwa_suspended())
+			continue;
+
 		/* timeout */
 		if (!ret) {
 			if (atomic_read(&wdev->state) == DWA_DEV_STATE_STOP) {
@@ -940,6 +944,7 @@ static int dwa_event_handler_th(void *data)
 				&& list_empty(&wdev->job_list)) {
 				timeout = idle_timeout;
 				atomic_set(&wdev->state, DWA_DEV_STATE_STOP);
+				up(&wdev->sem);
 				continue;
 			} else {
 				dwa_try_reset_abort_job(wdev);
@@ -956,6 +961,7 @@ static int dwa_event_handler_th(void *data)
 		if (list_empty(&wdev->job_list)) {
 			CVI_TRACE_DWA(CVI_DBG_INFO, "job list empty\n");
 			atomic_set(&wdev->state, DWA_DEV_STATE_STOP);
+			up(&wdev->sem);
 			goto continue_th;
 		}
 
@@ -1029,6 +1035,11 @@ s32 dwa_begin_job(struct cvi_dwa_vdev *wdev, struct dwa_handle_data *data)
 		dwa_check_null_ptr(data);
 	if (ret)
 		return ret;
+
+	if (is_dwa_suspended()) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa dev suspend\n");
+		return CVI_ERR_DWA_NOT_PERMITTED;
+	}
 
 	job = kzalloc(sizeof(struct dwa_job), GFP_ATOMIC);
 	if (job == NULL) {
@@ -1492,6 +1503,7 @@ int cvi_dwa_sw_init(struct cvi_dwa_vdev *wdev)
 	INIT_LIST_HEAD(&wdev->vb_doneq.doneq);
 	init_waitqueue_head(&wdev->wait);
 	sema_init(&wdev->vb_doneq.sem, 0);
+	sema_init(&wdev->sem, 0);
 
 	spin_lock_init(&wdev->job_lock);
 	wdev->core_num = DWA_DEV_MAX_CNT;
@@ -1563,5 +1575,54 @@ void cvi_dwa_sw_deinit(struct cvi_dwa_vdev *wdev)
 
 	list_del_init(&wdev->job_list);
 	list_del_init(&wdev->vb_doneq.doneq);
+}
+
+s32 dwa_suspend_handler(void)
+{
+	int ret;
+	struct cvi_dwa_vdev * dev = dwa_get_dev();
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa_dev is null\n");
+		return CVI_ERR_DWA_NULL_PTR;
+	}
+
+	if (!dev->thread) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa thread not initialized yet\n");
+		return CVI_ERR_DWA_SYS_NOTREADY;
+	}
+
+	if (dev->job_cnt > 0 || !list_empty(&dev->job_list) || atomic_read(&dev->state) == DWA_DEV_STATE_RUNNING) {
+		sema_init(&dev->sem, 0);
+		ret = down_timeout(&dev->sem, msecs_to_jiffies(DWA_IDLE_WAIT_TIMEOUT_MS));
+		if (ret == -ETIME) {
+			CVI_TRACE_DWA(CVI_DBG_ERR, "get sem timeout, dev not idle yet\n");
+			return ret;
+		}
+	}
+	atomic_set(&dev->state, DWA_DEV_STATE_STOP);
+
+	CVI_TRACE_DWA(CVI_DBG_DEBUG, "suspend handler+\n");
+	return CVI_SUCCESS;
+}
+
+s32 dwa_resume_handler(void)
+{
+	struct cvi_dwa_vdev * dev = dwa_get_dev();
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa_dev is null\n");
+		return CVI_ERR_DWA_NULL_PTR;
+	}
+
+	if (!dev->thread) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa thread not initialized yet\n");
+		return CVI_ERR_DWA_SYS_NOTREADY;
+	}
+
+	atomic_set(&dev->state, DWA_DEV_STATE_RUNNING);
+
+	CVI_TRACE_DWA(CVI_DBG_DEBUG, "resume handler+\n");
+	return CVI_SUCCESS;
 }
 

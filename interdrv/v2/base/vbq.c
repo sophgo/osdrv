@@ -237,6 +237,7 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	}
 
 	mutex_lock(&jobs->lock);
+	jobs->inited = false;
 	while (!FIFO_EMPTY(&jobs->waitq)) {
 		FIFO_POP(&jobs->waitq, &vb);
 		vb_release_block((VB_BLK)vb);
@@ -261,7 +262,6 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
 	mutex_unlock(&jobs->dlock);
 	mutex_destroy(&jobs->dlock);
-	jobs->inited = false;
 }
 EXPORT_SYMBOL_GPL(base_mod_jobs_exit);
 
@@ -512,8 +512,8 @@ int32_t vb_qbuf(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, struct vb_jobs_t *jobs,
 	if (chn_type == CHN_TYPE_OUT) {
 		if (FIFO_FULL(&jobs->workq)) {
 			mutex_unlock(&jobs->lock);
-			pr_err("%s workq is full. drop new one.\n"
-				     , sys_get_modname(chn.enModId));
+			pr_err("%s dev(%d) chn(%d) workq is full. drop new one.\n"
+				     , sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId);
 			return -ENOBUFS;
 		}
 		vb->buf.dev_num = chn.s32ChnId;
@@ -521,8 +521,8 @@ int32_t vb_qbuf(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, struct vb_jobs_t *jobs,
 	} else {
 		if (FIFO_FULL(&jobs->waitq)) {
 			mutex_unlock(&jobs->lock);
-			pr_err("%s waitq is full. drop new one.\n"
-				     , sys_get_modname(chn.enModId));
+			pr_err("%s dev(%d) chn(%d) waitq is full. drop new one.\n"
+				     , sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId);
 			return -ENOBUFS;
 		}
 		FIFO_PUSH(&jobs->waitq, vb);

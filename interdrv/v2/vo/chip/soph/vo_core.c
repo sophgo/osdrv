@@ -1,5 +1,6 @@
 #include <vo_core.h>
 #include <base_cb.h>
+#include "vo_sys.h"
 
 #define CVI_VO_DEV_NAME            "soph-vo"
 #define CVI_VO_CLASS_NAME          "soph-vo"
@@ -239,6 +240,13 @@ static int vo_core_probe(struct platform_device *pdev)
 		return ret;
 	}
 	_init_parameters(dev);
+
+	/* tgen should be turn off before reset disp */
+	for (i = 0; i < DISP_MAX_INST; ++i) {
+		disp_tgen_enable(i, false);
+	}
+
+	reset_disp();
 	disp_ctrl_init(false);
 
 	ret = vo_core_register_cdev(dev);

@@ -3,6 +3,7 @@
 *.mod.c
 *.cmd
 *.mod
+*.sh
 
 .tmp_versions
 Module.symvers

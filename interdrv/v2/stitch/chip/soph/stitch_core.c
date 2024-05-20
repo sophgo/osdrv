@@ -9,6 +9,7 @@
 #include <linux/clk-provider.h>
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <linux/of_device.h>
 
 #include <linux/cvi_vip.h>
 #include <linux/cvi_base_ctx.h>
@@ -26,8 +27,10 @@
 
 
 #define STITCH_DEV_NAME "soph-stitch"
+#define CONFIG_PM_SLEEP 1
 
 static atomic_t stitch_open_count = ATOMIC_INIT(0);
+static atomic_t suspend_flag = ATOMIC_INIT(0);
 static struct cvi_stitch_dev *g_stitch_dev;
 
 bool gStitchDumpReg;
@@ -167,7 +170,7 @@ static void stitch_dev_init(struct cvi_stitch_dev *dev)
 	}
 
 	spin_lock_init(&dev->lock);
-	atomic_set(&dev->state, STITCH_DEV_STATE_IDLE);
+	atomic_set(&dev->state, STITCH_DEV_STATE_RUNNING);
 	dev->job = NULL;
 
 	if (dev->clk_src)
@@ -201,6 +204,7 @@ static void stitch_dev_deinit(struct cvi_stitch_dev *dev)
 		dev->clk_sys_freq = 0;
 		clk_sys_freq = 0;
 	}
+	atomic_set(&dev->state, STITCH_DEV_STATE_IDLE);
 }
 
 static int _init_resources(struct platform_device *pdev)
@@ -351,10 +355,20 @@ static int register_stitch_dev(struct device *dev, struct cvi_stitch_dev *bdev)
 	return rc;
 }
 
+static const struct of_device_id cvi_stitch_dt_match[] = {
+	{.compatible = "cvitek,stitch"},
+	{}
+};
+
 static int cvi_stitch_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct cvi_stitch_dev *dev;
+	const struct of_device_id * match;
+
+	match = of_match_device(cvi_stitch_dt_match, &pdev->dev);
+	if (!match)
+		return ENODEV;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
@@ -363,8 +377,8 @@ static int cvi_stitch_probe(struct platform_device *pdev)
 	}
 
 	dev_set_drvdata(&pdev->dev, dev);
-	g_stitch_dev = dev;
 
+	g_stitch_dev = dev;
 	rc = _init_resources(pdev);
 	if (rc) {
 		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to init resource\n");
@@ -452,27 +466,55 @@ static int cvi_stitch_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
-static int stitch_suspend(struct device *dev)
+int stitch_suspend(struct device *dev)
 {
-	dev_info(dev, "%s not support\n", __func__);
+	s32 ret = 0;
+	struct cvi_stitch_dev * stitch_dev = stitch_get_dev();
+
+	/*step 1 suspend envent_handlers*/
+	ret = stitch_suspend_handler();
+	if (ret) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "fail to suspend stitch thread, err=%d\n", ret);
+		return -1;
+	}
+
+	/*step 2 turn off clock*/
+	stitch_dev_deinit(stitch_dev);
+	atomic_set(&suspend_flag, 1);
+
+	CVI_TRACE_STITCH(CVI_DBG_INFO, "stitch suspend+\n");
 	return 0;
 }
 
-static int stitch_resume(struct device *dev)
+int stitch_resume(struct device *dev)
 {
-	dev_info(dev, "%s not support\n", __func__);
+	s32 ret = 0;
+	struct cvi_stitch_dev * stitch_dev = stitch_get_dev();
+
+	/*step 1 turn on clock*/
+	stitch_dev_init(stitch_dev);
+
+	/*step 3 resume envent_handlers*/
+	ret = stitch_resume_handler();
+	if (ret) {
+		CVI_TRACE_STITCH(CVI_DBG_ERR, "fail to resume stitch thread, err=%d\n", ret);
+		return -1;
+	}
+	atomic_set(&suspend_flag, 0);
+
+	CVI_TRACE_STITCH(CVI_DBG_INFO, "stitch resume+\n");
 	return 0;
 }
+
+bool is_stitch_suspended(void)
+{
+	return atomic_read(&suspend_flag) == 1 ? true : false;
+}
+
 static SIMPLE_DEV_PM_OPS(stitch_pm_ops, stitch_suspend, stitch_resume);
 #else
 static SIMPLE_DEV_PM_OPS(stitch_pm_ops, NULL, NULL);
 #endif
-
-
-static const struct of_device_id cvi_stitch_dt_match[] = {
-	{.compatible = "cvitek,stitch"},
-	{}
-};
 
 #if (!DEVICE_FROM_DTS)
 static void cvi_stitch_pdev_release(struct device *dev)
@@ -492,7 +534,7 @@ static struct platform_driver cvi_stitch_pdrv = {
 		.name		= "stitch",
 		.owner		= THIS_MODULE,
 #if (DEVICE_FROM_DTS)
-		.of_match_table	= cvi_stitch_dt_match,
+		.of_match_table	= of_match_ptr(cvi_stitch_dt_match),
 #endif
 		.pm		= &stitch_pm_ops,
 	},

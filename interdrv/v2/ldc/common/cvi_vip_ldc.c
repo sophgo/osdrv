@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/io.h>
 #include <linux/mm.h>
 #include <linux/of_device.h>
@@ -42,7 +43,12 @@
 #define CONFIG_PROC_FS 1
 #endif
 
+#ifndef CONFIG_PM_SLEEP
+#define CONFIG_PM_SLEEP 1
+#endif
+
 static atomic_t ldc_open_count = ATOMIC_INIT(0);
+static atomic_t suspend_flag = ATOMIC_INIT(0);
 
 static struct cvi_ldc_vdev *ldc_dev;
 static struct fasync_struct *ldc_fasync;
@@ -52,12 +58,18 @@ bool ldc_dump_reg;
 module_param(ldc_log_lv, int, 0644);
 MODULE_PARM_DESC(ldc_log_lv, "LDC Debug Log Level");
 
-static u32 clk_sys_freq = 0;
-module_param(clk_sys_freq, int, 0644);
+static u32 clk_sys_freq[LDC_DEV_MAX_CNT];
+static u32 core_cnt;
+module_param_array(clk_sys_freq, int, &core_cnt, S_IRUGO);
 MODULE_PARM_DESC(clk_sys_freq, "clk_sys_freq setting by user");
 
 module_param(ldc_dump_reg, bool, 0644);
 MODULE_PARM_DESC(ldc_dump_reg, "ldc need dump reg");
+
+bool is_ldc_suspended(void)
+{
+	return atomic_read(&suspend_flag) == 1 ? true : false;
+}
 
 struct cvi_ldc_vdev *ldc_get_dev(void)
 {
@@ -67,6 +79,72 @@ struct cvi_ldc_vdev *ldc_get_dev(void)
 struct fasync_struct *ldc_get_dev_fasync(void)
 {
 	return ldc_fasync;
+}
+
+void ldc_core_init(int top_id)
+{
+	ldc_reset(top_id);
+	ldc_init(top_id);
+	ldc_intr_ctrl(0x00, top_id);//0x7 if you want get mesh tbl id err status
+}
+
+void ldc_core_deinit(int top_id)
+{
+	ldc_intr_ctrl(0x00, top_id);
+	ldc_disable(top_id);
+	ldc_reset(top_id);
+}
+
+void ldc_dev_init(struct cvi_ldc_vdev *dev)
+{
+	int i;
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev.\n");
+		return;
+	}
+
+	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
+		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
+		ldc_core_init(i);
+	}
+
+	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
+}
+
+void ldc_dev_deinit(struct cvi_ldc_vdev *dev)
+{
+	int i;
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev.\n");
+		return;
+	}
+
+	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
+		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
+		ldc_core_deinit(i);
+	}
+
+	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
+}
+
+void ldc_enable_dev_clk(int coreid, bool en)
+{
+	struct cvi_ldc_vdev *dev = ldc_get_dev();
+
+	if (!dev || !dev->clk_ldc[coreid]) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev or null clk_ldc[%d]\n", coreid);
+		return;
+	}
+
+	if (en) {
+		if (!__clk_is_enabled(dev->clk_ldc[coreid]))
+			clk_enable(dev->clk_ldc[coreid]);
+	} else {
+		if (__clk_is_enabled(dev->clk_ldc[coreid]))
+			clk_disable(dev->clk_ldc[coreid]);
+	}
 }
 
 static int ldc_mmap(struct file *filp, struct vm_area_struct *vma)
@@ -245,6 +323,20 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = ldc_detach_vb_pool();
 			break;
 		}
+		case CVI_LDC_SUSPEND: {
+			struct cvi_ldc_vdev *dev
+				= container_of(filp->private_data, struct cvi_ldc_vdev, miscdev);
+
+			ret = ldc_suspend(dev->miscdev.this_device);
+			break;
+		}
+		case CVI_LDC_RESUME: {
+			struct cvi_ldc_vdev *dev
+				= container_of(filp->private_data, struct cvi_ldc_vdev, miscdev);
+
+			ret = ldc_resume(dev->miscdev.this_device);
+			break;
+		}
 		default:
 			ret = -ENOTTY;
 			goto err;
@@ -278,20 +370,7 @@ static int ldc_open(struct inode *inode, struct file *filp)
 		return 0;
 	}
 
-	/*if (dev->clk_sys)
-		clk_prepare_enable(dev->clk_sys);
-	if (dev->clk)
-		clk_prepare_enable(dev->clk);*/
-
-	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
-		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
-		ldc_reset(i);
-		ldc_init(i);
-		ldc_intr_ctrl(0x00, i);//0x7 if you want get mesh tbl id err status
-	}
-	atomic_set(&dev->state, LDC_DEV_STATE_RUNNING);
-
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "ldc_open\n");
+	CVI_TRACE_LDC(CVI_DBG_INFO, "ldc_open\n");
 
 	return 0;
 }
@@ -313,22 +392,7 @@ static int ldc_release(struct inode *inode, struct file *filp)
 		return 0;
 	}
 
-	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
-		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
-		ldc_intr_ctrl(0x00, i);
-		ldc_disable(i);
-		ldc_reset(i);
-	}
-
-	/*if (dev->clk_sys)
-		clk_prepare_disable(dev->clk_sys);
-	if (dev->clk)
-		clk_prepare_disable(dev->clk);*/
-
-	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
-
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "ldc_release.\n");
-
+	CVI_TRACE_LDC(CVI_DBG_INFO, "ldc_release.\n");
 	return 0;
 }
 
@@ -364,7 +428,7 @@ static void ldc_tsk_finish(struct cvi_ldc_vdev *dev, int top_id)
 	done_job = list_first_entry_or_null(&dev->list.done_list[top_id], struct ldc_job, node);
 	spin_unlock_irqrestore(&dev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_INFO, "job [%px]\n", done_job);
+	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job [%px]\n", done_job);
 	if (unlikely(!done_tsk)) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "null core[%d] done tsk\n", top_id);
 		return;
@@ -426,7 +490,8 @@ static void ldc_irq_handler(u8 intr_status, struct cvi_ldc_vdev *dev, int top_id
 	}
 
 	atomic_set(&dev->core[top_id].state, LDC_CORE_STATE_END);
-	//atomic_set(&dev->cur_irq_core_id, top_id);
+	CVI_TRACE_LDC(CVI_DBG_INFO, "core(%d) state set(%d)\n", top_id, LDC_CORE_STATE_END);
+
 #if !LDC_USE_THREADED_IRQ
 	ldc_tsk_finish(dev, top_id);
 #endif
@@ -462,6 +527,7 @@ static irqreturn_t ldc_isr(int irq, void *data)
 				ldc_intr_clr(intr_status, top_id);
 				ldc_intr_ctrl(0x00, top_id);
 				ldc_disable(top_id);
+				//ldc_enable_dev_clk(top_id, false);
 				return IRQ_HANDLED;
 			}
 
@@ -490,12 +556,13 @@ static irqreturn_t ldc_isr(int irq, void *data)
 			} else {
 CMDQ_STATUS_UNKOWN:
 				intr_status = ldc_intr_status(top_id);
-				CVI_TRACE_LDC(CVI_DBG_DEBUG, "ldc_%d, irq(%d), status(0x%x)\n"
+				CVI_TRACE_LDC(CVI_DBG_INFO, "ldc_%d, irq(%d), status(0x%x)\n"
 					, top_id, irq, intr_status);
 				ldc_intr_clr(intr_status, top_id);
 			}
 			ldc_intr_ctrl(0x00, top_id);
 			ldc_disable(top_id);
+			//ldc_enable_dev_clk(top_id, false);
 
 			ldc_irq_handler(intr_status, dev, top_id, done_job->use_cmdq);
 		}
@@ -531,8 +598,9 @@ static int ldc_init_resources(struct platform_device *pdev)
 	int i;
 	int irq_num[LDC_DEV_MAX_CNT];
 	const char * const irq_name[LDC_DEV_MAX_CNT] = {LDC0_INTR_NAME, LDC1_INTR_NAME};
-	//const char * const clk_sys_name[] = {};
-	//const char * const clk_ldc_name[] = {};
+	const char ldc_clk_name[LDC_DEV_MAX_CNT][16] = {"clk_ldc0", "clk_ldc1"};
+	const char ldc_clk_sys_name[LDC_DEV_MAX_CNT][16] = {"clk_sys_3", "clk_sys_3"};
+
 	struct resource *res[LDC_DEV_MAX_CNT];
 	void __iomem *reg_base[LDC_DEV_MAX_CNT];
 	struct cvi_ldc_vdev *dev;
@@ -571,17 +639,19 @@ static int ldc_init_resources(struct platform_device *pdev)
 		CVI_TRACE_LDC(CVI_DBG_DEBUG, "(%d)irq(%d) for %s get from platform driver.\n"
 			, i, irq_num[i], irq_name[i]);
 
-		/*dev->clk_sys[i] = devm_clk_get(&pdev->dev, clk_sys_name[i]);
-		if (IS_ERR(dev->clk_sys[i])) {
-			pr_err("ldc cannot get clk for clk_sys_%d\n", i);
-			dev->clk_sys[i] = NULL;
+		//clk res
+		dev->clk_src[i] = devm_clk_get(&pdev->dev, ldc_clk_sys_name[i]);
+		if (IS_ERR(dev->clk_src[i])) {
+			CVI_TRACE_LDC(CVI_DBG_ERR, "Cannot get clk for clk_sys_3 for stitch\n");
+			dev->clk_src[i] = NULL;
 		}
-
-		dev->clk[i] = devm_clk_get(&pdev->dev, clk_ldc_name[i]);
-		if (IS_ERR(dev->clk)) {
-			pr_err("ldc cannot get clk for ldc_%d\n", i);
-			dev->clk = NULL;
-		}*/
+		dev->clk_ldc[i] = devm_clk_get(&pdev->dev, ldc_clk_name[i]);
+		if (IS_ERR(dev->clk_ldc[i])) {
+			CVI_TRACE_LDC(CVI_DBG_ERR, "Cannot get clk for clk_stitch\n");
+			dev->clk_ldc[i] = NULL;
+		}
+		if (clk_sys_freq[i])
+			dev->clk_sys_freq[i] = clk_sys_freq[i];
 
 #if LDC_USE_WORKQUEUE
 		if (devm_request_irq(&pdev->dev, irq_num[i], ldc_isr, IRQF_SHARED
@@ -619,6 +689,54 @@ static int ldc_init_resources(struct platform_device *pdev)
 	return rc;
 }
 
+static void ldc_clk_init(struct cvi_ldc_vdev *dev)
+{
+	int i;
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev.\n");
+		return;
+	}
+
+	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
+		if (dev->clk_src[i])
+			clk_prepare_enable(dev->clk_src[i]);
+		if (dev->clk_apb[i])
+			clk_prepare_enable(dev->clk_apb[i]);
+		if (dev->clk_ldc[i] && !__clk_is_enabled(dev->clk_ldc[i]))
+			clk_prepare_enable(dev->clk_ldc[i]);
+
+		ldc_enable_dev_clk(i, true);
+
+		if (clk_sys_freq[i])
+			dev->clk_sys_freq[i] = clk_sys_freq[i];
+	}
+}
+
+static void ldc_clk_deinit(struct cvi_ldc_vdev *dev)
+{
+	int i;
+
+	if (unlikely(!dev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev.\n");
+		return;
+	}
+
+	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
+		if (dev->clk_ldc[i] && __clk_is_enabled(dev->clk_ldc[i]))
+			clk_disable_unprepare(dev->clk_ldc[i]);
+		if (dev->clk_apb[i])
+			clk_disable_unprepare(dev->clk_apb[i]);
+		if (dev->clk_src[i])
+			clk_disable_unprepare(dev->clk_src[i]);
+
+		if (clk_sys_freq[i]) {
+			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			clk_sys_freq[i] = 0;
+		}
+	}
+}
+
 static int ldc_create_instance(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -647,6 +765,9 @@ static int ldc_create_instance(struct platform_device *pdev)
 	}
 #endif
 
+	ldc_clk_init(wdev);
+	ldc_dev_init(wdev);
+
 	if (cvi_ldc_sw_init(wdev)) {
 		pr_err("ldc sw init fail\n");
 		goto err_sw_init;
@@ -656,7 +777,6 @@ static int ldc_create_instance(struct platform_device *pdev)
 
 err_sw_init:
 	cvi_ldc_sw_deinit(wdev);
-
 #ifdef CONFIG_PROC_FS
 err_proc:
 	if (wdev->shared_mem) {
@@ -685,6 +805,8 @@ static int ldc_destroy_instance(struct platform_device *pdev)
 	}
 
 	cvi_ldc_sw_deinit(wdev);
+	ldc_dev_deinit(wdev);
+	ldc_clk_deinit(wdev);
 
 #ifdef CONFIG_PROC_FS
 	ldc_proc_remove();
@@ -727,9 +849,6 @@ static int cvi_ldc_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	if (clk_sys_freq)
-		wdev->clk_sys_freq = clk_sys_freq;
-
 	CVI_TRACE_LDC(CVI_DBG_INFO, "done with rc(%d).\n", rc);
 
 	return rc;
@@ -759,7 +878,6 @@ static int cvi_ldc_remove(struct platform_device *pdev)
 	}
 
 	dev_set_drvdata(&pdev->dev, NULL);
-	ldc_dev = NULL;
 
 	return 0;
 }
@@ -770,15 +888,51 @@ static const struct of_device_id cvi_ldc_dt_match[] = {
 };
 
 #ifdef CONFIG_PM_SLEEP
-static int ldc_suspend(struct device *dev)
+int ldc_suspend(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	s32 ret = 0;
+	struct cvi_ldc_vdev * vdev = ldc_get_dev();
+
+	if (unlikely(!vdev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
+		return -1;
+	}
+
+	ret = ldc_suspend_handler();
+	if (ret) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "fail to suspend ldc thread, err=%d\n", ret);
+		return -1;
+	}
+
+	ldc_dev_deinit(vdev);
+	ldc_clk_deinit(vdev);
+	atomic_set(&suspend_flag, 1);
+
+	CVI_TRACE_LDC(CVI_DBG_INFO, "ldc suspend+\n");
 	return 0;
 }
 
-static int ldc_resume(struct device *dev)
+int ldc_resume(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	s32 ret = 0;
+	struct cvi_ldc_vdev * vdev = ldc_get_dev();
+
+	if (unlikely(!vdev)) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
+		return -1;
+	}
+
+	ldc_clk_init(vdev);
+	ldc_dev_init(vdev);
+
+	ret = ldc_resume_handler();
+	if (ret) {
+		CVI_TRACE_LDC(CVI_DBG_ERR, "fail to resume ldc thread, err=%d\n", ret);
+		return -1;
+	}
+	atomic_set(&suspend_flag, 0);
+
+	CVI_TRACE_LDC(CVI_DBG_INFO, "ldc resume+\n");
 	return 0;
 }
 

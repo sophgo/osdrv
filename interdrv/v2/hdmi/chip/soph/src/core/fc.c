@@ -1,4 +1,5 @@
 #include "core/hdmi_reg.h"
+#include "core/hdmi_core.h"
 #include "fc.h"
 #include "video.h"
 #include "bsp/access.h"
@@ -235,7 +236,7 @@ int fc_video_config(hdmi_tx_dev_t *dev, videoParams_t *video)
 
 	if((dev == NULL) || (video == NULL)){
 		pr_err("Invalid video arguments");
-		return FALSE;
+		return CVI_ERR_HDMI_VIDEO_ARGS_INVALID;
 	}
 
 	dtd = &video->mDtd;
@@ -243,7 +244,7 @@ int fc_video_config(hdmi_tx_dev_t *dev, videoParams_t *video)
 	fc_video_vsync_polarity(dev, dtd->mVSyncPolarity);
 	fc_video_hsync_polarity(dev, dtd->mHSyncPolarity);
 	fc_video_data_enable_polarity(dev, dev->snps_hdmi_ctrl.data_enable_polarity);
-	fc_video_dvi_or_hdmi(dev, 1);
+	fc_video_dvi_or_hdmi(dev, video->mHdmi);
 
 	if (video->mHdmiVideoFormat == HDMI_3D_FORMAT) {
 		if (video->m3dStructure == FRAME_PACKING_3D) {/* 3d data frame packing is transmitted as a progressive format */
@@ -297,7 +298,7 @@ int fc_video_config(hdmi_tx_dev_t *dev, videoParams_t *video)
 
 	fc_video_pixel_repetition_input(dev, dev->snps_hdmi_ctrl.pixel_repetition + 1);
 
-	return TRUE;
+	return 0;
 }
 
 void fc_packets_queue_priority_high(hdmi_tx_dev_t *dev, u8 value)

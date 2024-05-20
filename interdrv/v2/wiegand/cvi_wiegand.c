@@ -62,10 +62,11 @@ static inline void mmio_clrsetbits_32(uintptr_t addr,
 static int platform_wiegand_clk_init(struct cvi_wiegand_device *ndev)
 {
 	//enable clock
-	if (ndev->clk_wiegand && ndev->clk_wiegand1) {
+	if (ndev->clk_wiegand) {
 		pr_debug("wiegand enable clock\n");
 		clk_prepare_enable(ndev->clk_wiegand);
-		clk_prepare_enable(ndev->clk_wiegand1);
+		//clk_prepare_enable(ndev->clk_wiegand1);
+		ndev->clk_wiegand_en = 1;
 	}
 
 	return 0;
@@ -74,10 +75,11 @@ static int platform_wiegand_clk_init(struct cvi_wiegand_device *ndev)
 static void platform_wiegand_clk_deinit(struct cvi_wiegand_device *ndev)
 {
 	//disable clock
-	if (ndev->clk_wiegand && ndev->clk_wiegand1) {
+	if (ndev->clk_wiegand) {
 		pr_debug("wiegand disable clock\n");
 		clk_disable_unprepare(ndev->clk_wiegand);
-		clk_disable_unprepare(ndev->clk_wiegand1);
+		//clk_disable_unprepare(ndev->clk_wiegand1);
+		ndev->clk_wiegand_en = 0;
 	}
 }
 
@@ -404,7 +406,6 @@ static int cvi_wiegand_probe(struct platform_device *pdev)
 	struct cvi_wiegand_device *ndev;
 	struct resource *res;
 	int ret;
-
 	pr_debug("cvi_wiegand_probe start\n");
 
 	ndev = devm_kzalloc(&pdev->dev, sizeof(*ndev), GFP_KERNEL);
@@ -439,11 +440,7 @@ static int cvi_wiegand_probe(struct platform_device *pdev)
 		ndev->clk_wiegand = NULL;
 	}
 
-	ndev->clk_wiegand1 = devm_clk_get(&pdev->dev, "clk_wgn1");
-	if (IS_ERR(ndev->clk_wiegand1)) {
-		dev_err(dev, "failed to retrieve wiegand clk_wgn1\n");
-		ndev->clk_wiegand1 = NULL;
-	}
+	ndev->clk_wiegand_en = 0;
 
 	ndev->rst_wiegand = devm_reset_control_get(&pdev->dev, "res_wgn");
 	if (IS_ERR(ndev->rst_wiegand)) {
@@ -476,6 +473,29 @@ static int cvi_wiegand_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int dw_wiegand_suspend(struct device *dev)
+{
+	struct cvi_wiegand_device *dw_wiegand = dev_get_drvdata(dev);
+
+	if (dw_wiegand->clk_wiegand_en == 1)
+		clk_disable_unprepare(dw_wiegand->clk_wiegand);
+
+	return 0;
+}
+
+static int dw_wiegand_resume(struct device *dev)
+{
+	struct cvi_wiegand_device *dw_wiegand = dev_get_drvdata(dev);
+
+	if (dw_wiegand->clk_wiegand_en == 1)
+		clk_prepare_enable(dw_wiegand->clk_wiegand);
+
+	return 0;
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static SIMPLE_DEV_PM_OPS(dw_wiegand_pm_ops, dw_wiegand_suspend, dw_wiegand_resume);
 static const struct of_device_id cvi_wiegand_match[] = {
 	{ .compatible = "cvitek,wiegand" },
 	{},
@@ -489,6 +509,7 @@ static struct platform_driver cvi_wiegand_driver = {
 			.owner = THIS_MODULE,
 			.name = "cvi-wiegand",
 			.of_match_table = cvi_wiegand_match,
+			.pm	= &dw_wiegand_pm_ops,
 		},
 };
 

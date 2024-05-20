@@ -654,7 +654,7 @@ void disp_oenc_set_cfg(u8 oenc_inst, struct disp_oenc_cfg *oenc_cfg)
 		//disp_oenc_trig
 		_reg_write_mask(REG_VO_SYS_OENC_INT_GO(oenc_inst), BIT(0), 1);
 	} else {
-		pr_err("[%s]Invalid oenc(%d), oenc only has 2 engine(0 & 1)", __func__, oenc_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[%s]Invalid oenc(%d), oenc only has 2 engine(0 & 1)", __func__, oenc_inst);
 	}
 }
 
@@ -672,17 +672,17 @@ struct disp_oenc_cfg *disp_oenc_get_cfg(u8 oenc_inst)
 		oenc_trig.go_intr.raw = _reg_read(REG_VO_SYS_OENC_INT_GO(oenc_inst));
 
 		if (oenc_trig.go_intr.b.done)
-			pr_debug("[cvi-disp] SCLR OSD Compression done!!\n");
+			CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] SCLR OSD Compression done!!\n");
 
-		pr_debug("[cvi-disp] SCLR OSD Compression INTR vector:");
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] SCLR OSD Compression INTR vector:");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(0))
-			pr_debug("Successful!!\n");
+			CVI_TRACE_VO(CVI_DBG_DEBUG, "Successful!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(2))
-			pr_err("Fail, Bitstream size great than limiter!!\n");
+			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Bitstream size great than limiter!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(3))
-			pr_err("Fail, Watch Dog time-out!!\n");
+			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Watch Dog time-out!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(4))
-			pr_err("Fail, Out of Dram Write protection region!!\n");
+			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Out of Dram Write protection region!!\n");
 
 		g_oenc_cfg[oenc_inst].cfg.raw = _reg_read(REG_VO_SYS_OENC_CFG(oenc_inst));
 		g_oenc_cfg[oenc_inst].bso_adr = _reg_read(REG_VO_SYS_OENC_BSO_ADDR(oenc_inst));
@@ -690,7 +690,7 @@ struct disp_oenc_cfg *disp_oenc_get_cfg(u8 oenc_inst)
 		g_oenc_cfg[oenc_inst].bso_mem_size.w = ALIGN(g_oenc_cfg[oenc_inst].bso_sz, 16) & 0x3fff;
 		g_oenc_cfg[oenc_inst].bso_mem_size.h = ALIGN(g_oenc_cfg[oenc_inst].bso_sz, 16) >> 14;
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such oenc_inst(%d). ", __func__, oenc_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such oenc_inst(%d). ", __func__, oenc_inst);
 		return NULL;
 	}
 
@@ -759,12 +759,12 @@ void disp_reg_set_shadow_mask(u8 inst, bool shadow_mask)
 void disp_gop_set_cfg(u8 inst, u8 layer, struct disp_gop_cfg *cfg, bool update)
 {
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return;
 	}
 
@@ -823,23 +823,23 @@ int disp_gop_setup_256LUT(u8 inst, u8 layer, u16 length, u16 *data)
 	u32 vip_pll = ioread32(vip_clk_reg);
 
 	iounmap(vip_clk_reg);
-	pr_debug("hw vip clk:%#x\n", vip_pll);
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "hw vip clk:%#x\n", vip_pll);
 #endif
 
-	pr_debug("[cvi-disp] %s:  inst(%d) layer(%d) length(%d)\n", __func__, inst, layer, length);
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] %s:  inst(%d) layer(%d) length(%d)\n", __func__, inst, layer, length);
 	gop_cfg = *disp_gop_get_cfg(inst, layer);
 
 	if (layer < DISP_MAX_GOP_INST) {
-		pr_debug("before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
 			_reg_read(REG_DISP_GOP_CFG(inst, layer)),
 			_reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 
 	if (length >= 256) {
-		pr_err("LUT length(%d) error, should less or equal to 256!\n", length);
+		CVI_TRACE_VO(CVI_DBG_ERR, "LUT length(%d) error, should less or equal to 256!\n", length);
 		return -1;
 	}
 
@@ -848,30 +848,30 @@ int disp_gop_setup_256LUT(u8 inst, u8 layer, u16 length, u16 *data)
 		//Disable OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), 0x0);
 
-		pr_debug("[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d). Length is %d.\n",
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d). Length is %d.\n",
 			layer, inst, length);
 		for (i = 0; i < length; ++i) {
 			_reg_write(REG_DISP_GOP_256LUT0(inst, layer),
 						(i << 16) | *(data + i));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), BIT(16));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), ~BIT(16));
-			pr_debug("write LUT index:%d value:%#x\n", i, *(data + i));
+			CVI_TRACE_VO(CVI_DBG_DEBUG, "write LUT index:%d value:%#x\n", i, *(data + i));
 		}
 #if 0 /* do not read when normal operation */
 		for (i = 0; i < length; ++i) {
 			_reg_write(REG_DISP_GOP_256LUT0(inst, layer), (i << 16));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), BIT(17));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), ~BIT(17));
-			pr_debug("read LUT index:%d value:%#x\n",
+			CVI_TRACE_VO(CVI_DBG_DEBUG, "read LUT index:%d value:%#x\n",
 				i, _reg_read(REG_DISP_GOP_256LUT1(inst, layer)) & 0xFFFF);
 		}
 #endif
 		//Enable original OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), gop_cfg.gop_ctrl.raw);
-		pr_debug("After update LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "After update LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 	return 0;
@@ -890,11 +890,11 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 	struct disp_gop_cfg gop_cfg = *disp_gop_get_cfg(inst, layer);
 
 	if (layer < DISP_MAX_GOP_INST) {
-		pr_debug("before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
 			_reg_read(REG_DISP_GOP_CFG(inst, layer)),
 			_reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 
@@ -906,7 +906,7 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 		//Disable OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), 0x0);
 
-		pr_debug("[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d), Index is %d.\n",
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d), Index is %d.\n",
 				layer, inst, index);
 		_reg_write(REG_DISP_GOP_256LUT0(inst, layer),
 					(index << 16) | data);
@@ -915,10 +915,10 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 
 		//Enable original OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), gop_cfg.gop_ctrl.raw);
-		pr_debug("After upadte LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "After upadte LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 	return 0;
@@ -939,7 +939,7 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 	u16 i = 0;
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 	if (length > 16)
@@ -948,8 +948,8 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 	if (inst < DISP_MAX_INST) {
 		disp_reg_set_shadow_mask(inst, true);
 
-		pr_debug("[cvi-vip][sc] update 16LUT in gop1 of display. Length is %d.\n", length);
-		pr_debug("[cvi-disp] update 16LUT in gop1 of display. Length is %d.\n", length);
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-vip][sc] update 16LUT in gop1 of display. Length is %d.\n", length);
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 16LUT in gop1 of display. Length is %d.\n", length);
 		for (i = 0; i <= length; i += 2) {
 			_reg_write(REG_DISP_GOP_16LUT(inst, layer, i / 2),
 						((*(data + i + 1) << 16) | (*(data + i))));
@@ -957,7 +957,7 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 	return 0;
@@ -974,7 +974,7 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 int disp_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data)
 {
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 	if (index > 16)
@@ -983,7 +983,7 @@ int disp_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data)
 	if (inst < DISP_MAX_INST) {
 		disp_reg_set_shadow_mask(inst, true);
 
-		pr_debug("[cvi-disp] update 16LUT in gop1 of display. Index is %d.\n", index);
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 16LUT in gop1 of display. Index is %d.\n", index);
 		if (index % 2 == 0) {
 			_reg_write_mask(REG_DISP_GOP_16LUT(inst, layer, index / 2), 0xFFFF, data);
 		} else {
@@ -992,7 +992,7 @@ int disp_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data)
 
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 	return 0;
@@ -1019,20 +1019,20 @@ void disp_gop_ow_set_cfg(u8 inst, u8 layer, u8 ow_inst, struct disp_gop_ow_cfg *
 	static const u8 reg_map_fmt[DISP_GOP_FMT_MAX] = {0, 0x4, 0x5, 0x8, 0xa, 0xc};
 
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (ow_inst >= DISP_MAX_GOP_OW_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
 		return;
 	}
-	pr_debug("[cvi-disp] %s: inst:%d layer:%d ow_inst:%d ow_cfg->fmt:%d\n",
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] %s: inst:%d layer:%d ow_inst:%d ow_cfg->fmt:%d\n",
 		__func__, inst, layer, ow_inst, ow_cfg->fmt);
 
 	disp_reg_set_shadow_mask(inst, true);
@@ -1069,17 +1069,17 @@ EXPORT_SYMBOL_GPL(disp_gop_ow_set_cfg);
 void disp_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 {
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (ow_inst >= DISP_MAX_GOP_OW_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
 		return;
 	}
 
@@ -1098,17 +1098,17 @@ void disp_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 void disp_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct disp_gop_fb_cfg *fb_cfg)
 {
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (fb_inst >= DISP_MAX_GOP_FB_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
 		return;
 	}
 
@@ -1136,17 +1136,17 @@ void disp_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct disp_gop_fb_cfg *
 u32 disp_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst)
 {
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return -1;
 	}
 
 	if (fb_inst >= DISP_MAX_GOP_FB_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
 		return -1;
 	}
 
@@ -1165,17 +1165,17 @@ void disp_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, u8 oenc_inst, struct dis
 	struct disp_oenc_cfg *oenc_cfg;
 
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return;
 	}
 
 	if (oenc_inst >= MAX_OSD_ENC_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such inst(%d). ", __func__, oenc_inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such inst(%d). ", __func__, oenc_inst);
 		return;
 	}
 
@@ -1200,7 +1200,7 @@ void disp_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, u8 oenc_inst, struct dis
 void disp_cover_set_cfg(u8 inst, u8 cover_w_inst, struct disp_cover_cfg *cover_cfg)
 {
 	if (inst >= DISP_MAX_INST) {
-		pr_err("[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
@@ -1505,9 +1505,9 @@ int disp_set_rect(u8 inst, struct disp_rect rect)
 	      disp_timing[inst].vfde_end) ||
 	    ((disp_timing[inst].hfde_start + rect.x + rect.w - 1) >
 	      disp_timing[inst].hfde_end)) {
-		pr_err("[cvi-vip][disp] %s: dev(%d) me's pos(%d, %d) size(%d, %d)\n",
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi-vip][disp] %s: dev(%d) me's pos(%d, %d) size(%d, %d)\n",
 				__func__, inst, rect.x, rect.y, rect.w, rect.h);
-		pr_err(" out of range(%d, %d, %d, %d).\n",
+		CVI_TRACE_VO(CVI_DBG_ERR, " out of range(%d, %d, %d, %d).\n",
 				disp_timing[inst].hfde_start, disp_timing[inst].vfde_start,
 				disp_timing[inst].hfde_end, disp_timing[inst].vfde_end);
 		return -EINVAL;
@@ -1691,11 +1691,12 @@ void disp_set_pattern(u8 inst, enum disp_pat_type type,
 		break;
 	}
 	default:
-		pr_err("%s - unacceptiable pattern-type(%d)\n", __func__, type);
+		CVI_TRACE_VO(CVI_DBG_ERR, "%s - unacceptiable pattern-type(%d)\n", __func__, type);
 		break;
 	}
 	_reg_write_mask(REG_DISP_CFG(inst), BIT(7), BIT(7));
 }
+EXPORT_SYMBOL_GPL(disp_set_pattern);
 
 /**
  * disp_set_frame_bgcolor - setup disp frame(area outside mde)'s
@@ -1975,7 +1976,7 @@ void disp_get_checksum_status(u8 inst, struct disp_checksum_status *status)
  */
 enum disp_dsi_mode dsi_get_mode(u8 inst)
 {
-	return (_reg_read(REG_DSI_MAC_EN(inst)) & 0x0f);
+	return (_reg_read(REG_DSI_MAC_EN(inst)) & 0x07);
 }
 
 /**
@@ -1984,11 +1985,11 @@ enum disp_dsi_mode dsi_get_mode(u8 inst)
  */
 void dsi_clr_mode(u8 inst)
 {
-	u32 mode = _reg_read(REG_DSI_MAC_EN(inst));
+	u32 mode = _reg_read(REG_DSI_MAC_EN(inst)) & 0x7;
 
-	pr_debug("%s: mac_en reg(%#x)\n", __func__, mode);
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: mac_en reg(%#x)\n", __func__, mode);
 	if (mode != DISP_DSI_MODE_IDLE)
-		_reg_write(REG_DSI_MAC_EN(inst), mode);
+		_reg_write_mask(REG_DSI_MAC_EN(inst), 0x7, mode);
 }
 
 /**
@@ -2010,7 +2011,8 @@ int dsi_set_mode(u8 inst, enum disp_dsi_mode mode)
 	if (_reg_read(REG_DSI_MAC_EN(inst)))
 		return -1;
 
-	_reg_write(REG_DSI_MAC_EN(inst), mode);
+	_reg_write_mask(REG_DSI_MAC_EN(inst), 0x7, mode);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(dsi_set_mode);
@@ -2026,12 +2028,12 @@ int dsi_chk_mode_done(u8 inst, enum disp_dsi_mode mode)
 	u32 val = 0;
 
 	if ((mode == DISP_DSI_MODE_ESC) || (mode == DISP_DSI_MODE_SPKT)) {
-		val = _reg_read(REG_DSI_MAC_EN(inst)) & 0xf0;
+		val = _reg_read(REG_DSI_MAC_EN(inst)) & 0x30;
 		return (val ^ (mode << 4)) ? -1 : 0;
 	}
 
 	if ((mode == DISP_DSI_MODE_IDLE) || (mode == DISP_DSI_MODE_HS)) {
-		val = _reg_read(REG_DSI_MAC_EN(inst)) & 0x0f;
+		val = _reg_read(REG_DSI_MAC_EN(inst)) & 0x07;
 		return (val == (mode)) ? 0 : -1;
 	}
 
@@ -2070,7 +2072,7 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 	int ret;
 	char str[128];
 
-	pr_debug("%s; count(%d)\n", __func__, count);
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s; count(%d)\n", __func__, count);
 	while (count != 0) {
 		if (count <= DISP_MAX_DSI_LP) {
 			packet_count = count;
@@ -2083,7 +2085,7 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 		count -= packet_count;
 		val = 0x01 | ((packet_count - 1) << 8) | (count ? 0 : 0x10000);
 		_reg_write(REG_DSI_ESC(inst), val);
-		pr_debug("%s: esc reg(%#x)\n", __func__, val);
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: esc reg(%#x)\n", __func__, val);
 
 		snprintf(str, 128, "%s: packet_count(%d) data(", __func__, packet_count);
 		for (i = 0; i < packet_count; i += 4) {
@@ -2100,12 +2102,12 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 			_reg_write(addr + i, val);
 			snprintf(str + strlen(str), 128 - strlen(str), "%#x ", val);
 		}
-		pr_debug("%s)\n", str);
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "%s)\n", str);
 
 		dsi_set_mode(inst, DISP_DSI_MODE_ESC);
 		ret = _dsi_chk_and_clean_mode(inst, DISP_DSI_MODE_ESC);
 		if (ret != 0) {
-			pr_err("%s: packet_count(%d) data0(%#x)\n", __func__, packet_count, data[0]);
+			CVI_TRACE_VO(CVI_DBG_ERR, "%s: packet_count(%d) data0(%#x)\n", __func__, packet_count, data[0]);
 			break;
 		}
 	}
@@ -2127,7 +2129,7 @@ int dsi_long_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 	u16 crc;
 
 	if (count > 128 - 6) {
-		pr_err("%s: count(%d) invalid\n", __func__, count);
+		CVI_TRACE_VO(CVI_DBG_ERR, "%s: count(%d) invalid\n", __func__, count);
 		return -1;
 	}
 
@@ -2171,6 +2173,8 @@ int dsi_short_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 		val |= data[0] << 8;
 	}
 
+	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: dev(%d) val(0x%x)\n", __func__, inst, val);
+
 	if (!sw_mode) {
 		_reg_write_mask(REG_DSI_HS_0(inst), 0x00ffffff, val);
 		dsi_set_mode(inst, DISP_DSI_MODE_SPKT);
@@ -2193,20 +2197,20 @@ int dsi_short_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 int dsi_dcs_write_buffer(u8 inst, u8 di, const void *data, size_t len, bool sw_mode)
 {
 	if (len == 0) {
-		pr_err("[cvi_mipi_tx] %s: 0 param unacceptable.\n", __func__);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: 0 param unacceptable.\n", __func__);
 		return -1;
 	}
 
 	if ((di == 0x06) || (di == 0x05) || (di == 0x04) || (di == 0x03)) {
 		if (len != 1) {
-			pr_err("[cvi_mipi_tx] %s: cmd(0x%02x) should has 1 param.\n", __func__, di);
+			CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: cmd(0x%02x) should has 1 param.\n", __func__, di);
 			return -1;
 		}
 		return dsi_short_packet(inst, di, data, len, sw_mode);
 	}
 	if ((di == 0x15) || (di == 0x37) || (di == 0x13) || (di == 0x14) || (di == 0x23)) {
 		if (len != 2) {
-			pr_err("[cvi_mipi_tx] %s: cmd(0x%02x) should has 2 param.\n", __func__, di);
+			CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: cmd(0x%02x) should has 2 param.\n", __func__, di);
 			return -1;
 		}
 		return dsi_short_packet(inst, di, data, len, sw_mode);
@@ -2236,7 +2240,7 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 		len = 4;
 
 	if (dsi_get_mode(inst) == DISP_DSI_MODE_HS) {
-		pr_err("[cvi_mipi_tx] %s: not work in HS.\n", __func__);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: not work in HS.\n", __func__);
 		return -1;
 	}
 
@@ -2254,7 +2258,7 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 	// goto BTA
 	dsi_set_mode(inst, DISP_DSI_MODE_ESC);
 	if (_dsi_chk_and_clean_mode(inst, DISP_DSI_MODE_ESC) != 0) {
-		pr_err("[cvi_mipi_tx] %s: BTA error.\n", __func__);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: BTA error.\n", __func__);
 		return ret;
 	}
 
@@ -2277,12 +2281,12 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 			data[i] = (rx_data >> (i * 8)) & 0xff;
 		break;
 	case ACK_WR:
-		pr_err("[cvi_mipi_tx] %s: dcs read, ack with error(%#x %#x).\n"
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: dcs read, ack with error(%#x %#x).\n"
 			, __func__, (rx_data >> 8) & 0xff, (rx_data >> 16) & 0xff);
 		ret = -1;
 		break;
 	default:
-		pr_err("[cvi_mipi_tx] %s: unknown DT, %#x.", __func__, rx_data);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: unknown DT, %#x.", __func__, rx_data);
 		ret = -1;
 		break;
 	}
@@ -2337,7 +2341,7 @@ void i80_packet(u8 inst, u32 cmd)
 	} while (++cnt < 10);
 
 	if (cnt == 10)
-		pr_err("[cvi_vip] %s: cmd(%#x) not ready.\n", __func__, cmd);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_vip] %s: cmd(%#x) not ready.\n", __func__, cmd);
 }
 
 bool i80_chk_idle(u8 inst)
@@ -2353,11 +2357,11 @@ bool i80_chk_idle(u8 inst)
 			usleep_range(1 * 1000, 3 * 1000);
 		} while (++cnt < I80_BUSY_WAITING_TIMES);
 
-		pr_err("%s: waiting idle failed. sw try to clear it.\n", __func__);
+		CVI_TRACE_VO(CVI_DBG_ERR, "%s: waiting idle failed. sw try to clear it.\n", __func__);
 		_reg_write_mask(REG_VO_MAC_MCU_IF_CTRL(inst), BIT(10), BIT(10));
 	}
 
-	pr_err("%s: failed.\n", __func__);
+	CVI_TRACE_VO(CVI_DBG_ERR, "%s: failed.\n", __func__);
 	return false;
 }
 
@@ -2436,7 +2440,7 @@ void i80_hw_set_cmd3(u8 inst, u32 cmd)
 int i80_hw_set_cmd_cnt(u8 inst, u32 cmdcnt)
 {
 	if (cmdcnt > 16) {
-		pr_err("[i80] %s: hw  mcu cmd takes max 16 cmds but (%d) set.\n", __func__, cmdcnt);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[i80] %s: hw  mcu cmd takes max 16 cmds but (%d) set.\n", __func__, cmdcnt);
 		return -1;
 	}
 	cmdcnt = ((cmdcnt & 0xF) - 1) << 4;
@@ -2500,7 +2504,7 @@ int i80_hw_trig(u8 inst)
 	} while (++cnt < 10);
 
 	if (cnt == 10) {
-		pr_err("[I80] %s: hw  mcu cmd not ready.\n", __func__);
+		CVI_TRACE_VO(CVI_DBG_ERR, "[I80] %s: hw  mcu cmd not ready.\n", __func__);
 		return -1;
 	}
 	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(6),  BIT(6));

@@ -3,6 +3,7 @@
 #include "core/main_controller.h"
 #include "core/packets.h"
 #include "core/hdmi_reg.h"
+#include "core/hdmi_core.h"
 #include "util/util.h"
 #include "bsp/access.h"
 #include "vo_sys.h"
@@ -269,13 +270,13 @@ int audio_configure(hdmi_tx_dev_t *dev, audioParams_t * audio)
 
 	if((dev == NULL) || (audio == NULL)){
 		pr_err("Improper function arguments");
-		return FALSE;
+		return CVI_ERR_HDMI_AUDIO_ARGS_INVALID;
 	}
 
 	if(dev->snps_hdmi_ctrl.audio_on == 0){
 		pr_debug("Audio is not enabled");
 		mc_audio_sampler_clock_enable(dev, 1);
-		return TRUE;
+		return 0;
 	}
 
 	audio->mInterfaceType = DMA;
@@ -311,7 +312,7 @@ int audio_configure(hdmi_tx_dev_t *dev, audioParams_t * audio)
 
 	audio_ahbdma(dev, audio);
 
-	return TRUE;
+	return 0;
 }
 
 int audio_mute(hdmi_tx_dev_t *dev, u8 state)

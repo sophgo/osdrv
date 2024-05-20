@@ -7508,6 +7508,7 @@ s32 cvi_ive_map(struct cvi_ive_device *ndev, IVE_SRC_IMAGE_S *pstSrc,
 	u16 *_pu16Ptr = NULL;
 	u8 *pu8Ptr = NULL;
 	u16 *pu16Ptr = NULL;
+	int c_unit = 1;
 	//DEFINE_IMG_IN_C(img_in_c);
 	IMG_IN_C img_in_c = _DEFINE_IMG_IN_C;
 	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
@@ -7608,9 +7609,10 @@ s32 cvi_ive_map(struct cvi_ive_device *ndev, IVE_SRC_IMAGE_S *pstSrc,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
 
 	if (pstSrc->u32Width > 480) {
+		c_unit = (pstMapCtrl->enMode == IVE_MAP_MODE_U8) ? 1 : 2;
 		ret = emit_tile(ndev, ive_top_c, &ive_filterop_c, &img_in_c,
 			NULL, NULL, &wdma_c_ctl_c, NULL, pstSrc, NULL,
-			NULL, pstDst, NULL, false, 1, true, 1, false, MOD_MAP,
+			NULL, pstDst, NULL, false, 1, true, c_unit, false, MOD_MAP,
 			bInstant, dev_id);
 	} else {
 		ret = cvi_ive_go(ndev, ive_top_c, bInstant,

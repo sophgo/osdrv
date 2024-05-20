@@ -45,7 +45,9 @@ struct ldc_core {
 	struct clk *clk;
 	atomic_t state;//ldc_core_state
 	struct ldc_tsk_list list;
+#if LDC_USE_WORKQUEUE
 	struct work_struct work_frm_done;
+#endif
 	wait_queue_head_t cmdq_wq;
 	bool cmdq_evt;
 };
@@ -61,7 +63,10 @@ struct cvi_ldc_vdev {
 	struct ldc_core core[LDC_DEV_MAX_CNT];
 	int core_num;
 	//atomic_t cur_irq_core_id;
-	u32 clk_sys_freq;
+	struct clk *clk_src[LDC_DEV_MAX_CNT];
+	struct clk *clk_apb[LDC_DEV_MAX_CNT];
+	struct clk *clk_ldc[LDC_DEV_MAX_CNT];
+	u32 clk_sys_freq[LDC_DEV_MAX_CNT];
 	void *shared_mem;
 	struct task_struct *thread;
 	wait_queue_head_t wait;
@@ -73,9 +78,18 @@ struct cvi_ldc_vdev {
 	struct ldc_job_list list;
 	struct ldc_vb_doneq vb_doneq;
 	VB_POOL VbPool;
+	struct semaphore sem;
 };
 
 struct cvi_ldc_vdev *ldc_get_dev(void);
 struct fasync_struct *ldc_get_dev_fasync(void);
+void ldc_enable_dev_clk(int coreid, bool en);
+void ldc_core_init(int top_id);
+void ldc_core_deinit(int top_id);
+void ldc_dev_init(struct cvi_ldc_vdev *dev);
+void ldc_dev_deinit(struct cvi_ldc_vdev *dev);
+int ldc_suspend(struct device *dev);
+int ldc_resume(struct device *dev);
+bool is_ldc_suspended(void);
 
 #endif /* _CVI_VIP_LDC_H_ */

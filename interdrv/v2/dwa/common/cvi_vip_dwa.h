@@ -78,6 +78,7 @@ struct cvi_dwa_vdev {
 	struct dwa_job_list list;
 	struct dwa_vb_doneq vb_doneq;
 	VB_POOL VbPool;
+	struct semaphore sem;
 };
 
 struct cvi_dwa_vdev *dwa_get_dev(void);
@@ -87,5 +88,8 @@ void dwa_core_init(int top_id);
 void dwa_core_deinit(int top_id);
 void dwa_dev_init(struct cvi_dwa_vdev *dev);
 void dwa_dev_deinit(struct cvi_dwa_vdev *dev);
+int dwa_suspend(struct device *dev);
+int dwa_resume(struct device *dev);
+bool is_dwa_suspended(void);
 
 #endif /* _CVI_VIP_DWA_H_ */

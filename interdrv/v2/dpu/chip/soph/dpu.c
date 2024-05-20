@@ -1072,8 +1072,6 @@ s32 cvi_dpu_create_grp(DPU_GRP DpuGrp,DPU_GRP_ATTR_S *pstGrpAttr)
 	dpuCtx[DpuGrp]->frameNum = 0;
 	dpuCtx[DpuGrp]->u8DpuDev =0;
 	dpuCtx[DpuGrp]->chfhBlk = VB_INVALID_HANDLE;
-	dpuCtx[DpuGrp]->phyAddr_chfh = 0;
-	dpuCtx[DpuGrp]->virAddr_chfh =NULL;
 	memcpy(&dpuCtx[DpuGrp]->stGrpAttr, pstGrpAttr, sizeof(dpuCtx[DpuGrp]->stGrpAttr));
 
 	for(i=0; i<DPU_PIPE_IN_NUM; ++i){
@@ -1752,19 +1750,14 @@ s32 cvi_dpu_get_frame(DPU_GRP DpuGrp,\
 
 	memset(pstFrameInfo, 0, sizeof(*pstFrameInfo));
 	ret = base_get_chn_buffer(chn, &gstDpuJobs[DpuGrp].outs[DpuChn],&blk,s32Millisec);
-
-	if (ret != 0 || blk == VB_INVALID_HANDLE) {
-		CVI_TRACE_DPU(CVI_DBG_ERR, "Grp(%d) Chn(%d) get chn frame fail, s32MilliSec=%d, ret=%d\n",
-				DpuGrp, DpuChn, s32Millisec, ret);
-
-		dpu_check_reg_read();
-
-		getsgbm_status();
-
-		getfgs_status();
-		return CVI_ERR_DPU_BUF_EMPTY;
-	}
-
+// if (ret != 0 || blk == VB_INVALID_HANDLE) {
+// CVI_TRACE_DPU(CVI_DBG_ERR, "Grp(%d) Chn(%d) get chn frame fail, s32MilliSec=%d, ret=%d\n",
+// DpuGrp, DpuChn, s32Millisec, ret);
+// dpu_check_reg_read();
+// getsgbm_status();
+// getfgs_status();
+// return CVI_ERR_DPU_BUF_EMPTY;
+// }
 	vb = (struct vb_s *)blk;
 	if (!vb->buf.phy_addr[0] || !vb->buf.size.u32Width) {
 		CVI_TRACE_DPU(CVI_DBG_ERR, "buf already released\n");
@@ -2645,7 +2638,7 @@ static s32 fill_buffers(DPU_GRP DpuGrp)
 	u8 is_true_out[DPU_MAX_CHN_NUM] = {CVI_FALSE};
 
 	u8 is_null_out[DPU_MAX_CHN_NUM] = {CVI_TRUE};
-	//char chfh_ion_name[10] ="dpuChfh";
+	char chfh_ion_name[10] = "dpuChfh";
 	//u8 is_true_chfh = CVI_FALSE;
 	CVI_TRACE_DPU(CVI_DBG_INFO, "fill_buffers          +\n");
 	if ( base_mod_jobs_waitq_empty(&gstDpuJobs[DpuGrp].ins[0]) ||
@@ -2726,18 +2719,21 @@ static s32 fill_buffers(DPU_GRP DpuGrp)
 		COMMON_GetPicBufferConfig(dpuCtx[DpuGrp]->stGrpAttr.stLeftImageSize.u32Width, \
 			dpuCtx[DpuGrp]->stGrpAttr.stLeftImageSize.u32Height, \
 			PIXEL_FORMAT_YUV_400, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, ALIGN_32, &stVbCalConfig_chfh);
-		// ret = base_ion_alloc(&dpuCtx[DpuGrp]->phyAddr_chfh, &dpuCtx[DpuGrp]->virAddr_chfh,
+		ret = base_ion_alloc(&dpu_dev->phyaddr_chfh, &dpu_dev->viraddr_chfh,
+							(uint8_t *)chfh_ion_name,
+							stVbCalConfig_chfh.u32VBSize*5,
+							CVI_FALSE);
+		// ret = base_ion_alloc(&dpuCtx[DpuGrp]->phyaddr_chfh, &dpuCtx[DpuGrp]->viraddr_chfh,
 		// 	 (uint8_t *)chfh_ion_name, stVbCalConfig_chfh.u32VBSize*5, CVI_FALSE);
-		// if (ret) {
-		// 	CVI_TRACE_DPU(CVI_DBG_ERR,"base_ion_alloc fail! ret(%d)\n", ret);
-		// 	goto ERR_FILL_BUF;
-		// }
-		// dram_base_chfh_l = dpuCtx[DpuGrp]->phyAddr_chfh &(0xFFFFFFFF);
-		// dram_base_chfh_h = dpuCtx[DpuGrp]->phyAddr_chfh >> 32;
-		dram_base_chfh_l = dpu_dev->phyAddr_chfh &(0xFFFFFFFF);
-		dram_base_chfh_h = dpu_dev->phyAddr_chfh >> 32;
-		CVI_TRACE_DPU(CVI_DBG_INFO, "chfh base(0x%llx) h(0x%x) l(0x%x) \n",
-					dpu_dev->phyAddr_chfh,dram_base_chfh_h,dram_base_chfh_l);
+		if (ret) {
+			CVI_TRACE_DPU(CVI_DBG_ERR, "base_ion_alloc fail! ret(%d)\n", ret);
+			goto ERR_FILL_BUF;
+		}
+		// dram_base_chfh_l = dpuCtx[DpuGrp]->phyaddr_chfh &(0xFFFFFFFF);
+		// dram_base_chfh_h = dpuCtx[DpuGrp]->phyaddr_chfh >> 32;
+		dram_base_chfh_l = dpu_dev->phyaddr_chfh &(0xFFFFFFFF);
+		dram_base_chfh_h = dpu_dev->phyaddr_chfh >> 32;
+		CVI_TRACE_DPU(CVI_DBG_INFO, "chfh base(0x%llx) h(0x%x) l(0x%x) \n", dpu_dev->phyaddr_chfh,dram_base_chfh_h,dram_base_chfh_l);
 	}
 
 	phyAddr_out =phyAddr_out_arr[0];
@@ -3091,11 +3087,16 @@ static void dpu_handle_frame_done(struct dpu_handler_ctx *ctx)
 	do_div(duration_s,(1000*1000));
 	dpu_dev->stRunTimeInfo.RunTm = duration_s;
 	ctx->events = 0;
-	// if(dpuCtx[workingGrp]->phyAddr_chfh!=0){
-	// 	base_ion_free(dpuCtx[workingGrp]->phyAddr_chfh);
-	// 	dpuCtx[workingGrp]->phyAddr_chfh=0;
-	// 	CVI_TRACE_DPU(CVI_DBG_INFO, "phyAddr_chfh(0x%llx)", dpuCtx[workingGrp]->phyAddr_chfh);
-	// }
+	if(dpuCtx[workingGrp]->stGrpAttr.enDpuMode == DPU_MODE_FGS_MUX0 ||
+		dpuCtx[workingGrp]->stGrpAttr.enDpuMode == DPU_MODE_FGS_MUX1 ||
+		dpuCtx[workingGrp]->stGrpAttr.enDpuMode == DPU_MODE_SGBM_FGS_ONLINE_MUX0 ||
+		dpuCtx[workingGrp]->stGrpAttr.enDpuMode == DPU_MODE_SGBM_FGS_ONLINE_MUX1  ){
+		if (dpu_dev->phyaddr_chfh != 0) {
+			base_ion_free(dpu_dev->phyaddr_chfh);
+			dpu_dev->phyaddr_chfh = 0;
+			CVI_TRACE_DPU(CVI_DBG_INFO, "phyaddr_chfh(0x%llx)", dpu_dev->phyaddr_chfh);
+		}
+	}
 	CVI_TRACE_DPU(CVI_DBG_INFO, "dpu_handle_frame_done          -\n");
 }
 
@@ -3158,11 +3159,11 @@ static void dpu_handle_offline(struct dpu_handler_ctx *ctx)
 				dpuCtx[workingGrp]->grp_state = GRP_STATE_IDLE;
 				hw_reset(workingGrp);
 
-				// if(dpuCtx[workingGrp]->phyAddr_chfh!=0){
-				// 	base_ion_free(dpuCtx[workingGrp]->phyAddr_chfh);
-				// 	dpuCtx[workingGrp]->phyAddr_chfh=0;
+				// if(dpuCtx[workingGrp]->phyaddr_chfh!=0){
+				// 	base_ion_free(dpuCtx[workingGrp]->phyaddr_chfh);
+				// 	dpuCtx[workingGrp]->phyaddr_chfh=0;
 				// }
-				// CVI_TRACE_DPU(CVI_DBG_INFO, "phyAddr_chfh(0x%llx)", dpuCtx[workingGrp]->phyAddr_chfh);
+				// CVI_TRACE_DPU(CVI_DBG_INFO, "phyaddr_chfh(0x%llx)", dpuCtx[workingGrp]->phyaddr_chfh);
 
 			} else {
 				// keep waiting
@@ -3208,6 +3209,12 @@ static int dpu_event_handler(void *arg)
 			timeout = idle_timeout;
 			continue;
 		}
+		mutex_lock(&dpu_dev->suspendLock);
+		if(dpu_dev->bsuspend){
+			timeout = idle_timeout;
+			continue;
+		}
+		mutex_unlock(&dpu_dev->suspendLock);
 
 		if(handler_ctx[0].events == CTX_EVENT_EOF){
 			ktime_get_ts64(&time);
@@ -3370,9 +3377,9 @@ void dpu_mode_deinit(DPU_GRP DpuGrp){
 
 void dpu_init(void *arg)
 {
-	int ret;
+	// int ret;
 	u8 i;
-	char chfh_ion_name[10] ="dpuChfh";
+	// char chfh_ion_name[10] ="dpuChfh";
 	if (!arg)
 		return;
 
@@ -3380,7 +3387,6 @@ void dpu_init(void *arg)
 
 	mutex_init(&dpu_dev->dpuLock);
 	mutex_init(&dpuGetGrpLock);
-
 	INIT_LIST_HEAD(&dpu_dev->handle_list);
 
 	mutex_lock(&dpuGetGrpLock);
@@ -3399,13 +3405,13 @@ void dpu_init(void *arg)
 	init_waitqueue_head(&dpu_dev->reset_wait);
 	init_waitqueue_head(&dpu_dev->sendFrame_wait);
 	dpu_dev->reset_done = CVI_FALSE;
-	ret = base_ion_alloc(&dpu_dev->phyAddr_chfh, &dpu_dev->virAddr_chfh,
-			 (uint8_t *)chfh_ion_name, 1920*1080*5, CVI_FALSE);
-	if (ret) {
-		CVI_TRACE_DPU(CVI_DBG_ERR,"base_ion_alloc fail! ret(%d)\n", ret);
-		return;
-	}
-	CVI_TRACE_DPU(CVI_DBG_INFO, "phyAddr_chfh(0x%llx)", dpu_dev->phyAddr_chfh);
+// ret = base_ion_alloc(&dpu_dev->phyaddr_chfh, &dpu_dev->viraddr_chfh,
+// (uint8_t *)chfh_ion_name, 1920*1080*5, CVI_FALSE);
+// if (ret) {
+// CVI_TRACE_DPU(CVI_DBG_ERR,"base_ion_alloc fail! ret(%d)\n", ret);
+// return;
+// }
+	CVI_TRACE_DPU(CVI_DBG_INFO, "phyaddr_chfh(0x%llx)", dpu_dev->phyaddr_chfh);
 	dpu_start_handler(dpu_dev);
 }
 
@@ -3416,8 +3422,8 @@ void dpu_deinit(void *arg)
 		return;
 
 	dpu_dev = (struct cvi_dpu_dev *)arg;
-	base_ion_free(dpu_dev->phyAddr_chfh);
-	CVI_TRACE_DPU(CVI_DBG_INFO, "phyAddr_chfh(0x%llx)", dpu_dev->phyAddr_chfh);
+	// base_ion_free(dpu_dev->phyaddr_chfh);
+	// CVI_TRACE_DPU(CVI_DBG_INFO, "phyaddr_chfh(0x%llx)", dpu_dev->phyaddr_chfh);
 
 	if(dpu_dev->clk_sys[0])
 		clk_disable_unprepare(dpu_dev->clk_sys[0]);
@@ -3431,6 +3437,8 @@ void dpu_deinit(void *arg)
 
 	mutex_destroy(&dpu_dev->dpuLock);
 	mutex_destroy(&dpuGetGrpLock);
+	mutex_destroy(&dpu_dev->suspendLock);
+	mutex_destroy(&dpu_dev->mutex);
 
 	ret = kthread_stop(dpu_dev->thread);
 	if (ret)

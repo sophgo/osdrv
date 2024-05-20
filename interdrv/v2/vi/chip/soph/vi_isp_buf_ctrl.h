@@ -23,8 +23,14 @@
 #include <vip/vi_drv.h>
 #include <vi_defines.h>
 
+enum cvi_isp_buf_status {
+	INTERNAL_BUFFER,
+	EXTERNAL_BUFFER,
+};
+
 struct isp_buffer {
 	enum cvi_isp_raw  raw_num;
+	uint8_t	          is_ext;
 	enum cvi_isp_fe_chn_num chn_num;
 	uint64_t          addr;
 	struct vi_rect    crop_le;

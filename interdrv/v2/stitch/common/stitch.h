@@ -44,6 +44,9 @@ s32 stitch_detach_vb_pool(void);
 /*internal*/
 int stitch_thread_init(void);
 void stitch_thread_deinit(void);
+s32 stitch_suspend_handler(void);
+s32 stitch_resume_handler(void);
+
 struct cvi_stitch_ctx *stitch_get_ctx(void);
 
 static inline s32 STITCH_SUPPORT_FMT(PIXEL_FORMAT_E fmt)

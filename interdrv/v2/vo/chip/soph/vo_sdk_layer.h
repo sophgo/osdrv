@@ -45,6 +45,16 @@ static inline s32 CHECK_VO_LAYER_ENABLE(VO_LAYER VoLayer)
 	return CVI_SUCCESS;
 }
 
+static inline s32 CHECK_VO_OVERLAY_VALID(VO_LAYER VoLayer)
+{
+	if ((VoLayer < VO_MAX_LAYER_NUM) || (VoLayer >= (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
+		return CVI_ERR_VO_INVALID_LAYERID;
+	}
+
+	return CVI_SUCCESS;
+}
+
 static inline s32 CHECK_VO_DEV_VALID(VO_DEV VoDev)
 {
 	if ((VoDev >= VO_MAX_DEV_NUM) || (VoDev < 0)) {

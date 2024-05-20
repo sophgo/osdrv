@@ -172,8 +172,8 @@ struct cvi_dpu_ctx {
 	VB_BLK chfhBlk;
 	s32 frameNum;
 	s32 costTimeForSec;
-	uint64_t phyAddr_chfh;
-	void *   virAddr_chfh;
+	uint64_t phyaddr_chfh;
+	void *   viraddr_chfh;
 };
 
 struct cvi_dpu_handle_info {
@@ -205,13 +205,13 @@ struct cvi_dpu_dev {
 	u32 costTimeForSec ;
 	u32 IntTimePerSec;
 	u8 bBusy;
-	uint64_t phyAddr_chfh;
-	void *   virAddr_chfh;
+	uint64_t phyaddr_chfh;
+	void *   viraddr_chfh;
 	struct list_head handle_list;
 	struct mutex dpuLock;
+	CVI_BOOL bsuspend;
+	struct mutex suspendLock;
 };
-
-s32 cvi_dpu_get_assist_buf_size(u16 u16_disp_num,u32 u32_dst_height,u32 * pu32_size);
 
 s32 cvi_dpu_create_grp(DPU_GRP DpuGrp,DPU_GRP_ATTR_S *pstGrpAttr);
 

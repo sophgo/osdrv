@@ -245,6 +245,15 @@ typedef enum _BAYER_FORMAT_E {
 	BAYER_FORMAT_GB,
 	BAYER_FORMAT_GR,
 	BAYER_FORMAT_RG,
+	/*for rgb-ir sensor*/
+	BAYER_FORMAT_GRGBI = 8,
+	BAYER_FORMAT_RGBGI,
+	BAYER_FORMAT_GBGRI,
+	BAYER_FORMAT_BGRGI,
+	BAYER_FORMAT_IGRGB,
+	BAYER_FORMAT_IRGBG,
+	BAYER_FORMAT_IBGRG,
+	BAYER_FORMAT_IGBGR,
 	BAYER_FORMAT_MAX
 } BAYER_FORMAT_E;
 // -------- If you want to change these interfaces, please contact the isp team. --------

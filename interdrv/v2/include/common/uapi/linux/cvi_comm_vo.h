@@ -311,10 +311,6 @@ typedef struct _VO_PUB_ATTR_S {
 	VO_INTF_TYPE_E enIntfType;
 	VO_INTF_SYNC_E enIntfSync;
 	VO_SYNC_INFO_S stSyncInfo;
-	union {
-		VO_I80_CFG_S sti80Cfg;
-		VO_LVDS_ATTR_S stLvdsAttr;
-	};
 } VO_PUB_ATTR_S;
 
 /*

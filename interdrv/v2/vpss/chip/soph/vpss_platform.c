@@ -434,7 +434,7 @@ static void _sc_ext_set_y_ratio(u8 dev_idx, u32 YRatio, enum sclr_csc csc_type)
 	sclr_set_csc(dev_idx, &csc_matrix);
 }
 
-bool cvi_img_left_tile_cfg(u8 dev_idx)
+bool cvi_img_left_tile_cfg(u8 dev_idx, u16 online_l_width)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
@@ -444,7 +444,10 @@ bool cvi_img_left_tile_cfg(u8 dev_idx)
 	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on left.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
-	mem.width = (sc->sc.tile.in_mem.w >> 1) + TILE_GUARD_PIXEL;
+	if (online_l_width)
+		mem.width = online_l_width;
+	else
+		mem.width = (sc->sc.tile.in_mem.w >> 1) + TILE_GUARD_PIXEL;
 	sclr_img_set_mem(dev_idx, &mem, true);
 	if(fbd_cfg.enable){
 		int fbd_height = ((sc->sc.tile.in_mem.h + 15) >> 4) << 2;
@@ -463,7 +466,7 @@ bool cvi_img_left_tile_cfg(u8 dev_idx)
 	return sclr_left_tile(dev_idx, mem.width);
 }
 
-bool cvi_img_right_tile_cfg(u8 dev_idx)
+bool cvi_img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
@@ -475,9 +478,14 @@ bool cvi_img_right_tile_cfg(u8 dev_idx)
 	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on right.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
-	sc_offset = (sc_cfg->sc.tile.in_mem.w >> 1) - TILE_GUARD_PIXEL;
-	mem.start_x += sc_offset;
-	mem.width = src_width - sc_offset;
+	if (online_r_start && online_r_end) {
+		mem.width = online_r_end - online_r_start + 1;
+		sc_offset = online_r_start;
+	} else {
+		sc_offset = (sc_cfg->sc.tile.in_mem.w >> 1) - TILE_GUARD_PIXEL;
+		mem.start_x += sc_offset;
+		mem.width = src_width - sc_offset;
+	}
 	sclr_img_set_mem(dev_idx, &mem, true);
 	if(fbd_cfg.enable){
 		int fbd_height = ((sc_cfg->sc.tile.in_mem.h + 15) >> 4) << 2;

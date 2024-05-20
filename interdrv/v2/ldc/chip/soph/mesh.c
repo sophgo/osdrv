@@ -7,7 +7,7 @@
 
 #include <linux/cvi_comm_video.h>
 #include <linux/cvi_comm_gdc.h>
-#include <linux/dwa_uapi.h>
+#include <linux/ldc_uapi.h>
 #include <linux/cvi_buffer.h>
 
 #include "ldc_debug.h"
@@ -168,6 +168,7 @@ static s32 mesh_gdc_do_rot(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	u32 buf_size;
 	s32 ret;
 	SIZE_S size_out;
+	struct _gdc_cb_param *p_cb_param;
 
 	if (enRotation == ROTATION_0 || enRotation == ROTATION_180) {
 		size_out = vb_in->buf.size;
@@ -179,7 +180,8 @@ static s32 mesh_gdc_do_rot(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	pstTask = vmalloc(sizeof(*pstTask));
 	if (!pstTask) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "vmalloc failed\n");
-		return CVI_ERR_GDC_NOBUF;
+		ret = CVI_ERR_GDC_NOMEM;
+		goto FAIL_ALLOC;
 	}
 
 	// get buf for gdc output.
@@ -188,9 +190,8 @@ static s32 mesh_gdc_do_rot(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	blk = vb_get_block_with_id(wdev->VbPool, buf_size, CVI_ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "get vb fail\n");
-		vb_release_block((VB_BLK)vb_in);
 		ret = CVI_ERR_GDC_NOBUF;
-		goto ROT_FAIL_EXIT;
+		goto FAIL_GET_VB;
 	}
 
 	atomic_long_fetch_and(~BIT(enModId), &vb_in->mod_ids);
@@ -206,7 +207,7 @@ static s32 mesh_gdc_do_rot(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 		, CVI_TRUE, pcbParam, cbParamSize, enRotation);
 	if (ret) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "init_ldc_param fail\n");
-		goto ROT_FAIL_EXIT;
+		goto FAIL_EXIT;
 	}
 
 	ldc_begin_job(wdev, &data);
@@ -217,11 +218,23 @@ static s32 mesh_gdc_do_rot(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	job = (struct ldc_job *)(uintptr_t)data.handle;
 	job->identity.syncIo = sync_io;
 	job->identity.enModId = enModId;
-	ret = ldc_end_job(wdev, data.handle);
-	//TODO: update proc
+	job->identity.u32ID = vb_in->buf.frm_num;
+	p_cb_param = (struct _gdc_cb_param *)pcbParam;
+	snprintf(job->identity.Name, sizeof(job->identity.Name)
+		, "dev_%d_chn_%d", p_cb_param->chn.s32DevId, p_cb_param->chn.s32ChnId);
 
-ROT_FAIL_EXIT:
+	ret = ldc_end_job(wdev, data.handle);
+
 	vfree(pstTask);
+	return ret;
+
+FAIL_EXIT:
+	vb_release_block((VB_BLK)blk);
+FAIL_GET_VB:
+	vfree(pstTask);
+FAIL_ALLOC:
+	vb_release_block((VB_BLK)vb_in);
+
 	return ret;
 }
 
@@ -239,12 +252,14 @@ static s32 mesh_gdc_do_ldc(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	SIZE_S size_out[2];
 	ROTATION_E enRotationOut[2];
 	u32 mesh_1st_size;
+	struct _gdc_cb_param *p_cb_param;
 
 	pstTask[0] = vmalloc(sizeof(struct gdc_task_attr));
 	pstTask[1] = vmalloc(sizeof(struct gdc_task_attr));
 	if (!pstTask[0] || !pstTask[1]) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "vmalloc failed\n");
-		goto LDC_FAIL_EXIT;
+		ret = CVI_ERR_GDC_NOMEM;
+		goto FAIL_ALLOC;
 	}
 
 	// Rotate 90/270 for 1st job
@@ -265,9 +280,8 @@ static s32 mesh_gdc_do_ldc(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	blk = vb_get_block_with_id(wdev->VbPool, buf_size, CVI_ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "get vb fail\n");
-		vb_release_block((VB_BLK)vb_in);
 		ret = CVI_ERR_GDC_NOBUF;
-		goto LDC_FAIL_EXIT;
+		goto FAIL_GET_VB;
 	}
 
 	atomic_long_fetch_and(~BIT(enModId), &vb_in->mod_ids);
@@ -304,7 +318,7 @@ static s32 mesh_gdc_do_ldc(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 		, CVI_FALSE, pcbParam, cbParamSize, enRotationOut[0]);
 	if (ret) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "init ldc param 1st failed\n");
-		goto LDC_FAIL_EXIT;
+		goto FAIL_EXIT;
 	}
 
 	ldc_begin_job(wdev, &data);
@@ -321,7 +335,7 @@ static s32 mesh_gdc_do_ldc(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	if (ret) {
 		CVI_TRACE_LDC(CVI_DBG_ERR, "init ldc param 2nd failed\n");
 		vfree((void *)(uintptr_t)pstTask[0]->au64privateData[2]);
-		goto LDC_FAIL_EXIT;
+		goto FAIL_EXIT;
 	}
 
 	pstTask[1]->handle = data.handle;
@@ -331,12 +345,27 @@ static s32 mesh_gdc_do_ldc(struct cvi_ldc_vdev *wdev, struct vb_s *vb_in
 	job = (struct ldc_job *)(uintptr_t)data.handle;
 	job->identity.syncIo = sync_io;
 	job->identity.enModId = enModId;
-	ret = ldc_end_job(wdev, data.handle);
-	//TODO: update proc
+	job->identity.u32ID = vb_in->buf.frm_num;
+	p_cb_param = (struct _gdc_cb_param *)pcbParam;
+	snprintf(job->identity.Name, sizeof(job->identity.Name)
+		, "dev_%d_chn_%d", p_cb_param->chn.s32DevId, p_cb_param->chn.s32ChnId);
 
-LDC_FAIL_EXIT:
+	ret = ldc_end_job(wdev, data.handle);
+
 	vfree(pstTask[0]);
 	vfree(pstTask[1]);
+	return ret;
+
+FAIL_EXIT:
+	vb_release_block((VB_BLK)blk);
+
+FAIL_GET_VB:
+FAIL_ALLOC:
+	if (pstTask[0])
+		vfree(pstTask[0]);
+	if (pstTask[0])
+		vfree(pstTask[1]);
+	vb_release_block((VB_BLK)vb_in);
 
 	return ret;
 }

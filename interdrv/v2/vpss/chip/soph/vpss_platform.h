@@ -14,8 +14,8 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg);
 void cvi_top_update(u8 dev_idx, bool isShare, bool fbd_enable);
 void cvi_img_start(u8 dev_idx, u8 chn_num);
 void cvi_img_reset(u8 dev_idx);
-bool cvi_img_left_tile_cfg(u8 dev_idx);
-bool cvi_img_right_tile_cfg(u8 dev_idx);
+bool cvi_img_left_tile_cfg(u8 dev_idx, u16 online_l_width);
+bool cvi_img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end);
 bool cvi_img_top_tile_cfg(u8 dev_idx, u8 is_left);
 bool cvi_img_down_tile_cfg(u8 dev_idx, u8 is_right);
 

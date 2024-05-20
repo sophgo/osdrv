@@ -518,15 +518,9 @@ static s32 _rgn_update_hw_cfg_to_module(RGN_HANDLE *hdls, void *cfg, MMF_CHN_S *
 				CVI_TRACE_RGN(RGN_ERR, "VO_CB_SET_RGN_CFG is failed\n");
 				return CVI_ERR_RGN_ILLEGAL_PARAM;
 			}
-		} else if (enType == COVEREX_RGN) {
-			struct _rgn_coverex_cfg_cb_param rgn_coverex_cfg_arg;
-
-			rgn_coverex_cfg_arg.stChn = *pstChn;
-			rgn_coverex_cfg_arg.rgn_coverex_cfg = *(struct cvi_rgn_coverex_cfg *)cfg;
-			if (_rgn_call_cb(E_MODULE_VO, VO_CB_SET_RGN_COVEREX_CFG, &rgn_coverex_cfg_arg) != 0) {
-				CVI_TRACE_RGN(RGN_ERR, "VO_CB_SET_RGN_COVER_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
-			}
+		} else {
+			CVI_TRACE_RGN(RGN_ERR, "VO unsupported enType(%d)\n", enType);
+			return CVI_ERR_RGN_ILLEGAL_PARAM;
 		}
 	} else if (pstChn->enModId == CVI_ID_VPSS) {
 		u32 osd_layer = bCmpr ? RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;

@@ -885,14 +885,24 @@ union sclr_intr sclr_intr_status(u8 inst)
 void sclr_img_set_cfg(u8 img_inst, struct sclr_img_cfg *cfg)
 {
 	enum sclr_format in_fmt = cfg->fmt;
+	u8 y_buf_thre = 0x80;
+	u8 c_buf_thre;
 
 	_reg_write(reg_base + REG_SCL_IMG_CFG(img_inst),
 		   (cfg->csc_en << 12) | (cfg->burst << 8) |
 		   (in_fmt << 4) | cfg->src);
 
+	if ((cfg->fmt == SCL_FMT_YUV420) || (cfg->fmt == SCL_FMT_NV12) || (cfg->fmt == SCL_FMT_NV21))
+		c_buf_thre = y_buf_thre / 2;
+	else
+		c_buf_thre = y_buf_thre;
+
+	_reg_write_mask(reg_base + REG_SCL_IMG_FIFO_THR(img_inst), 0xff00ff, ((c_buf_thre << 16) | y_buf_thre));
+	_reg_write(reg_base + REG_SCL_IMG_OUTSTANDING(img_inst), 0xf);
+/*
 	_reg_write_mask(reg_base + REG_SCL_IMG_FIFO_THR(img_inst), 0xff00ff, ((cfg->fifo_c) << 16 | (cfg->fifo_y)));
 	_reg_write_mask(reg_base + REG_SCL_IMG_OUTSTANDING(img_inst), 0xf, cfg->outstanding);
-
+*/
 	sclr_img_set_mem(img_inst, &cfg->mem, true);
 
 	if (cfg->src == SCL_INPUT_ISP && !(g_fbd_cfg[img_inst].enable))
@@ -2732,7 +2742,10 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 			cfg->tile.r_ini_phase = R_first_phase - (((R_first_pixel - 2) & ~0x1) << fix) + h_pos * ((crop_size.w < out_size.w || cfg->algorithm == SCL_COEF_NEAREST) ? -1 : 1);
 			cfg->tile.src_r_offset = (R_first_pixel - 2) & ~0x1;
 			cfg->tile.src_r_width = crop_size.w - cfg->tile.src_r_offset;
-			mode = SCL_TILE_BOTH;
+			if (!out_l_width)
+				mode = SCL_TILE_RIGHT;
+			else
+				mode = SCL_TILE_BOTH;
 		}
 	}
 #endif

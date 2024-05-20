@@ -88,12 +88,6 @@ struct cvi_vo_layer_ctx {
 	s32 proc_amp[PROC_AMP_MAX];
 	s32 s32BindDevId;
 	struct cvi_vo_chn_ctx astChnCtx[VO_MAX_CHN_NUM];
-
-	RGN_HANDLE rgn_handle[RGN_MAX_NUM_VO];
-	RGN_HANDLE rgn_coverEx_handle[RGN_COVEREX_MAX_NUM];
-	struct cvi_rgn_cfg rgn_cfg;
-	struct cvi_rgn_coverex_cfg rgn_coverex_cfg;
-
 	struct mutex layer_lock;
 	struct task_struct *thread;
 	wait_queue_head_t	wq;
@@ -116,26 +110,36 @@ struct cvi_vo_layer_ctx {
 	u32 u32BwFail;
 	u32 u32OsdBwFail;
 
-
 	struct{
 		u32 left;
 		u32 top;
 		u32 width;
 		u32 height;
 	} rect_crop;
+};
 
+struct cvi_vo_overlay_ctx {
+	s32 s32BindDevId;
+	CVI_U32 u32Priority;
+	RGN_HANDLE rgn_handle[RGN_MAX_NUM_VO];
+	struct cvi_rgn_cfg rgn_cfg;
 };
 
 struct cvi_vo_dev_ctx {
 	u8 is_dev_enable;
 	VO_PUB_ATTR_S stPubAttr;
 	s32 s32BindLayerId;
+	s32 s32BindOverlayId[VO_MAX_OVERLAY_IN_DEV];
+	VO_LVDS_ATTR_S lvds_param;
+	VO_I80_CFG_S I80_param;
+	struct mutex dev_lock;
 };
 
 struct cvi_vo_ctx {
 	u8 bSuspend;
 	struct cvi_vo_dev_ctx astDevCtx[VO_MAX_DEV_NUM];
 	struct cvi_vo_layer_ctx astLayerCtx[VO_MAX_LAYER_NUM];
+	struct cvi_vo_overlay_ctx astOverlayCtx[VO_MAX_OVERLAY_NUM];
 	struct cvi_vo_wbc_ctx astWbcCtx[VO_MAX_WBC_NUM];
 };
 

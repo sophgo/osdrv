@@ -172,7 +172,8 @@ int edid_read(hdmi_tx_dev_t *dev, struct edid * edid)
 	int error = 0;
 	const u8 header[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00};
 
-	i2cddc_clk_config(dev, 2500, I2C_MIN_SS_SCL_LOW_TIME, I2C_MIN_SS_SCL_HIGH_TIME, I2C_MIN_FS_SCL_LOW_TIME, I2C_MIN_FS_SCL_HIGH_TIME);
+	// i2cddc_clk_config(dev, 2500, I2C_MIN_SS_SCL_LOW_TIME, I2C_MIN_SS_SCL_HIGH_TIME, I2C_MIN_FS_SCL_LOW_TIME, I2C_MIN_FS_SCL_HIGH_TIME);
+	i2cddc_clk_set_divs(dev);
 
 	error = ddc_read(dev, EDID_I2C_ADDR, EDID_I2C_SEGMENT_ADDR, 0, 0, 128, (u8 *)edid);
 	if(error){

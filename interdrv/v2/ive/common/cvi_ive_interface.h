@@ -7,7 +7,6 @@
 
 #ifndef __CVI_IVE_INTERFACE_H__
 #define __CVI_IVE_INTERFACE_H__
-
 #include <linux/cdev.h>
 #include <linux/completion.h>
 #include <linux/version.h>

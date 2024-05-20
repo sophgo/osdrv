@@ -33,7 +33,7 @@
 #include <vi_raw_dump.h>
 
 #define BNR_AI_ISP_BUF_NUM	2
-#define OFFLINE_SPLT_BUF_NUM 3
+#define OFFLINE_SPLT_BUF_NUM	4
 #define OFFLINE_RAW_BUF_NUM	2
 #define OFFLINE_PRE_BE_BUF_NUM	2
 #define OFFLINE_YUV_BUF_NUM	2

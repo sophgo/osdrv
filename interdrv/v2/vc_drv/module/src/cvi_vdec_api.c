@@ -1265,7 +1265,6 @@ int enable_user_pic(void *pHandle, int instant)
                                 pst_handle->core_idx, pst_handle->channel_index);
     if (IS_ERR(thread_handle))
         return RETCODE_FAILURE;
-
     sched_setscheduler(thread_handle, SCHED_RR, &param);
 
     return 0;

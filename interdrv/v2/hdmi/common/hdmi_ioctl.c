@@ -102,7 +102,7 @@ long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		case CVI_HDMI_FORCE_GET_EDID:
 		{
 			CVI_HDMI_EDID* edid_raw = (CVI_HDMI_EDID*)kdata;
-			ret = hdmitx_force_get_edid(edid_raw);
+			ret = hdmitx_force_get_edid(edid_raw, NULL);
 			break;
 		}
 		case CVI_HDMI_GET_EVENT_ID:

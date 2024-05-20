@@ -1,6 +1,7 @@
 #include "core/packets.h"
 #include "core/fc.h"
 #include "core/hdmi_reg.h"
+#include "core/hdmi_core.h"
 #include "edid/edid.h"
 #include "bsp/access.h"
 #include "util/util.h"
@@ -33,7 +34,7 @@ int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 		}
 		else {
 			pr_err("%s:3D structure not supported %d", __func__, video->m3dStructure);
-			return FALSE;
+			return CVI_ERR_HDMI_3DSTRUCTURE_NOT_SUPPORT;
 		}
 		fc_packets_auto_send(dev, 1, VSD_TX);
 	} else if (video->mHdmiVideoFormat == HDMI_EXT_RES_FORMAT ) {
@@ -87,7 +88,7 @@ int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 	/** Colorimetry */
 	packets_colorimetry_config(dev, video);
 
-	return TRUE;
+	return 0;
 }
 
 void packets_audio_content_protection(hdmi_tx_dev_t *dev, u8 type, const u8 * fields, u8 length, u8 autoSend)

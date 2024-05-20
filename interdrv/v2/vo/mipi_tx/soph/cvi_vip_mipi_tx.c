@@ -78,7 +78,7 @@ module_param_array(gpio, int, &n_gpio_para, 0664);
 
 static int smooth;
 
-static int debug = 1;
+static int debug = 0;
 
 /* debug: debug
  * bit[0]: dcs cmd mode. 0(hw)/1(sw)
@@ -169,7 +169,7 @@ static int mipi_tx_set_combo_dev_cfg(struct cvi_vip_mipi_tx_dev *tdev, struct co
 	}
 
 	disp_set_intf(devno, DISP_VO_INTF_MIPI);
-	memcpy(&mipi_tx_dev_ctx.dev_cfg, dev_cfg, sizeof(mipi_tx_dev_ctx.dev_cfg));
+
 	for (i = 0; i < LANE_MAX_NUM; i++) {
 		if ((dev_cfg->lane_id[i] < 0) || (dev_cfg->lane_id[i] >= MIPI_TX_LANE_MAX)) {
 			dphy_dsi_set_lane(devno, i, DSI_LANE_MAX, false, true);

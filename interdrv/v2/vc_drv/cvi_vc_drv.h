@@ -55,6 +55,11 @@ struct cvi_vc_drv_device {
     cvi_vc_drv_buffer_t remap_register;
 
     const struct cvi_vc_drv_ops *pdata;
+
+    // padding buffer
+    uint64_t align_physical;
+    void *align_virtual;
+    uint32_t align_size;
 };
 
 typedef struct _VENC_STREAM_EX_S {

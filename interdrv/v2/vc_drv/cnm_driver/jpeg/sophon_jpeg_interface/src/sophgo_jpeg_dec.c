@@ -2,7 +2,7 @@
 #include "sophgo_jpeg_interface.h"
 #include "jputypes.h"
 #include "jdi.h"
-
+#include "regdefine.h"
 
 typedef struct {
     unsigned char *buf;
@@ -495,10 +495,19 @@ int sophgo_jpeg_dec_send_frame_data(SOPHGO_JPEG_HANDLE_PTR pvJpgHandle, void *pv
     //JLOG(INFO, "\t<+>INSTANCE #%d JPU_WaitInterrupt\n", handle->instIndex);
     while(1) {
         if ((int_reason=JPU_WaitInterrupt(handle, JPU_INTERRUPT_TIMEOUT_MS)) == -1) {
+            int i;
             JLOG(ERR, "Error dec: timeout happened,core:%d inst %d, reason:%d\n",
                 pjpgHandle->iCoreIdx, pJpgInst->instIndex, int_reason);
             // dump_bitstream_file(pjpgHandle->iCoreIdx, pJpgInst->instIndex, bufInfo.buf, bufInfo.size);
             // JPU_SWReset(pJpgInst->coreIndex, handle);
+            for (i=(pJpgInst->instIndex*NPT_REG_SIZE); i<=((pJpgInst->instIndex*NPT_REG_SIZE)+0x250); i=i+16)
+            {
+                JLOG(ERR, "0x%04xh: 0x%08lx 0x%08lx 0x%08lx 0x%08lx\n", i,
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+4),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+8),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+0xc));
+            }
             JPU_SetJpgPendingInstEx(handle, NULL);
             ret = JPG_RET_FAILURE;
             goto SEND_DEC_STREAM_ERR;

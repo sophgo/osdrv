@@ -3,6 +3,7 @@
 #include "jdi.h"
 #include "jpu_helper.h"
 #include "drv_file.h"
+#include "regdefine.h"
 
 #define BS_SIZE_ALIGNMENT           4096
 #define MIN_BS_SIZE                 8192
@@ -612,11 +613,19 @@ int sophgo_jpeg_enc_send_frame_data(SOPHGO_JPEG_HANDLE_PTR pvJpgHandle, SOPHGO_S
     while(1) {
         int_reason = JPU_WaitInterrupt(pjpgHandle->pHandle, JPU_INTERRUPT_TIMEOUT_MS);
         if (int_reason == -1) {
+            int i;
             JLOG(ERR, "Error enc: timeout happened,core:%d inst %d, reason:%d\n",
                 pjpgHandle->iCoreIdx, pJpgInst->instIndex, int_reason);
             // JPU_SWReset(pJpgInst->coreIndex, pjpgHandle->pHandle);
             ret = JPG_RET_FAILURE;
-
+            for (i=(pJpgInst->instIndex*NPT_REG_SIZE); i<=((pJpgInst->instIndex*NPT_REG_SIZE)+0x250); i=i+16)
+            {
+                JLOG(ERR, "0x%04xh: 0x%08lx 0x%08lx 0x%08lx 0x%08lx\n", i,
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+4),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+8),
+                    jdi_read_register_ext(pjpgHandle->iCoreIdx, i+0xc));
+            }
             JPU_SetJpgPendingInstEx(pjpgHandle->pHandle, NULL);
             goto JPG_ENC_ENCODE_END;
         }

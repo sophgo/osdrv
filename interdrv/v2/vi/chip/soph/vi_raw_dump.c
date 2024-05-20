@@ -1,11 +1,14 @@
 #include <vi_raw_dump.h>
 #include <vip/vi_drv.h>
 #include <linux/cvi_errno.h>
+#include <vb.h>
 
 struct isp_buffer *isp_byr[ISP_PRERAW_MAX], *isp_byr_se[ISP_PRERAW_MAX];
 
 struct isp_queue raw_dump_b_q[ISP_PRERAW_MAX], raw_dump_b_se_q[ISP_PRERAW_MAX],
 	raw_dump_b_dq[ISP_PRERAW_MAX], raw_dump_b_se_dq[ISP_PRERAW_MAX];
+
+static struct raw_dump_work g_raw_dump_work;
 
 void _isp_fe_be_raw_dump_cfg(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num, const u8 chn_num)
 {
@@ -412,4 +415,49 @@ void _isp_raw_dump_chk(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num, 
 		return;
 	}
 	}
+}
+
+static void raw_dump_wq_handler(struct work_struct *worker)
+{
+	struct raw_dump_work *dump_work = container_of((void *)worker, struct raw_dump_work, worker);
+	struct isp_buffer *buf = NULL;
+	VB_BLK blk = 0;
+
+	do {
+		buf = isp_buf_remove(&dump_work->raw_dump_vb_q);
+		if (buf) {
+			if (buf->is_ext == INTERNAL_BUFFER) {
+				vi_pr(VI_ERR, "buf is invalid\n");
+				continue;
+			}
+
+			//for ai bnr buf->addr is invalid
+			blk = vb_phys_addr2handle(buf->addr);
+			if (blk != VB_INVALID_HANDLE)
+				vb_release_block(blk);
+			kfree(buf);
+		}
+
+	} while (buf);
+}
+
+void isp_raw_dump_vb_queue(struct isp_buffer *buf)
+{
+	isp_buf_queue(&g_raw_dump_work.raw_dump_vb_q, buf);
+
+	schedule_work(&g_raw_dump_work.worker);
+}
+
+void isp_raw_dump_init(void)
+{
+	INIT_LIST_HEAD(&g_raw_dump_work.raw_dump_vb_q.rdy_queue);
+	g_raw_dump_work.raw_dump_vb_q.num_rdy = 0;
+	g_raw_dump_work.raw_dump_vb_q.raw_num = 0;
+	INIT_WORK(&g_raw_dump_work.worker, raw_dump_wq_handler);
+}
+
+void isp_raw_dump_deinit(void)
+{
+	raw_dump_wq_handler(&g_raw_dump_work.worker);
+	cancel_work_sync(&g_raw_dump_work.worker);
 }

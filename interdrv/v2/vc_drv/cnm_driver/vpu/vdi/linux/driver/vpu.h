@@ -43,6 +43,7 @@ typedef struct vpudrv_buffer_t {
 
     unsigned int  core_idx;
     unsigned int  is_cached;
+    unsigned int  offset;       /* real paddr start: phys_addr - offset */
 } vpudrv_buffer_t;
 
 typedef struct vpu_bit_firmware_info_t {

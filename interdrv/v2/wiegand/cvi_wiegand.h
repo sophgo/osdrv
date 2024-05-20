@@ -32,6 +32,7 @@ struct cvi_wiegand_device {
 	struct reset_control *rst_wiegand;
 	struct clk *clk_wiegand;
 	struct clk *clk_wiegand1;
+	int clk_wiegand_en;
 	dev_t cdev_id;
 	struct cdev cdev;
 	u8 __iomem *wiegand_vaddr;

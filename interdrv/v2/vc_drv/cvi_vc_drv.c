@@ -2045,6 +2045,7 @@ static void __exit cvi_vc_drv_exit(void)
     }
 #endif
     class_destroy(vdev->cvi_vc_class);
+
     vfree(vdev);
     pCviVcDrvDevice = NULL;
 

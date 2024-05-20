@@ -34,9 +34,10 @@
 #include <linux/of_device.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/proc_fs.h>
-#include "../../../vpuapi/vpuconfig.h"
-#include "../../../vpuapi/vpuerror.h"
-#include "../../../../jpeg/jpuapi/jpuconfig.h"
+#include "vpuconfig.h"
+#include "vpuerror.h"
+#include "jpuconfig.h"
+#include "ion.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 #include <linux/sched/signal.h>
@@ -49,9 +50,9 @@
 #else
 #define DPRINTK(args...)
 #endif
-#include "../../../vpuapi/wave/wave5_regdefine.h"
-#include "../../../vpuapi/wave/wave6_regdefine.h"
-#include "../../../vpuapi/coda9/coda9_regdefine.h"
+#include "wave/wave5_regdefine.h"
+#include "wave/wave6_regdefine.h"
+#include "coda9/coda9_regdefine.h"
 
 #define VPU_PRODUCT_CODE_REGISTER                 (0x1044)
 #define VPU_STAT_CYCLES                           (575000000)
@@ -105,6 +106,8 @@
 #ifndef VM_RESERVED	/*for kernel up to 3.7.0 version*/
 # define  VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
+
+#define MAX_ALLOC_RETRY_CNT 5
 
 typedef struct vpu_drv_context_t {
     struct fasync_struct *async_queue;
@@ -346,11 +349,6 @@ typedef enum {
     INT_WAVE6_BSBUF_EMPTY       = 15,
     INT_WAVE6_BSBUF_FULL        = 15,
 } Wave6InterruptBit;
-
-extern int32_t base_ion_free(uint64_t u64PhyAddr);
-extern int32_t base_ion_alloc(uint64_t *p_paddr, void **pp_vaddr, uint8_t *buf_name, uint32_t buf_len, bool is_cached);
-extern int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t u32Len);
-extern int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t u32Len);
 
 static int get_vpu_core_num(int chip_id, int video_cap){
     return MAX_NUM_VPU_CORE;
@@ -1051,8 +1049,8 @@ long vpu_close_instance(vpudrv_inst_info_t *inst_info)
         }
     }
 
-    if (s_vpu_usage_info.vpu_open_ref_count[vil->core_idx] == 0) {
-        vpu_clear_stat_info(vil->core_idx);
+    if (s_vpu_usage_info.vpu_open_ref_count[inst_info->core_idx] == 0) {
+        vpu_clear_stat_info(inst_info->core_idx);
     }
     mutex_unlock(&s_vpu_lock);
 
@@ -1086,6 +1084,7 @@ long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb)
 {
     long ret;
     vpudrv_buffer_pool_t *vbp;
+    int retry_cnt = 0;
 
     DPRINTK("[VPUDRV][+]VDI_IOCTL_ALLOCATE_PHYSICAL_MEMORY\n");
 
@@ -1095,12 +1094,38 @@ long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb)
     }
 
     memcpy(&(vbp->vb), vdb, sizeof(vpudrv_buffer_t));
+    vbp->vb.offset = 0;
 
-    ret = vpu_alloc_dma_buffer(&(vbp->vb));
-    if (ret == -1) {
-        ret = -ENOMEM;
-        kfree(vbp);
-        return ret;
+    do {
+        if (retry_cnt >= MAX_ALLOC_RETRY_CNT) {
+            pr_err("[%s,%d] fail !\n", __func__, __LINE__);
+            ret = -ENOMEM;
+            kfree(vbp);
+            return ret;
+        }
+
+        retry_cnt++;
+        vbp->vb.size += vbp->vb.offset;
+        ret = vpu_alloc_dma_buffer(&(vbp->vb));
+        if (ret == -1) {
+            ret = -ENOMEM;
+            kfree(vbp);
+            return ret;
+        }
+
+        if ((vbp->vb.phys_addr & 0xFFFFFFFF) < WAVE5_MAX_CODE_BUF_SIZE) {
+            vpu_free_dma_buffer(&(vbp->vb));
+            vbp->vb.base = 0;
+            vbp->vb.phys_addr = 0;
+            vbp->vb.offset = WAVE5_MAX_CODE_BUF_SIZE;
+        }
+    } while (!(vbp->vb.base));
+
+    if (vbp->vb.offset > 0) {
+        vbp->vb.phys_addr += vbp->vb.offset;
+        vbp->vb.virt_addr += vbp->vb.offset;
+        vbp->vb.base += vbp->vb.offset;
+        vbp->vb.size -= vbp->vb.offset;
     }
 
     //vbp->filp = filp;
@@ -1121,8 +1146,13 @@ long vpu_free_physical_memory(vpudrv_buffer_t *vdb)
     vpudrv_buffer_pool_t *vbp, *n;
     DPRINTK("[VPUDRV][+]VDI_IOCTL_FREE_PHYSICALMEMORY\n");
 
-    if (vdb->base)
+    if (vdb->base) {
+        if (vdb->offset > 0) {
+            vdb->phys_addr -= vdb->offset;
+        }
+
         vpu_free_dma_buffer(vdb);
+    }
 
     mutex_lock(&s_vpu_lock);
     list_for_each_entry_safe(vbp, n, &s_vbp_head, list)

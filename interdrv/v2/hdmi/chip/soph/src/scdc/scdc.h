@@ -20,6 +20,10 @@
 #define SCDC_CONFIG_0  		    0x30	/* Config_0                                       */
 #define SCDC_CONFIG_RESERVED  	0x31	/* 0x31-0x3f - Reserved for configuration         */
 #define SCDC_STATUS_FLAG_0  	0x40	/* Status_Flag_0                                  */
+#define SCDC_STATUS_FLAG_0_CLK	0x1	    /* Valid TMDS Clock Detected                      */
+#define SCDC_STATUS_FLAG_0_CH0	0x2	    /* Valid Data at Chanel0                          */
+#define SCDC_STATUS_FLAG_0_CH1	0x4	    /* Valid Data at Chanel1                          */
+#define SCDC_STATUS_FLAG_0_CH2	0x8	    /* Valid Data at Chanel2                          */
 #define SCDC_STATUS_FLAG_1  	0x41	/* Status_Flag_1                                  */
 #define SCDC_STATUS_RESERVED 	0x42	/* 0x42-0x4f - Reserved for Status Related Uses   */
 #define SCDC_ERR_DET_0_L  	    0x50	/* Err_Det_0_L                                    */
@@ -47,7 +51,7 @@ int scdc_scrambling_status(hdmi_tx_dev_t *dev);
 
 int scdc_scrambling_enable_flag(hdmi_tx_dev_t *dev, u8 flag);
 
-void scdc_set_rr_flag(hdmi_tx_dev_t *dev, u8 enable);
+int scdc_set_rr_flag(hdmi_tx_dev_t *dev, u8 enable);
 
 int scdc_get_rr_flag(hdmi_tx_dev_t *dev, u8 * flag);
 
@@ -57,10 +61,14 @@ int scdc_test_rr_update_flag(hdmi_tx_dev_t *dev);
 
 int scdc_read_cnt(hdmi_tx_dev_t *dev, u8 * data);
 
-void scrambling(hdmi_tx_dev_t *dev, u8 enable);
+int scrambling(hdmi_tx_dev_t *dev, u8 enable);
 
 void scrambling_enable(hdmi_tx_dev_t *dev, u8 bit);
 
-void tmds_high_rate(hdmi_tx_dev_t *dev, u8 enable);
+int tmds_high_rate(hdmi_tx_dev_t *dev, u8 enable);
+
+int scdc_read_channel_status(hdmi_tx_dev_t *dev);
+
+int scdc_read_err_characters(hdmi_tx_dev_t *dev, u8* data);
 
 #endif	/* _SCDC_H_ */

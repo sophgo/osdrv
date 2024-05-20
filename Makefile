@@ -73,7 +73,7 @@ KO_LIST = base pwm  mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio v
 # endif
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
-	KO_LIST += sys vi snsr_i2c cif vpss ldc dwa vo mipi_tx rgn rtos_cmdqu ive 2d_engine dpu stitch
+	KO_LIST += sys vi snsr_i2c cif vpss ldc dwa vo mipi_tx rgn rtos_cmdqu ive 2d_engine dpu stitch spacc
 	BASE_DEP = sys
 	FB_DEP = vpss vo
 ifneq (${CONFIG_BOARD}, "fpga")
@@ -145,6 +145,9 @@ pwm:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 wdt:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+spacc:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 rtc:

@@ -99,7 +99,7 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%10s%15s%20s%15s%15s%15s%15s%15s\n",
 		"SeqNo", "ModName", "jobName", "syncIo", "u32ID", "TaskNum", "State", "CostTime(us)");
 
-	for (i = 0 ; i < 8; ++i) {
+	for (i = 0 ; i < LDC_PROC_JOB_INFO_NUM; ++i) {
 		if (!pldcCtx->stJobInfo[idx].hHandle)
 			break;
 

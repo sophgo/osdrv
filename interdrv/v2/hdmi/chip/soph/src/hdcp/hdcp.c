@@ -1,4 +1,5 @@
 #include "core/hdmi_reg.h"
+#include "core/hdmi_core.h"
 #include "hdcp/hdcp.h"
 #include "identification/identification.h"
 #include "bsp/access.h"
@@ -443,7 +444,7 @@ int hdcp_initialize(hdmi_tx_dev_t *dev)
 	hdcp_rxdetect(dev, 0);
 	_hdcp_data_enable_polarity(dev, dev->snps_hdmi_ctrl.data_enable_polarity);
 	_disable_encryption(dev, 1);
-	return TRUE;
+	return 0;
 }
 
 void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp)
@@ -505,7 +506,7 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 
 	if(dev->snps_hdmi_ctrl.hdcp_on == 0){
 		pr_debug("HDCP is not active");
-		return TRUE;
+		return 0;
 	}
 
 	// Before configure HDCP we should configure the internal parameters
@@ -518,7 +519,7 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 	//1 - To determine if the controller supports HDCP
 	if(id_product_type(dev) != 0xC1){
 		pr_err("Controller does not supports HDCP");
-		return FALSE;
+		return CVI_ERR_HDMI_HDCP_NOT_SUPORRT;
 	}
 
 	//2 - To determine the HDCP version of the transmitter
@@ -548,7 +549,7 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 	if((hdcp_2p2 == 0x00) || (hdcp_2p2 == 0x02) ){
 		pr_debug("Configuring HDCP 1.4");
 		hdcp_1p4_configure(dev, hdcp);
-		return TRUE;
+		return 0;
 	}
 	else{
 		pr_debug("Configuring HDCP 2.2 SNPS");
@@ -567,7 +568,7 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 			//8 - Perform the HDCP 2.2 authentication
 			_hdcp_2p2_authentication(dev);
 	}
-	return TRUE;
+	return 0;
 }
 
 // SHA-1 calculation by Software

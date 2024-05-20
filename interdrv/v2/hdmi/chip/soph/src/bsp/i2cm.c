@@ -10,6 +10,7 @@
 #define I2CM_OPERATION_READ_SEQ_EXT     0x08
 #define I2CM_OPERATION_WRITE		0x10
 #define I2C_DIV_FACTOR	 100000
+#define I2C_CLK_RATE_KHZ 25000
 
 /*********************  PRIVATE FUNCTIONS ***********************/
 
@@ -182,6 +183,47 @@ void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfrClock, u16 ss_low_ckl, u16 ss
 	_standard_speed_high_clk_ctrl(dev, _scl_calc(sfrClock, ss_high_ckl));
 	_fast_speed_low_clk_ctrl(dev, _scl_calc(sfrClock, fs_low_ckl));
 	_fast_speed_high_clk_ctrl(dev, _scl_calc(sfrClock, fs_high_ckl));
+}
+
+void i2cddc_clk_set_divs(hdmi_tx_dev_t * dev)
+{
+	u32 low_ns, high_ns;
+	u32 div_low, div_high;
+
+	/* Standard-mode */
+	if (dev->i2c.scl_high_ns < 4000)
+		high_ns = 4500;
+	else
+		high_ns = dev->i2c.scl_high_ns;
+
+	if (dev->i2c.scl_low_ns < 4700)
+		low_ns = 5200;
+	else
+		low_ns = dev->i2c.scl_low_ns;
+
+	/* Adjust to avoid overflow */
+	div_low = (I2C_CLK_RATE_KHZ * low_ns) / 1000000;
+	if ((I2C_CLK_RATE_KHZ * low_ns) % 1000000)
+		div_low++;
+
+	div_high = (I2C_CLK_RATE_KHZ * high_ns) / 1000000;
+	if ((I2C_CLK_RATE_KHZ * high_ns) % 1000000)
+		div_high++;
+
+	/* Maximum divider supported by hw is 0xffff */
+	if (div_low > 0xffff)
+		div_low = 0xffff;
+
+	if (div_high > 0xffff)
+		div_high = 0xffff;
+
+	pr_debug("%s: div_low is 0x%02x, div_high is 0x%02x \n", __func__, div_low, div_high);
+
+	dev_write(I2CM_SS_SCL_LCNT_0_ADDR, (div_low & 0xff));
+	dev_write(I2CM_SS_SCL_LCNT_1_ADDR, (div_low >> 8) & 0xff);
+
+	dev_write(I2CM_SS_SCL_HCNT_0_ADDR, (div_high >> 0));
+	dev_write(I2CM_SS_SCL_HCNT_1_ADDR, ((div_high >> 8) & 0xff));
 }
 
 void i2cddc_fast_mode(hdmi_tx_dev_t * dev, u8 value)

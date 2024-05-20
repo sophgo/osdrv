@@ -12,7 +12,7 @@
 #define HDMI_VIDEO_PROC_NAME    "soph/hdmi_video"
 #define HDMI_AUDIO_PROC_NAME    "soph/hdmi_audio"
 #define HDMI_SINK_PROC_NAME     "soph/hdmi_sink"
-#define MAX_PROC_STR_SIZE (32)
+#define MAX_PROC_STR_SIZE (160)
 
 static char* _pix_fmt_to_string(CVI_HDMI_VIDEO_MODE PixFmt, char* str)
 {
@@ -147,6 +147,108 @@ int hdmi_ctx_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static int hdmi_proc_write_parse(char *input_data)
+{
+	char file_path[128];
+	u32 edid;
+	u32 avmute_enable;
+	u32 audioMute_enable;
+	u32 cbar_enable;
+	u32 scdc, addr, data;
+	u32 outclrspace;
+	u32 ddc;
+	u32 hdmi_mode;
+	u32 cmd;
+	u32 phy;
+
+	if (strcmp(input_data, "help\n") == 0)
+	{
+		// input help for all commands
+		pr_info("Available debug commands:\n");
+		pr_info("1. Command: help(h) - echo help > /proc/soph/hdmi\n");
+		pr_info("2. Command: edid(ed) - echo edid argv1 argv2 > /proc/soph/hdmi\n");
+		pr_info("3. Command: avmute(a) - echo avmute argv1 > /proc/soph/hdmi\n");
+		pr_info("4. Command: audio_mute(a) - echo audio_mute argv1 > /proc/soph/hdmi\n");
+		pr_info("5. Command: cbar(c) - echo cbar argv1 > /proc/soph/hdmi\n");
+		pr_info("6. Command: scdc(sc) - echo scdc argv1 argv2 argv3 > /proc/soph/hdmi\n");
+		pr_info("7. Command: outclrspace(oc) - echo outclrspace argv1 > /proc/soph/hdmi\n");
+		pr_info("8. Command: ddc(dc) - echo ddc argv1(Hz) > /proc/soph/hdmi\n");
+		pr_info("9. Command: hdmimode(m) - echo hdmimode argv1 > /proc/soph/hdmi\n");
+		pr_info("10. Command: cmd - echo cmd argv1 > /proc/soph/hdmi\n");
+		pr_info("11. Command: phy - echo phy argv1 argv2 argv3 > /proc/soph/hdmi\n");
+	} else if (sscanf(input_data, "edid %d %s", &edid, file_path) == 2){
+		if (hdmi_proc_edid_cmd(edid, file_path) < 0) {
+			pr_err("Read EDID failed \n");
+			return -1;
+		}
+
+	} else if(sscanf(input_data, "avmute %d", &avmute_enable) == 1){
+		if (avmute_enable != 0 && avmute_enable != 1) {
+			pr_err("Invalid Param avmute_enable(%d) \n", avmute_enable);
+			return -EINVAL;
+		}
+
+		if (hdmitx_set_avmute(avmute_enable)) {
+			pr_err("%s: Set HDMI Avmute failed \n", __func__);
+			return -1;
+		}
+
+	} else if(sscanf(input_data, "audio_mute %d", &audioMute_enable) == 1){
+		if (audioMute_enable != 0 && audioMute_enable != 1) {
+			pr_err("Invalid Param audioMute_enable(%d) \n", audioMute_enable);
+			return -EINVAL;
+		}
+
+		if (hdmitx_set_audio_mute(audioMute_enable)) {
+			pr_err("%s: Set HDMI Audio Mute failed \n", __func__);
+			return -1;
+		}
+
+	} else if(sscanf(input_data, "cbar %d", &cbar_enable) == 1){
+		if (hdmi_proc_cbar_cmd(cbar_enable)) {
+			pr_err("%s: Set HDMI cbar failed \n", __func__);
+			return -1;
+		}
+
+	} else if (sscanf(input_data, "scdc %d 0x%x %d", &scdc, &addr, &data) == 3) {
+		if (hdmi_proc_scdc_cmd(scdc, addr, data)) {
+			pr_err("%s: Set HDMI SCDC failed \n", __func__);
+			return -1;
+		}
+
+	} else if (sscanf(input_data, "ddc %d ", &ddc) == 1) {
+		if (hdmi_proc_ddc_cmd(ddc)) {
+			pr_err("%s: Set DDC Rate failed \n", __func__);
+			return -1;
+		}
+
+	} else if (sscanf(input_data, "outclrspace %d ", &outclrspace) == 1) {
+		if (hdmi_proc_outclrspace_parse(outclrspace)) {
+			pr_err("%s: Set HDMI OutClrspace failed \n", __func__);
+			return -1;
+		}
+
+	} else if (sscanf(input_data, "hdmimode %d ", &hdmi_mode) == 1){
+		if (hdmi_proc_mode_cmd(hdmi_mode)) {
+			pr_err("%s: Set HDMI Mode Failed \n", __func__);
+			return -1;
+		}
+
+	} else if (sscanf(input_data, "cmd %d ", &cmd) == 1){
+		if (hdmi_proc_control_cmd(cmd)) {
+			pr_err("%s: Control HDMI Switch Failed \n", __func__);
+			return -1;
+		}
+	} else if (sscanf(input_data, "phy %d 0x%x %d", &phy, &addr, &data) == 3) {
+		if (hdmi_proc_phy_cmd(phy, addr, data)) {
+			pr_err("%s: Set Phy Failed \n", __func__);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static int hdmi_proc_show(struct seq_file *m, void *v)
 {
 	return hdmi_ctx_proc_show(m, v);
@@ -154,6 +256,21 @@ static int hdmi_proc_show(struct seq_file *m, void *v)
 
 static ssize_t hdmi_proc_write(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
 {
+	char cProcInputdata[MAX_PROC_STR_SIZE] = {'\0'};
+
+	if (user_buf == NULL || count >= MAX_PROC_STR_SIZE) {
+		pr_err("Invalid input value\n");
+		return -EINVAL;
+	}
+
+	if (copy_from_user(cProcInputdata, user_buf, count)) {
+		pr_err("copy_from_user fail\n");
+		return -EFAULT;
+	}
+
+	if(hdmi_proc_write_parse(cProcInputdata) < 0)
+		return -EFAULT;
+
 	return count;
 }
 

@@ -43,7 +43,12 @@
 #define CONFIG_PROC_FS 1
 #endif
 
+#ifndef CONFIG_PM_SLEEP
+#define CONFIG_PM_SLEEP 1
+#endif
+
 static atomic_t dwa_open_count = ATOMIC_INIT(0);
+static atomic_t suspend_flag = ATOMIC_INIT(0);
 
 static struct cvi_dwa_vdev *dwa_dev;
 static struct fasync_struct *dwa_fasync;
@@ -61,6 +66,11 @@ MODULE_PARM_DESC(clk_sys_freq, "clk_sys_freq setting by user");
 
 module_param(dwa_dump_reg, bool, 0644);
 MODULE_PARM_DESC(dwa_dump_reg, "dwa need dump reg");
+
+bool is_dwa_suspended(void)
+{
+	return atomic_read(&suspend_flag) == 1 ? true : false;
+}
 
 struct cvi_dwa_vdev *dwa_get_dev(void)
 {
@@ -85,7 +95,6 @@ void dwa_core_deinit(int top_id)
 	dwa_disable(top_id);
 	dwa_reset(top_id);
 }
-
 
 void dwa_dev_init(struct cvi_dwa_vdev *dev)
 {
@@ -302,7 +311,20 @@ static long dwa_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = dwa_get_chn_frame(wdev, identity, VideoFrame, MilliSec);
 			break;
 		}
+		case CVI_DWA_SUSPEND: {
+			struct cvi_dwa_vdev *dev
+				= container_of(filp->private_data, struct cvi_dwa_vdev, miscdev);
 
+			ret = dwa_suspend(dev->miscdev.this_device);
+			break;
+		}
+		case CVI_DWA_RESUME: {
+			struct cvi_dwa_vdev *dev
+				= container_of(filp->private_data, struct cvi_dwa_vdev, miscdev);
+
+			ret = dwa_resume(dev->miscdev.this_device);
+			break;
+		}
 		default:
 			ret = -ENOTTY;
 			goto err;
@@ -852,17 +874,55 @@ static const struct of_device_id cvi_dwa_dt_match[] = {
 };
 
 #ifdef CONFIG_PM_SLEEP
-static int dwa_suspend(struct device *dev)
+int dwa_suspend(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	s32 ret = 0;
+	struct cvi_dwa_vdev * vdev = dwa_get_dev();
+
+	if (unlikely(!vdev)) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa_dev is null\n");
+		return -1;
+	}
+
+	ret = dwa_suspend_handler();
+	if (ret) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "fail to suspend dwa thread, err=%d\n", ret);
+		return -1;
+	}
+
+	dwa_dev_deinit(vdev);
+	dwa_clk_deinit(vdev);
+	atomic_set(&suspend_flag, 1);
+
+	CVI_TRACE_DWA(CVI_DBG_INFO, "dwa suspend+\n");
 	return 0;
 }
 
-static int dwa_resume(struct device *dev)
+int dwa_resume(struct device *dev)
 {
-	dev_info(dev, "%s\n", __func__);
+	s32 ret = 0;
+	struct cvi_dwa_vdev * vdev = dwa_get_dev();
+
+	if (unlikely(!vdev)) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "dwa_dev is null\n");
+		return -1;
+	}
+
+	dwa_clk_init(vdev);
+	dwa_dev_init(vdev);
+
+	ret = dwa_resume_handler();
+	if (ret) {
+		CVI_TRACE_DWA(CVI_DBG_ERR, "fail to resume dwa thread, err=%d\n", ret);
+		return -1;
+	}
+	atomic_set(&suspend_flag, 0);
+
+	CVI_TRACE_DWA(CVI_DBG_INFO, "dwa resume+\n");
 	return 0;
 }
+
+
 
 static SIMPLE_DEV_PM_OPS(dwa_pm_ops, dwa_suspend, dwa_resume);
 #else

@@ -347,7 +347,8 @@ enum ENUM_CHIP_ID {
 #define VO_MAX_CHN_NUM          64      /* max chn num */
 #define VO_MAX_LAYER_IN_DEV     1       /* max layer num of each dev */
 #define VO_MAX_LAYER_DEPTH     	8       /* max layer depth num */
-#define VO_MAX_GRAPHICS_LAYER_NUM   1
+#define VO_MAX_OVERLAY_IN_DEV   3		/* max vgop num of each dev*/
+#define VO_MAX_OVERLAY_NUM 		6		/* max vgop num */
 #define VO_MAX_WBC_NUM   		1		/* max wbc num */
 #define VO_MAX_WBC_BUF   		2		/* max wbc buffer num */
 #define VO_WBC_DONEQ   			1		/* default wbc doneq depth*/
@@ -360,6 +361,14 @@ enum ENUM_CHIP_ID {
 #define VO_MAX_CHN_SCALE       	16      /* up to 16x scale when chn crop*/
 #define VO_MAX_CHN_ZOOM       	1000    /* max value can set use zoom by ratio*/
 #define VO_MAX_CHN_BORDER       14    	/* max width for border*/
+#define VO_LAYER_V0   			0
+#define VO_LAYER_V1   			1
+#define VO_OVERLAY_G0   		2
+#define VO_OVERLAY_G1 			3
+#define VO_OVERLAY_G2   		4
+#define VO_OVERLAY_G3 			5
+#define VO_OVERLAY_G4   		6
+#define VO_OVERLAY_G5 			7
 
 /* For AUDIO */
 #define AI_DEV_MAX_NUM          1
@@ -380,7 +389,7 @@ enum ENUM_CHIP_ID {
 #define VPSS_T_IP_NUM            4
 #define VPSS_D_IP_NUM            2
 #define VPSS_IP_NUM              (VPSS_V_IP_NUM + VPSS_T_IP_NUM + VPSS_D_IP_NUM)
-#define VPSS_MAX_GRP_NUM         64
+#define VPSS_MAX_GRP_NUM         128
 #define VPSS_ONLINE_NUM          8
 #define VPSS_ONLINE_GRP_0        0
 #define VPSS_ONLINE_GRP_1        1

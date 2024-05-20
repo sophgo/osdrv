@@ -1,6 +1,7 @@
 #include "phy/phy.h"
 #include "phy/phy_i2c.h"
 #include "core/main_controller.h"
+#include "core/hdmi_core.h"
 #include "bsp/access.h"
 #include "util/util.h"
 #include "core/hdmi_reg.h"
@@ -513,6 +514,7 @@ struct phy_config * phy316_get_configs_pr(u32 mpixelclock, pixel_repetition_t pi
 int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_repetition_t pixel)
 {
 	int i   = 0;
+	int res = 0;
 	u32 phyRead = 0;
 	u8 lock = 0;
 	struct phy_config * config = NULL;
@@ -526,19 +528,35 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_re
 	if (config == NULL) {
 		pr_err("Configuration for clk %x color depth %d"
 				  " pixel repetition %d not found\n", pClk, color, pixel);
-		return -1;
+		return CVI_ERR_HDMI_PHY_NOT_CONFIG;
 	}
 
+	/*
+	 * Some monitors may experience SCDC read/write failures, yet display normally.
+	 * Therefore, in this case, we only provide an error message but not return.
+	 */
 	if(pClk > 340000) {
 		dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x1);
-		scrambling(dev, TRUE);
-		tmds_high_rate(dev, TRUE);
+		res = scrambling(dev, TRUE);
+		if (res != 0)
+			pr_err("scrambling config failed\n");
+
+		res = tmds_high_rate(dev, TRUE);
+		if (res != 0)
+			pr_err("tmds high rate config failed\n");
+
 		dev->snps_hdmi_ctrl.src_scramble = dev->snps_hdmi_ctrl.sink_scramble
 		 = dev->snps_hdmi_ctrl.high_tmds_ratio = TRUE;
 	} else {
 		dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x0);
-		scrambling(dev, FALSE);
-		tmds_high_rate(dev, FALSE);
+		res = scrambling(dev, FALSE);
+		if (res != 0)
+			pr_err("scrambling config failed\n");
+
+		res = tmds_high_rate(dev, FALSE);
+		if (res != 0)
+			pr_err("tmds high rate config failed\n");
+
 		dev->snps_hdmi_ctrl.src_scramble = dev->snps_hdmi_ctrl.sink_scramble
 		 = dev->snps_hdmi_ctrl.high_tmds_ratio = FALSE;
 	}
@@ -593,10 +611,11 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_re
 		lock = phy_phase_lock_loop_state(dev);
 		if (lock & 0x1) {
 			pr_debug("PHY PLL locked\n");
-			return TRUE;
+			return 0;
 		}
 	}
+
 	pr_debug("PHY PLL not locked\n");
 
-	return FALSE;
+	return CVI_ERR_HDMI_PHY_PLL_NOT_LOCK;
 }

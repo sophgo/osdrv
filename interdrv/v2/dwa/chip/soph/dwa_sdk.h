@@ -67,6 +67,8 @@ void cvi_dwa_sw_deinit(struct cvi_dwa_vdev *wdev);
 
 s32 dwa_set_identity(struct cvi_dwa_vdev *wdev,
 				  struct dwa_identity_attr *attr);
+s32 dwa_suspend_handler(void);
+s32 dwa_resume_handler(void);
 
 #define DWA_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_YUV_PLANAR_420) || (fmt == PIXEL_FORMAT_YUV_PLANAR_444) ||           \
@@ -256,5 +258,4 @@ static inline u8 dwa_identity_is_match(GDC_IDENTITY_ATTR_S *attr_src, GDC_IDENTI
 	else
 		return false;
 }
-
 #endif /* _DWA_SDK_H_ */

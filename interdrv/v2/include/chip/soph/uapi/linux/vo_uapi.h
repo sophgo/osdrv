@@ -62,6 +62,10 @@ enum VO_SDK_CTRL {
 	VO_SDK_GET_PUBATTR,
 	VO_SDK_SET_HDMIPARAM,
 	VO_SDK_GET_HDMIPARAM,
+	VO_SDK_SET_LVDSPARAM,
+	VO_SDK_GET_LVDSPARAM,
+	VO_SDK_SET_I80PARAM,
+	VO_SDK_GET_I80PARAM,
 	VO_SDK_ENABLE,
 	VO_SDK_DISABLE,
 	VO_SDK_SUSPEND,
@@ -83,7 +87,10 @@ enum VO_SDK_CTRL {
 	VO_SDK_GET_LAYERCSC,
 	VO_SDK_SET_LAYERTOLERATION,
 	VO_SDK_GET_LAYERTOLERATION,
-	VO_SDK_BIND_VIDEOLAYER,
+	VO_SDK_SET_LAYERPRRIORITY,
+	VO_SDK_GET_LAYERPRRIORITY,
+	VO_SDK_BIND_LAYER,
+	VO_SDK_UNBIND_LAYER,
 	//CHN CTRL
 	VO_SDK_SET_CHNATTR,
 	VO_SDK_GET_CHNATTR,
@@ -274,6 +281,11 @@ struct vo_video_layer_cfg {
 	__u8 VoLayer;
 };
 
+struct vo_video_layer_bind_cfg {
+	__u8 VoDev;
+	__u8 VoLayer;
+};
+
 struct vo_video_layer_attr_cfg {
 	__u8 VoLayer;
 	VO_VIDEO_LAYER_ATTR_S stLayerAttr;
@@ -292,6 +304,11 @@ struct vo_layer_csc_cfg {
 struct vo_layer_toleration_cfg {
 	__u8 VoLayer;
 	__u32 u32Toleration;
+};
+
+struct vo_layer_priority_cfg {
+	__u8 VoLayer;
+	__u32 u32Priority;
 };
 
 struct vo_clear_chn_buf_cfg {
@@ -402,6 +419,16 @@ struct vo_dev_cfg {
 struct vo_pub_attr_cfg {
 	__u8 VoDev;
 	VO_PUB_ATTR_S stPubAttr;
+};
+
+struct vo_lvds_param_cfg {
+	__u8 VoDev;
+	VO_LVDS_ATTR_S stLVDSParam;
+};
+
+struct vo_I80_param_cfg {
+	__u8 VoDev;
+	VO_I80_CFG_S stI80Param;
 };
 
 struct vo_hdmi_param_cfg {

@@ -34,8 +34,6 @@
 
 u32 vpss_log_lv = CVI_DBG_WARN;
 int hw_mask = 0x3ff; //default vpss_v + vpss_t + vpss_d
-int work_mask = 0xff; //default vpss_v + vpss_t
-//int vip_clk_freq;
 
 static atomic_t open_count = ATOMIC_INIT(0);
 static const char *const vpss_name[] = {"vpss_v0", "vpss_v1", "vpss_v2",
@@ -57,8 +55,6 @@ static const char *const vpss_clk_name[CVI_VPSS_MAX][3] = {
 module_param(vpss_log_lv, int, 0644);
 
 module_param(hw_mask, int, 0644);
-
-module_param(work_mask, int, 0644);
 
 
 void vpss_timer_core_update(void *data)
@@ -96,14 +92,10 @@ int vpss_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 		param.snr_num = post_para->snr_num;
 		param.is_tile = post_para->is_tile;
 		param.is_left_tile = post_para->is_left_tile;
-
-		if (param.is_left_tile) {
-			param.in = post_para->l_in;
-			param.out = post_para->l_out;
-		} else {
-			param.in = post_para->r_in;
-			param.out = post_para->r_out;
-		}
+		param.l_in = post_para->l_in;
+		param.l_out = post_para->l_out;
+		param.r_in = post_para->r_in;
+		param.r_out = post_para->r_out;
 
 		vpss_set_mlv_info(post_para->snr_num, &post_para->m_lv_i);
 		rc = cvi_vpss_hal_online_run(&param);
@@ -721,7 +713,7 @@ static int __init cvi_vpss_init(void)
 static void __exit cvi_vpss_exit(void)
 {
 	CVI_TRACE_VPSS(CVI_DBG_INFO, " +\n");
-	vpss_deinit();
+
 	platform_driver_unregister(&cvi_vpss_pdrv);
 	#if (!DEVICE_FROM_DTS)
 	platform_device_unregister(&cvi_vpss_pdev);

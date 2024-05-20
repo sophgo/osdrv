@@ -10,6 +10,10 @@
 #define I2C_MIN_SS_SCL_HIGH_TIME   4592 //4737 //5625
 #define I2C_MIN_SS_SCL_LOW_TIME    5102 //5263 //6250
 
+#define I2C_CLK 100000
+#define I2C_SCL_HIGH_TIME_NS 4500
+#define I2C_SCL_LOW_TIME_NS  5200
+
 /** I2C clock configuration
  *
  * @param sfrClock external clock supplied to controller
@@ -19,6 +23,8 @@
  * @param value of fast speed high time counter (refer to HDMITXCTRL databook)
  */
 void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfrClock, u16 ss_low_ckl, u16 ss_high_ckl, u16 fs_low_ckl, u16 fs_high_ckl);
+
+void i2cddc_clk_set_divs(hdmi_tx_dev_t * dev);
 
 /** Set the speed mode (standard/fast mode)
  *

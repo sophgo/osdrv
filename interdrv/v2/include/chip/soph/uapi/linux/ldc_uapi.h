@@ -122,6 +122,8 @@ struct ldc_vb_pool_cfg {
 #define CVI_LDC_GET_BUF_WRAP _IOWR('L', 0x0b, struct ldc_buf_wrap_cfg)
 #define CVI_LDC_ATTACH_VB_POOL _IOW('L', 0x0c, struct ldc_vb_pool_cfg)
 #define CVI_LDC_DETACH_VB_POOL _IO('L', 0x0d)
+#define CVI_LDC_SUSPEND _IO('L',0x0e)
+#define CVI_LDC_RESUME _IO('L',0x0f)
 
 #ifdef __cplusplus
 }

@@ -432,7 +432,6 @@ static long ive_add_task(struct cvi_ive_device *ndev, unsigned int cmd, unsigned
 		ret = -1;
 	} else
 		ret = 0;
-
 	ive_notify_wkup_evt_kth(ndev, IVE_EVENT_EOF);
 
 
@@ -497,13 +496,11 @@ static long cvi_ive_ioctl(struct file *filp, unsigned int cmd,
 	void *buffer = NULL;
 
 	ioctl_arg = (struct cvi_ive_ioctl_arg *)arg;
-	kdata = vmalloc(512);
+	kdata = kmalloc(512,GFP_KERNEL);
 	if (!kdata) {
 		CVI_TRACE_IVE(CVI_DBG_ERR, "vmalloc fail\n");
 		goto error;
 	}
-
-
 	if (copy_from_user(ioctl_arg, (void __user *)arg, sizeof(ioctl_arg)) != 0) {
 		CVI_TRACE_IVE(CVI_DBG_ERR, "copy to user fail\n");
 		goto error;
@@ -512,11 +509,12 @@ static long cvi_ive_ioctl(struct file *filp, unsigned int cmd,
 		CVI_TRACE_IVE(CVI_DBG_ERR, "copy to user fail\n");
 		goto error;
 	}
+
 	if (cmd == CVI_IVE_IOC_Map || cmd == CVI_IVE_IOC_NCC ||
 		cmd == CVI_IVE_IOC_CCL || cmd == CVI_IVE_IOC_MatchBgModel ||
 		cmd == CVI_IVE_IOC_UpdateBgModel) {
 
-		buffer = vmalloc(ioctl_arg->u32Size);
+		buffer = kmalloc(ioctl_arg->u32Size,GFP_KERNEL);
 		if (!buffer) {
 			CVI_TRACE_IVE(CVI_DBG_ERR, "vmalloc fail\n");
 			goto error;
@@ -546,14 +544,13 @@ static long cvi_ive_ioctl(struct file *filp, unsigned int cmd,
 		CVI_TRACE_IVE(CVI_DBG_ERR, "copy to user fail\n");
 		ret = -EFAULT;
 	}
-
 	if (kdata) {
-		vfree(kdata);
+		kfree(kdata);
 		kdata = NULL;
 	}
 
 	if (copy_buf && buffer) {
-		vfree(buffer);
+		kfree(buffer);
 		buffer= NULL;
 	}
 
@@ -561,12 +558,12 @@ static long cvi_ive_ioctl(struct file *filp, unsigned int cmd,
 
 error:
 	if (kdata) {
-		vfree(kdata);
+		kfree(kdata);
 		kdata = NULL;
 	}
 
 	if (copy_buf && buffer) {
-		vfree(buffer);
+		kfree(buffer);
 		buffer= NULL;
 	}
 	return -1;

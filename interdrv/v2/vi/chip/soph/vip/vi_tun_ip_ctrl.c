@@ -272,6 +272,9 @@ int vi_tuning_buf_setup(struct isp_ctx *ctx)
 		if (!ctx->isp_pipe_enable[i])
 			continue;
 
+		if (_is_right_tile(ctx, i))
+			continue;
+
 		if (vi_tuning_ptr[i] != NULL)
 			continue;
 
@@ -297,8 +300,8 @@ int vi_tuning_buf_setup(struct isp_ctx *ctx)
 		tuning_buf_addr.fe_addr[dev_num] = fe_paddr;
 		tuning_buf_addr.fe_vir[dev_num] = phys_to_virt(fe_paddr);
 
-		vi_pr(VI_INFO, "tuning fe_addr[%d]=0x%llx, be_addr[%d]=0x%llx, post_addr[%d]=0x%llx\n",
-				i, tuning_buf_addr.fe_addr[dev_num],
+		vi_pr(VI_INFO, "dev_num_%d tuning fe_addr[%d]=0x%llx, be_addr[%d]=0x%llx, post_addr[%d]=0x%llx\n",
+				dev_num, i, tuning_buf_addr.fe_addr[dev_num],
 				i, tuning_buf_addr.be_addr[dev_num],
 				i, tuning_buf_addr.post_addr[dev_num]);
 	}
@@ -421,6 +424,9 @@ void pre_be_tuning_update(
 	be_cfg	= (struct cvi_vip_isp_be_cfg *)tuning_buf_addr.be_vir[dev_num];
 	tun_idx = be_cfg->tun_idx;
 
+	if (ctx->isp_pipe_cfg[raw_num].is_tile && ctx->is_work_on_r_tile)
+		return;
+
 	vi_pr(VI_DBG, "Pre_be_%d tuning update(%d):idx(%d)\n",
 			raw_num, be_cfg->tun_update[tun_idx], tun_idx);
 
@@ -481,6 +487,9 @@ void postraw_tuning_update(
 
 	post_cfg = (struct cvi_vip_isp_post_cfg *)tuning_buf_addr.post_vir[dev_num];
 	tun_idx  = post_cfg->tun_idx;
+
+	if (ctx->isp_pipe_cfg[raw_num].is_tile && ctx->is_work_on_r_tile)
+		return;
 
 	vi_pr(VI_DBG, "Postraw_%d tuning update(%d):idx(%d)\n",
 			raw_num, post_cfg->tun_update[tun_idx], tun_idx);

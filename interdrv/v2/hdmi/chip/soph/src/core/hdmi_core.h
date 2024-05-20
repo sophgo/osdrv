@@ -188,7 +188,7 @@ int hdmitx_set_phy(int phy, int debug_mode);
 
 int edid_read_cap(void);
 
-int hdmitx_force_get_edid(CVI_HDMI_EDID* edid_raw);
+int hdmitx_force_get_edid(CVI_HDMI_EDID* edid_raw, char *fileName);
 
 int sink_capability(CVI_HDMI_SINK_CAPABILITY* cvi_sink_cap);
 
@@ -235,5 +235,21 @@ int get_current_event_id(u32* event_id);
 void hdmitx_create_proc(struct hdmitx_dev * dev);
 
 void hdmitx_destroy_proc(struct hdmitx_dev * dev);
+
+int hdmi_proc_edid_cmd(u8 edid, char* file_path);
+
+int hdmi_proc_cbar_cmd(u8 cbar);
+
+int hdmi_proc_mode_cmd(u8 hdmi_mode);
+
+int hdmi_proc_ddc_cmd(u32 ddc_rate);
+
+int hdmi_proc_control_cmd(u8 cmd);
+
+int hdmi_proc_outclrspace_parse(u8 outclrspace);
+
+int hdmi_proc_scdc_cmd(u8 scdc, u32 addr, u32 data);
+
+int hdmi_proc_phy_cmd(u8 phy, u32 addr, u32 data);
 
 #endif /* _HDMI_CORE_H_*/

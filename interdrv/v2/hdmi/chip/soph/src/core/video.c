@@ -5,6 +5,7 @@
 #include "core/hdmi_reg.h"
 #include "bsp/access.h"
 #include "edid/edid.h"
+#include "core/hdmi_core.h"
 
 
 int video_initialize(hdmi_tx_dev_t *dev, videoParams_t * video, u8 dataEnablePolarity)
@@ -14,24 +15,32 @@ int video_initialize(hdmi_tx_dev_t *dev, videoParams_t * video, u8 dataEnablePol
 
 int video_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 {
+	int res = 0;
 	/* DVI mode does not support pixel repetition */
 	if ((video->mHdmi == DVI) && video_params_is_pixel_repetition(dev, video)) {
 		pr_err("DVI mode with pixel repetition: video not transmitted");
-		return FALSE;
+		return CVI_ERR_HDMI_VIDEO_CONFIG_FAILED;
 	}
 
 	fc_force_output(dev, 1);
 
-	if (fc_video_config(dev, video) == FALSE)
-		return FALSE;
-	if (video_video_packetizer(dev, video) == FALSE)
-		return FALSE;
-	if (video_color_space_converter(dev, video) == FALSE)
-		return FALSE;
-	if (video_video_sampler(dev, video) == FALSE)
-		return FALSE;
+	res = fc_video_config(dev, video);
+	if (res != 0)
+		return res;
 
-	return TRUE;
+	res = video_video_packetizer(dev, video);
+	if (res != 0)
+		return res;
+
+	res = video_color_space_converter(dev, video);
+	if (res != 0)
+		return res;
+
+	res = video_video_sampler(dev, video);
+	if (res != 0)
+		return res;
+
+	return res;
 }
 
 int video_color_space_converter(hdmi_tx_dev_t *dev, videoParams_t * video)
@@ -43,14 +52,14 @@ int video_color_space_converter(hdmi_tx_dev_t *dev, videoParams_t * video)
 	if (video_params_is_color_space_interpolation(dev, video)) {
 		if (video->mCscFilter > 1) {
 			pr_err("invalid chroma interpolation filter: %d", video->mCscFilter);
-			return FALSE;
+			return CVI_ERR_HDMI_INTERPOLATION_FILTER_INVALID;
 		}
 		interpolation = 1 + video->mCscFilter;
 	}
 	else if (video_params_is_color_space_decimation(dev, video)) {
 		if (video->mCscFilter > 2) {
 			pr_err("invalid chroma decimation filter: %d", video->mCscFilter);
-			return FALSE;
+			return CVI_ERR_HDMI_DECIMATION_FILTER_INVALID;
 		}
 		decimation = 1 + video->mCscFilter;
 	}
@@ -65,12 +74,12 @@ int video_color_space_converter(hdmi_tx_dev_t *dev, videoParams_t * video)
 		color_depth = 7;
 	else {
 		pr_err("invalid color depth: %d", video->mColorResolution);
-		return FALSE;
+		return CVI_ERR_HDMI_COLOR_DEPTH_INVALID;
 	}
 
 	csc_config(dev, video, interpolation, decimation, color_depth);
 
-	return TRUE;
+	return 0;
 }
 
 int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * video)
@@ -93,7 +102,7 @@ int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * video)
 			color_depth = 7;
 		else {
 			pr_err("invalid color depth: %d", video->mColorResolution);
-			return FALSE;
+			return CVI_ERR_HDMI_COLOR_DEPTH_INVALID;
 		}
 	}
 	else if (video->mEncodingOut == YCC422) {
@@ -105,13 +114,13 @@ int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * video)
 			remap_size = 2;
 		else {
 			pr_err("invalid color remap size: %d", video->mColorResolution);
-			return FALSE;
+			return CVI_ERR_HDMI_COLOR_REMAP_SIZE_INVALID;
 		}
 		output_select = 1;
 	}
 	else {
 		pr_err("invalid output encoding type: %d", video->mEncodingOut);
-		return FALSE;
+		return CVI_ERR_HDMI_OUTPUT_ENCODETYPE_INVALID;
 	}
 
 	vp_pixel_repetition_factor(dev, video->mPixelRepetitionFactor);
@@ -119,7 +128,7 @@ int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * video)
 	vp_pixel_packing_default_phase(dev, video->mPixelPackingDefaultPhase);
 	vp_ycc422_remap_size(dev, remap_size);
 	vp_output_selector(dev, output_select);
-	return TRUE;
+	return 0;
 }
 
 int video_video_sampler(hdmi_tx_dev_t *dev, videoParams_t * video)
@@ -137,9 +146,13 @@ int video_video_sampler(hdmi_tx_dev_t *dev, videoParams_t * video)
 			map_code = 7;
 		else {
 			pr_err("invalid color depth: %d", video->mColorResolution);
-			return FALSE;
+			return CVI_ERR_HDMI_COLOR_DEPTH_INVALID;
 		}
 		map_code += (video->mEncodingIn != RGB) ? 8 : 0;
+
+		if(video->mEncodingIn == YCC444)
+			map_code = 0x17;
+
 	} else if (video->mEncodingIn == YCC422) {
 		/* YCC422 mapping is discontinued - only map 1 is supported */
 		if (video->mColorResolution == COLOR_DEPTH_36)
@@ -150,16 +163,16 @@ int video_video_sampler(hdmi_tx_dev_t *dev, videoParams_t * video)
 			map_code = 22;
 		else {
 			pr_err("invalid color remap size: %d", video->mColorResolution);
-			return FALSE;
+			return CVI_ERR_HDMI_COLOR_REMAP_SIZE_INVALID;
 		}
 	} else {
 		pr_err("invalid input encoding type: %d", video->mEncodingIn);
-		return FALSE;
+		return CVI_ERR_HDMI_INVALID_INPUT_ENCODETYPE;
 	}
 
 	video_sampler_config(dev, map_code);
 
-	return TRUE;
+	return 0;
 }
 
 int video_params_get_cea_vic_code(int hdmi_vic_code)

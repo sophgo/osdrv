@@ -20,6 +20,14 @@ extern "C" {
 #define _OFST(_BLK_T, _REG)       ((uintptr_t)&(((struct _BLK_T *)0)->_REG))
 #endif
 
+#define GMS_SEC_SIZE			(((1024 >> 1) << 5) * 3)
+/*ae dma size ae_dma_counts + hist_dma_counts + faceae_dma_counts*/
+#define AE_DMA_SIZE			(0x21C0 + 0x2000 + 0x80)
+/*dci 256 * data_size*/
+#define DCI_DMA_SIZE			(0x400)
+/*af size = (block_num_x * block_num_y) << 5*/
+#define AF_DMA_SIZE			((17 * 15) << 5)
+
 #define ISP_RD_REG_BA(_BA) \
 	(_reg_read(_BA))
 
@@ -247,6 +255,13 @@ enum ISP_YUV_SCENE {
 	ISP_YUV_SCENE_ONLINE,
 	ISP_YUV_SCENE_ISP,
 	ISP_YUV_SCENE_MAX,
+};
+
+enum RAW_AI_ISP_AP {
+	RAW_AI_ISP_BYPASS = 0,
+	RAW_AI_ISP_SPLT,
+	RAW_AI_ISP_FE,
+	RAW_AI_ISP_MAX,
 };
 
 enum ISP_BLC_ID {
@@ -515,7 +530,8 @@ struct _isp_cfg {
 	uint32_t		drop_frm_cnt;
 	uint32_t		isp_reset_frm;
 	uint32_t		first_frm_cnt;
-	uint32_t		bnr_ai_isp_frm_cnt;
+	u32			raw_ai_isp_frm_cnt;
+	u32			raw_ai_isp_ap;
 	struct vi_rect		crop;
 	struct vi_rect		crop_se;
 	struct vi_rect		rawdump_crop;
@@ -546,7 +562,6 @@ struct _isp_cfg {
 	uint32_t		is_slice_buf_on		: 1;
 	uint32_t		is_drop_next_frame	: 1;
 	uint32_t		is_ctrl_inited		: 1;
-	uint32_t		is_raw_ai_isp		: 1;
 	uint32_t		is_fake_splt_wdma	: 1;
 	uint32_t		is_tnr_ai_isp		: 1;
 	uint32_t		is_tnr_ai_isp_rdy	: 1;

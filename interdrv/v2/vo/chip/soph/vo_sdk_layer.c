@@ -463,8 +463,8 @@ s32 vo_set_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 {
 	struct cvi_disp_intf_cfg cfg;
 	struct vo_dv_timings dv_timings;
-	u16 rgb[3], i;
-	u32  panel_status = 0;
+	u16 rgb[3];
+	u32 panel_status = 0;
 	s32 ret = CVI_FAILURE;
 	struct cvi_vo_dev_ctx *pstDevCtx;
 
@@ -541,39 +541,7 @@ s32 vo_set_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 
 	if ((pstPubAttr->enIntfType >= VO_INTF_LCD_18BIT) && (pstPubAttr->enIntfType <= VO_INTF_LCD_30BIT)) {
 		cfg.intf_type = CVI_VIP_DISP_INTF_LVDS;
-		if (pstPubAttr->enIntfType == VO_INTF_LCD_18BIT)
-			cfg.lvds_cfg.out_bits = LVDS_OUT_6BIT;
-		else if (pstPubAttr->enIntfType == VO_INTF_LCD_24BIT)
-			cfg.lvds_cfg.out_bits = LVDS_OUT_8BIT;
-		else if (pstPubAttr->enIntfType == VO_INTF_LCD_30BIT)
-			cfg.lvds_cfg.out_bits = LVDS_OUT_10BIT;
-		else
-			cfg.lvds_cfg.out_bits = LVDS_OUT_8BIT;
-
-		cfg.lvds_cfg.mode = (enum LVDS_MODE)pstPubAttr->stLvdsAttr.lvds_vesa_mode;
-		cfg.lvds_cfg.chn_num = pstPubAttr->stLvdsAttr.chn_num;
-		if (cfg.lvds_cfg.chn_num > 1) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "lvds only surpports single link!\n");
-			return CVI_ERR_VO_ILLEGAL_PARAM;
-		}
-		cfg.lvds_cfg.vs_out_en = 1;
-		cfg.lvds_cfg.hs_out_en = 1;
-		cfg.lvds_cfg.hs_blk_en = 1;
-		cfg.lvds_cfg.msb_lsb_data_swap = 1;
-		cfg.lvds_cfg.serial_msb_first = pstPubAttr->stLvdsAttr.data_big_endian;
-		cfg.lvds_cfg.even_odd_link_swap = 0;
-		cfg.lvds_cfg.enable = 1;
-		do_div(dv_timings.bt.pixelclock, 1000);
-		cfg.lvds_cfg.pixelclock = dv_timings.bt.pixelclock;
-		for (i = 0; i < VO_LVDS_LANE_MAX; ++i) {
-			cfg.lvds_cfg.lane_id[i] = pstPubAttr->stLvdsAttr.lane_id[i];
-			cfg.lvds_cfg.lane_pn_swap[i] = pstPubAttr->stLvdsAttr.lane_pn_swap[i];
-		}
-
-		if (vo_set_interface(VoDev, &cfg) != 0) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO INTF configure failured.\n");
-			return CVI_FAILURE;
-		}
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "LVDSParam should be setup by CVI_VO_SetLVDSParam.\n");
 	} else if ((pstPubAttr->enIntfType == VO_INTF_MIPI) || (pstPubAttr->enIntfType == VO_INTF_MIPI_SLAVE)) {
 		cfg.intf_type = CVI_VIP_DISP_INTF_DSI;
 		CVI_TRACE_VO(CVI_DBG_DEBUG, "MIPI-DSI should be setup by mipi-tx.\n");
@@ -585,58 +553,8 @@ s32 vo_set_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 		cfg.intf_type = CVI_VIP_DISP_INTF_HDMI;
 		CVI_TRACE_VO(CVI_DBG_DEBUG, "HDMI should be setup by hdmi-tx.\n");
 	} else if (pstPubAttr->enIntfType == VO_INTF_I80) {
-		const VO_I80_CFG_S *psti80Cfg = &pstPubAttr->sti80Cfg;
-
-		if ((psti80Cfg->lane_s.CS > 3) || (psti80Cfg->lane_s.RS > 3) ||
-			(psti80Cfg->lane_s.WR > 3) || (psti80Cfg->lane_s.RD > 3)) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) I80 lane should be less than 3.\n", VoDev);
-			CVI_TRACE_VO(CVI_DBG_ERR, "CS(%d) RS(%d) WR(%d) RD(%d).\n",
-					 psti80Cfg->lane_s.CS, psti80Cfg->lane_s.RS,
-					 psti80Cfg->lane_s.WR, psti80Cfg->lane_s.RD);
-			return CVI_ERR_VO_ILLEGAL_PARAM;
-		}
-		if ((psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RS) || (psti80Cfg->lane_s.CS == psti80Cfg->lane_s.WR) ||
-			(psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RD) || (psti80Cfg->lane_s.RS == psti80Cfg->lane_s.WR) ||
-			(psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RD) || (psti80Cfg->lane_s.WR == psti80Cfg->lane_s.RD)) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) I80 lane can't duplicate CS(%d) RS(%d) WR(%d) RD(%d).\n",
-					 VoDev, psti80Cfg->lane_s.CS, psti80Cfg->lane_s.RS,
-					 psti80Cfg->lane_s.WR, psti80Cfg->lane_s.RD);
-			return CVI_ERR_VO_ILLEGAL_PARAM;
-		}
-		if (psti80Cfg->cycle_time > 250) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) cycle time %d > 250.\n",
-					 VoDev, psti80Cfg->cycle_time);
-			return CVI_ERR_VO_ILLEGAL_PARAM;
-		}
-		if (psti80Cfg->fmt >= VO_I80_FORMAT_MAX) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) invalid I80 Format(%d).\n",
-					 VoDev, psti80Cfg->fmt);
-			return CVI_ERR_VO_ILLEGAL_PARAM;
-		}
-#if 0 //TODO: I80
 		cfg.intf_type = CVI_VIP_DISP_INTF_I80;
-		if (vo_set_interface(gvdev, &cfg, VoDev) != 0) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO INTF configure failured.\n");
-			//return CVI_FAILURE;
-		}
-
-		i80_ctrl[I80_CTRL_CMD] = BIT(psti80Cfg->lane_s.RD) |
-					((BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.WR)) << 4);
-		i80_ctrl[I80_CTRL_DATA] = (BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.RS)) |
-			((BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.WR) | BIT(psti80Cfg->lane_s.RS)) << 4);
-		i80_ctrl[I80_CTRL_EOF] = 0xff;
-
-		CVI_TRACE_VO(CVI_DBG_ERR, "VO I80 ctrl CMD(%#x) DATA(%#x)\n",
-				 i80_ctrl[I80_CTRL_CMD], i80_ctrl[I80_CTRL_DATA]);
-
-
-
-		d = get_dev_info(VDEV_TYPE_DISP, 0);
-		if (vo_set_clk(d->fd, 1000000 / (psti80Cfg->cycle_time / 2)) != 0) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO I80 update cycle_time(%d) fail\n", psti80Cfg->cycle_time);
-			return CVI_FAILURE;
-		}
-#endif
+		CVI_TRACE_VO(CVI_DBG_DEBUG, "I80Param should be setup by CVI_VO_SetI80Param.\n");
 	} else if (pstPubAttr->enIntfType == VO_INTF_BT656) {
 		cfg.intf_type = CVI_VIP_DISP_INTF_BT;
 		cfg.bt_cfg.mode = BT_MODE_656;
@@ -662,7 +580,6 @@ s32 vo_set_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 	CVI_TRACE_VO(CVI_DBG_INFO, "panel_status[%d], intf_type[%d]\n", panel_status, cfg.intf_type);
 	if ((cfg.intf_type != CVI_VIP_DISP_INTF_DSI) && (cfg.intf_type != CVI_VIP_DISP_INTF_HDMI) && !panel_status) {
 		struct disp_timing timing;
-
 		vo_fill_disp_timing(&timing, &dv_timings.bt);
 		disp_set_timing(VoDev, &timing);
 	}
@@ -725,6 +642,195 @@ s32 vo_get_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 
 	return CVI_SUCCESS;
 
+}
+
+s32 vo_set_lvds_param(VO_DEV VoDev, VO_LVDS_ATTR_S *pstLVDSParam)
+{
+	struct cvi_vo_dev_ctx *pstDevCtx;
+	struct cvi_disp_intf_cfg cfg;
+	struct vo_dv_timings dv_timings;
+	u16 i;
+	s32 ret = CVI_FAILURE;
+
+	ret = CHECK_VO_DEV_VALID(VoDev);
+	if (ret != CVI_SUCCESS)
+		return ret;
+
+	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+
+	if (pstDevCtx->stPubAttr.enIntfSync == VO_OUTPUT_USER) {
+		dv_timings.bt.pixelclock = pstDevCtx->stPubAttr.stSyncInfo.u16FrameRate *
+                           (pstDevCtx->stPubAttr.stSyncInfo.u16Vbb +
+                            (pstDevCtx->stPubAttr.stSyncInfo.u16Vact << !pstDevCtx->stPubAttr.stSyncInfo.bIop) +
+                            pstDevCtx->stPubAttr.stSyncInfo.u16Vfb +
+                            pstDevCtx->stPubAttr.stSyncInfo.u16Vpw) *
+                           (pstDevCtx->stPubAttr.stSyncInfo.u16Hbb +
+                            pstDevCtx->stPubAttr.stSyncInfo.u16Hact +
+                            pstDevCtx->stPubAttr.stSyncInfo.u16Hfb +
+                            pstDevCtx->stPubAttr.stSyncInfo.u16Hpw);
+	} else if (pstDevCtx->stPubAttr.enIntfSync < VO_OUTPUT_USER) {
+		dv_timings.bt.pixelclock = stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16FrameRate *
+                          (stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Vbb +
+                           (stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Vact << !stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].bIop) +
+                           stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Vfb +
+                           stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Vpw) *
+                          (stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Hbb +
+                           stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Hact +
+                           stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Hfb +
+                           stSyncInfo[pstDevCtx->stPubAttr.enIntfSync].u16Hpw);
+	}
+
+	if ((pstDevCtx->stPubAttr.enIntfType >= VO_INTF_LCD_18BIT) && (pstDevCtx->stPubAttr.enIntfType <= VO_INTF_LCD_30BIT)) {
+		cfg.intf_type = CVI_VIP_DISP_INTF_LVDS;
+		if (pstDevCtx->stPubAttr.enIntfType == VO_INTF_LCD_18BIT)
+			cfg.lvds_cfg.out_bits = LVDS_OUT_6BIT;
+		else if (pstDevCtx->stPubAttr.enIntfType == VO_INTF_LCD_24BIT)
+			cfg.lvds_cfg.out_bits = LVDS_OUT_8BIT;
+		else if (pstDevCtx->stPubAttr.enIntfType == VO_INTF_LCD_30BIT)
+			cfg.lvds_cfg.out_bits = LVDS_OUT_10BIT;
+		else
+			cfg.lvds_cfg.out_bits = LVDS_OUT_8BIT;
+
+		cfg.lvds_cfg.mode = (enum LVDS_MODE)pstLVDSParam->lvds_vesa_mode;
+		cfg.lvds_cfg.chn_num = pstLVDSParam->chn_num;
+		if (cfg.lvds_cfg.chn_num > 1) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "lvds only surpports single link!\n");
+			return CVI_ERR_VO_ILLEGAL_PARAM;
+		}
+		cfg.lvds_cfg.vs_out_en = 1;
+		cfg.lvds_cfg.hs_out_en = 1;
+		cfg.lvds_cfg.hs_blk_en = 1;
+		cfg.lvds_cfg.msb_lsb_data_swap = 1;
+		cfg.lvds_cfg.serial_msb_first = pstLVDSParam->data_big_endian;
+		cfg.lvds_cfg.even_odd_link_swap = 0;
+		cfg.lvds_cfg.enable = 1;
+
+		do_div(dv_timings.bt.pixelclock, 1000);
+		cfg.lvds_cfg.pixelclock = dv_timings.bt.pixelclock;
+
+		for (i = 0; i < VO_LVDS_LANE_MAX; ++i) {
+			cfg.lvds_cfg.lane_id[i] = pstLVDSParam->lane_id[i];
+			cfg.lvds_cfg.lane_pn_swap[i] = pstLVDSParam->lane_pn_swap[i];
+		}
+
+		if (vo_set_interface(VoDev, &cfg) != 0) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO INTF configure failured.\n");
+			return CVI_FAILURE;
+		}
+	}
+
+	memcpy(&pstDevCtx->lvds_param, pstLVDSParam, sizeof(*pstLVDSParam));
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_get_lvds_param(VO_DEV VoDev, VO_LVDS_ATTR_S *pstLVDSParam)
+{
+	struct cvi_vo_dev_ctx *pstDevCtx;
+	s32 ret = CVI_FAILURE;
+
+	ret = CHECK_VO_DEV_VALID(VoDev);
+	if (ret != CVI_SUCCESS)
+		return ret;
+	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+
+	if (pstDevCtx->stPubAttr.enIntfType < VO_INTF_LCD_18BIT || pstDevCtx->stPubAttr.enIntfType > VO_INTF_LCD_30BIT) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "not working under th lvds interface!\n");
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+
+	memcpy(pstLVDSParam, &pstDevCtx->lvds_param, sizeof(*pstLVDSParam));
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_set_I80_param(VO_DEV VoDev, VO_I80_CFG_S *stI80Param)
+{
+	const VO_I80_CFG_S *psti80Cfg = stI80Param;
+	struct cvi_vo_dev_ctx *pstDevCtx;
+	s32 ret = CVI_FAILURE;
+
+	ret = CHECK_VO_DEV_VALID(VoDev);
+	if (ret != CVI_SUCCESS)
+		return ret;
+
+	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+
+	if ((psti80Cfg->lane_s.CS > 3) || (psti80Cfg->lane_s.RS > 3) ||
+		(psti80Cfg->lane_s.WR > 3) || (psti80Cfg->lane_s.RD > 3)) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) I80 lane should be less than 3.\n", VoDev);
+		CVI_TRACE_VO(CVI_DBG_ERR, "CS(%d) RS(%d) WR(%d) RD(%d).\n",
+				 psti80Cfg->lane_s.CS, psti80Cfg->lane_s.RS,
+				 psti80Cfg->lane_s.WR, psti80Cfg->lane_s.RD);
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+	if ((psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RS) || (psti80Cfg->lane_s.CS == psti80Cfg->lane_s.WR) ||
+		(psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RD) || (psti80Cfg->lane_s.RS == psti80Cfg->lane_s.WR) ||
+		(psti80Cfg->lane_s.CS == psti80Cfg->lane_s.RD) || (psti80Cfg->lane_s.WR == psti80Cfg->lane_s.RD)) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) I80 lane can't duplicate CS(%d) RS(%d) WR(%d) RD(%d).\n",
+				 VoDev, psti80Cfg->lane_s.CS, psti80Cfg->lane_s.RS,
+				 psti80Cfg->lane_s.WR, psti80Cfg->lane_s.RD);
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+	if (psti80Cfg->cycle_time > 250) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) cycle time %d > 250.\n",
+				 VoDev, psti80Cfg->cycle_time);
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+	if (psti80Cfg->fmt >= VO_I80_FORMAT_MAX) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO DEV(%d) invalid I80 Format(%d).\n",
+				 VoDev, psti80Cfg->fmt);
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+#if 0 //TODO: I80
+	cfg.intf_type = CVI_VIP_DISP_INTF_I80;
+	if (vo_set_interface(gvdev, &cfg, VoDev) != 0) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO INTF configure failured.\n");
+		//return CVI_FAILURE;
+	}
+
+	i80_ctrl[I80_CTRL_CMD] = BIT(psti80Cfg->lane_s.RD) |
+				((BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.WR)) << 4);
+	i80_ctrl[I80_CTRL_DATA] = (BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.RS)) |
+		((BIT(psti80Cfg->lane_s.RD) | BIT(psti80Cfg->lane_s.WR) | BIT(psti80Cfg->lane_s.RS)) << 4);
+	i80_ctrl[I80_CTRL_EOF] = 0xff;
+
+	CVI_TRACE_VO(CVI_DBG_ERR, "VO I80 ctrl CMD(%#x) DATA(%#x)\n",
+			 i80_ctrl[I80_CTRL_CMD], i80_ctrl[I80_CTRL_DATA]);
+
+
+
+	d = get_dev_info(VDEV_TYPE_DISP, 0);
+	if (vo_set_clk(d->fd, 1000000 / (psti80Cfg->cycle_time / 2)) != 0) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VO I80 update cycle_time(%d) fail\n", psti80Cfg->cycle_time);
+		return CVI_FAILURE;
+	}
+#endif
+
+	memcpy(&pstDevCtx->I80_param, stI80Param, sizeof(*stI80Param));
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_get_I80_param(VO_DEV VoDev, VO_I80_CFG_S *stI80Param)
+{
+	struct cvi_vo_dev_ctx *pstDevCtx;
+	s32 ret = CVI_FAILURE;
+
+	ret = CHECK_VO_DEV_VALID(VoDev);
+	if (ret != CVI_SUCCESS)
+		return ret;
+
+	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+
+	if (pstDevCtx->stPubAttr.enIntfType != VO_INTF_I80) {
+		CVI_TRACE_VO(CVI_DBG_ERR, "not working under th I80 interface!\n");
+		return CVI_ERR_VO_ILLEGAL_PARAM;
+	}
+
+	memcpy(stI80Param, &pstDevCtx->I80_param, sizeof(*stI80Param));
+
+	return CVI_SUCCESS;
 }
 
 s32 vo_set_hdmi_param(VO_DEV VoDev, VO_HDMI_PARAM_S *pstHDMIParam)
@@ -939,7 +1045,7 @@ s32 vo_enablevideolayer(VO_LAYER VoLayer)
 		}
 
 		if (gVoCtx->astDevCtx[VoDev].stPubAttr.enIntfType == VO_INTF_I80) {
-			u8 byte_cnt = (gVoCtx->astDevCtx[VoDev].stPubAttr.sti80Cfg.fmt == VO_I80_FORMAT_RGB666) ? 3 : 2;
+			u8 byte_cnt = (gVoCtx->astDevCtx[VoDev].I80_param.fmt == VO_I80_FORMAT_RGB666) ? 3 : 2;
 			u32 buf_size;
 			VB_BLK blk_i80 = VB_INVALID_HANDLE;
 
@@ -972,10 +1078,6 @@ s32 vo_enablevideolayer(VO_LAYER VoLayer)
 
 	mutex_lock(&pstLayerCtx->layer_lock);
 	pstLayerCtx->is_layer_enable = CVI_TRUE;
-	for (i = 0; i < RGN_MAX_NUM_VO; ++i)
-		pstLayerCtx->rgn_handle[i] = RGN_INVALID_HANDLE;
-	for (i = 0; i < RGN_COVEREX_MAX_NUM; ++i)
-		pstLayerCtx->rgn_coverEx_handle[i] = RGN_INVALID_HANDLE;
 	pstLayerCtx->event = 0;
 	init_waitqueue_head(&pstLayerCtx->wq);
 	mutex_unlock(&pstLayerCtx->layer_lock);
@@ -1035,52 +1137,252 @@ s32 vo_disablevideolayer(VO_LAYER VoLayer)
 	return CVI_SUCCESS;
 }
 
-s32 vo_bind_videolayer(VO_LAYER VoLayer, VO_DEV VoDev)
+void vo_sort_layer_priority(s32 *u32Priority, u32 length, s32 *as32OverlayId)
 {
-	s32 ret = CVI_FAILURE;
+    s32 i, j, t1, t2;
 
-	ret = CHECK_VO_DEV_VALID(VoDev);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	ret = CHECK_VO_LAYER_VALID(VoLayer);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	ret = CHECK_VO_LAYER_DISABLE(VoLayer);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	mutex_lock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
-	gVoCtx->astDevCtx[VoDev].s32BindLayerId = VoLayer;
-	gVoCtx->astLayerCtx[VoLayer].s32BindDevId = VoDev;
-	mutex_unlock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
-
-	return ret;
+    for (j = 0; j < length; j++) {
+        for (i = 0; i < (length - 1 - j); i++) {
+			if ((as32OverlayId[i] > as32OverlayId[i + 1]) && (as32OverlayId[i + 1] != -1))
+            {
+                t2 = u32Priority[i];
+                u32Priority[i] = u32Priority[i + 1];
+                u32Priority[i + 1] = t2;
+                t1 = as32OverlayId[i];
+                as32OverlayId[i] = as32OverlayId[i + 1];
+                as32OverlayId[i + 1] = t1;
+            }
+            if (u32Priority[i] > u32Priority[i + 1])
+            {
+                t2 = u32Priority[i];
+                u32Priority[i] = u32Priority[i + 1];
+                u32Priority[i + 1] = t2;
+                t1 = as32OverlayId[i];
+                as32OverlayId[i] = as32OverlayId[i + 1];
+                as32OverlayId[i + 1] = t1;
+            }
+		}
+	}
 }
 
-s32 vo_unbind_videolayer(VO_LAYER VoLayer, VO_DEV VoDev)
+s32 vo_bind_layer(VO_LAYER VoLayer, VO_DEV VoDev)
 {
-	s32 ret = CVI_FAILURE;
+	s32 i, ret = CVI_FAILURE;
 
 	ret = CHECK_VO_DEV_VALID(VoDev);
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	ret = CHECK_VO_LAYER_VALID(VoLayer);
+	if ((VoLayer >= 0) && (VoLayer < VO_MAX_LAYER_NUM)) {
+		ret = CHECK_VO_LAYER_DISABLE(VoLayer);
+		if (ret != CVI_SUCCESS)
+			return ret;
+
+		if (gVoCtx->astDevCtx[VoDev].s32BindLayerId != -1) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoDev(%d) already bind with VoLayer(%d).",
+				VoDev, VoLayer);
+			return CVI_ERR_VO_DEV_HAS_BINDED;
+		}
+
+		mutex_lock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
+		gVoCtx->astDevCtx[VoDev].s32BindLayerId = VoLayer;
+		gVoCtx->astLayerCtx[VoLayer].s32BindDevId = VoDev;
+		mutex_unlock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
+	} else if ((VoLayer >= VO_MAX_LAYER_NUM) &&
+		(VoLayer < (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
+
+		VO_LAYER Overlay = VoLayer - VO_MAX_LAYER_NUM;
+		u8 bind_overlay_num = 0;
+		s32 as32Priority[VO_MAX_OVERLAY_IN_DEV];
+		s32 as32OverlayId[VO_MAX_OVERLAY_IN_DEV];
+		s32 s32BindOverlayId_new[VO_MAX_OVERLAY_IN_DEV];
+
+		if (gVoCtx->astOverlayCtx[Overlay].s32BindDevId != -1) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) already bind on dev(%d)."
+				"please unbind first.\n",
+				VoLayer, gVoCtx->astOverlayCtx[Overlay].s32BindDevId);
+			return CVI_ERR_VO_DEV_HAS_BINDED;
+		}
+
+		for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+			if (gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] == -1) {
+				CVI_TRACE_VO(CVI_DBG_ERR, "Overlay(%d) invalid.\n", Overlay);
+				mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = VoLayer;
+				gVoCtx->astOverlayCtx[Overlay].s32BindDevId = VoDev;
+				mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				break;
+			} else {
+				bind_overlay_num++;
+			}
+		}
+
+		if (bind_overlay_num == VO_MAX_OVERLAY_IN_DEV) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoDev(%d) already bind %d overlays.\n"
+				"please unbind first.\n", VoDev, VO_MAX_OVERLAY_IN_DEV);
+			return CVI_ERR_VO_INVALID_LAYERID;
+		}
+
+		for (bind_overlay_num = 0, i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+			if (gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] != -1) {
+				Overlay = gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] - VO_MAX_LAYER_NUM;
+				CVI_TRACE_VO(CVI_DBG_ERR, "Overlay(%d) invalid.\n", Overlay);
+				mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				as32Priority[bind_overlay_num] = gVoCtx->astOverlayCtx[Overlay].u32Priority;
+				as32OverlayId[bind_overlay_num] = gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i];
+				mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				bind_overlay_num++;
+			}
+		}
+
+		vo_sort_layer_priority(as32Priority, bind_overlay_num, as32OverlayId);
+
+		for (i = 0; i < bind_overlay_num; ++i) {
+			s32BindOverlayId_new[i] = as32OverlayId[i];
+			CVI_TRACE_VO(CVI_DBG_ERR, "as32OverlayId(%d).\n", as32OverlayId[i]);
+		}
+
+		mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+		for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+			if (i < bind_overlay_num)
+				gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = s32BindOverlayId_new[i];
+			else
+				gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = -1;
+		}
+		mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+
+		for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoDev(%d) bind VoLayer(%d).\n", VoDev, gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i]);
+		}
+	} else {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
+		return CVI_ERR_VO_INVALID_LAYERID;
+	}
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_unbind_layer(VO_LAYER VoLayer, VO_DEV VoDev)
+{
+	s32 i, ret = CVI_FAILURE;
+
+	ret = CHECK_VO_DEV_VALID(VoDev);
 	if (ret != CVI_SUCCESS)
 		return ret;
 
-	ret = CHECK_VO_LAYER_DISABLE(VoLayer);
-	if (ret != CVI_SUCCESS)
-		return ret;
+	if ((VoLayer >= 0) && (VoLayer < VO_MAX_LAYER_NUM)) {
+		ret = CHECK_VO_LAYER_DISABLE(VoLayer);
+		if (ret != CVI_SUCCESS)
+			return ret;
 
-	mutex_lock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
-	gVoCtx->astDevCtx[VoDev].s32BindLayerId = -1;
-	gVoCtx->astLayerCtx[VoLayer].s32BindDevId = -1;
-	mutex_unlock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
+		if (gVoCtx->astDevCtx[VoDev].s32BindLayerId != VoLayer
+			|| gVoCtx->astLayerCtx[VoLayer].s32BindDevId != VoDev) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind on VoDev(%d).",
+				VoLayer, VoDev);
+			return CVI_ERR_VO_DEV_NOT_BINDED;
+		}
 
-	return ret;
+		mutex_lock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
+		gVoCtx->astDevCtx[VoDev].s32BindLayerId = -1;
+		gVoCtx->astLayerCtx[VoLayer].s32BindDevId = -1;
+		mutex_unlock(&gVoCtx->astLayerCtx[VoLayer].layer_lock);
+	} else if ((VoLayer >= VO_MAX_LAYER_NUM) &&
+		(VoLayer < (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
+
+		VO_LAYER Overlay = VoLayer - VO_MAX_LAYER_NUM;
+
+		if (gVoCtx->astOverlayCtx[Overlay].s32BindDevId != VoDev) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind on VoDev(%d).",
+				VoLayer, VoDev);
+			return CVI_ERR_VO_DEV_NOT_BINDED;
+		}
+
+		for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+			if (gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] == VoLayer) {
+				mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = -1;
+				gVoCtx->astOverlayCtx[Overlay].s32BindDevId = -1;
+				mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+				break;
+			}
+		}
+	} else {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
+		return CVI_ERR_VO_INVALID_LAYERID;
+	}
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_set_layer_priority(VO_LAYER VoLayer, u32 u32Priority)
+{
+	s32 i;
+
+	if ((VoLayer >= VO_MAX_LAYER_NUM) &&
+		(VoLayer < (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
+
+		VO_LAYER Overlay = VoLayer - VO_MAX_LAYER_NUM;
+		VO_DEV VoDev = gVoCtx->astOverlayCtx[Overlay].s32BindDevId;
+		s32 as32Priority[VO_MAX_OVERLAY_IN_DEV];
+		s32 as32OverlayId[VO_MAX_OVERLAY_IN_DEV];
+		s32 s32BindOverlayId_new[VO_MAX_OVERLAY_IN_DEV];
+		u8 bind_overlay_num = 0;
+
+		gVoCtx->astOverlayCtx[Overlay].u32Priority = u32Priority;
+
+		if (VoDev != -1) {
+			for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+				if (gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] != -1) {
+					Overlay = gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] - VO_MAX_LAYER_NUM;
+					mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+					as32Priority[bind_overlay_num] = gVoCtx->astOverlayCtx[Overlay].u32Priority;
+					as32OverlayId[bind_overlay_num] = gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i];
+					mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+					bind_overlay_num++;
+				}
+			}
+
+			vo_sort_layer_priority(as32Priority, bind_overlay_num, as32OverlayId);
+
+			for (i = 0; i < bind_overlay_num; ++i) {
+				s32BindOverlayId_new[i] = as32OverlayId[i];
+			}
+
+			mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+			for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
+				if (i < bind_overlay_num)
+					gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = s32BindOverlayId_new[i];
+				else
+					gVoCtx->astDevCtx[VoDev].s32BindOverlayId[i] = -1;
+			}
+			mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+		}
+	} else {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
+		return CVI_ERR_VO_INVALID_LAYERID;
+	}
+
+	return CVI_SUCCESS;
+}
+
+s32 vo_get_layer_priority(VO_LAYER VoLayer, u32 *pu32Priority)
+{
+	if ((VoLayer >= VO_MAX_LAYER_NUM) &&
+		(VoLayer < (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
+
+		VO_LAYER Overlay = VoLayer - VO_MAX_LAYER_NUM;
+		VO_DEV VoDev = gVoCtx->astOverlayCtx[Overlay].s32BindDevId;
+
+		mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+		*pu32Priority = gVoCtx->astOverlayCtx[Overlay].u32Priority;
+		mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+
+	} else {
+		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
+		return CVI_ERR_VO_INVALID_LAYERID;
+	}
+
+	return CVI_SUCCESS;
 }
 
 s32 vo_get_videolayerattr(VO_LAYER VoLayer, VO_VIDEO_LAYER_ATTR_S *pstLayerAttr)
@@ -3420,6 +3722,66 @@ long vo_sdk_ctrl(struct cvi_vo_dev *vdev, struct vo_ext_control *p)
 	}
 	break;
 
+	case VO_SDK_SET_LVDSPARAM: {
+		struct vo_lvds_param_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_lvds_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_SET_LVDSPARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_set_lvds_param(cfg.VoDev, &cfg.stLVDSParam);
+	}
+	break;
+
+	case VO_SDK_GET_LVDSPARAM: {
+		struct vo_lvds_param_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_lvds_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_GET_LVDSPARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_get_lvds_param(cfg.VoDev, &cfg.stLVDSParam);
+		if (copy_to_user(p->ptr, &cfg, sizeof(struct vo_lvds_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_GET_LVDSPARAM copy_to_user failed.\n");
+			rc = -EFAULT;
+		}
+	}
+	break;
+
+	case VO_SDK_SET_I80PARAM: {
+		struct vo_I80_param_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_I80_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_SET_I80PARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_set_I80_param(cfg.VoDev, &cfg.stI80Param);
+	}
+	break;
+
+	case VO_SDK_GET_I80PARAM: {
+		struct vo_I80_param_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_I80_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_GET_I80PARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_get_I80_param(cfg.VoDev, &cfg.stI80Param);
+		if (copy_to_user(p->ptr, &cfg, sizeof(struct vo_I80_param_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_GET_I80PARAM copy_to_user failed.\n");
+			rc = -EFAULT;
+		}
+	}
+	break;
+
 	case VO_SDK_GET_HDMIPARAM: {
 		struct vo_hdmi_param_cfg cfg;
 
@@ -3850,17 +4212,55 @@ long vo_sdk_ctrl(struct cvi_vo_dev *vdev, struct vo_ext_control *p)
 	}
 	break;
 
+	case VO_SDK_SET_LAYERPRRIORITY: {
+		struct vo_layer_priority_cfg cfg;
 
-	case VO_SDK_BIND_VIDEOLAYER: {
-		struct vo_video_layer_cfg cfg;
-
-		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_video_layer_cfg))) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_BIND_VIDEOLAYER copy_from_user failed.\n");
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_layer_priority_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_SET_LAYERPRRIORITY copy_from_user failed.\n");
 			rc = -EFAULT;
 			break;
 		}
 
-		rc = vo_bind_videolayer(cfg.VoLayer, cfg.VoLayer);
+		rc = vo_set_layer_priority(cfg.VoLayer, cfg.u32Priority);
+	}
+	break;
+
+	case VO_SDK_GET_LAYERPRRIORITY: {
+		struct vo_layer_priority_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_layer_priority_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_GET_LAYERPRRIORITY copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_get_layer_priority(cfg.VoLayer, &cfg.u32Priority);
+	}
+	break;
+
+	case VO_SDK_BIND_LAYER: {
+		struct vo_video_layer_bind_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_video_layer_bind_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_BIND_LAYER copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_bind_layer(cfg.VoLayer, cfg.VoDev);
+	}
+	break;
+
+	case VO_SDK_UNBIND_LAYER: {
+		struct vo_video_layer_bind_cfg cfg;
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_video_layer_bind_cfg))) {
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO_SDK_UNBIND_LAYER copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_unbind_layer(cfg.VoLayer, cfg.VoDev);
 	}
 	break;
 

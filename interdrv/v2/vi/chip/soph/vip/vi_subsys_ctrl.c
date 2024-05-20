@@ -70,7 +70,7 @@ void ispblk_splt_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, bool enab
 		dma_ctrl.bits.RDMA_L_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
 		dma_ctrl.bits.RDMA_S_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
 						   ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-	} else if (ctx->isp_pipe_cfg[raw_num].is_raw_ai_isp) {
+	} else if (ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap) {
 		sel_ctrl.bits.FE0_SEL		 = 0;
 		sel_ctrl.bits.FE1_SEL		 = ctx->isp_pipe_cfg[raw_num].is_tile;
 		sel_ctrl.bits.FE0_RDMA_SEL	 = 1;
@@ -176,7 +176,7 @@ void ispblk_splt_rdma_ctrl_config(struct isp_ctx *ctx, enum ISP_BLK_ID_T blk_id,
 			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 0);
 			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 0);
 		}
-	} else if (ctx->isp_pipe_cfg[ISP_PRERAW0].is_raw_ai_isp) {
+	} else if (ctx->isp_pipe_cfg[ISP_PRERAW0].raw_ai_isp_ap) {
 		ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 0);
 		ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 0);
 	}
@@ -535,11 +535,18 @@ void ispblk_isptop_config(struct isp_ctx *ctx)
 	else //trigger by SW
 		post_trig_by_hw = 0x0;
 
-	//line_spliter intr ctrl, now no use dma intr, close intr enable
-	ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE0	= 0;// 0xF
-	ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE1	= 0;// 0xF
-	ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE0		= 0;// 0x1
-	ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE1		= 0;// 0x1
+	//line_spliter intr ctrl, splt_ai_isp enable, otherwise disable
+	if (ctx->isp_pipe_cfg[first_raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT) {
+		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE0	= 0xF;
+		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE1	= 0xF;
+		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE0		= 0x1;
+		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE1		= 0x1;
+	} else {
+		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE0	= 0;
+		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE1	= 0;
+		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE0		= 0;
+		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE1		= 0;
+	}
 
 	//pre_fe0
 	ev0_en.bits.FRAME_DONE_ENABLE_FE0	= 0xF;

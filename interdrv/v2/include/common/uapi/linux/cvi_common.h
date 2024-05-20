@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 #ifndef VER_Y
-#define VER_Y 0
+#define VER_Y 5
 #endif
 
 #ifndef VER_Z

@@ -720,6 +720,9 @@ static void _isp_cmdq_post_trig(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, u
 	cmdq_intr_ctrl(cmqd, 0x1F);
 	cmdq_engine(cmqd, (uintptr_t)ctx->isp_pipe_cfg[raw_num].cmdq_buf.phy_addr,
 		    (ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CMDQ) >> 22, true, false, cmd_idx);
+
+	//reset cmd_idx
+	ctx->isp_pipe_cfg[raw_num].cmdq_buf.cmd_idx = 0;
 }
 
 void isp_post_trig(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
@@ -914,9 +917,7 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int d
 	case ISP_BLK_ID_DMA_CTL_AF_W:
 	{
 		/* af */
-		uint16_t block_num_x = 17, block_num_y = 15;
-
-		len = (block_num_x * block_num_y) << 5;
+		len = ctx->isp_pipe_cfg[raw_num].is_tile ? VI_ALIGN(AF_DMA_SIZE) + AF_DMA_SIZE : AF_DMA_SIZE;
 		num = 1;
 
 		break;
@@ -948,9 +949,7 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int d
 	case ISP_BLK_ID_DMA_CTL_GMS:
 	{
 		/* gms */
-		u32 sec_size = 1023;
-
-		len = (((sec_size + 1) >> 1) << 5) * 3;
+		len = ctx->isp_pipe_cfg[raw_num].is_tile ? (VI_ALIGN(GMS_SEC_SIZE) + GMS_SEC_SIZE) : GMS_SEC_SIZE;
 		num = 1;
 
 		break;
@@ -958,13 +957,7 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int d
 	case ISP_BLK_ID_DMA_CTL_AE_HIST_LE:
 	case ISP_BLK_ID_DMA_CTL_AE_HIST_SE:
 	{
-		int ae_dma_counts, hist_dma_counts, faceae_dma_counts;
-
-		ae_dma_counts		= 0x21C0;
-		hist_dma_counts		= 0x2000;
-		faceae_dma_counts	= 0x80;
-
-		len = ae_dma_counts + hist_dma_counts + faceae_dma_counts;
+		len = ctx->isp_pipe_cfg[raw_num].is_tile ? (VI_ALIGN(AE_DMA_SIZE) + AE_DMA_SIZE) : AE_DMA_SIZE;
 		num = 1;
 
 		break;
@@ -1096,7 +1089,7 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int d
 	case ISP_BLK_ID_DMA_CTL_DCI:
 	{
 		// dci
-		len = 0x400;
+		len = ctx->isp_pipe_cfg[raw_num].is_tile ? (VI_ALIGN(DCI_DMA_SIZE) + DCI_DMA_SIZE) : DCI_DMA_SIZE;
 		num = 0x1;
 
 		break;
@@ -1278,10 +1271,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int dmaid, 
 	case ISP_BLK_ID_DMA_CTL_AF_W:
 	{
 		/* af */
-		uint16_t block_num_x = 17, block_num_y = 15;
-
 		num = 1;
-		len = (block_num_x * block_num_y) << 5;
+		len = AF_DMA_SIZE;
 		stride = len;
 
 		break;
@@ -1338,14 +1329,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int dmaid, 
 	case ISP_BLK_ID_DMA_CTL_AE_HIST_LE:
 	case ISP_BLK_ID_DMA_CTL_AE_HIST_SE:
 	{
-		int ae_dma_counts, hist_dma_counts, faceae_dma_counts;
-
-		ae_dma_counts		= 0x21C0;
-		hist_dma_counts		= 0x2000;
-		faceae_dma_counts	= 0x80;
-
 		num = 1;
-		len = ae_dma_counts + hist_dma_counts + faceae_dma_counts;
+		len = AE_DMA_SIZE;
 		stride = len;
 
 		break;
@@ -1477,7 +1462,7 @@ int ispblk_dma_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, int dmaid, 
 	case ISP_BLK_ID_DMA_CTL_DCI:
 	{
 		// dci
-		len = 0x400;
+		len = DCI_DMA_SIZE;
 		num = 0x1;
 		stride = len;
 
@@ -2547,147 +2532,125 @@ void _ispblk_dci_cfg_update(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
 void _ispblk_ldci_cfg_update(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
 {
 	uintptr_t ldci = ctx->phys_regs[ISP_BLK_ID_LDCI];
+	union REG_ISP_LDCI_BLK_SIZE_X          blk_size_x;
+	union REG_ISP_LDCI_BLK_SIZE_X1         blk_size_x1;
+	union REG_ISP_LDCI_SUBBLK_SIZE_X       subblk_size_x;
+	union REG_ISP_LDCI_SUBBLK_SIZE_X1      subblk_size_x1;
+	union REG_ISP_LDCI_INTERP_NORM_LR      interp_norm_lr;
+	union REG_ISP_LDCI_INTERP_NORM_LR1     interp_norm_lr1;
+	union REG_ISP_LDCI_SUB_INTERP_NORM_LR  sub_interp_norm_lr;
+	union REG_ISP_LDCI_SUB_INTERP_NORM_LR1 sub_interp_norm_lr1;
+	union REG_ISP_LDCI_MEAN_NORM_X         mean_norm_x;
+	union REG_ISP_LDCI_VAR_NORM_Y          var_norm_y;
 
-	if (ctx->isp_pipe_cfg[raw_num].is_tile) {
-		// if (!ctx->is_work_on_r_tile) {
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_CROP_SIZE, BLOCK_CROP_W_STR, 0);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_CROP_SIZE, BLOCK_CROP_W_END, 7);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_OFFSET, BLOCK_X_OFFSET1, 0);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_OFFSET, BLOCK_X_OFFSET2, 0);
-		// } else {
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_CROP_SIZE, BLOCK_CROP_W_STR, 8);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_CROP_SIZE, BLOCK_CROP_W_END, 15);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_OFFSET, BLOCK_X_OFFSET1, 7);
-		// 	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_X_OFFSET, BLOCK_X_OFFSET2, 7);
-		// }
+	uint16_t BlockSizeX, BlockSizeY, SubBlockSizeX, SubBlockSizeY;
+	uint16_t BlockSizeX1, BlockSizeY1, SubBlockSizeX1, SubBlockSizeY1;
+	uint16_t line_mean_num, line_var_num;
+	uint16_t dW, dH;
 
-		// ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_Y_CROP_SIZE, BLOCK_CROP_H_STR, 0);
-		// ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_Y_CROP_SIZE, BLOCK_CROP_H_END, 11);
-		// ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_CROP_SIZE, BLOCK_IMG_WIDTH_CROP, 15);
-		// ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_CROP_SIZE, BLOCK_IMG_HEIGHT_CROP, 11);
+	//hw bug use right/left tile size;
+	uint16_t width = ctx->img_width;
+	uint16_t height = ctx->img_height;
 
-		// ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_CROP_ENABLE, BLOCK_CROP_ENABLE, 1);
+	if ((width % 16 == 0) && (height % 12 == 0)) {
+		ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE,
+			LDCI_IMAGE_SIZE_DIV_BY_16X12, 1);
 	} else {
-		union REG_ISP_LDCI_BLK_SIZE_X          blk_size_x;
-		union REG_ISP_LDCI_BLK_SIZE_X1         blk_size_x1;
-		union REG_ISP_LDCI_SUBBLK_SIZE_X       subblk_size_x;
-		union REG_ISP_LDCI_SUBBLK_SIZE_X1      subblk_size_x1;
-		union REG_ISP_LDCI_INTERP_NORM_LR      interp_norm_lr;
-		union REG_ISP_LDCI_INTERP_NORM_LR1     interp_norm_lr1;
-		union REG_ISP_LDCI_SUB_INTERP_NORM_LR  sub_interp_norm_lr;
-		union REG_ISP_LDCI_SUB_INTERP_NORM_LR1 sub_interp_norm_lr1;
-		union REG_ISP_LDCI_MEAN_NORM_X         mean_norm_x;
-		union REG_ISP_LDCI_VAR_NORM_Y          var_norm_y;
-
-		uint16_t BlockSizeX, BlockSizeY, SubBlockSizeX, SubBlockSizeY;
-		uint16_t BlockSizeX1, BlockSizeY1, SubBlockSizeX1, SubBlockSizeY1;
-		uint16_t line_mean_num, line_var_num;
-		uint16_t dW, dH;
-
-		//hw bug use right/left tile size;
-		uint16_t width = ctx->img_width;
-		uint16_t height = ctx->img_height;
-
-		if ((width % 16 == 0) && (height % 12 == 0)) {
-			ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE,
-				LDCI_IMAGE_SIZE_DIV_BY_16X12, 1);
-		} else {
-			ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE,
-				LDCI_IMAGE_SIZE_DIV_BY_16X12, 0);
-		}
-
-		BlockSizeX = (width % 16 == 0) ?
-			(width / 16) : (width / 16) + 1; // Width of one block
-		BlockSizeY = (height % 12 == 0) ?
-			(height / 12) : (height / 12) + 1; // Height of one block
-		SubBlockSizeX = (BlockSizeX >> 1);
-		SubBlockSizeY = (BlockSizeY >> 1);
-		line_mean_num = (BlockSizeY / 2) + (BlockSizeY % 2);
-		line_var_num  = (BlockSizeY / 2);
-
-		if (width % 16 == 0) {
-			BlockSizeX1 = BlockSizeX;
-			SubBlockSizeX1 = width - BlockSizeX * (16 - 1) - SubBlockSizeX;
-		} else {
-			dW = BlockSizeX * 16 - width;
-			BlockSizeX1 = 2 * BlockSizeX - SubBlockSizeX - dW;
-			SubBlockSizeX1 = 0;
-		}
-
-		if (height % 12 == 0) {
-			BlockSizeY1 = BlockSizeY;
-			SubBlockSizeY1 = height - BlockSizeY * (12 - 1) - SubBlockSizeY;
-		} else {
-			dH = BlockSizeY * 12 - height;
-			BlockSizeY1 = 2 * BlockSizeY - SubBlockSizeY - dH;
-			SubBlockSizeY1 = 0;
-		}
-
-		blk_size_x.raw = 0;
-		blk_size_x.bits.LDCI_BLK_SIZE_X = BlockSizeX;
-		blk_size_x.bits.LDCI_BLK_SIZE_Y = BlockSizeY;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X, blk_size_x.raw);
-
-		BlockSizeX1 = BlockSizeX;
-		BlockSizeY1 = BlockSizeY;
-
-		blk_size_x1.raw = 0;
-		blk_size_x1.bits.LDCI_BLK_SIZE_X1 = BlockSizeX1;
-		blk_size_x1.bits.LDCI_BLK_SIZE_Y1 = BlockSizeY1;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X1, blk_size_x1.raw);
-
-		subblk_size_x.raw = 0;
-		subblk_size_x.bits.LDCI_SUBBLK_SIZE_X = SubBlockSizeX;
-		subblk_size_x.bits.LDCI_SUBBLK_SIZE_Y = SubBlockSizeY;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X, subblk_size_x.raw);
-
-		SubBlockSizeX1 = SubBlockSizeX;
-		SubBlockSizeY1 = SubBlockSizeY;
-
-		subblk_size_x1.raw = 0;
-		subblk_size_x1.bits.LDCI_SUBBLK_SIZE_X1 = SubBlockSizeX1;
-		subblk_size_x1.bits.LDCI_SUBBLK_SIZE_Y1 = SubBlockSizeY1;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X1, subblk_size_x1.raw);
-
-		interp_norm_lr.raw = 0;
-		interp_norm_lr.bits.LDCI_INTERP_NORM_LR =
-			(BlockSizeX == 0) ? 0 : (1 << 16) / BlockSizeX;
-		interp_norm_lr.bits.LDCI_INTERP_NORM_UD =
-			(BlockSizeY == 0) ? 0 : (1 << 16) / BlockSizeY;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR, interp_norm_lr.raw);
-
-		interp_norm_lr1.raw = 0;
-		interp_norm_lr1.bits.LDCI_INTERP_NORM_LR1 =
-			(BlockSizeX1 == 0) ? 0 : (1 << 16) / BlockSizeX1;
-		interp_norm_lr1.bits.LDCI_INTERP_NORM_UD1 =
-			(BlockSizeY1 == 0) ? 0 : (1 << 16) / BlockSizeY1;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR1, interp_norm_lr1.raw);
-
-		sub_interp_norm_lr.raw = 0;
-		sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_LR =
-			(SubBlockSizeX == 0) ? 0 : (1 << 16) / SubBlockSizeX;
-		sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_UD =
-			(SubBlockSizeY == 0) ? 0 : (1 << 16) / SubBlockSizeY;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR, sub_interp_norm_lr.raw);
-
-		sub_interp_norm_lr1.raw = 0;
-		sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_LR1 =
-			(SubBlockSizeX1 == 0) ? 0 : (1 << 16) / SubBlockSizeX1;
-		sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_UD1 =
-			(SubBlockSizeY1 == 0) ? 0 : (1 << 16) / SubBlockSizeY1;
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR1, sub_interp_norm_lr1.raw);
-
-		mean_norm_x.raw = 0;
-		mean_norm_x.bits.LDCI_MEAN_NORM_X = (1 << 14) / MAX(BlockSizeX, 1);
-		mean_norm_x.bits.LDCI_MEAN_NORM_Y = (1 << 13) / MAX(line_mean_num, 1);
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_MEAN_NORM_X, mean_norm_x.raw);
-
-		var_norm_y.raw = 0;
-		var_norm_y.bits.LDCI_VAR_NORM_Y = (1 << 13) / MAX(line_var_num, 1);
-		ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_VAR_NORM_Y, var_norm_y.raw);
-
-		ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_CROP_ENABLE, BLOCK_CROP_ENABLE, 0);
+		ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE,
+			LDCI_IMAGE_SIZE_DIV_BY_16X12, 0);
 	}
+
+	BlockSizeX = (width % 16 == 0) ?
+		(width / 16) : (width / 16) + 1; // Width of one block
+	BlockSizeY = (height % 12 == 0) ?
+		(height / 12) : (height / 12) + 1; // Height of one block
+	SubBlockSizeX = (BlockSizeX >> 1);
+	SubBlockSizeY = (BlockSizeY >> 1);
+	line_mean_num = (BlockSizeY / 2) + (BlockSizeY % 2);
+	line_var_num  = (BlockSizeY / 2);
+
+	if (width % 16 == 0) {
+		BlockSizeX1 = BlockSizeX;
+		SubBlockSizeX1 = width - BlockSizeX * (16 - 1) - SubBlockSizeX;
+	} else {
+		dW = BlockSizeX * 16 - width;
+		BlockSizeX1 = 2 * BlockSizeX - SubBlockSizeX - dW;
+		SubBlockSizeX1 = 0;
+	}
+
+	if (height % 12 == 0) {
+		BlockSizeY1 = BlockSizeY;
+		SubBlockSizeY1 = height - BlockSizeY * (12 - 1) - SubBlockSizeY;
+	} else {
+		dH = BlockSizeY * 12 - height;
+		BlockSizeY1 = 2 * BlockSizeY - SubBlockSizeY - dH;
+		SubBlockSizeY1 = 0;
+	}
+
+	blk_size_x.raw = 0;
+	blk_size_x.bits.LDCI_BLK_SIZE_X = BlockSizeX;
+	blk_size_x.bits.LDCI_BLK_SIZE_Y = BlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X, blk_size_x.raw);
+
+	BlockSizeX1 = BlockSizeX;
+	BlockSizeY1 = BlockSizeY;
+
+	blk_size_x1.raw = 0;
+	blk_size_x1.bits.LDCI_BLK_SIZE_X1 = BlockSizeX1;
+	blk_size_x1.bits.LDCI_BLK_SIZE_Y1 = BlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X1, blk_size_x1.raw);
+
+	subblk_size_x.raw = 0;
+	subblk_size_x.bits.LDCI_SUBBLK_SIZE_X = SubBlockSizeX;
+	subblk_size_x.bits.LDCI_SUBBLK_SIZE_Y = SubBlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X, subblk_size_x.raw);
+
+	SubBlockSizeX1 = SubBlockSizeX;
+	SubBlockSizeY1 = SubBlockSizeY;
+
+	subblk_size_x1.raw = 0;
+	subblk_size_x1.bits.LDCI_SUBBLK_SIZE_X1 = SubBlockSizeX1;
+	subblk_size_x1.bits.LDCI_SUBBLK_SIZE_Y1 = SubBlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X1, subblk_size_x1.raw);
+
+	interp_norm_lr.raw = 0;
+	interp_norm_lr.bits.LDCI_INTERP_NORM_LR =
+		(BlockSizeX == 0) ? 0 : (1 << 16) / BlockSizeX;
+	interp_norm_lr.bits.LDCI_INTERP_NORM_UD =
+		(BlockSizeY == 0) ? 0 : (1 << 16) / BlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR, interp_norm_lr.raw);
+
+	interp_norm_lr1.raw = 0;
+	interp_norm_lr1.bits.LDCI_INTERP_NORM_LR1 =
+		(BlockSizeX1 == 0) ? 0 : (1 << 16) / BlockSizeX1;
+	interp_norm_lr1.bits.LDCI_INTERP_NORM_UD1 =
+		(BlockSizeY1 == 0) ? 0 : (1 << 16) / BlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR1, interp_norm_lr1.raw);
+
+	sub_interp_norm_lr.raw = 0;
+	sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_LR =
+		(SubBlockSizeX == 0) ? 0 : (1 << 16) / SubBlockSizeX;
+	sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_UD =
+		(SubBlockSizeY == 0) ? 0 : (1 << 16) / SubBlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR, sub_interp_norm_lr.raw);
+
+	sub_interp_norm_lr1.raw = 0;
+	sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_LR1 =
+		(SubBlockSizeX1 == 0) ? 0 : (1 << 16) / SubBlockSizeX1;
+	sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_UD1 =
+		(SubBlockSizeY1 == 0) ? 0 : (1 << 16) / SubBlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR1, sub_interp_norm_lr1.raw);
+
+	mean_norm_x.raw = 0;
+	mean_norm_x.bits.LDCI_MEAN_NORM_X = (1 << 14) / MAX(BlockSizeX, 1);
+	mean_norm_x.bits.LDCI_MEAN_NORM_Y = (1 << 13) / MAX(line_mean_num, 1);
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_MEAN_NORM_X, mean_norm_x.raw);
+
+	var_norm_y.raw = 0;
+	var_norm_y.bits.LDCI_VAR_NORM_Y = (1 << 13) / MAX(line_var_num, 1);
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_VAR_NORM_Y, var_norm_y.raw);
+
+	ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_BLOCK_CROP_ENABLE, BLOCK_CROP_ENABLE, 0);
 }
 
 void ispblk_post_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)

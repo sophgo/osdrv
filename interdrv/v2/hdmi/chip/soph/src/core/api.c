@@ -26,16 +26,16 @@ void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, videoParams_t * video, hdcpParams_t *
 
 int api_configure(hdmi_tx_dev_t *dev, videoParams_t * video, audioParams_t * audio, hdcpParams_t * hdcp)
 {
-	int success = TRUE;
+	int res = 0;
 
 	if (!dev) {
 		pr_err("%s: Device pointer invalid", __func__);
-		return FALSE;
+		return CVI_ERR_HDMI_DEV_POINTER_INVALID;
 	}
 
 	if (!video || !audio || !hdcp) {
 		pr_err("%s: Argument Invalid received", __func__);
-		return FALSE;
+		return CVI_ERR_HDMI_ARG_INVALID;
 	}
 
 	api_set_hdmi_ctrl(dev, video, hdcp);
@@ -52,49 +52,52 @@ int api_configure(hdmi_tx_dev_t *dev, videoParams_t * video, audioParams_t * aud
 	api_avmute(dev, TRUE);
 	irq_mute(dev);
 
-	success = video_configure(dev, video);
-	if (success == FALSE) {
+	res = video_configure(dev, video);
+	if (res != 0) {
 		pr_err("%s:Could not configure video", __func__);
+		return res;
 	}
 
 	// Audio
 	audio_Initialize(dev);
-	success = audio_configure(dev, audio);
-	if(success == FALSE){
+	res = audio_configure(dev, audio);
+	if(res != 0){
 		pr_err("%s:Audio not configured", __func__);
+		return res;
 	}
 
 	// Packets
-	success = packets_configure(dev, video);
-	if (success == FALSE) {
+	res = packets_configure(dev, video);
+	if (res != 0) {
 		pr_err("%s:Could not configure packets\n", __func__);
+		return res;
 	}
 
 	mc_enable_all_clocks(dev);
 	udelay(10);
 
-	success = phy_configure(dev);
-	if (success == FALSE) {
-		pr_debug("%s:Could not configure PHY", __func__);
+	res = phy_configure(dev);
+	if (res != 0) {
+		pr_err("%s:Could not configure PHY", __func__);
+		return res;
 	}
 
 	// Disable blue screen transmission after turning on all necessary blocks (e.g. HDCP)
 	fc_force_output(dev, FALSE);
 
 	// HDCP is PHY independent
-	if (hdcp_initialize(dev) != TRUE) {
-		pr_err("%s:Could not initialize HDCP", __func__);
-	}
+	hdcp_initialize(dev);
 	udelay(20);
 
-	success = hdcp_configure(dev, hdcp, video);
-	if (success == FALSE) {
+	res = hdcp_configure(dev, hdcp, video);
+	if (res != 0) {
 		pr_err("%s:Could not configure HDCP", __func__);
+		return res;
 	}
 
 	api_avmute(dev, FALSE);
 
-	return success;
+	return 0;
 }
 
 int api_standby(hdmi_tx_dev_t *dev)

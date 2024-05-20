@@ -67,6 +67,8 @@ void cvi_ldc_sw_deinit(struct cvi_ldc_vdev *wdev);
 
 s32 ldc_set_identity(struct cvi_ldc_vdev *wdev,
 				  struct gdc_identity_attr *attr);
+s32 ldc_suspend_handler(void);
+s32 ldc_resume_handler(void);
 
 #define LDC_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_NV21) || (fmt == PIXEL_FORMAT_NV12) || (fmt == PIXEL_FORMAT_YUV_400))

@@ -1,18 +1,23 @@
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
-#include <linux/kthread.h>
 #include <linux/clk-provider.h>
+#include <linux/kthread.h>
+#include <uapi/linux/sched/types.h>
 
 #include "vpss_hal.h"
 #include "vpss_debug.h"
 #include "vpss_platform.h"
 #include "ion.h"
 #include "base_common.h"
+#include "base_cb.h"
+#include "vi_cb.h"
 
 #define FBD_MAX_CHN (2)
+#define HAL_WAIT_TIMEOUT_MS  1000
 
 enum vpss_online_state {
 	VPSS_ONLINE_UNEXIST,
@@ -22,9 +27,12 @@ enum vpss_online_state {
 };
 
 struct vpss_task_ctx {
+	wait_queue_head_t wait;
+	struct task_struct *thread;
 	struct list_head job_wait_queue;
 	struct list_head job_online_queue;
-	spinlock_t job_lock;
+	spinlock_t task_lock;
+	u8 available;
 	u8 online_dev_max_num;
 	u8 online_status[VPSS_ONLINE_NUM];
 	struct vpss_cmdq_buf stCmdqBuf[2];
@@ -46,9 +54,14 @@ static struct vpss_task_ctx stTaskCtx;
 static struct cvi_vpss_device *vpss_dev;
 struct vpss_convert_to_bak convert_to_bak[VPSS_MAX];
 
-extern int work_mask;
+int work_mask = 0xff; //default vpss_v + vpss_t
+int sche_thread_enable = 1;
 
-void show_hw_state(void)
+module_param(work_mask, int, 0644);
+
+module_param(sche_thread_enable, int, 0644);
+
+static void show_hw_state(void)
 {
 	u8 state[CVI_VPSS_MAX];
 	u8 i;
@@ -61,7 +74,7 @@ void show_hw_state(void)
 		state[7], state[8], state[9]);
 }
 
-int find_available_dev(u8 chn_num)
+static int find_available_dev(u8 chn_num)
 {
 	int i;
 	int start_idx = CVI_VPSS_V0;
@@ -87,7 +100,7 @@ int find_available_dev(u8 chn_num)
 	return -1;
 }
 
-int job_cheack_hw_ready(bool isFBD, u8 chn_num, bool vpss_v_priority)
+static int job_cheack_hw_ready(bool isFBD, u8 chn_num, bool vpss_v_priority)
 {
 	int i, start_core;
 
@@ -108,7 +121,7 @@ int job_cheack_hw_ready(bool isFBD, u8 chn_num, bool vpss_v_priority)
 				return i;
 		}
 
-		if (isFBD)
+		if (isFBD || vpss_v_priority)
 			return -1;
 	} else if (chn_num == 2) {
 		if ((atomic_read(&vpss_dev->vpss_cores[CVI_VPSS_T0].state) == CVI_VIP_IDLE)
@@ -129,7 +142,7 @@ int job_cheack_hw_ready(bool isFBD, u8 chn_num, bool vpss_v_priority)
 	return find_available_dev(chn_num);
 }
 
-int online_get_dev(struct cvi_vpss_job *pstJob)
+static int online_get_dev(struct cvi_vpss_job *pstJob)
 {
 	u8 i;
 	u8 chn_num = pstJob->cfg.chn_num;
@@ -154,7 +167,7 @@ int online_get_dev(struct cvi_vpss_job *pstJob)
 	return CVI_SUCCESS;
 }
 
-bool check_convert_to_addr(struct cvi_vpss_hw_cfg *cfg, u8 chn_num){
+static bool check_convert_to_addr(struct cvi_vpss_hw_cfg *cfg, u8 chn_num){
 	u8 i;
 	for(i = 0; i < chn_num; i++)
 		if(((cfg->astChnCfg[i].addr[0] & 0xf) != 0 ||
@@ -164,7 +177,7 @@ bool check_convert_to_addr(struct cvi_vpss_hw_cfg *cfg, u8 chn_num){
 	return false;
 };
 
-int job_convert_to_min_update(struct cvi_vpss_job *pstJob, int dev_idx, u8 *chn_idx){
+static int job_convert_to_min_update(struct cvi_vpss_job *pstJob, int dev_idx, u8 *chn_idx){
 	struct cvi_vpss_hw_cfg *cfg = &pstJob->cfg;
 	u8 i, chn_id;
 
@@ -202,7 +215,7 @@ int job_convert_to_min_update(struct cvi_vpss_job *pstJob, int dev_idx, u8 *chn_
 	return CVI_SUCCESS;
 }
 
-int job_try_schedule(struct cvi_vpss_job *pstJob)
+static int job_try_schedule(struct cvi_vpss_job *pstJob)
 {
 	u8 i, chn_id, j = 0;
 	u8 chn_idx[VPSS_MAX_CHN_NUM];
@@ -212,6 +225,14 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 	u8 chn_num = cfg->chn_num;
 	unsigned long flags;
 	int dev_idx, dev_idx_max;
+	u16 out_l_end;
+	u16 online_l_width = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.l_in.end - pstJob->online_param.l_in.start + 1
+							: 0;
+	u16 online_r_start = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.r_in.start : 0;
+	u16 online_r_end = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.r_in.end : 0;
 
 	for (i = 0; i < VPSS_MAX_CHN_NUM; i++)
 		if (cfg->chn_enable[i]) {
@@ -236,7 +257,8 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 		job_convert_to_min_update(pstJob, dev_idx, chn_idx);
 	}
 
-	if (cfg->stGrpCfg.crop.width > VPSS_HW_LIMIT_WIDTH) { //output > 4608 ?
+	if ((cfg->stGrpCfg.crop.width > VPSS_HW_LIMIT_WIDTH) ||
+		pstJob->online_param.is_tile) { //output > 4608 ?
 		pstJob->is_tile = true;
 		pstJob->tile_mode = 0;
 	} else {
@@ -275,8 +297,9 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 		cvi_sc_update(i, &cfg->astChnCfg[chn_id]);
 
 		if (pstJob->is_tile) {
-			vpss_dev->vpss_cores[i].tile_mode = sclr_tile_cal_size(i,
-				(pstJob->cfg.astChnCfg[chn_id].src_size.width >> 1) - 1);
+			out_l_end = pstJob->is_online ? pstJob->online_param.l_out.end :
+				((pstJob->cfg.astChnCfg[chn_id].src_size.width >> 1) - 1);
+			vpss_dev->vpss_cores[i].tile_mode = sclr_tile_cal_size(i, out_l_end);
 			pstJob->tile_mode |= vpss_dev->vpss_cores[i].tile_mode;
 		}
 
@@ -299,13 +322,13 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 			pstJob->tile_mode &= ~SCL_TILE_LEFT;
 			pstJob->is_work_on_r_tile = false;
 			for (i = dev_idx; i < dev_idx_max; i++)
-				if (!cvi_img_left_tile_cfg(i))
+				if (!cvi_img_left_tile_cfg(i, online_l_width))
 					atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_END);
 		} else if (pstJob->tile_mode & SCL_TILE_RIGHT) {
 			pstJob->tile_mode &= ~SCL_TILE_RIGHT;
 			pstJob->is_work_on_r_tile = true;
 			for (i = dev_idx; i < dev_idx_max; i++)
-				if (!cvi_img_right_tile_cfg(i))
+				if (!cvi_img_right_tile_cfg(i, online_r_start, online_r_end))
 					atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_END);
 		}
 	}
@@ -323,14 +346,14 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 					atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_END);
 		}
 	}
+
 	spin_unlock_irqrestore(&vpss_dev->lock, flags);
 
+	atomic_set(&pstJob->enJobState, CVI_JOB_WORKING);
 	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d) job working, chn enable(%d %d %d %d), dev(%d %d %d %d).\n",
 		pstJob->grp_id, cfg->chn_enable[0], cfg->chn_enable[1],
 		cfg->chn_enable[2], cfg->chn_enable[3], dev_list[0], dev_list[1],
 		dev_list[2], dev_list[3]);
-
-	atomic_set(&pstJob->enJobState, CVI_JOB_WORKING);
 
 	for (i = dev_idx; i < dev_idx_max; i++)
 		ktime_get_ts64(&vpss_dev->vpss_cores[i].ts_start);
@@ -341,19 +364,19 @@ int job_try_schedule(struct cvi_vpss_job *pstJob)
 }
 
 
-void vpss_hal_reset(struct cvi_vpss_job *pstJob)
+static void vpss_hal_reset(u32 vpss_dev_mask, bool is_online)
 {
 	unsigned long flags;
 	int i;
 
 	spin_lock_irqsave(&vpss_dev->lock, flags);
 	for (i = 0; i < CVI_VPSS_MAX; i++) {
-		if (!(pstJob->vpss_dev_mask & BIT(i)))
+		if (!(vpss_dev_mask & BIT(i)))
 			continue;
 		cvi_img_reset(i);
 		vpss_dev->vpss_cores[i].job = NULL;
 		vpss_dev->vpss_cores[i].intr_status = 0;
-		if (pstJob->is_online)
+		if (is_online)
 			atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_ONLINE);
 		else
 			atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_IDLE);
@@ -361,15 +384,95 @@ void vpss_hal_reset(struct cvi_vpss_job *pstJob)
 	spin_unlock_irqrestore(&vpss_dev->lock, flags);
 }
 
+int hal_try_schedule(void)
+{
+	struct cvi_vpss_job *pstJob = NULL;
+	unsigned long flags, flags_job;
+	int ret = CVI_FAILURE;
+
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
+	while (!list_empty(&stTaskCtx.job_wait_queue)) {
+		pstJob = list_first_entry(&stTaskCtx.job_wait_queue,
+			struct cvi_vpss_job, list);
+
+		spin_lock_irqsave(&pstJob->lock, flags_job);
+		if (pstJob->is_online) {
+			if (online_get_dev(pstJob)) {
+				spin_unlock_irqrestore(&pstJob->lock, flags_job);
+				break;
+			}
+			list_move_tail(&pstJob->list, &stTaskCtx.job_online_queue);
+			stTaskCtx.online_status[pstJob->grp_id] = VPSS_ONLINE_READY;
+			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "online max chn num:%d.\n", stTaskCtx.online_dev_max_num);
+		} else {
+			if (job_try_schedule(pstJob)) {
+				//CVI_TRACE_VPSS(CVI_DBG_DEBUG, "Grp(%d), try schedule fail, wait for next time.\n",
+				//	pstJob->grp_id);
+				spin_unlock_irqrestore(&pstJob->lock, flags_job);
+				break;
+			}
+			list_del_init(&pstJob->list);
+		}
+		spin_unlock_irqrestore(&pstJob->lock, flags_job);
+
+		ret = CVI_SUCCESS;
+	}
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
+
+	return ret;
+}
+
+static int schedule_thread(void *arg)
+{
+	struct vpss_task_ctx *ctx = (struct vpss_task_ctx *)arg;
+	unsigned long timeout = msecs_to_jiffies(HAL_WAIT_TIMEOUT_MS);
+	int ret;
+
+	while (!kthread_should_stop()) {
+		ret = wait_event_interruptible_timeout(ctx->wait,
+			ctx->available || kthread_should_stop(), timeout);
+
+		/*timeout*/
+		if (!ret)
+			continue;
+
+		/* -%ERESTARTSYS */
+		if (ret < 0 || kthread_should_stop())
+			break;
+
+		ctx->available = 0;
+		hal_try_schedule();
+	}
+
+	return CVI_SUCCESS;
+}
+
+int cvi_vpss_hal_try_schedule(void)
+{
+	int ret = CVI_SUCCESS;
+
+	if (sche_thread_enable) {
+		stTaskCtx.available = 1;
+		wake_up_interruptible(&stTaskCtx.wait);
+	} else {
+		ret = hal_try_schedule();
+	}
+
+	return ret;
+}
+
 int cvi_vpss_hal_init(struct cvi_vpss_device *dev)
 {
-	int i;
+	int i, ret;
+	struct sched_param tsk;
 
-	spin_lock_init(&stTaskCtx.job_lock);
+	vpss_dev = dev;
+	init_waitqueue_head(&stTaskCtx.wait);
+	spin_lock_init(&stTaskCtx.task_lock);
 	INIT_LIST_HEAD(&stTaskCtx.job_wait_queue);
 	INIT_LIST_HEAD(&stTaskCtx.job_online_queue);
 	stTaskCtx.online_dev_max_num = 0;
-	vpss_dev = dev;
+	stTaskCtx.available = 0;
 
 	for (i = 0; i < VPSS_ONLINE_NUM; i++)
 		stTaskCtx.online_status[i] = VPSS_ONLINE_UNEXIST;
@@ -380,16 +483,41 @@ int cvi_vpss_hal_init(struct cvi_vpss_device *dev)
 		stTaskCtx.stCmdqBuf[i].cmdq_buf_size = 0;
 	}
 
+	if (sche_thread_enable) {
+		stTaskCtx.thread = kthread_run(schedule_thread, &stTaskCtx,
+			"cvitask_vpss_schedule");
+		if (IS_ERR(stTaskCtx.thread))
+			CVI_TRACE_VPSS(CVI_DBG_ERR, "failed to create vpss kthread\n");
+
+		tsk.sched_priority = MAX_USER_RT_PRIO - 4;
+		ret = sched_setscheduler(stTaskCtx.thread, SCHED_FIFO, &tsk);
+		if (ret)
+			CVI_TRACE_VPSS(CVI_DBG_WARN, "vpss schedule thread priority update failed: %d\n", ret);
+	}
+
 	return CVI_SUCCESS;
 }
 
 void cvi_vpss_hal_deinit(void)
 {
+	int ret;
 	struct cvi_vpss_job *pstJob;
 	unsigned long flags;
 	int i;
 
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
+	if (sche_thread_enable) {
+		if (!stTaskCtx.thread) {
+			CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss schedule thread not initialized yet\n");
+			return;
+		}
+		ret = kthread_stop(stTaskCtx.thread);
+		if (ret)
+			CVI_TRACE_VPSS(CVI_DBG_ERR, "fail to stop vpss thread, err=%d\n", ret);
+
+		stTaskCtx.thread = NULL;
+	}
+
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
 	while (!list_empty(&stTaskCtx.job_wait_queue)) {
 		pstJob = list_first_entry(&stTaskCtx.job_wait_queue,
 				struct cvi_vpss_job, list);
@@ -400,7 +528,7 @@ void cvi_vpss_hal_deinit(void)
 				struct cvi_vpss_job, list);
 		list_del_init(&pstJob->list);
 	}
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 
 	for (i = 0; i < 2; i++) {
 		if (stTaskCtx.stCmdqBuf[i].cmdq_phy_addr) {
@@ -416,30 +544,36 @@ void cvi_vpss_hal_deinit(void)
 
 int cvi_vpss_hal_push_job(struct cvi_vpss_job *pstJob)
 {
-	unsigned long flags;
+	unsigned long flags, flags_job;
 
 	if (!pstJob || !pstJob->cfg.chn_num)
 		return CVI_FAILURE;
 
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
 	list_add_tail(&pstJob->list, &stTaskCtx.job_wait_queue);
+
+	spin_lock_irqsave(&pstJob->lock, flags_job);
 	atomic_set(&pstJob->enJobState, CVI_JOB_WAIT);
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+	spin_unlock_irqrestore(&pstJob->lock, flags_job);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 
 	return CVI_SUCCESS;
 }
 
 int cvi_vpss_hal_push_online_job(struct cvi_vpss_job *pstJob)
 {
-	unsigned long flags;
+	unsigned long flags, flags_job;
 
 	if (!pstJob || !pstJob->cfg.chn_num)
 		return CVI_FAILURE;
 
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
 	list_add_tail(&pstJob->list, &stTaskCtx.job_online_queue);
+
+	spin_lock_irqsave(&pstJob->lock, flags_job);
 	atomic_set(&pstJob->enJobState, CVI_JOB_WAIT);
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+	spin_unlock_irqrestore(&pstJob->lock, flags_job);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 
 	return CVI_SUCCESS;
 }
@@ -447,40 +581,53 @@ int cvi_vpss_hal_push_online_job(struct cvi_vpss_job *pstJob)
 int cvi_vpss_hal_remove_job(struct cvi_vpss_job *pstJob)
 {
 	int i, count = 10;
-	unsigned long flags;
+	unsigned long flags, flags_job;
 	struct cvi_vpss_job *jobItem;
 	enum cvi_job_state enJobState;
+
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
+	spin_lock_irqsave(&pstJob->lock, flags_job);
 
 	enJobState = atomic_read(&pstJob->enJobState);
 
 	if ((enJobState == CVI_JOB_WORKING) || (enJobState == CVI_JOB_HALF)) {
+		spin_unlock_irqrestore(&pstJob->lock, flags_job);
+		spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
+
+		//wait hw done
 		while (--count > 0) {
 			if (atomic_read(&pstJob->enJobState) == CVI_JOB_END)
 				break;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "wait count(%d)\n", count);
+			CVI_TRACE_VPSS(CVI_DBG_WARN, "wait count(%d)\n", count);
 			usleep_range(5000, 6000);
 		}
+
+		//hw hang
 		if (count == 0) {
 			CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) Wait timeout, HW hang.\n", pstJob->grp_id);
+
 			for (i = 0; i < CVI_VPSS_MAX; i++) {
 				if (!(pstJob->vpss_dev_mask & BIT(i)))
 					continue;
-				cvi_vpss_error_stauts(i);
-				vpss_hal_reset(pstJob);
-				// cvi_vpss_stauts(i);
+				//cvi_vpss_error_stauts(i);
+				vpss_hal_reset(pstJob->vpss_dev_mask, pstJob->is_online);
+				cvi_vpss_stauts(i);
 				// work_mask &= (~BIT(i));
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
 					__clk_is_enabled(vpss_dev->vpss_cores[i].clk_vpss))
 					clk_disable(vpss_dev->vpss_cores[i].clk_vpss);
 			}
 		}
+
+		return CVI_SUCCESS;
 	} else if (enJobState == CVI_JOB_WAIT) {
-		spin_lock_irqsave(&stTaskCtx.job_lock, flags);
+		CVI_TRACE_VPSS(CVI_DBG_WARN, "Grp(%d) job remove.\n", pstJob->grp_id);
 		list_for_each_entry(jobItem, &stTaskCtx.job_wait_queue, list) {
 			if (jobItem == pstJob) {
 				atomic_set(&pstJob->enJobState, CVI_JOB_INVALID);
 				list_del_init(&pstJob->list);
-				spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+				spin_unlock_irqrestore(&pstJob->lock, flags_job);
+				spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 				return CVI_SUCCESS;
 			}
 		}
@@ -488,47 +635,18 @@ int cvi_vpss_hal_remove_job(struct cvi_vpss_job *pstJob)
 			if (jobItem == pstJob) {
 				atomic_set(&pstJob->enJobState, CVI_JOB_INVALID);
 				list_del_init(&pstJob->list);
-				spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+				spin_unlock_irqrestore(&pstJob->lock, flags_job);
+				spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 				return CVI_SUCCESS;
 			}
 		}
-		spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
 	}
+	spin_unlock_irqrestore(&pstJob->lock, flags_job);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 
 	return CVI_SUCCESS;
 }
 
-int cvi_vpss_hal_try_schedule(void)
-{
-	struct cvi_vpss_job *pstJob = NULL;
-	unsigned long flags;
-	int ret = CVI_FAILURE;
-
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
-	while (!list_empty(&stTaskCtx.job_wait_queue)) {
-		pstJob = list_first_entry(&stTaskCtx.job_wait_queue,
-			struct cvi_vpss_job, list);
-		if (pstJob->is_online) {
-			if (online_get_dev(pstJob))
-				break;
-			list_move_tail(&pstJob->list, &stTaskCtx.job_online_queue);
-			stTaskCtx.online_status[pstJob->grp_id] = VPSS_ONLINE_READY;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "online max chn num:%d.\n", stTaskCtx.online_dev_max_num);
-		} else {
-			if (job_try_schedule(pstJob)) {
-				//CVI_TRACE_VPSS(CVI_DBG_DEBUG, "Grp(%d), try schedule fail, wait for next time.\n",
-				//	pstJob->grp_id);
-				break;
-			}
-			list_del_init(&pstJob->list);
-		}
-
-		ret = CVI_SUCCESS;
-	}
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
-
-	return ret;
-}
 
 int cvi_vpss_hal_stitch_schedule(struct vpss_stitch_cfg *pstCfg)
 {
@@ -579,27 +697,29 @@ int cvi_vpss_hal_stitch_schedule(struct vpss_stitch_cfg *pstCfg)
 
 void cvi_vpss_hal_online_release_dev(void)
 {
-	unsigned long flags;
+	unsigned long flags, flags_dev;
 	int i;
 
-	spin_lock_irqsave(&vpss_dev->lock, flags);
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
+
+	spin_lock_irqsave(&vpss_dev->lock, flags_dev);
 	for (i = 0; i < stTaskCtx.online_dev_max_num; i++) {
 		atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_IDLE);
 		vpss_dev->vpss_cores[i].isOnline = 0;
 	}
-	spin_unlock_irqrestore(&vpss_dev->lock, flags);
+	spin_unlock_irqrestore(&vpss_dev->lock, flags_dev);
 
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
 	stTaskCtx.online_dev_max_num = 0;
 	for (i = 0; i < VPSS_ONLINE_NUM; i++)
 		stTaskCtx.online_status[i] = VPSS_ONLINE_UNEXIST;
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 }
 
 int cvi_vpss_hal_online_run(struct cvi_vpss_online_cb *param)
 {
 	int i;
-	unsigned long flags;
+	unsigned long flags, flags_job;
 	struct cvi_vpss_job *pstWorkJob = NULL;
 	struct cvi_vpss_job *jobItem;
 
@@ -608,17 +728,30 @@ int cvi_vpss_hal_online_run(struct cvi_vpss_online_cb *param)
 		return CVI_FAILURE;
 	}
 
-	spin_lock_irqsave(&stTaskCtx.job_lock, flags);
+	CVI_TRACE_VPSS(CVI_DBG_INFO, "online trigger vpss, snr_num(%d).\n", param->snr_num);
+	if (param->is_tile) {
+		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "is_left_tile(%d)\n" \
+			"left in(%d %d) out(%d %d).\n" \
+			"right in(%d %d) out(%d %d).\n",
+			param->is_left_tile, param->l_in.start, param->l_in.end,
+			param->l_out.start, param->l_out.end,
+			param->r_in.start, param->r_in.end,
+			param->r_out.start, param->r_out.end);
+	}
+
+	spin_lock_irqsave(&stTaskCtx.task_lock, flags);
 	if (stTaskCtx.online_status[param->snr_num] == VPSS_ONLINE_UNEXIST) {
 		CVI_TRACE_VPSS(CVI_DBG_WARN, "vpss(%d) not ready.\n", param->snr_num);
 		goto err;
 	} else if (stTaskCtx.online_status[param->snr_num] == VPSS_ONLINE_RUN) {
 		CVI_TRACE_VPSS(CVI_DBG_NOTICE, "vpss(%d) is running.\n", param->snr_num);
-		stTaskCtx.online_status[param->snr_num] = VPSS_ONLINE_CONTINUE;
 		goto err;
-	} else if (stTaskCtx.online_status[param->snr_num] == VPSS_ONLINE_CONTINUE) {
-		CVI_TRACE_VPSS(CVI_DBG_WARN, "vpss(%d) is hang.\n", param->snr_num);
-		goto err;
+	}
+
+	if (param->is_tile && (!param->is_left_tile)) {
+		stTaskCtx.online_status[param->snr_num] = VPSS_ONLINE_RUN;
+		spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
+		return CVI_SUCCESS;
 	}
 
 	list_for_each_entry(jobItem, &stTaskCtx.job_online_queue, list) {
@@ -632,24 +765,29 @@ int cvi_vpss_hal_online_run(struct cvi_vpss_online_cb *param)
 		CVI_TRACE_VPSS(CVI_DBG_WARN, "online grp(%d), Empty job.\n", param->snr_num);
 		goto err;
 	}
+
+	spin_lock_irqsave(&pstWorkJob->lock, flags_job);
 	for (i = 0; i < VPSS_MAX_CHN_NUM; i++) {
 		if (!pstWorkJob->cfg.chn_enable[i])
 			continue;
 		if (pstWorkJob->cfg.astChnCfg[i].addr[0] == 0) {
 			CVI_TRACE_VPSS(CVI_DBG_WARN, "online grp(%d), Not buffer.\n", param->snr_num);
+			spin_unlock_irqrestore(&pstWorkJob->lock, flags_job);
 			goto err;
 		}
 	}
+	memcpy(&pstWorkJob->online_param, param, sizeof(struct cvi_vpss_online_cb));
 	job_try_schedule(pstWorkJob);
 	list_del_init(&pstWorkJob->list);
+	spin_unlock_irqrestore(&pstWorkJob->lock, flags_job);
+
 	stTaskCtx.online_status[param->snr_num] = VPSS_ONLINE_RUN;
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
-	CVI_TRACE_VPSS(CVI_DBG_INFO, "online trigger vpss, snr_num(%d).\n", param->snr_num);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 
 	return CVI_SUCCESS;
 
 err:
-	spin_unlock_irqrestore(&stTaskCtx.job_lock, flags);
+	spin_unlock_irqrestore(&stTaskCtx.task_lock, flags);
 	return CVI_FAILURE;
 }
 
@@ -660,6 +798,13 @@ int vpss_job_restart(struct cvi_vpss_job *pstJob){
 	int dev_idx_max = dev_idx + pstJob->cfg.chn_num;
 	struct cvi_vpss_hw_cfg *cfg = &pstJob->cfg;
 	unsigned long flags;
+	u16 online_l_width = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.l_in.end - pstJob->online_param.l_in.start + 1
+							: 0;
+	u16 online_r_start = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.r_in.start : 0;
+	u16 online_r_end = (pstJob->is_online && pstJob->online_param.is_tile)
+							? pstJob->online_param.r_in.end : 0;
 
 	for (i = 0; i < VPSS_MAX_CHN_NUM; i++)
 		if (cfg->chn_enable[i]) {
@@ -724,13 +869,13 @@ int vpss_job_restart(struct cvi_vpss_job *pstJob){
 			pstJob->tile_mode &= ~SCL_TILE_LEFT;
 			pstJob->is_work_on_r_tile = false;
 			for (i = dev_idx; i < dev_idx_max; i++)
-				if (!cvi_img_left_tile_cfg(i))
+				if (!cvi_img_left_tile_cfg(i, online_l_width))
 					atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_END);
 		} else if (pstJob->tile_mode & SCL_TILE_RIGHT) {
 			pstJob->tile_mode &= ~SCL_TILE_RIGHT;
 			pstJob->is_work_on_r_tile = true;
 			for (i = dev_idx; i < dev_idx_max; i++)
-				if (!cvi_img_right_tile_cfg(i))
+				if (!cvi_img_right_tile_cfg(i, online_r_start, online_r_end))
 					atomic_set(&vpss_dev->vpss_cores[i].state, CVI_VIP_END);
 		}
 	}
@@ -767,20 +912,28 @@ static void vpss_job_finish(struct cvi_vpss_job *job)
 	u8 i, chn_id;
 	u32 u32MaxDuration = 0;
 	struct cvi_vpss_device *dev = vpss_dev;
+	unsigned long flags_job;
+
+	spin_lock_irqsave(&job->lock, flags_job);
 
 	for (i = 0; i < CVI_VPSS_MAX; i++) {
 		if (!(job->vpss_dev_mask & BIT(i)))
 			continue;
 
-		if (atomic_read(&dev->vpss_cores[i].state) != CVI_VIP_END)
+		if (atomic_read(&dev->vpss_cores[i].state) != CVI_VIP_END) {
+			spin_unlock_irqrestore(&job->lock, flags_job);
 			return;
+		}
 	}
 
-	if (atomic_cmpxchg(&job->enJobState, CVI_JOB_WORKING, CVI_JOB_HALF) != CVI_JOB_WORKING)
+	if (atomic_cmpxchg(&job->enJobState, CVI_JOB_WORKING, CVI_JOB_HALF) != CVI_JOB_WORKING) {
+		spin_unlock_irqrestore(&job->lock, flags_job);
 		return;
+	}
 
 	if (convert_to_bak[job->dev_idx_start].enable == true){
 		vpss_job_restart(job);
+		spin_unlock_irqrestore(&job->lock, flags_job);
 		return;
 	}
 
@@ -798,17 +951,24 @@ static void vpss_job_finish(struct cvi_vpss_job *job)
 		job->tile_mode &= ~SCL_RIGHT_DOWN_TILE_FLAG;
 		atomic_set(&job->enJobState, CVI_JOB_WORKING);
 		cvi_img_start(job->dev_idx_start, job->cfg.chn_num);
+
+		spin_unlock_irqrestore(&job->lock, flags_job);
 		return;
 	}
 
 	if ((job->is_tile) && job->tile_mode) { //right tile
+		u16 online_r_start = (job->is_online && job->online_param.is_tile)
+								? job->online_param.r_in.start : 0;
+		u16 online_r_end = (job->is_online && job->online_param.is_tile)
+								? job->online_param.r_in.end : 0;
+
 		job->tile_mode &= ~SCL_TILE_RIGHT;
 		job->is_work_on_r_tile = true;
 
 		for (i = 0; i < CVI_VPSS_MAX; i++) {
 			if (!(job->vpss_dev_mask & BIT(i)))
 				continue;
-			if (cvi_img_right_tile_cfg(i))
+			if (cvi_img_right_tile_cfg(i, online_r_start, online_r_end))
 				atomic_set(&dev->vpss_cores[i].state, CVI_VIP_RUNNING);
 			else
 				atomic_set(&dev->vpss_cores[i].state, CVI_VIP_END);
@@ -842,6 +1002,20 @@ static void vpss_job_finish(struct cvi_vpss_job *job)
 
 		atomic_set(&job->enJobState, CVI_JOB_WORKING);
 		cvi_img_start(job->dev_idx_start, job->cfg.chn_num);
+		spin_unlock_irqrestore(&job->lock, flags_job);
+
+		//wake up isp
+		if (job->is_online && job->online_param.is_tile) {
+			struct base_exe_m_cb exe_cb;
+
+			stTaskCtx.online_status[job->grp_id] = VPSS_ONLINE_READY;
+
+			exe_cb.callee = E_MODULE_VI;
+			exe_cb.caller = E_MODULE_VPSS;
+			exe_cb.cmd_id = VI_CB_SC_FRM_DONE;
+			exe_cb.data = NULL;
+			base_exe_module_cb(&exe_cb);
+		}
 		return;
 	}
 
@@ -876,8 +1050,12 @@ static void vpss_job_finish(struct cvi_vpss_job *job)
 		job->vpss_dev_mask = 0;
 		job->pfnJobCB(&job->data);
 
+		spin_unlock_irqrestore(&job->lock, flags_job);
 		cvi_vpss_hal_try_schedule();
+		return;
 	}
+
+	spin_unlock_irqrestore(&job->lock, flags_job);
 }
 
 
@@ -892,7 +1070,8 @@ void cvi_vpss_irq_handler(struct vpss_core *core)
 		return;
 	}
 	if (!(job->vpss_dev_mask & BIT(vpss_idx))) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss_dev_mask err.\n");
+		CVI_TRACE_VPSS(CVI_DBG_ERR, "core(%d) grp(%d) vpss_dev_mask(%x) err.\n",
+			vpss_idx, job->grp_id, job->vpss_dev_mask);
 		return;
 	}
 

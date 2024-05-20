@@ -29,8 +29,9 @@ static struct list_head devlist_global =  LIST_HEAD_INIT(devlist_global);
 static struct mem_alloc *alloc_list;
 struct hdmitx_dev *dev_hdmi;
 struct hdmi_tx_ctx *ctx;
-static int hdmitx_state = 0;
+static bool hdmitx_state = FALSE;
 static int hdmitx_event_id = 0;
+static int scrambling_low_rates = -1;
 
 static struct fasync_struct *hdmi_fasync;
 static atomic_t  dev_open_cnt;
@@ -313,6 +314,7 @@ int edid_parser_parse_data_block(hdmi_tx_dev_t *dev, u8 * data, sink_edid_t *edi
 			if (ieeeId == 0xC45DD8) {	/* HDMI-F */
 				pr_debug("Sink is HDMI 2.0 because haves HF-VSDB\n");
 				edidExt->edid_m20Sink = TRUE;
+				scrambling_low_rates = data[6] & 0x8;
 				if (hdmiforumvsdb_parse(dev, &edidExt->edid_mHdmiForumvsdb, data) != TRUE) {
 					pr_err("HDMI Vendor Specific Data Block corrupt");
 					break;
@@ -328,7 +330,7 @@ int edid_parser_parse_data_block(hdmi_tx_dev_t *dev, u8 * data, sink_edid_t *edi
 #endif
 				}
 			} else {
-				pr_err("Vendor Specific Data Block not parsed ieeeId: 0x%x",
+				pr_debug("Vendor Specific Data Block not parsed ieeeId: 0x%x",
 						ieeeId);
 			}
 		}
@@ -667,28 +669,62 @@ int edid_read_cap()
 	return 0;
 }
 
-int hdmitx_force_get_edid(CVI_HDMI_EDID* edid_raw)
+static size_t read_file_into_buffer(const char *filename, int size, char *data)
+{
+	struct file *filp;
+	size_t read_size;
+
+    filp = filp_open(filename, O_RDONLY, 0);
+    if (IS_ERR(filp)) {
+        pr_err("%s: filp_open error %ld\n", __func__, PTR_ERR(filp));
+        return -1;
+    }
+
+	read_size = kernel_read(filp, data, size, &filp->f_pos);
+
+	filp_close(filp, NULL);
+
+	return read_size;
+
+}
+
+int hdmitx_force_get_edid(CVI_HDMI_EDID* edid_raw, char *fileName)
 {
 	int j;
 	u8 *edid_data;
+	int ret;
 
 	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
 		pr_err("Hot Plug = %s\n", phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
 		return CVI_ERR_HDMI_HPD_FAILED;
 	}
 
-	if (edid_read_cap()) {
-		pr_debug("Read Edid error !\n");
-		hdmitx_event_id = HDMI_EDID_FAIL;
-		kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
-		return stop_handler();
-	}
+	if (fileName) {
+		edid_data = kmalloc(256, GFP_KERNEL);
+		ret = read_file_into_buffer(fileName, 256, edid_data);
+		if (ret < 0) {
+			kfree(edid_data);
+			return -1;
+		} else {
+			for(j = 0; j < 256; j++)
+				edid_raw->edid[j] = edid_data[j];
+		}
 
-	edid_data = (u8 *)&ctx->mode.edid;
-	for(j=0; j<128; j++)
-	{
-		edid_raw->edid[j] = edid_data[j];
-		edid_raw->edid[j+128] = ctx->mode.edid_ext[0][j];
+		kfree(edid_data);
+	} else {
+		if (edid_read_cap()) {
+			pr_debug("Read Edid error !\n");
+			hdmitx_event_id = HDMI_EDID_FAIL;
+			kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
+			return stop_handler();
+		}
+
+		edid_data = (u8 *)&ctx->mode.edid;
+		for(j=0; j<128; j++)
+		{
+			edid_raw->edid[j] = edid_data[j];
+			edid_raw->edid[j+128] = ctx->mode.edid_ext[0][j];
+		}
 	}
 
 	return 0;
@@ -839,6 +875,7 @@ int hdmitx_start(void)
 {
 	// mutex_lock(&(ctx->mutex));
 	int i = 0;
+	int res = 0;
 
 	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
 		pr_err("Hot Plug = %s\n", phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
@@ -882,7 +919,6 @@ int hdmitx_start(void)
 			irq_hpd_sense_enable(&ctx->hdmi_tx);
 			return CVI_ERR_HDMI_FEATURE_NO_SUPPORT;
 		}
-
 		if(ctx->mode.pVideo.mDtd.mInterlaced) {
 			pr_err("Interlaced mode is not supported by hdmitx\n");
 			return CVI_ERR_HDMI_FEATURE_NO_SUPPORT;
@@ -906,10 +942,11 @@ int hdmitx_start(void)
 	}
 
 	if(ctx->mode.hdmi_en){
-		if (!api_configure(&ctx->hdmi_tx, &ctx->mode.pVideo, &ctx->mode.pAudio, &ctx->mode.pHdcp)) {
-			pr_debug("API configure error");
+		res = api_configure(&ctx->hdmi_tx, &ctx->mode.pVideo, &ctx->mode.pAudio, &ctx->mode.pHdcp);
+		if (res != 0) {
+			pr_err("Api configure failed\n");
 			stop_handler();
-			return CVI_ERR_HDMI_API_CONFIG_FAILED;
+			return res;
 		}
 	}
 
@@ -917,7 +954,7 @@ int hdmitx_start(void)
 
 	// mutex_unlock(&(ctx->mutex));
 
-	return 0;
+	return res;
 }
 
 int hdmitx_stop(void)
@@ -1108,15 +1145,17 @@ void print_videoinfo(videoParams_t *pVideo)
 }
 
 int do_reset(void){
+	pr_debug("Reset done.");
+
 	irq_mask_all(&ctx->hdmi_tx);
 	irq_hpd_sense_enable(&ctx->hdmi_tx);
-	pr_debug("Reset done.");
 
 	return 0;
 }
 
 int stop_handler(void){
 	pr_debug("stop handler");
+
 	hdcp_rxdetect(&ctx->hdmi_tx, 0);
 	hdcp_sw_reset(&ctx->hdmi_tx);
 	api_standby(&ctx->hdmi_tx);
@@ -1133,7 +1172,8 @@ int start_handler(void){
 		pr_debug("Read Edid error !");
 		hdmitx_event_id = HDMI_EDID_FAIL;
 		kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
-		return stop_handler();
+		stop_handler();
+		return -1;
 	}
 
 	sink = ctx->mode.sink_cap;
@@ -1175,34 +1215,40 @@ int start_handler(void){
 	}
 
 	if(!ctx->mode.pVideo.mDtd.mCode || !ctx->hdmi_tx.snps_hdmi_ctrl.pixel_clock){
-		return 1;
+		return -1;
 	}
 
-	if (!api_configure(&ctx->hdmi_tx, &ctx->mode.pVideo, &ctx->mode.pAudio, &ctx->mode.pHdcp)) {
+	if (api_configure(&ctx->hdmi_tx, &ctx->mode.pVideo, &ctx->mode.pAudio, &ctx->mode.pHdcp)) {
 		pr_debug("API configure error");
-		return stop_handler();
+		stop_handler();
+		return -1;
 	}
 
-	return 1;
+	return 0;
 }
 
 void hpd_handler()
 {
+	int ret = 0;
 	pr_debug("%s:%d Hot Plug => %s, Rx Sense => %s", __FUNCTION__, __LINE__, phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF", phy_rx_sense_state(&ctx->hdmi_tx) ? "ON" : "OFF");
 	mdelay(100);
 
 	if (phy_hot_plug_state(&ctx->hdmi_tx) && (!hdmitx_state)) {
-		hdmitx_state = start_handler();
-		if(hdmitx_state) {
-				hdmitx_event_id = HDMI_HOTPLUG;
-				kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
+		ret = start_handler();
+		hdmitx_state = TRUE;
+		if (!ret || hdmitx_state)
+		{
+			hdmitx_event_id = HDMI_HOTPLUG;
+			kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
 		}
 	} else if ((!phy_hot_plug_state(&ctx->hdmi_tx) || !phy_rx_sense_state(&ctx->hdmi_tx)) && hdmitx_state) {
-		hdmitx_state = stop_handler();
-		if(!hdmitx_state) {
-				hdmitx_event_id = HDMI_NOPLUG;
-				kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
-		}
+		ret = stop_handler();
+		hdmitx_state = FALSE;
+		if (!ret)
+		{
+			hdmitx_event_id = HDMI_NOPLUG;
+			kill_fasync(&hdmi_fasync, SIGIO, POLL_IN);
+	 	}
 	}
 }
 
@@ -1321,6 +1367,371 @@ int hdmitx_get_infoframe(CVI_HDMI_INFOFRAME* info_frame)
 	info_frame->infoframe_unit.audio_infoframe.coding_type = ctx->mode.pAudio.mCodingType;
 	info_frame->infoframe_unit.audio_infoframe.sample_size = ctx->mode.pAudio.mSampleSize;
 	info_frame->infoframe_unit.audio_infoframe.sampling_freq = ctx->mode.pAudio.mSamplingFrequency;
+	return 0;
+}
+
+int hdmi_proc_edid_cmd(u8 edid, char* file_path)
+{
+	CVI_HDMI_EDID edid_data;
+	memset(&edid_data, 0, sizeof(edid_data));
+
+	if (edid == 0) {
+		hdmitx_force_get_edid(&edid_data, NULL);
+	} else if (edid == 1) {
+		hdmitx_force_get_edid(&edid_data, file_path);
+	} else {
+		pr_err("%s: Invalid Param edid(%d) \n", __func__, edid);
+		return -1;
+	}
+
+	return 0;
+}
+
+int hdmi_proc_cbar_cmd(u8 cbar)
+{
+	if (cbar == 1) {
+		disp_set_pattern(DISP1, PAT_TYPE_FULL, PAT_COLOR_BAR, NULL);
+	} else if (cbar == 0) {
+		disp_set_pattern(DISP1, PAT_TYPE_OFF, PAT_COLOR_WHITE, NULL);
+	} else {
+		pr_err("%s: Invalid Param cbar(%d) \n", __func__, cbar);
+		return -1;
+	}
+
+	return 0;
+}
+
+int hdmi_proc_mode_cmd(u8 hdmi_mode)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+
+	ctx->mode.pVideo.mHdmi = hdmi_mode == 1 ? HDMI: DVI;
+
+	if(hdmitx_start() < 0)
+		return -1;
+
+	return 0;
+}
+
+int hdmi_proc_ddc_cmd(u32 ddc_rate)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+
+	if (ddc_rate > 100000) {
+		pr_err("%s: Invalid Param ddc_rate(%d) \n", __func__, ddc_rate);
+		return -1;
+	}
+
+	ctx->hdmi_tx.i2c.scl_high_ns = I2C_SCL_HIGH_TIME_NS * I2C_CLK / ddc_rate;
+	ctx->hdmi_tx.i2c.scl_low_ns = I2C_SCL_LOW_TIME_NS * I2C_CLK / ddc_rate;
+
+	pr_info("%s: ctx->hdmi_tx.i2c.scl_high_ns = %d, ctx->hdmi_tx.i2c.scl_low_ns = %d \n",
+			__func__, ctx->hdmi_tx.i2c.scl_high_ns, ctx->hdmi_tx.i2c.scl_low_ns);
+
+	i2cddc_clk_set_divs(&ctx->hdmi_tx);
+
+	return 0;
+}
+
+int hdmi_proc_outclrspace_parse(u8 outclrspace)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+
+	if(outclrspace == 0){
+		ctx->mode.pVideo.mEncodingOut = CVI_HDMI_VIDEO_MODE_RGB888;
+	} else if (outclrspace == 1){
+		ctx->mode.pVideo.mEncodingOut = CVI_HDMI_VIDEO_MODE_YCBCR444;
+	} else if (outclrspace == 2){
+		ctx->mode.pVideo.mEncodingOut = CVI_HDMI_VIDEO_MODE_YCBCR422;
+	} else {
+		pr_err("%s: Invalid Param outclrspace(%d) \n", __func__, outclrspace);
+		return -1;
+	}
+	ctx->hdmi_tx.snps_hdmi_ctrl.csc_on =
+	        (ctx->mode.pVideo.mEncodingIn == ctx->mode.pVideo.mEncodingOut) ? 0: 1;
+
+	if(hdmitx_start() < 0)
+		return -1;
+
+	return 0;
+}
+
+int hdmi_proc_control_cmd(u8 cmd)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+
+	if(cmd == 1){
+		if(phy_hot_plug_state(&ctx->hdmi_tx)){
+			if (start_handler()) {
+				pr_err("%s: start_handler failed \n", __func__);
+				return -1;
+			}
+		} else {
+			pr_err("%s: Hot Plug = %s \n",
+				__func__, phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
+		}
+	} else if(cmd == 0){
+		if (phy_hot_plug_state(&ctx->hdmi_tx)){
+			if (stop_handler()) {
+				pr_err("%s: stop_handler failed \n", __func__);
+				return -1;
+			}
+		} else
+			pr_err("%s:Hot Plug = %s \n",
+				__func__, phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
+	} else {
+		pr_err("%s: Invalid Param cmd(%d) \n", __func__, cmd);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int scdc_support(sink_edid_t *sink_cap)
+{
+	int ret = 0;
+	if (!sink_cap || !sink_cap->edid_mHdmiForumvsdb.mValid ||
+		!sink_cap->edid_mHdmiForumvsdb.mSCDC_Present) {
+		pr_err("%s: Sink does not support SCDC \n", __func__);
+		ret = -1;
+	}
+
+	return ret;
+}
+
+int scdc_enable_scrambling(struct hdmi_tx_ctx *ctx, u8 enable)
+{
+	hdmi_tx_dev_t *dev;
+	u32 pclk;
+	int res = 0;
+
+	if (scdc_support(ctx->mode.sink_cap)) {
+		return -1;
+	}
+
+	dev = &ctx->hdmi_tx;
+	pclk = dev->snps_hdmi_ctrl.pixel_clock;
+
+	if (enable) {
+		if (pclk > 340000) {
+			res = scrambling(dev, TRUE);
+			res = tmds_high_rate(dev, TRUE);
+		} else {
+			if (scrambling_low_rates) {
+				res = scrambling(dev, TRUE);
+				res = tmds_high_rate(dev, FALSE);
+			}
+		}
+
+	} else {
+		if (pclk > 340000) {
+			res = scrambling(dev, FALSE);
+			res = tmds_high_rate(dev, TRUE);
+		} else {
+			res = scrambling(dev, FALSE);
+			res = tmds_high_rate(dev, FALSE);
+		}
+	}
+
+	return res;
+}
+
+int scdc_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 size)
+{
+	u8 *data;
+	int i;
+
+	if (scdc_support(ctx->mode.sink_cap)) {
+		return -1;
+	}
+
+	if ((size < 1) || (size + addr > 0xFF)) {
+		pr_err("%s: Improper arguments \n", __func__);
+		pr_err("%s: Addr Value from 0x01 - 0xFF \n", __func__);
+		return -1;
+	}
+
+	data = (u8*) vmalloc(sizeof(u8) * size);
+	if(!data) {
+		pr_err("%s: Failed to allocate buffer \n", __func__);
+		return -1;
+	}
+
+	memset(data, 0, size);
+
+	if (scdc_read(&ctx->hdmi_tx, (u8)addr, (u8)size, data)) {
+		pr_err("%s: SCDC Read failed to address 0x%02x \n", __func__, addr);
+		vfree(data);
+		return -1;
+	}
+
+	for (i = 0; i < size; i++)
+		pr_info("SCDC Read[0x%02x] = 0x%02x \n", addr + i, data[i]);
+
+	vfree(data);
+	return 0;
+}
+
+int scdc_write_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 data)
+{
+	if (scdc_support(ctx->mode.sink_cap)) {
+		return -1;
+	}
+
+	if ((addr != 2) && (addr != 0x10) && (addr != 0x11) &&
+		(addr != 0x20) && (addr != 0x30) && (addr != 0x30) &&
+		(addr != 0xC0) && ((addr < 0xDE) || (addr > 0xFF))) {
+		pr_err("%s: Improper arguments \n", __func__);
+		pr_err("%s: Addr: 0x02, 0x10, 0x11, 0x20, 0x30, 0xC0 and 0xDE to 0xFF \n", __func__);
+		return -1;
+	}
+
+	if ((data > 0xFF)) {
+		pr_err("%s: Improper arguments \n", __func__);
+		pr_err("%s: data to write 0x00-0xFF \n", __func__);
+		return -1;
+	}
+
+	if (scdc_write(&ctx->hdmi_tx, (u8)addr, (u8)data, (u8*)&data)) {
+		pr_err("%s: SCDC Write failed to address 0x%02x \n", __func__, addr);
+		return -1;
+	}
+
+	return 0;
+}
+
+int scdc_get_channel_status(struct hdmi_tx_ctx *ctx)
+{
+	u8 data;
+	u8 er_data[7] = {0};
+
+	if (scdc_support(ctx->mode.sink_cap)) {
+		return -1;
+	}
+
+	data = scdc_read_channel_status(&ctx->hdmi_tx);
+
+	if (scdc_read_err_characters(&ctx->hdmi_tx, er_data)) {
+		pr_err("%s : SCDC read err characters Failed \n", __func__);
+		return -1;
+	}
+
+	pr_info("Status: Clock=[%s] Ln0=[%s], Ln1=[%s], Ln2=[%s] \n",
+		data & SCDC_STATUS_FLAG_0_CLK ? "LODCKED": "NOT_LOCKED",
+		data & SCDC_STATUS_FLAG_0_CH0 ? "LODCKED": "NOT_LOCKED",
+		data & SCDC_STATUS_FLAG_0_CH1 ? "LODCKED": "NOT_LOCKED",
+		data & SCDC_STATUS_FLAG_0_CH2 ? "LODCKED": "NOT_LOCKED");
+
+	pr_info("CED: CH0=[0x%02X%02X], CH1=[0x%02X%02X], CH2=[0x%02X%02X]",
+			er_data[1] & 0x70, er_data[0],
+			er_data[3] & 0x70, er_data[2],
+			er_data[5] & 0x70, er_data[4]);
+	pr_info("CED: CheckSum = [0x%02x] \n", er_data[6]);
+
+	return 0;
+}
+
+int hdmi_proc_scdc_cmd(u8 scdc, u32 addr, u32 data)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+	if (scdc == 0) {
+		if (scdc_enable_scrambling(ctx, FALSE)) {
+			pr_err("%s: SCDC Close Failed \n", __func__);
+			return -1;
+		}
+	} else if (scdc == 1) {
+		if (scdc_enable_scrambling(ctx, TRUE)) {
+			pr_err("%s: SCDC Open Failed \n", __func__);
+			return -1;
+		}
+	} else if(scdc == 2) {
+		if (scdc_get_channel_status(ctx)) {
+			pr_err("%s: SCDC Get Channel Status Failed \n", __func__);
+			return -1;
+		}
+	} else if(scdc == 3) {
+		if (scdc_read_cmd(ctx, addr, data)) {
+			pr_err("%s:SCDC Read failed \n", __func__);
+			return -1;
+		}
+	} else if (scdc == 4) {
+		if (scdc_write_cmd(ctx, addr, data)) {
+			pr_err("%s:SCDC Write failed \n", __func__);
+			return -1;
+		}
+	} else {
+		pr_err("%s: Invalid Param scdc(%d) \n", __func__, scdc);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int phy_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr)
+{
+	u32 data = 0;
+
+	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
+		pr_err("Hot Plug = %s\n", phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
+		return CVI_ERR_HDMI_HPD_FAILED;
+	}
+
+	if (addr > 0x3b) {
+		pr_err("%s: Improper arguments \n", __func__);
+		pr_err("%s: addr from 0x00 - 0x3B \n", __func__);
+		return -1;
+	}
+
+	if (phy_read(&ctx->hdmi_tx, (u16)addr, &data)) {
+		pr_err("%s: Phy Read failed to address 0x%02x\n", __func__, addr);
+		return -1;
+	}
+
+	pr_info("Phy Read[0x%02x] = 0x%02x \n", addr, data);
+
+	return 0;
+}
+
+int phy_write_cmd(struct hdmi_tx_ctx *ctx, u16 addr, u32 data)
+{
+	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
+		pr_err("Hot Plug = %s\n", phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
+		return CVI_ERR_HDMI_HPD_FAILED;
+	}
+
+	if (addr > 0x3b || data > 0xFFFF) {
+		pr_err("%s: Improper arguments \n", __func__);
+		return -1;
+	}
+
+	if (phy_write(&ctx->hdmi_tx, (u16)addr, data)) {
+		pr_err("%s: Phy Write failed to address 0x%02x\n", __func__, addr);
+		return -1;
+	}
+
+	return 0;
+}
+
+int hdmi_proc_phy_cmd(u8 phy, u32 addr, u32 data)
+{
+	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
+
+	if (phy == 0) {
+		if (phy_read_cmd(ctx, addr)) {
+			pr_err("%s:PHY Read failed \n", __func__);
+			return -1;
+		}
+
+	} else if (phy == 1) {
+		if (phy_write_cmd(ctx, addr, data)) {
+			pr_err("%s:PHY Write failed \n", __func__);
+			return -1;
+		}
+	} else {
+		pr_err("%s: Invalid Param Phy(%d) \n", __func__, phy);
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
@@ -1528,6 +1939,7 @@ static int hdmi_tx_probe(struct platform_device *pdev)
 	int ret = 0;
 	int i = 0;
 	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
 	struct resource *mem = NULL;
 
 	void* hdmi_reg_base;
@@ -1631,6 +2043,19 @@ static int hdmi_tx_probe(struct platform_device *pdev)
 						IH_MUTE_PHY_STAT0_RX_SENSE_2_MASK |
 						IH_MUTE_PHY_STAT0_RX_SENSE_3_MASK ));
 	irq_unmute(&ctx->hdmi_tx);
+
+	/*
+	* Read high and low time from device tree. If not available use
+	* the default timing scl clock rate is about 100KHz.
+	*/
+	if (of_property_read_u32(np, "ddc-i2c-scl-high-time-ns",
+		&ctx->hdmi_tx.i2c.scl_high_ns))
+		ctx->hdmi_tx.i2c.scl_high_ns = 4500;
+
+	if (of_property_read_u32(np, "ddc-i2c-scl-low-time-ns",
+		&ctx->hdmi_tx.i2c.scl_low_ns))
+		ctx->hdmi_tx.i2c.scl_low_ns = 5200;
+
 	register_interrupts(dev_hdmi);
 	hdmitx_create_proc(dev_hdmi);
 
@@ -1650,7 +2075,9 @@ static int hdmi_tx_exit(struct platform_device *pdev){
 	pr_info("%s:Removing HDMI module\n", __func__);
 	pr_info("**************************************\n");
 
+	disable_irq(dev->irq[0]);
 	irq_mute(&ctx->hdmi_tx);
+
 	stop_handler();
 	hdmitx_deinit();
 	hdmitx_destroy_proc(dev);
@@ -1670,6 +2097,7 @@ static int hdmi_tx_exit(struct platform_device *pdev){
 
 		pr_info("%s:Release interrupts\n", __func__);
 		release_interrupts(dev);
+
 		pr_debug("dev->base_address:%x\n", *(unsigned int *)(dev->base_address));
 		devm_iounmap(&pdev->dev, dev->base_address);
 		free_all_mem();
@@ -1683,6 +2111,28 @@ static int hdmi_tx_exit(struct platform_device *pdev){
 
 	return 0;
 }
+
+#ifdef CONFIG_PM
+static int hdmi_tx_resume(struct platform_device *pdev)
+{
+	struct hdmitx_dev *dev = platform_get_drvdata(pdev);
+	enable_irq(dev->irq[0]);
+	return 0;
+}
+
+static int hdmi_tx_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct hdmitx_dev *dev = platform_get_drvdata(pdev);
+	int ret;
+	disable_irq(dev->irq[0]);
+	ret = hdmitx_stop();
+	if(ret != 0){
+		pr_err("hdmi_tx_suspend failed\n");
+		return ret;
+	}
+	return 0;
+}
+#endif
 
 static const struct of_device_id dw_hdmi_tx[] = {
 	{ .compatible =	"sophgo,vo_hdmi" },
@@ -1698,5 +2148,9 @@ static struct platform_driver __refdata dwc_hdmi_tx_pdrv = {
 		.owner = THIS_MODULE,
 		.of_match_table = dw_hdmi_tx,
 	},
+#ifdef CONFIG_PM
+	.resume = hdmi_tx_resume,
+	.suspend = hdmi_tx_suspend,
+#endif
 };
 module_platform_driver(dwc_hdmi_tx_pdrv);

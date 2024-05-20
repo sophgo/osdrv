@@ -481,8 +481,8 @@ s32 vi_enable_dev(VI_DEV ViDev)
 #ifndef FPGA_PORTING
 	vi_mac_clk_ctrl(gvdev, gViCtx->devBindPipeAttr[ViDev].PipeId[0], true);
 #endif
-	vi_pr(VI_DBG, "dev_%d, enable=%d, total_dev_num=%d\n",
-		ViDev, gViCtx->isDevEnable[ViDev], gViCtx->total_dev_num);
+	vi_pr(VI_DBG, "dev_%d, raw_num(%d) enable=%d, total_dev_num=%d\n",
+		ViDev, raw_num, gViCtx->isDevEnable[ViDev], gViCtx->total_dev_num);
 
 	return CVI_SUCCESS;
 }

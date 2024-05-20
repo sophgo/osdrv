@@ -1024,7 +1024,7 @@ int vdi_allocate_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTyp
 
     if (vpu_allocate_physical_memory(&vdb) < 0)
     {
-        VLOG(ERR, "[VDI] fail to vdi_allocate_dma_memory size=%d\n", vdb.size);
+        VLOG(ERR, "[VDI] fail to vdi_allocate_dma_memory type:%d, size=%d\n", memTypes, vdb.size);
         return -1;
     }
 
@@ -1062,8 +1062,8 @@ int vdi_allocate_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTyp
     }
     vmem_unlock(core_idx);
 
-    //VLOG(INFO, "[VDI] vdi_allocate_dma_memory, physaddr=0x%llx, virtaddr=0x%llx~0x%llx, size=%d, memType=%d, count:%d\n",
-    //    vb->phys_addr, vb->virt_addr, vb->virt_addr + vb->size, vb->size, memTypes, vdi->vpu_buffer_pool_count);
+    VLOG(INFO, "[VDI] vdi_allocate_dma_memory, physaddr=0x%llx, virtaddr=0x%llx~0x%llx, size=%d, memType=%d, count:%d\n",
+       vb->phys_addr, vb->virt_addr, vb->virt_addr + vb->size, vb->size, memTypes, vdi->vpu_buffer_pool_count);
 
     return 0;
 }

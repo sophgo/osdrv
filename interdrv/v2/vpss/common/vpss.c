@@ -46,23 +46,6 @@
 #define CTX_EVENT_EOF        0x0002
 #define CTX_EVENT_VI_ERR     0x0004
 
-#define EXT_POOL             0xffff
-#define EXT_POOL_IN          0
-#define EXT_POOL_OUT         1
-
-#define BM_FIFO_INIT(head, _capacity, _fifo) do {		\
-		if (_capacity > 0)						\
-		(head)->fifo = _fifo;	\
-		(head)->front = (head)->tail = -1;				\
-		(head)->capacity = _capacity;					\
-	} while (0)
-
-#define BM_FIFO_EXIT(head) do {						\
-		(head)->front = (head)->tail = -1;			\
-		(head)->capacity = 0; 					\
-		(head)->fifo = NULL;					\
-	} while (0)
-
 struct vpss_jobs_ctx {
 	struct vb_jobs_t ins;
 	struct vb_jobs_t outs[VPSS_MAX_CHN_NUM];
@@ -72,7 +55,7 @@ struct vpss_handler_ctx {
 	wait_queue_head_t wait;
 	struct task_struct *thread;
 	spinlock_t hdl_lock;
-	u64 GrpMask;
+	atomic_t active_cnt;
 	u8 events;
 };
 
@@ -99,11 +82,7 @@ static struct vpss_ext_ctx vpssExtCtx[VPSS_MAX_GRP_NUM];
 
 static struct vpss_jobs_ctx stVpssVbjobs[VPSS_MAX_GRP_NUM];
 
-struct cvi_vpss_job job_bm[VPSS_MAX_GRP_NUM][2];
-
-static struct vb_s vb_bm[VPSS_MAX_GRP_NUM][7];
-
-static u8 is_bm_scene = false;
+static u8 is_bm_scene = CVI_FALSE;
 
 // Motion level for vcodec
 static struct mlv_i_s g_mlv_i[VI_MAX_DEV_NUM];
@@ -139,70 +118,7 @@ static PROC_AMP_CTRL_S procamp_ctrls[PROC_AMP_MAX] = {
 static VI_VPSS_MODE_S stVIVPSSMode;
 static VPSS_MOD_PARAM_S stModParam;
 
-static void bm_base_mod_jobs_init(VPSS_GRP grp, uint8_t vb_idx, struct vb_jobs_t *jobs, uint8_t waitq_depth, uint8_t workq_depth, uint8_t doneq_depth)
-{
-	if (jobs == NULL) {
-		pr_err("[%p] job init fail, Null parameter\n", __builtin_return_address(0));
-		return;
-	}
-
-	if (jobs->inited) {
-		pr_err("[%p] job init fail, already inited\n", __builtin_return_address(0));
-		return;
-	}
-
-	mutex_init(&jobs->lock);
-	mutex_init(&jobs->dlock);
-	sema_init(&jobs->sem, 0);
-	BM_FIFO_INIT(&jobs->waitq, waitq_depth, (struct vb_s**)&vb_bm[grp][vb_idx]);
-	BM_FIFO_INIT(&jobs->workq, workq_depth, (struct vb_s**)&vb_bm[grp][vb_idx + 1]);
-	BM_FIFO_INIT(&jobs->doneq, doneq_depth, (struct vb_s**)&vb_bm[grp][vb_idx + 2]);
-	TAILQ_INIT(&jobs->snap_jobs);
-	jobs->inited = true;
-}
-
-static void bm_base_mod_jobs_exit(struct vb_jobs_t *jobs)
-{
-	struct vb_s *vb;
-	struct snap_s *s, *s_tmp;
-
-	if (jobs == NULL) {
-		pr_err("[%p] job exit fail, Null parameter\n", __builtin_return_address(0));
-		return;
-	}
-
-	if (!jobs->inited) {
-		pr_err("[%p] job exit fail, not inited yet\n", __builtin_return_address(0));
-		return;
-	}
-
-	mutex_lock(&jobs->lock);
-	while (!FIFO_EMPTY(&jobs->waitq)) {
-		FIFO_POP(&jobs->waitq, &vb);
-		vb_release_block((VB_BLK)vb);
-	}
-	BM_FIFO_EXIT(&jobs->waitq);
-	while (!FIFO_EMPTY(&jobs->workq)) {
-		FIFO_POP(&jobs->workq, &vb);
-		vb_release_block((VB_BLK)vb);
-	}
-	BM_FIFO_EXIT(&jobs->workq);
-	mutex_unlock(&jobs->lock);
-	mutex_destroy(&jobs->lock);
-
-	mutex_lock(&jobs->dlock);
-	while (!FIFO_EMPTY(&jobs->doneq)) {
-		FIFO_POP(&jobs->doneq, &vb);
-		vb_release_block((VB_BLK)vb);
-	}
-	BM_FIFO_EXIT(&jobs->doneq);
-
-	TAILQ_FOREACH_SAFE(s, &jobs->snap_jobs, tailq, s_tmp)
-	TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
-	mutex_unlock(&jobs->dlock);
-	mutex_destroy(&jobs->dlock);
-	jobs->inited = false;
-}
+static struct semaphore vpss_core_sem;
 
 static inline s32 check_vpss_grp_created(VPSS_GRP grp)
 {
@@ -254,7 +170,13 @@ void vpss_wkup_frame_done_handle(void *pdata)
 {
 	struct cvi_vpss_job *pstJob = container_of(pdata, struct cvi_vpss_job, data);
 
-	queue_work(vpss_workqueue, &pstJob->job_work);
+	if(!is_bm_scene)
+		queue_work(vpss_workqueue, &pstJob->job_work);
+	else {
+		struct vpss_stitch_data *pstData = (struct vpss_stitch_data *)pstJob->data;
+		pstData->u8Flag = 1;
+		wake_up(&pstData->wait);
+	}
 }
 
 struct cvi_vpss_ctx **vpss_get_ctx(void)
@@ -1709,7 +1631,6 @@ static s32 vpss_online_full_job(VPSS_GRP workingGrp, struct cvi_vpss_job *pstJob
 
 	ktime_get_ts64(&vpss_ctx->time);
 	vpss_ctx->enHdlState = HANDLER_STATE_RUN;
-	mutex_unlock(&vpssCtx[workingGrp]->lock);
 
 	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "Online Grp(%d) post job.\n", workingGrp);
 
@@ -1852,7 +1773,7 @@ static void vpss_handle_frame_done(struct work_struct *work)
 	VPSS_GRP workingGrp = pstJob->grp_id;
 
 	if (!vpssCtx[workingGrp] || !vpssCtx[workingGrp]->isStarted) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) isn't start yet.\n", workingGrp);
+		CVI_TRACE_VPSS(CVI_DBG_NOTICE, "Grp(%d) isn't start yet.\n", workingGrp);
 		return;
 	}
 	mutex_lock(&vpssCtx[workingGrp]->lock);
@@ -1927,7 +1848,6 @@ static s32 vpss_try_schedule(u8 workingGrp)
 	CVI_TRACE_VPSS(CVI_DBG_INFO, "Offline Grp(%d) post job.\n", workingGrp);
 	cvi_vpss_hal_try_schedule();
 
-	// wait for h/w done
 	return CVI_SUCCESS;
 
 vpss_next_job:
@@ -1968,6 +1888,7 @@ static int vpss_event_handler(void *arg)
 	unsigned long eof_timeout = msecs_to_jiffies(EOF_WAIT_TIMEOUT_MS);
 	unsigned long timeout = idle_timeout;
 	int i, ret;
+	int grp = 0, prev_grp = -1;
 	struct vb_jobs_t *jobs;
 	struct timespec64 time;
 
@@ -1990,30 +1911,32 @@ static int vpss_event_handler(void *arg)
 		ctx->events &= ~CTX_EVENT_WKUP;
 		spin_unlock(&vpss_hdl_ctx.hdl_lock);
 
-		if (!ctx->GrpMask)
+		if (atomic_read(&ctx->active_cnt) == 0)
 			continue;
 
 		ktime_get_ts64(&time);
 
+		grp = prev_grp;
 		for (i = 0; i < VPSS_MAX_GRP_NUM; i++) {
-			if (!(ctx->GrpMask & BIT(i)))
+			if (++grp >= VPSS_MAX_GRP_NUM)
+				grp = 0;
+			if (!vpssCtx[grp] || !vpssCtx[grp]->isStarted)
 				continue;
-			if (!vpssCtx[i])
-				continue;
-			if (vpssCtx[i]->enHdlState == HANDLER_STATE_RUN) {
-				// if (get_diff_in_us(vpssCtx[i]->time, time) > (eof_timeout * 1000))
-				// 	vpss_timeout(vpssCtx[i]);
+			if (vpssCtx[grp]->enHdlState == HANDLER_STATE_RUN) {
+				// if (get_diff_in_us(vpssCtx[grp]->time, time) > (eof_timeout * 1000))
+				// 	vpss_timeout(vpssCtx[grp]);
 				continue;
 			}
-			jobs = &stVpssVbjobs[i].ins;
+			jobs = &stVpssVbjobs[grp].ins;
 			if (!jobs) {
 				CVI_TRACE_VPSS(CVI_DBG_INFO, "get jobs failed\n");
 				continue;
 			}
 
 			if (!down_trylock(&jobs->sem)) {
-				vpss_try_schedule(i);
+				vpss_try_schedule(grp);
 				timeout = eof_timeout;
+				prev_grp = grp;
 			}
 		}
 	}
@@ -2159,7 +2082,7 @@ static int vpss_grp_qbuf(MMF_CHN_S chn, VB_BLK blk)
 		return ret;
 
 	if (!vpssCtx[VpssGrp]->isStarted) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) not started yet.\n", VpssGrp);
+		CVI_TRACE_VPSS(CVI_DBG_NOTICE, "Grp(%d) not started yet.\n", VpssGrp);
 		return CVI_FAILURE;
 	}
 	if (vpssCtx[VpssGrp]->online_from_isp) {
@@ -2177,13 +2100,15 @@ static int vpss_grp_qbuf(MMF_CHN_S chn, VB_BLK blk)
 	}
 	vpssCtx[VpssGrp]->stGrpWorkStatus.u32FRCRecvCnt++;
 
+	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d) qbuf, blk(0x%llx)\n", VpssGrp, blk);
+
 	ret = vb_qbuf(chn, CHN_TYPE_IN, &stVpssVbjobs[VpssGrp].ins, blk);
-	if (ret != CVI_SUCCESS)
+	if (ret != CVI_SUCCESS) {
+		vpssCtx[VpssGrp]->stGrpWorkStatus.u32LostCnt++;
 		return ret;
+	}
 
 	vpss_notify_wkup_evt();
-
-	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d) qbuf, blk(0x%llx)\n", VpssGrp, blk);
 
 	return CVI_SUCCESS;
 }
@@ -2277,22 +2202,14 @@ s32 vpss_create_grp(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr)
 		return CVI_ERR_VPSS_NOMEM;
 	}
 
-	if (is_bm_scene){
-		memset(&job_bm[VpssGrp][0], 0, sizeof(struct cvi_vpss_job));
-		vpssCtx[VpssGrp]->pJobBuffer = (void *)&job_bm[VpssGrp][0];
-	} else {
-		vpssCtx[VpssGrp]->pJobBuffer = kzalloc(sizeof(struct cvi_vpss_job) * u32JobNum, GFP_ATOMIC);
-		if (!vpssCtx[VpssGrp]->pJobBuffer) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "job kzalloc fail.\n");
-			kfree(vpssCtx[VpssGrp]);
-			return CVI_ERR_VPSS_NOMEM;
-		}
+	vpssCtx[VpssGrp]->pJobBuffer = kzalloc(sizeof(struct cvi_vpss_job) * u32JobNum, GFP_ATOMIC);
+	if (!vpssCtx[VpssGrp]->pJobBuffer) {
+		CVI_TRACE_VPSS(CVI_DBG_ERR, "job kzalloc fail.\n");
+		kfree(vpssCtx[VpssGrp]);
+		return CVI_ERR_VPSS_NOMEM;
 	}
 
-	if (pstGrpAttr->stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-		BM_FIFO_INIT(&vpssCtx[VpssGrp]->jobq, u32JobNum, (struct cvi_vpss_job **)&job_bm[VpssGrp][1]);
-	else
-		FIFO_INIT(&vpssCtx[VpssGrp]->jobq, u32JobNum);
+	FIFO_INIT(&vpssCtx[VpssGrp]->jobq, u32JobNum);
 
 	pstJob = (struct cvi_vpss_job *)vpssCtx[VpssGrp]->pJobBuffer;
 	for (i = 0; i < u32JobNum; i++) {
@@ -2301,17 +2218,15 @@ s32 vpss_create_grp(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr)
 		pstJob[i].data = (void *)vpssCtx[VpssGrp];
 		pstJob[i].pfnJobCB = vpss_wkup_frame_done_handle;
 		INIT_WORK(&pstJob[i].job_work, vpss_handle_frame_done);
+		spin_lock_init(&pstJob[i].lock);
 		atomic_set(&pstJob[i].enJobState, CVI_JOB_INVALID);
 		FIFO_PUSH(&vpssCtx[VpssGrp]->jobq, pstJob + i);
 	}
 
 	if (online_from_isp)
 		base_mod_jobs_init(&stVpssVbjobs[VpssGrp].ins, 0, 0, 0);
-	else if (pstGrpAttr->stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-		bm_base_mod_jobs_init(VpssGrp, 2, &stVpssVbjobs[VpssGrp].ins, 1, 1, 0);
-	else {
-		base_mod_jobs_init(&stVpssVbjobs[VpssGrp].ins, 1, 1, 0);
-	}
+	else
+		base_mod_jobs_init(&stVpssVbjobs[VpssGrp].ins, 4, 1, 0);
 
 	vpssCtx[VpssGrp]->VpssGrp = VpssGrp;
 	vpssCtx[VpssGrp]->isCreated = CVI_TRUE;
@@ -2322,6 +2237,7 @@ s32 vpss_create_grp(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr)
 	_vpss_grp_raram_init(VpssGrp);
 	mutex_lock(&g_VpssLock);
 	s_VpssGrpUsed[VpssGrp] = CVI_TRUE;
+	if(is_bm_scene) is_bm_scene = CVI_FALSE;
 	mutex_unlock(&g_VpssLock);
 
 	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d) u32MaxW(%d) u32MaxH(%d) PixelFmt(%d) online_from_isp(%d)\n",
@@ -2345,10 +2261,7 @@ s32 vpss_destroy_grp(VPSS_GRP VpssGrp)
 	if (vpssCtx[VpssGrp]->isCreated) {
 		mutex_lock(&vpssCtx[VpssGrp]->lock);
 		vpssCtx[VpssGrp]->isCreated = CVI_FALSE;
-		if (vpssCtx[VpssGrp]->stGrpAttr.stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-			bm_base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].ins);
-		else
-			base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].ins);
+		base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].ins);
 		for (VpssChn = 0; VpssChn < VPSS_MAX_CHN_NUM; ++VpssChn) {
 			vpssCtx[VpssGrp]->stChnCfgs[VpssChn].enRotation = ROTATION_0;
 			vpssCtx[VpssGrp]->stChnCfgs[VpssChn].stLDCAttr.bEnable = CVI_FALSE;
@@ -2363,16 +2276,12 @@ s32 vpss_destroy_grp(VPSS_GRP VpssGrp)
 				mesh[VpssGrp][VpssChn].vaddr = 0;
 			}
 		}
-		if (vpssCtx[VpssGrp]->stGrpAttr.stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-			BM_FIFO_EXIT(&vpssCtx[VpssGrp]->jobq);
-		else
-			FIFO_EXIT(&vpssCtx[VpssGrp]->jobq);
+		FIFO_EXIT(&vpssCtx[VpssGrp]->jobq);
 		mutex_unlock(&vpssCtx[VpssGrp]->lock);
 		mutex_destroy(&vpssCtx[VpssGrp]->lock);
 	}
 
-	if(!is_bm_scene) // bm scene
-		kfree(vpssCtx[VpssGrp]->pJobBuffer);
+	kfree(vpssCtx[VpssGrp]->pJobBuffer);
 	kfree(vpssCtx[VpssGrp]);
 	vpssCtx[VpssGrp] = NULL;
 
@@ -2446,9 +2355,7 @@ s32 vpss_start_grp(VPSS_GRP VpssGrp)
 			return ret;
 		}
 	} else {
-		spin_lock(&vpss_hdl_ctx.hdl_lock);
-		vpss_hdl_ctx.GrpMask |= BIT(VpssGrp);
-		spin_unlock(&vpss_hdl_ctx.hdl_lock);
+		atomic_add(1, &vpss_hdl_ctx.active_cnt);
 	}
 	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d)\n", VpssGrp);
 
@@ -2470,9 +2377,8 @@ s32 vpss_stop_grp(VPSS_GRP VpssGrp)
 	if (!vpssCtx[VpssGrp]->isStarted)
 		return CVI_SUCCESS;
 
-	spin_lock(&vpss_hdl_ctx.hdl_lock);
-	vpss_hdl_ctx.GrpMask &= ~BIT(VpssGrp);
-	spin_unlock(&vpss_hdl_ctx.hdl_lock);
+	if (!vpssCtx[VpssGrp]->online_from_isp)
+		atomic_sub(1, &vpss_hdl_ctx.active_cnt);
 
 	mutex_lock(&vpssCtx[VpssGrp]->lock);
 	vpssCtx[VpssGrp]->isStarted = CVI_FALSE;
@@ -2906,8 +2812,6 @@ s32 vpss_enable_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 	mutex_lock(&vpssCtx[VpssGrp]->lock);
 	if (vpssCtx[VpssGrp]->online_from_isp)
 		base_mod_jobs_init(&stVpssVbjobs[VpssGrp].outs[VpssChn], 1, VPSS_ONLINE_JOB_NUM, chn_cfg->stChnAttr.u32Depth);
-	else if (vpssCtx[VpssGrp]->stGrpAttr.stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-		bm_base_mod_jobs_init(VpssGrp, 4, &stVpssVbjobs[VpssGrp].outs[VpssChn], 1, 1, chn_cfg->stChnAttr.u32Depth);
 	else
 		base_mod_jobs_init(&stVpssVbjobs[VpssGrp].outs[VpssChn], 1, 1, chn_cfg->stChnAttr.u32Depth);
 	chn_cfg->isEnabled = CVI_TRUE;
@@ -2951,10 +2855,7 @@ s32 vpss_disable_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 	pstChnStatus->u64PrevTime = 0;
 	pstChnStatus->u32FrameNum = 0;
 	pstChnStatus->u32RealFrameRate = 0;
-	if (vpssCtx[VpssGrp]->stGrpAttr.stFrameRate.s32SrcFrameRate == 0x7fff) // bm scene
-		bm_base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].outs[VpssChn]);
-	else
-		base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].outs[VpssChn]);
+	base_mod_jobs_exit(&stVpssVbjobs[VpssGrp].outs[VpssChn]);
 	mutex_unlock(&vpssCtx[VpssGrp]->lock);
 
 	CVI_TRACE_VPSS(CVI_DBG_INFO, "Grp(%d) Chn(%d)\n", VpssGrp, VpssChn);
@@ -3346,21 +3247,12 @@ s32 vpss_send_frame(VPSS_GRP VpssGrp, const VIDEO_FRAME_INFO_S *pstVideoFrame, s
 		}
 	}
 
-	if (pstVideoFrame->u32PoolId == EXT_POOL){
-		vpssCtx[VpssGrp]->hw_cfg.stGrpCfg.vpss_v_priority = true;
-		blk = vb_create_block_vpss(&vb_bm[VpssGrp][EXT_POOL_IN], pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
+	blk = vb_phys_addr2handle(pstVideoFrame->stVFrame.u64PhyAddr[0]);
+	if (blk == VB_INVALID_HANDLE) {
+		blk = vb_create_block(pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
 		if (blk == VB_INVALID_HANDLE) {
 			CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) no space for malloc.\n", VpssGrp);
 			return CVI_ERR_VPSS_NOMEM;
-		}
-	} else {
-		blk = vb_phys_addr2handle(pstVideoFrame->stVFrame.u64PhyAddr[0]);
-		if (blk == VB_INVALID_HANDLE) {
-			blk = vb_create_block(pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
-			if (blk == VB_INVALID_HANDLE) {
-				CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) no space for malloc.\n", VpssGrp);
-				return CVI_ERR_VPSS_NOMEM;
-			}
 		}
 	}
 
@@ -3427,20 +3319,12 @@ s32 vpss_send_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn
 
 	UNUSED(s32MilliSec);
 
-	if (pstVideoFrame->u32PoolId == EXT_POOL){
-		blk = vb_create_block_vpss(&vb_bm[VpssGrp][EXT_POOL_OUT], pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
+	blk = vb_phys_addr2handle(pstVideoFrame->stVFrame.u64PhyAddr[0]);
+	if (blk == VB_INVALID_HANDLE) {
+		blk = vb_create_block(pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
 		if (blk == VB_INVALID_HANDLE) {
 			CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) no space for malloc.\n", VpssGrp);
 			return CVI_ERR_VPSS_NOMEM;
-		}
-	} else {
-		blk = vb_phys_addr2handle(pstVideoFrame->stVFrame.u64PhyAddr[0]);
-		if (blk == VB_INVALID_HANDLE) {
-			blk = vb_create_block(pstVideoFrame->stVFrame.u64PhyAddr[0], NULL, VB_EXTERNAL_POOLID, CVI_TRUE);
-			if (blk == VB_INVALID_HANDLE) {
-				CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) no space for malloc.\n", VpssGrp);
-				return CVI_ERR_VPSS_NOMEM;
-			}
 		}
 	}
 
@@ -3540,117 +3424,6 @@ s32 vpss_get_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VIDEO_FRAME_INFO_S *p
 			, VpssGrp, VpssChn, pstFrameInfo->stVFrame.u32Width, pstFrameInfo->stVFrame.u32Height,
 			pstFrameInfo->stVFrame.u64PhyAddr[0]);
 	return CVI_SUCCESS;
-}
-
-s32 vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
-
-	VPSS_GRP VpssGrp = VPSS_INVALID_GRP;
-	s32 ret = CVI_SUCCESS, i = 0;
-
-	if(!is_bm_scene) is_bm_scene = true;
-
-	VpssGrp = vpss_get_available_grp();
-	if (VPSS_INVALID_GRP == VpssGrp) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) not ready.\n", VpssGrp);
-		return CVI_ERR_VPSS_NOTREADY;
-	}
-
-	ret = vpss_create_grp(VpssGrp, &vpss_cfg->grp_attr.stGrpAttr);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_reset_grp(VpssGrp);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_set_chn_attr(VpssGrp, 0, &vpss_cfg->chn_attr.stChnAttr);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_enable_chn(VpssGrp, 0);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_start_grp(VpssGrp);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_set_chn_scale_coef_level(VpssGrp, 0, vpss_cfg->chn_coef_level_cfg.enCoef);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	if(vpss_cfg->grp_csc_cfg.enable){
-		vpss_cfg->grp_csc_cfg.VpssGrp = VpssGrp;
-		ret = vpss_set_grp_csc(&vpss_cfg->grp_csc_cfg);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	if(vpss_cfg->chn_csc_cfg.enable){
-		vpss_cfg->chn_csc_cfg.VpssGrp = VpssGrp;
-		vpss_cfg->chn_csc_cfg.VpssChn = 0;
-		ret = vpss_set_chn_csc(&vpss_cfg->chn_csc_cfg);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	if(vpss_cfg->grp_crop_cfg.stCropInfo.bEnable){
-		ret = vpss_set_grp_crop(VpssGrp, &vpss_cfg->grp_crop_cfg.stCropInfo);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	if(vpss_cfg->chn_crop_cfg.stCropInfo.bEnable){
-		ret = vpss_set_chn_crop(VpssGrp, 0, &vpss_cfg->chn_crop_cfg.stCropInfo);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	if(vpss_cfg->chn_convert_cfg.stConvert.bEnable){
-		ret = vpss_set_chn_convert(VpssGrp, 0, &vpss_cfg->chn_convert_cfg.stConvert);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	if(vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[0].bEnable){
-		ret = vpss_set_chn_draw_rect(VpssGrp, 0, &vpss_cfg->chn_draw_rect_cfg.stDrawRect);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	ret = vpss_set_chn_align(VpssGrp, 0, 1);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	if(vpss_cfg->coverex_cfg.rgn_coverex_cfg.rgn_coverex_param[0].enable){
-		ret = vpss_set_rgn_coverex_cfg(VpssGrp, 0, &vpss_cfg->coverex_cfg.rgn_coverex_cfg);
-		if (ret != CVI_SUCCESS)
-			goto fail;
-	}
-
-	for(i = 0; i < RGN_MAX_LAYER_VPSS; i++)
-		if(vpss_cfg->rgn_cfg[i].num_of_rgn > 0){
-			ret = vpss_set_rgn_cfg(VpssGrp, 0, i, &vpss_cfg->rgn_cfg[i]);
-			if (ret != CVI_SUCCESS)
-				goto fail;
-		}
-
-	ret = vpss_send_chn_frame(VpssGrp, 0, &vpss_cfg->chn_frm_cfg.stVideoFrame, vpss_cfg->chn_frm_cfg.s32MilliSec);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_send_frame(VpssGrp, &vpss_cfg->snd_frm_cfg.stVideoFrame, vpss_cfg->snd_frm_cfg.s32MilliSec);
-	if (ret != CVI_SUCCESS)
-		goto fail;
-
-	ret = vpss_get_chn_frame(VpssGrp, 0, &vpss_cfg->chn_frm_cfg.stVideoFrame, vpss_cfg->chn_frm_cfg.s32MilliSec);
-
-fail:
-	vpss_disable_chn(VpssGrp, 0);
-	vpss_stop_grp(VpssGrp);
-	vpss_destroy_grp(VpssGrp);
-
-	return ret;
 }
 
 s32 vpss_release_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VIDEO_FRAME_INFO_S *pstVideoFrame)
@@ -4362,6 +4135,210 @@ EXIT:
 	return ret;
 }
 
+s32 vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
+	s32 ret = CVI_SUCCESS, i = 0, j = 0;
+	struct cvi_vpss_job *pstJob = kzalloc(sizeof(struct cvi_vpss_job), GFP_ATOMIC);
+	struct cvi_vpss_grp_cfg *pstGrpHwCfg = &pstJob->cfg.stGrpCfg;
+	struct cvi_vpss_chn_cfg *pstChnHwCfg = &pstJob->cfg.astChnCfg[0];
+	struct vpss_stitch_data pstData;
+
+	if(!is_bm_scene) is_bm_scene = CVI_TRUE;
+
+	init_waitqueue_head(&pstData.wait);
+	pstData.u8Flag = 0;
+
+	pstJob->grp_id = 0;
+	pstJob->is_online = CVI_FALSE;
+	pstJob->data = (void *)&pstData;
+	pstJob->pfnJobCB = vpss_wkup_frame_done_handle;
+	atomic_set(&pstJob->enJobState, CVI_JOB_INVALID);
+
+	pstJob->cfg.chn_num = 1;
+	pstJob->cfg.chn_enable[0] = CVI_TRUE;
+
+	if(vpss_cfg->grp_csc_cfg.enable){
+		for (i = 0; i < 3; i++) {
+			for (j = 0; j < 3; j++)
+				pstGrpHwCfg->csc_cfg.coef[i][j] = vpss_cfg->grp_csc_cfg.coef[i][j];
+			pstGrpHwCfg->csc_cfg.add[i] = vpss_cfg->grp_csc_cfg.add[i];
+			pstGrpHwCfg->csc_cfg.sub[i] = vpss_cfg->grp_csc_cfg.sub[i];
+		}
+		pstGrpHwCfg->upsample = vpss_cfg->grp_csc_cfg.is_copy_upsample ? CVI_FALSE : CVI_TRUE;
+	}
+
+	if(vpss_cfg->chn_csc_cfg.enable){
+		for (i = 0; i < 3; i++) {
+			for (j = 0; j < 3; j++)
+				pstChnHwCfg->csc_cfg.coef[i][j] = vpss_cfg->chn_csc_cfg.coef[i][j];
+
+			pstChnHwCfg->csc_cfg.add[i] = vpss_cfg->chn_csc_cfg.add[i];
+			pstChnHwCfg->csc_cfg.sub[i] = vpss_cfg->chn_csc_cfg.sub[i];
+		}
+	}
+	pstChnHwCfg->YRatio = YRATIO_SCALE;
+
+	if(vpss_cfg->grp_crop_cfg.stCropInfo.bEnable){
+		pstGrpHwCfg->crop.width = vpss_cfg->grp_crop_cfg.stCropInfo.stCropRect.u32Width;
+		pstGrpHwCfg->crop.height = vpss_cfg->grp_crop_cfg.stCropInfo.stCropRect.u32Height;
+		pstGrpHwCfg->crop.left = vpss_cfg->grp_crop_cfg.stCropInfo.stCropRect.s32X;
+		pstGrpHwCfg->crop.top = vpss_cfg->grp_crop_cfg.stCropInfo.stCropRect.s32Y;
+	} else {
+		pstGrpHwCfg->crop.left = 0;
+		pstGrpHwCfg->crop.top = 0;
+		pstGrpHwCfg->crop.width = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Width;
+		pstGrpHwCfg->crop.height = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Height;
+	}
+
+	if(vpss_cfg->chn_crop_cfg.stCropInfo.bEnable){
+		pstChnHwCfg->crop.left = vpss_cfg->chn_crop_cfg.stCropInfo.stCropRect.s32X;
+		pstChnHwCfg->crop.top = vpss_cfg->chn_crop_cfg.stCropInfo.stCropRect.s32Y;
+		pstChnHwCfg->crop.width = vpss_cfg->chn_crop_cfg.stCropInfo.stCropRect.u32Width;
+		pstChnHwCfg->crop.height = vpss_cfg->chn_crop_cfg.stCropInfo.stCropRect.u32Height;
+	} else {
+		pstChnHwCfg->crop.left = 0;
+		pstChnHwCfg->crop.top = 0;
+		pstChnHwCfg->crop.width = pstGrpHwCfg->crop.width;
+		pstChnHwCfg->crop.height = pstGrpHwCfg->crop.height;
+	}
+
+	if(vpss_cfg->chn_convert_cfg.stConvert.bEnable){
+		pstChnHwCfg->convert_to_cfg.enable = vpss_cfg->chn_convert_cfg.stConvert.bEnable;
+		pstChnHwCfg->convert_to_cfg.a_frac[0] = vpss_cfg->chn_convert_cfg.stConvert.u32aFactor[0];
+		pstChnHwCfg->convert_to_cfg.a_frac[1] = vpss_cfg->chn_convert_cfg.stConvert.u32aFactor[1];
+		pstChnHwCfg->convert_to_cfg.a_frac[2] = vpss_cfg->chn_convert_cfg.stConvert.u32aFactor[2];
+		pstChnHwCfg->convert_to_cfg.b_frac[0] = vpss_cfg->chn_convert_cfg.stConvert.u32bFactor[0];
+		pstChnHwCfg->convert_to_cfg.b_frac[1] = vpss_cfg->chn_convert_cfg.stConvert.u32bFactor[1];
+		pstChnHwCfg->convert_to_cfg.b_frac[2] = vpss_cfg->chn_convert_cfg.stConvert.u32bFactor[2];
+	}
+
+	if(vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[0].bEnable){
+		for (i = 0; i < VPSS_RECT_NUM; i++) {
+			RECT_S rect;
+			u16 u16Thick;
+
+			pstChnHwCfg->border_vpp_cfg[i].enable = vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].bEnable;
+			if (pstChnHwCfg->border_vpp_cfg[i].enable) {
+				pstChnHwCfg->border_vpp_cfg[i].bg_color[0] = (vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].u32BgColor >> 16) & 0xff;
+				pstChnHwCfg->border_vpp_cfg[i].bg_color[1] = (vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].u32BgColor >> 8) & 0xff;
+				pstChnHwCfg->border_vpp_cfg[i].bg_color[2] = vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].u32BgColor & 0xff;
+
+				rect = vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].stRect;
+				u16Thick = vpss_cfg->chn_draw_rect_cfg.stDrawRect.astRect[i].u16Thick;
+
+				pstChnHwCfg->border_vpp_cfg[i].outside.start_x = rect.s32X;
+				pstChnHwCfg->border_vpp_cfg[i].outside.start_y = rect.s32Y;
+				pstChnHwCfg->border_vpp_cfg[i].outside.end_x = rect.s32X + rect.u32Width;
+				pstChnHwCfg->border_vpp_cfg[i].outside.end_y = rect.s32Y + rect.u32Height;
+				pstChnHwCfg->border_vpp_cfg[i].inside.start_x = rect.s32X + u16Thick;
+				pstChnHwCfg->border_vpp_cfg[i].inside.start_y = rect.s32Y + u16Thick;
+				pstChnHwCfg->border_vpp_cfg[i].inside.end_x =
+					pstChnHwCfg->border_vpp_cfg[i].outside.end_x - u16Thick;
+				pstChnHwCfg->border_vpp_cfg[i].inside.end_y =
+					pstChnHwCfg->border_vpp_cfg[i].outside.end_y - u16Thick;
+			}
+		}
+	}
+
+	if(vpss_cfg->coverex_cfg.rgn_coverex_cfg.rgn_coverex_param[0].enable){
+		pstChnHwCfg->rgn_coverex_cfg = vpss_cfg->coverex_cfg.rgn_coverex_cfg;
+	}
+
+	for(i = 0; i < RGN_MAX_LAYER_VPSS; i++)
+		if(vpss_cfg->rgn_cfg[i].num_of_rgn > 0)
+			pstChnHwCfg->rgn_cfg[i] = vpss_cfg->rgn_cfg[i];
+
+	pstGrpHwCfg->src_size.width = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Width;
+	pstGrpHwCfg->src_size.height = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Height;
+	pstGrpHwCfg->pixelformat = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.enPixelFormat;
+	for (i = 0; i < NUM_OF_PLANES; ++i)
+		pstGrpHwCfg->addr[i] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[i];
+	if (vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.enPixelFormat == PIXEL_FORMAT_BGR_888_PLANAR) {
+		pstGrpHwCfg->addr[0] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[2];
+		pstGrpHwCfg->addr[2] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[0];
+	}
+	if (vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.enCompressMode == COMPRESS_MODE_FRAME){
+		pstGrpHwCfg->addr[3] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u64ExtPhyAddr;
+		pstGrpHwCfg->fbd_enable = true;
+	}
+	pstGrpHwCfg->bytesperline[0] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Stride[0];
+	pstGrpHwCfg->bytesperline[1] = vpss_cfg->snd_frm_cfg.stVideoFrame.stVFrame.u32Stride[1];
+	pstGrpHwCfg->vpss_v_priority = true;
+
+	pstChnHwCfg->pixelformat = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.enPixelFormat;
+	pstChnHwCfg->bytesperline[0] = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u32Stride[0];
+	pstChnHwCfg->bytesperline[1] = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u32Stride[1];
+	for (i = 0; i < NUM_OF_PLANES; ++i)
+		pstChnHwCfg->addr[i] = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[i];
+	if (vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.enPixelFormat == PIXEL_FORMAT_BGR_888_PLANAR) {
+		pstChnHwCfg->addr[0] = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[2];
+		pstChnHwCfg->addr[2] = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u64PhyAddr[0];
+	}
+	pstChnHwCfg->src_size.width = pstGrpHwCfg->crop.width;
+	pstChnHwCfg->src_size.height = pstGrpHwCfg->crop.height;
+	pstChnHwCfg->dst_size.width = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u32Width;
+	pstChnHwCfg->dst_size.height = vpss_cfg->chn_frm_cfg.stVideoFrame.stVFrame.u32Height;
+
+	if (vpss_cfg->chn_attr.stChnAttr.bFlip && vpss_cfg->chn_attr.stChnAttr.bMirror)
+		pstChnHwCfg->flip = CVI_SC_FLIP_HVFLIP;
+	else if (vpss_cfg->chn_attr.stChnAttr.bFlip)
+		pstChnHwCfg->flip = CVI_SC_FLIP_VFLIP;
+	else if (vpss_cfg->chn_attr.stChnAttr.bMirror)
+		pstChnHwCfg->flip = CVI_SC_FLIP_HFLIP;
+	else
+		pstChnHwCfg->flip = CVI_SC_FLIP_NO;
+
+	pstChnHwCfg->dst_rect.left = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.stVideoRect.s32X;
+	pstChnHwCfg->dst_rect.top = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.stVideoRect.s32Y;
+	pstChnHwCfg->dst_rect.width = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.stVideoRect.u32Width;
+	pstChnHwCfg->dst_rect.height = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.stVideoRect.u32Height;
+
+	pstChnHwCfg->border_cfg.enable = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.bEnableBgColor
+			&& ((pstChnHwCfg->dst_rect.width != pstChnHwCfg->dst_size.width)
+			 || (pstChnHwCfg->dst_rect.height != pstChnHwCfg->dst_size.height));
+	pstChnHwCfg->border_cfg.offset_x = pstChnHwCfg->dst_rect.left;
+	pstChnHwCfg->border_cfg.offset_y = pstChnHwCfg->dst_rect.top;
+	pstChnHwCfg->border_cfg.bg_color[2] = vpss_cfg->chn_attr.stChnAttr.stAspectRatio.u32BgColor & 0xff;
+	pstChnHwCfg->border_cfg.bg_color[1] = (vpss_cfg->chn_attr.stChnAttr.stAspectRatio.u32BgColor >> 8) & 0xff;
+	pstChnHwCfg->border_cfg.bg_color[0] = (vpss_cfg->chn_attr.stChnAttr.stAspectRatio.u32BgColor >> 16) & 0xff;
+
+	switch (vpss_cfg->chn_coef_level_cfg.enCoef) {
+	default:
+	case VPSS_SCALE_COEF_BILINEAR:
+		pstChnHwCfg->sc_coef = CVI_SC_SCALING_COEF_BILINEAR;
+		break;
+	case VPSS_SCALE_COEF_NEAREST:
+		pstChnHwCfg->sc_coef = CVI_SC_SCALING_COEF_NEAREST;
+		break;
+	case VPSS_SCALE_COEF_BICUBIC_OPENCV:
+		pstChnHwCfg->sc_coef = CVI_SC_SCALING_COEF_BICUBIC_OPENCV;
+		break;
+	}
+
+	if (down_interruptible(&vpss_core_sem)){
+		ret = CVI_FAILURE;
+		goto fail;
+	}
+
+	cvi_vpss_hal_push_job(pstJob);
+	cvi_vpss_hal_try_schedule();
+
+	wait_event_timeout(pstData.wait, pstData.u8Flag, msecs_to_jiffies(vpss_cfg->chn_frm_cfg.s32MilliSec));
+	if (pstData.u8Flag){
+		ret = CVI_SUCCESS;
+		pstData.u8Flag = 0;
+	} else
+		ret = CVI_FAILURE;
+
+	if ((atomic_read(&pstJob->enJobState) == CVI_JOB_WAIT) ||
+		(atomic_read(&pstJob->enJobState) == CVI_JOB_WORKING))
+		cvi_vpss_hal_remove_job(pstJob);
+fail:
+	up(&vpss_core_sem);
+	kfree(pstJob);
+
+	return ret;
+}
+
 s32 vpss_set_vivpss_mode(const VI_VPSS_MODE_S *pstVIVPSSMode)
 {
 	memcpy(&stVIVPSSMode, pstVIVPSSMode, sizeof(stVIVPSSMode));
@@ -4433,15 +4410,14 @@ void vpss_init(void)
 
 	base_register_recv_cb(CVI_ID_VPSS, vpss_grp_qbuf);
 
-
 	mutex_init(&g_VpssLock);
 	init_waitqueue_head(&vpss_hdl_ctx.wait);
 	spin_lock_init(&vpss_hdl_ctx.hdl_lock);
-	vpss_hdl_ctx.GrpMask = 0;
+	atomic_set(&vpss_hdl_ctx.active_cnt, 0);
 	vpss_hdl_ctx.events = 0;
 
 	// Same as sched_set_fifo in linux 5.x
-	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
+	tsk.sched_priority = MAX_USER_RT_PRIO - 4;
 
 	vpss_hdl_ctx.thread = kthread_run(vpss_event_handler, &vpss_hdl_ctx,
 		"cvitask_vpss_hdl");
@@ -4453,11 +4429,13 @@ void vpss_init(void)
 	if (ret)
 		CVI_TRACE_VPSS(CVI_DBG_WARN, "vpss thread priority update failed: %d\n", ret);
 
-	vpss_workqueue = alloc_workqueue("vpss_workqueue", WQ_HIGHPRI, 0);
+	vpss_workqueue = alloc_workqueue("vpss_workqueue", WQ_HIGHPRI | WQ_UNBOUND |
+						__WQ_LEGACY | WQ_MEM_RECLAIM, 8);
 	//workqueue = create_workqueue("vpss_workqueue");
 	// workqueue = create_singlethread_workqueue("vpss_workqueue");
 	if (!vpss_workqueue)
 		CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss create_workqueue failed.\n");
+	sema_init(&vpss_core_sem, VPSS_WORK_MAX);
 }
 
 void vpss_deinit(void)
@@ -4497,3 +4475,4 @@ void vpss_release_grp(void)
 		}
 	}
 }
+

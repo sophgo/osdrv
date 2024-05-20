@@ -197,3 +197,17 @@ void extern_axi_to_36bit(u32 high_bit)
 	_reg_write(vo_sys_reg_base + VO_SYS_VO_AXI_ADDR_EXT1, axi_ext1 | ((high_bit << 16) | (high_bit << 20)));
 }
 EXPORT_SYMBOL_GPL(extern_axi_to_36bit);
+
+/**
+ * reset disp0 and disp1 - ip and apb reset.
+ *
+ */
+void reset_disp(void)
+{
+	_reg_write_mask(vo_sys_reg_base + VO_SYS_VO_IP_RESETS, 0xC0, 0xC0);
+	_reg_write_mask(vo_sys_reg_base + VO_SYS_VO_APB_RESETS, 0xC0, 0xC0);
+	udelay(10);
+	_reg_write_mask(vo_sys_reg_base + VO_SYS_VO_IP_RESETS, 0xC0, 0x00);
+	_reg_write_mask(vo_sys_reg_base + VO_SYS_VO_APB_RESETS, 0xC0, 0x00);
+}
+EXPORT_SYMBOL_GPL(reset_disp);
