@@ -6,7 +6,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
-
+#include <linux/compat.h>
 #include <linux/sys_uapi.h>
 #include <linux/cvi_comm_sys.h>
 #include <linux/cvi_defines.h>
@@ -187,16 +187,6 @@ static int cvi_sys_close(struct inode *inode, struct file *filp)
 	filp->private_data = NULL;
 	return 0;
 }
-
-#ifdef CONFIG_COMPAT
-static long compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (!file->f_op->unlocked_ioctl)
-		return -ENOIOCTLCMD;
-
-	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-}
-#endif
 
 static const struct file_operations cvi_sys_fops = {
 	.owner = THIS_MODULE,

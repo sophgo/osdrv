@@ -1,6 +1,6 @@
 #include <vi_core.h>
 #include <base_cb.h>
-
+#include <linux/compat.h>
 #define CVI_VI_IRQ_NAME            "isp"
 #define CVI_VI_CLASS_NAME          "soph-vi"
 #define CVI_VI_DEV_NAME            "soph-vi"
@@ -20,15 +20,7 @@ static long vi_core_ioctl(struct file *filp, u_int cmd, u_long arg)
 	return vi_ioctl(filp, cmd, arg);
 }
 
-#ifdef CONFIG_COMPAT
-static long compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (!file->f_op->unlocked_ioctl)
-		return -ENOIOCTLCMD;
 
-	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-}
-#endif
 
 static int vi_core_open(struct inode *inode, struct file *filp)
 {

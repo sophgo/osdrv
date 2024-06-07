@@ -16,7 +16,7 @@
 #include <linux/interrupt.h>
 #include <linux/reboot.h>
 #include <linux/cdev.h>
-
+#include <linux/compat.h>
 #include "linux/cvi_mipi_tx.h"
 #include "proc/cvi_vip_mipi_tx_proc.h"
 // #include <reg_vip_sys.h>

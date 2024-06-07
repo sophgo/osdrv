@@ -8,6 +8,7 @@
 #include <linux/delay.h>
 #include <linux/iommu.h>
 #include <linux/irq.h>
+#include <linux/compat.h>
 #include <linux/reset.h>
 #include <generated/compile.h>
 #include <linux/io.h>

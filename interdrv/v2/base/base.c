@@ -10,7 +10,7 @@
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-
+#include <linux/compat.h>
 #include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/version.h>
@@ -189,15 +189,6 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	return ret;
 }
 
-#ifdef CONFIG_COMPAT
-static long compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (!file->f_op->unlocked_ioctl)
-		return -ENOIOCTLCMD;
-
-	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-}
-#endif
 
 static const struct file_operations base_fops = {
 	.owner = THIS_MODULE,
