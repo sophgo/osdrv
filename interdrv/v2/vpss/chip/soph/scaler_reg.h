@@ -1,5 +1,5 @@
-#ifndef _CVI_SCL_REG_H_
-#define _CVI_SCL_REG_H_
+#ifndef _SCL_REG_H_
+#define _SCL_REG_H_
 
 
 //#define REG_VPSS_V_BASE 0x68080000
@@ -257,4 +257,4 @@
 #define REG_SCL_MAP_CONV_ENDIAN(x) (REG_SCL_FBD_BASE(x) + 0x30)
 #define REG_SCL_MAP_CONV_BIT_DEPTH(x) (REG_SCL_FBD_BASE(x) + 0x34)
 
-#endif  // _CVI_SCL_REG_H_
+#endif  // _SCL_REG_H_

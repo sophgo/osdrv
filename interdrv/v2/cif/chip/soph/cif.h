@@ -3,12 +3,12 @@
 
 #include <linux/miscdevice.h>
 #include "drv/cif_drv.h"
-#include "linux/cif_uapi.h"
+#include "linux/comm_cif.h"
 
 #define CIF_MAX_CSI_NUM		8
-#define MAX_PAD_NUM			28
+#define MAX_PAD_NUM		28
 
-struct cvi_csi_status {
+struct csi_status {
 	unsigned int			errcnt_ecc;
 	unsigned int			errcnt_crc;
 	unsigned int			errcnt_hdr;
@@ -16,11 +16,11 @@ struct cvi_csi_status {
 	unsigned int			fifo_full;
 };
 
-struct cvi_lvds_status {
+struct lvds_status {
 	unsigned int			fifo_full;
 };
 
-struct cvi_link {
+struct link {
 	struct cif_ctx			cif_ctx;
 	int				irq_num;
 	struct reset_control		*phy_reset;
@@ -35,35 +35,35 @@ struct cvi_link {
 	int				snsr_rst_pin;
 	enum of_gpio_flags		snsr_rst_pol;
 	union {
-		struct cvi_csi_status	sts_csi;
-		struct cvi_lvds_status	sts_lvds;
+		struct csi_status	sts_csi;
+		struct lvds_status	sts_lvds;
 	};
 	struct device			*dev;
 	enum rx_mac_clk_e		mac_clk;
 	enum ttl_bt_fmt_out		bt_fmt_out;
 };
 
-struct cvi_cam_clk {
+struct cam_clk {
 	int				is_on;
 	struct clk			*clk_o;
 };
 
-struct cvi_cif_dev {
+struct cif_dev {
 	struct miscdevice	miscdev;
 	spinlock_t		lock;
 	struct mutex		mutex;
-	struct cvi_link		link[MAX_LINK_NUM];
-	struct cvi_cam_clk	clk_cam0;
-	struct cvi_cam_clk	clk_cam1;
-	struct cvi_cam_clk	clk_cam2;
-	struct cvi_cam_clk	clk_cam3;
-	struct cvi_cam_clk	clk_cam4;
-	struct cvi_cam_clk	clk_cam5;
-	struct cvi_cam_clk	clk_cam6;
-	struct cvi_cam_clk	vip_sys2;
-	struct cvi_cam_clk	clk_mipimpll; /* mipipll */
-	struct cvi_cam_clk	clk_disppll; /* disppll */
-	struct cvi_cam_clk	clk_fpll; /* fpll */
+	struct link		link[MAX_LINK_NUM];
+	struct cam_clk		clk_cam0;
+	struct cam_clk		clk_cam1;
+	struct cam_clk		clk_cam2;
+	struct cam_clk		clk_cam3;
+	struct cam_clk		clk_cam4;
+	struct cam_clk		clk_cam5;
+	struct cam_clk		clk_cam6;
+	struct cam_clk		vip_sys2;
+	struct cam_clk		clk_mipimpll; /* mipipll */
+	struct cam_clk		clk_disppll; /* disppll */
+	struct cam_clk		clk_fpll; /* fpll */
 	unsigned int		max_mac_clk;
 	void			*pad_ctrl;
 };

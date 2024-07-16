@@ -54,8 +54,8 @@ void fc_spd_source_device_info(hdmi_tx_dev_t *dev, u8 code)
 
 int fc_spd_config(hdmi_tx_dev_t *dev, fc_spd_info_t *spd_data)
 {
-	const unsigned short pSize = 8;
-	const unsigned short vSize = 16;
+	const unsigned short psize = 8;
+	const unsigned short vsize = 16;
 
 	if(spd_data == NULL){
 		pr_err("Improper argument: spd_data");
@@ -64,30 +64,30 @@ int fc_spd_config(hdmi_tx_dev_t *dev, fc_spd_info_t *spd_data)
 
 	fc_packets_auto_send(dev, 0, SPD_TX);	/* prevent sending half the info. */
 
-	if (spd_data->vName == 0) {
+	if (spd_data->vname == 0) {
 		pr_err("invalid parameter");
 		return FALSE;
 	}
-	if (spd_data->vLength > vSize) {
-		spd_data->vLength = vSize;
+	if (spd_data->vlength > vsize) {
+		spd_data->vlength = vsize;
 		pr_err("vendor name truncated");
 	}
-	if (spd_data->pName == 0) {
+	if (spd_data->pname == 0) {
 		pr_err("invalid parameter");
 		return FALSE;
 	}
-	if (spd_data->pLength > pSize) {
-		spd_data->pLength = pSize;
+	if (spd_data->plength > psize) {
+		spd_data->plength = psize;
 		pr_err("product name truncated");
 	}
 
-	fc_spd_vendor_name(dev, spd_data->vName, spd_data->vLength);
-	fc_spd_product_name(dev, spd_data->pName, spd_data->pLength);
+	fc_spd_vendor_name(dev, spd_data->vname, spd_data->vlength);
+	fc_spd_product_name(dev, spd_data->pname, spd_data->plength);
 
 	fc_spd_source_device_info(dev, spd_data->code);
 
-	if (spd_data->autoSend) {
-		fc_packets_auto_send(dev, spd_data->autoSend, SPD_TX);
+	if (spd_data->auto_send) {
+		fc_packets_auto_send(dev, spd_data->auto_send, SPD_TX);
 	} else {
 		fc_packets_manual_send(dev, SPD_TX);
 	}
@@ -137,7 +137,7 @@ void fc_video_hactive(hdmi_tx_dev_t *dev, u16 value)
 
 	dev_write((FC_INHACTIV0), (u8) (value));
 	dev_write_mask(FC_INHACTIV1, FC_INHACTIV1_H_IN_ACTIV_MASK |
-									  FC_INHACTIV1_H_IN_ACTIV_12_MASK, (u8)(value >> 8));
+					FC_INHACTIV1_H_IN_ACTIV_12_MASK, (u8)(value >> 8));
 }
 
 void fc_video_hblank(hdmi_tx_dev_t *dev, u16 value)
@@ -145,7 +145,7 @@ void fc_video_hblank(hdmi_tx_dev_t *dev, u16 value)
 	/* 10-bit width */
 	dev_write((FC_INHBLANK0), (u8) (value));
 	dev_write_mask(FC_INHBLANK1, FC_INHBLANK1_H_IN_BLANK_MASK |
-									  FC_INHBLANK1_H_IN_BLANK_12_MASK, (u8)(value >> 8));
+					FC_INHBLANK1_H_IN_BLANK_12_MASK, (u8)(value >> 8));
 }
 
 void fc_video_vactive(hdmi_tx_dev_t *dev, u16 value)
@@ -153,7 +153,7 @@ void fc_video_vactive(hdmi_tx_dev_t *dev, u16 value)
 	/* 11-bit width */
 	dev_write((FC_INVACTIV0), (u8) (value));
 	dev_write_mask(FC_INVACTIV1, FC_INVACTIV1_V_IN_ACTIV_MASK |
-									  FC_INVACTIV1_V_IN_ACTIV_12_11_MASK, (u8)(value >> 8));
+					FC_INVACTIV1_V_IN_ACTIV_12_11_MASK, (u8)(value >> 8));
 }
 
 void fc_video_vblank(hdmi_tx_dev_t *dev, u16 value)
@@ -167,7 +167,7 @@ void fc_video_hsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
 	/* 11-bit width */
 	dev_write((FC_HSYNCINDELAY0), (u8) (value));
 	dev_write_mask(FC_HSYNCINDELAY1, FC_HSYNCINDELAY1_H_IN_DELAY_MASK |
-										  FC_HSYNCINDELAY1_H_IN_DELAY_12_MASK, (u8)(value >> 8));
+					FC_HSYNCINDELAY1_H_IN_DELAY_12_MASK, (u8)(value >> 8));
 }
 
 void fc_video_hsync_pulse_width(hdmi_tx_dev_t *dev, u16 value)
@@ -229,62 +229,63 @@ void fc_video_pixel_repetition_input(hdmi_tx_dev_t *dev, u8 value)
 	dev_write_mask(FC_PRCONF, FC_PRCONF_INCOMING_PR_FACTOR_MASK, value);
 }
 
-int fc_video_config(hdmi_tx_dev_t *dev, videoParams_t *video)
+int fc_video_config(hdmi_tx_dev_t *dev, video_params_t *video)
 {
-	const dtd_t *dtd = &video->mDtd;
+	const dtd_t *dtd = &video->mdtd;
 	u16 i = 0;
 
 	if((dev == NULL) || (video == NULL)){
 		pr_err("Invalid video arguments");
-		return CVI_ERR_HDMI_VIDEO_ARGS_INVALID;
+		return HDMI_ERR_VIDEO_ARGS_INVALID;
 	}
 
-	dtd = &video->mDtd;
+	dtd = &video->mdtd;
 
-	fc_video_vsync_polarity(dev, dtd->mVSyncPolarity);
-	fc_video_hsync_polarity(dev, dtd->mHSyncPolarity);
+	fc_video_vsync_polarity(dev, dtd->m_vsync_polarity);
+	fc_video_hsync_polarity(dev, dtd->m_hsync_polarity);
 	fc_video_data_enable_polarity(dev, dev->snps_hdmi_ctrl.data_enable_polarity);
-	fc_video_dvi_or_hdmi(dev, video->mHdmi);
+	fc_video_dvi_or_hdmi(dev, video->mhdmi);
 
-	if (video->mHdmiVideoFormat == HDMI_3D_FORMAT) {
-		if (video->m3dStructure == FRAME_PACKING_3D) {/* 3d data frame packing is transmitted as a progressive format */
+	if (video->mhdmi_video_format == HDMI_3D_FORMAT) {
+		if (video->m3d_structure == FRAME_PACKING_3D) {
+			/* 3d data frame packing is transmitted as a progressive format */
 			fc_video_vblank_osc(dev, 0);
 			fc_video_interlaced(dev, 0);
 
-			if (dtd->mInterlaced) {
-				fc_video_vactive(dev, (dtd->mVActive << 2) + 3 * dtd->mVBlanking + 2);
+			if (dtd->m_interlaced) {
+				fc_video_vactive(dev, (dtd->m_vactive << 2) + 3 * dtd->m_vblanking + 2);
 			}
 			else {
-				fc_video_vactive(dev, (dtd->mVActive << 1) + dtd->mVBlanking);
+				fc_video_vactive(dev, (dtd->m_vactive << 1) + dtd->m_vblanking);
 			}
 		}
 		else {
-			fc_video_vblank_osc(dev, dtd->mInterlaced);
-			fc_video_interlaced(dev, dtd->mInterlaced);
-			fc_video_vactive(dev, dtd->mVActive);
+			fc_video_vblank_osc(dev, dtd->m_interlaced);
+			fc_video_interlaced(dev, dtd->m_interlaced);
+			fc_video_vactive(dev, dtd->m_vactive);
 		}
 	}
 	else {
-		fc_video_vblank_osc(dev, dtd->mInterlaced);
-		fc_video_interlaced(dev, dtd->mInterlaced);
-		fc_video_vactive(dev, dtd->mVActive);
+		fc_video_vblank_osc(dev, dtd->m_interlaced);
+		fc_video_interlaced(dev, dtd->m_interlaced);
+		fc_video_vactive(dev, dtd->m_vactive);
 	}
 
-	if(video->mEncodingOut == YCC420){
-		fc_video_hactive(dev, dtd->mHActive/2);
-		fc_video_hblank(dev, dtd->mHBlanking/2);
-		fc_video_hsync_pulse_width(dev, dtd->mHSyncPulseWidth/2);
-		fc_video_hsync_edge_delay(dev, dtd->mHSyncOffset/2);
+	if(video->mencodingout == YCC420){
+		fc_video_hactive(dev, dtd->m_hactive / 2);
+		fc_video_hblank(dev, dtd->m_hblanking  /2);
+		fc_video_hsync_pulse_width(dev, dtd->m_hsync_pulse_width / 2);
+		fc_video_hsync_edge_delay(dev, dtd->m_hsync_offset / 2);
 	} else {
-		fc_video_hactive(dev, dtd->mHActive);
-		fc_video_hblank(dev, dtd->mHBlanking);
-		fc_video_hsync_pulse_width(dev, dtd->mHSyncPulseWidth);
-		fc_video_hsync_edge_delay(dev, dtd->mHSyncOffset);
+		fc_video_hactive(dev, dtd->m_hactive);
+		fc_video_hblank(dev, dtd->m_hblanking);
+		fc_video_hsync_pulse_width(dev, dtd->m_hsync_pulse_width);
+		fc_video_hsync_edge_delay(dev, dtd->m_hsync_offset);
 	}
 
-	fc_video_vblank(dev, dtd->mVBlanking);
-	fc_video_vsync_edge_delay(dev, dtd->mVSyncOffset);
-	fc_video_vsync_pulse_width(dev, dtd->mVSyncPulseWidth);
+	fc_video_vblank(dev, dtd->m_vblanking);
+	fc_video_vsync_edge_delay(dev, dtd->m_vsync_offset);
+	fc_video_vsync_pulse_width(dev, dtd->m_vsync_pulse_width);
 	fc_video_control_period_min_duration(dev, 12);
 	fc_video_extended_control_period_min_duration(dev, 32);
 
@@ -359,9 +360,9 @@ void fc_isrc_valid(hdmi_tx_dev_t *dev, u8 validity)
 	dev_write_mask(FC_ISCR1_0, FC_ISCR1_0_ISRC_VALID_MASK, (validity ? 1 : 0));
 }
 
-void fc_isrc_cont(hdmi_tx_dev_t *dev, u8 isContinued)
+void fc_isrc_cont(hdmi_tx_dev_t *dev, u8 is_continued)
 {
-	dev_write_mask(FC_ISCR1_0, FC_ISCR1_0_ISRC_CONT_MASK, (isContinued ? 1 : 0));
+	dev_write_mask(FC_ISCR1_0, FC_ISCR1_0_ISRC_CONT_MASK, (is_continued ? 1 : 0));
 }
 
 void fc_isrc_isrc1_codes(hdmi_tx_dev_t *dev, u8 * codes, u8 length)
@@ -457,11 +458,11 @@ void fc_gamut_config(hdmi_tx_dev_t *dev)
 	fc_gamut_packet_line_spacing(dev, 0x1);
 }
 
-void fc_gamut_packet_config(hdmi_tx_dev_t *dev, const u8 * gbdContent, u8 length)
+void fc_gamut_packet_config(hdmi_tx_dev_t *dev, const u8 * gbd_content, u8 length)
 {
 	fc_gamut_enable_tx(dev, 1);
 	fc_gamut_affected_seq_no(dev, (fc_gamut_current_seq_no(dev) + 1) % 16); /* sequential */
-	fc_gamut_content(dev, gbdContent, length);
+	fc_gamut_content(dev, gbd_content, length);
 	fc_gamut_update_packet(dev); /* set next_field to 1 */
 }
 
@@ -502,9 +503,9 @@ void fc_scan_info(hdmi_tx_dev_t *dev, u8 left)
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_SCAN_INFORMATION_MASK, left);
 }
 
-void fc_colorimetry(hdmi_tx_dev_t *dev, unsigned cscITU)
+void fc_colorimetry(hdmi_tx_dev_t *dev, unsigned csc_itu)
 {
-	dev_write_mask(FC_AVICONF1, FC_AVICONF1_COLORIMETRY_MASK, cscITU);
+	dev_write_mask(FC_AVICONF1, FC_AVICONF1_COLORIMETRY_MASK, csc_itu);
 }
 
 void fc_pic_aspect_ratio(hdmi_tx_dev_t *dev, u8 ar)
@@ -527,9 +528,9 @@ void fc_is_it_content(hdmi_tx_dev_t *dev, u8 it)
 	dev_write_mask(FC_AVICONF2, FC_AVICONF2_IT_CONTENT_MASK, (it ? 1 : 0));
 }
 
-void fc_extended_colorimetry(hdmi_tx_dev_t *dev, u8 extColor)
+void fc_extended_colorimetry(hdmi_tx_dev_t *dev, u8 ext_color)
 {
-	dev_write_mask(FC_AVICONF2, FC_AVICONF2_EXTENDED_COLORIMETRY_MASK, extColor);
+	dev_write_mask(FC_AVICONF2, FC_AVICONF2_EXTENDED_COLORIMETRY_MASK, ext_color);
 	dev_write_mask(FC_AVICONF1, FC_AVICONF1_COLORIMETRY_MASK, 0x3);
 }
 
@@ -553,12 +554,12 @@ void fc_horizontal_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_BAR_INFORMATION_MASK & 0x8, (validity ? 1 : 0));
 }
 
-void fc_horizontal_bars(hdmi_tx_dev_t *dev, u16 endTop, u16 startBottom)
+void fc_horizontal_bars(hdmi_tx_dev_t *dev, u16 end_top, u16 start_bottom)
 {
-	dev_write(FC_AVIETB0, (u8) (endTop));
-	dev_write(FC_AVIETB1, (u8) (endTop >> 8));
-	dev_write(FC_AVISBB0, (u8) (startBottom));
-	dev_write(FC_AVISBB1, (u8) (startBottom >> 8));
+	dev_write(FC_AVIETB0, (u8) (end_top));
+	dev_write(FC_AVIETB1, (u8) (end_top >> 8));
+	dev_write(FC_AVISBB0, (u8) (start_bottom));
+	dev_write(FC_AVISBB1, (u8) (start_bottom >> 8));
 }
 
 void fc_vertical_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
@@ -566,12 +567,12 @@ void fc_vertical_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_BAR_INFORMATION_MASK & 0x4, (validity ? 1 : 0));
 }
 
-void fc_vertical_bars(hdmi_tx_dev_t *dev, u16 endLeft, u16 startRight)
+void fc_vertical_bars(hdmi_tx_dev_t *dev, u16 end_left, u16 start_right)
 {
-	dev_write(FC_AVIELB0, (u8) (endLeft));
-	dev_write(FC_AVIELB1, (u8) (endLeft >> 8));
-	dev_write(FC_AVISRB0, (u8) (startRight));
-	dev_write(FC_AVISRB1, (u8) (startRight >> 8));
+	dev_write(FC_AVIELB0, (u8) (end_left));
+	dev_write(FC_AVIELB1, (u8) (end_left >> 8));
+	dev_write(FC_AVISRB0, (u8) (start_right));
+	dev_write(FC_AVISRB1, (u8) (start_right >> 8));
 }
 
 void fc_out_pixel_repetition(hdmi_tx_dev_t *dev, u8 pr)
@@ -584,27 +585,27 @@ u32 fc_get_info_frame_satus(hdmi_tx_dev_t *dev)
 	return dev_read(FC_AVICONF0);
 }
 
-void fc_avi_config(hdmi_tx_dev_t *dev, videoParams_t *videoParams)
+void fc_avi_config(hdmi_tx_dev_t *dev, video_params_t *video_params)
 {
 	u16 endTop = 0;
 	u16 startBottom = 0;
 	u16 endLeft = 0;
 	u16 startRight = 0;
-	dtd_t *dtd = &videoParams->mDtd;
+	dtd_t *dtd = &video_params->mdtd;
 
-	if (videoParams->mEncodingOut == RGB) {
+	if (video_params->mencodingout == RGB) {
 		pr_debug("%s:rgb", __func__);
 		fc_rgb_ycc(dev, 0);
 	}
-	else if (videoParams->mEncodingOut == YCC422) {
+	else if (video_params->mencodingout == YCC422) {
 		pr_debug("%s:ycc422", __func__);
 		fc_rgb_ycc(dev, 1);
 	}
-	else if (videoParams->mEncodingOut == YCC444) {
+	else if (video_params->mencodingout == YCC444) {
 		pr_debug("%s:ycc444", __func__);
 		fc_rgb_ycc(dev, 2);
 	}
-	else if (videoParams->mEncodingOut == YCC420) {
+	else if (video_params->mencodingout == YCC420) {
 		pr_debug("%s:ycc420", __func__);
 		fc_rgb_ycc(dev, 3);
 	}
@@ -614,10 +615,10 @@ void fc_avi_config(hdmi_tx_dev_t *dev, videoParams_t *videoParams)
 	pr_debug( "%s:infoframe status %x", __func__,
 			fc_get_info_frame_satus(dev));
 
-	fc_scan_info(dev, videoParams->mScanInfo);
+	fc_scan_info(dev, video_params->mscaninfo);
 
-	if (dtd->mHImageSize != 0 || dtd->mVImageSize != 0) {
-		u8 pic = (dtd->mHImageSize * 10) % dtd->mVImageSize;
+	if (dtd->m_himage_size != 0 || dtd->m_vimage_size != 0) {
+		u8 pic = (dtd->m_himage_size * 10) % dtd->m_vimage_size;
 		// 16:9 or 4:3
 		fc_pic_aspect_ratio(dev, (pic > 5) ? 2 : 1);
 	}
@@ -626,16 +627,16 @@ void fc_avi_config(hdmi_tx_dev_t *dev, videoParams_t *videoParams)
 		fc_pic_aspect_ratio(dev, 0);
 	}
 
-	fc_is_it_content(dev, videoParams->mItContent);
+	fc_is_it_content(dev, video_params->mitcontent);
 
-	fc_quantization_range(dev, videoParams->mRgbQuantizationRange);
-	fc_non_uniform_pic_scaling(dev, videoParams->mNonUniformScaling);
-	if (dtd->mCode != (u8) (-1)) {
-		if (videoParams->mHdmi20 == 1) {
-			fc_video_code(dev, dtd->mCode);
+	fc_quantization_range(dev, video_params->mrgb_quantization_range);
+	fc_non_uniform_pic_scaling(dev, video_params->mnon_uniform_scaling);
+	if (dtd->m_code != (u8) (-1)) {
+		if (video_params->mhdmi20 == 1) {
+			fc_video_code(dev, dtd->m_code);
 		} else {
-			if (dtd->mCode < 110) {
-				fc_video_code(dev, dtd->mCode);
+			if (dtd->m_code < 110) {
+				fc_video_code(dev, dtd->m_code);
 			} else {
 				fc_video_code(dev, 0);
 			}
@@ -643,47 +644,47 @@ void fc_avi_config(hdmi_tx_dev_t *dev, videoParams_t *videoParams)
 	} else {
 		fc_video_code(dev, 0);
 	}
-	if (videoParams->mColorimetry == EXTENDED_COLORIMETRY) { /* ext colorimetry valid */
-		if (videoParams->mExtColorimetry != (u8) (-1)) {
-			fc_extended_colorimetry(dev, videoParams->mExtColorimetry);
-			fc_colorimetry(dev, videoParams->mColorimetry);	/* EXT-3 */
+	if (video_params->mcolorimetry == EXTENDED_COLORIMETRY) { /* ext colorimetry valid */
+		if (video_params->mext_colorimetry != (u8) (-1)) {
+			fc_extended_colorimetry(dev, video_params->mext_colorimetry);
+			fc_colorimetry(dev, video_params->mcolorimetry);	/* EXT-3 */
 		} else {
 			fc_colorimetry(dev, 0);	/* No Data */
 		}
 	} else {
-		fc_colorimetry(dev, videoParams->mColorimetry);	/* NODATA-0/ 601-1/ 709-2/ EXT-3 */
+		fc_colorimetry(dev, video_params->mcolorimetry);	/* NODATA-0/ 601-1/ 709-2/ EXT-3 */
 	}
-	if (videoParams->mActiveFormatAspectRatio != 0) {
-		fc_active_format_aspect_ratio(dev, videoParams->mActiveFormatAspectRatio);
+	if (video_params->mactive_format_aspect_ratio != 0) {
+		fc_active_format_aspect_ratio(dev, video_params->mactive_format_aspect_ratio);
 		fc_acctive_aspect_ratio_valid(dev, 1);
 	} else {
 		fc_acctive_aspect_ratio_valid(dev, 0);
 	}
-	if (videoParams->mEndTopBar != (u16) (-1) || videoParams->mStartBottomBar != (u16) (-1)) {
-		if (videoParams->mEndTopBar != (u16) (-1)) {
-			endTop = videoParams->mEndTopBar;
+	if (video_params->mend_top_bar != (u16) (-1) || video_params->mstart_bottom_bar != (u16) (-1)) {
+		if (video_params->mend_top_bar != (u16) (-1)) {
+			endTop = video_params->mend_top_bar;
 		}
-		if (videoParams->mStartBottomBar != (u16) (-1)) {
-			startBottom = videoParams->mStartBottomBar;
+		if (video_params->mstart_bottom_bar != (u16) (-1)) {
+			startBottom = video_params->mstart_bottom_bar;
 		}
 		fc_horizontal_bars(dev, endTop, startBottom);
 		fc_horizontal_bars_valid(dev, 1);
 	} else {
 		fc_horizontal_bars_valid(dev, 0);
 	}
-	if (videoParams->mEndLeftBar != (u16) (-1) || videoParams->mStartRightBar != (u16) (-1)) {
-		if (videoParams->mEndLeftBar != (u16) (-1)) {
-			endLeft = videoParams->mEndLeftBar;
+	if (video_params->mend_left_bar != (u16) (-1) || video_params->mstart_right_bar != (u16) (-1)) {
+		if (video_params->mend_left_bar != (u16) (-1)) {
+			endLeft = video_params->mend_left_bar;
 		}
-		if (videoParams->mStartRightBar != (u16) (-1)) {
-			startRight = videoParams->mStartRightBar;
+		if (video_params->mstart_right_bar != (u16) (-1)) {
+			startRight = video_params->mstart_right_bar;
 		}
 		fc_vertical_bars(dev, endLeft, startRight);
 		fc_vertical_bars_valid(dev, 1);
 	} else {
 		fc_vertical_bars_valid(dev, 0);
 	}
-	fc_out_pixel_repetition(dev, (videoParams->mPixelRepetitionFactor + 1) - 1);
+	fc_out_pixel_repetition(dev, (video_params->mpixel_repetition_factor + 1) - 1);
 }
 
 void fc_packet_sample_flat(hdmi_tx_dev_t *dev, u8 value)
@@ -801,7 +802,7 @@ void fc_iec_word_length(hdmi_tx_dev_t *dev, u8 value)
 	dev_write_mask(FC_AUDSCHNL8, FC_AUDSCHNL8_OIEC_WORDLENGTH_MASK, value);
 }
 
-void fc_audio_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
+void fc_audio_config(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	int i = 0;
 	u8 data = 0;
@@ -820,10 +821,10 @@ void fc_audio_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
 		 * right as another (+1), hence the x2 factor in the following */
 		/* validity bit is 0 when reliable, which is !IsChannelEn */
 		u8 channel_enable = audio_is_channel_en(dev, audio, (2 * i));
-		fc_validity_right(dev, !channel_enable, i);    //write 0xff instead
+		fc_validity_right(dev, !channel_enable, i);		//write 0xff instead
 
 		channel_enable = audio_is_channel_en(dev, audio, (2 * i) + 1);
-		fc_validity_left(dev, !channel_enable, i);     //write 0xff instead
+		fc_validity_left(dev, !channel_enable, i);		//write 0xff instead
 
 		fc_user_right(dev, 1, i);
 		fc_user_left(dev, 1, i);
@@ -831,11 +832,11 @@ void fc_audio_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
 
 #if 0
 	/* IEC - not needed if non-linear PCM */
-	fc_iec_cgms_a(dev, audio->mIecCgmsA);
-	fc_iec_copyright(dev, audio->mIecCopyright ? 0 : 1);
-	fc_iec_category_code(dev, audio->mIecCategoryCode);
-	fc_iec_pcm_mode(dev, audio->mIecPcmMode);
-	fc_iec_source(dev, audio->mIecSourceNumber);
+	fc_iec_cgms_a(dev, audio->miec_cgms_a);
+	fc_iec_copyright(dev, audio->miec_copyright ? 0 : 1);
+	fc_iec_category_code(dev, audio->miec_category_code);
+	fc_iec_pcm_mode(dev, audio->miec_pcm_mode);
+	fc_iec_source(dev, audio->miec_source_number);
 #endif
 
 	for (i = 0; i < 4; i++) {	/* 0, 1, 2, 3 */
@@ -843,7 +844,7 @@ void fc_audio_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
 		fc_iec_channel_right(dev, 2 * (i + 1), i);	/* 2, 4, 6, 8 */
 	}
 
-	fc_iec_clock_accuracy(dev, audio->mIecClockAccuracy);
+	fc_iec_clock_accuracy(dev, audio->miec_clock_accuracy);
 
 	data = audio_iec_sampling_freq(dev, audio);
 	fc_iec_sampling_freq(dev, data);
@@ -865,10 +866,10 @@ void fc_audio_unmute(hdmi_tx_dev_t *dev)
 	fc_packet_sample_flat(dev, 0);
 }
 
-void fc_channel_count(hdmi_tx_dev_t *dev, u8 noOfChannels)
+void fc_channel_count(hdmi_tx_dev_t *dev, u8 no_ofchannels)
 {
-	pr_debug("noOfChannels:%d\n", noOfChannels);
-	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CC_MASK, noOfChannels);
+	pr_debug("noOfChannels:%d\n", no_ofchannels);
+	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CC_MASK, no_ofchannels);
 }
 
 void fc_sample_freq(hdmi_tx_dev_t *dev, u8 sf)
@@ -892,9 +893,9 @@ void fc_down_mix_inhibit(hdmi_tx_dev_t *dev, u8 prohibited)
 	dev_write_mask(FC_AUDICONF3, FC_AUDICONF3_DM_INH_MASK, (prohibited ? 1 : 0));
 }
 
-void fc_coding_type(hdmi_tx_dev_t *dev, u8 codingType)
+void fc_coding_type(hdmi_tx_dev_t *dev, u8 coding_type)
 {
-	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CT_MASK, codingType);
+	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CT_MASK, coding_type);
 }
 
 void fc_sampling_size(hdmi_tx_dev_t *dev, u8 ss)
@@ -902,18 +903,18 @@ void fc_sampling_size(hdmi_tx_dev_t *dev, u8 ss)
 	dev_write_mask(FC_AUDICONF1, FC_AUDICONF1_SS_MASK, ss);
 }
 
-void fc_audio_info_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
+void fc_audio_info_config(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	u8 channel_count = audio_channel_count(dev, audio);
-	u32 sampling_freq = audio->mSamplingFrequency;
+	u32 sampling_freq = audio->msampling_frequency;
 	fc_channel_count(dev, channel_count);
-	fc_allocate_channels(dev, audio->mChannelAllocation);
-	fc_level_shift_value(dev, audio->mLevelShiftValue);
-	fc_down_mix_inhibit(dev, audio->mDownMixInhibitFlag);
+	fc_allocate_channels(dev, audio->mchannel_allocation);
+	fc_level_shift_value(dev, audio->mLevel_shift_value);
+	fc_down_mix_inhibit(dev, audio->mdown_mix_inhibit_flag);
 
 	pr_debug("Audio channel count = %d", channel_count);
-	pr_debug("Audio channel allocation = %d", audio->mChannelAllocation);
-	pr_debug("Audio level shift = %d", audio->mLevelShiftValue);
+	pr_debug("Audio channel allocation = %d", audio->mchannel_allocation);
+	pr_debug("Audio level shift = %d", audio->mLevel_shift_value);
 
 	/* Audio InfoFrame sample frequency when OBA or DST */
 	if (is_equal(sampling_freq, 32000)) {
@@ -943,10 +944,10 @@ void fc_audio_info_config(hdmi_tx_dev_t *dev, audioParams_t * audio)
 
 	fc_coding_type(dev, 1);	/* for HDMI refer to stream header  (0) */
 
-	if(is_equal(audio->mSampleSize, 16)){
+	if(is_equal(audio->msample_size, 16)){
 		fc_sampling_size(dev, 1);	/* for HDMI refer to stream header  (0) */
 	}
-	else if(is_equal(audio->mSampleSize, 24)){
+	else if(is_equal(audio->msample_size, 24)){
 		fc_sampling_size(dev, 3);	/* for HDMI refer to stream header  (0) */
 	}
 }
@@ -956,15 +957,15 @@ void fc_acp_type(hdmi_tx_dev_t *dev, u8 type)
 	dev_write(FC_ACP0, type);
 }
 
-void fc_acp_type_dependent_fields(hdmi_tx_dev_t *dev, u8 * fields, u8 fieldsLength)
+void fc_acp_type_dependent_fields(hdmi_tx_dev_t *dev, u8 * fields, u8 fields_length)
 {
 	u8 c = 0;
-	if (fieldsLength > (FC_ACP1 - FC_ACP16 + 1)) {
-		fieldsLength = (FC_ACP1 - FC_ACP16 + 1);
+	if (fields_length > (FC_ACP1 - FC_ACP16 + 1)) {
+		fields_length = (FC_ACP1 - FC_ACP16 + 1);
 		pr_debug("ACP Fields Truncated");
 	}
 
-	for (c = 0; c < fieldsLength; c++)
+	for (c = 0; c < fields_length; c++)
 		dev_write(FC_ACP1 - c, fields[c]);
 }
 
@@ -1075,27 +1076,27 @@ void csc_coefficient_c4(hdmi_tx_dev_t *dev, u16 value)
 	dev_write_mask(CSC_COEF_C4_MSB, CSC_COEF_C4_MSB_CSC_COEF_C4_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_config(hdmi_tx_dev_t *dev, videoParams_t * video,
+void csc_config(hdmi_tx_dev_t *dev, video_params_t * video,
 		unsigned interpolation, unsigned decimation, unsigned color_depth)
 {
-	if(!video->mColorimetry){
-		video->mColorimetry = ITU709;
+	if(!video->mcolorimetry){
+		video->mcolorimetry = ITU709;
 	}
 	video_params_get_csc_a(dev, video);
 	csc_interpolation(dev, interpolation);
 	csc_decimation(dev, decimation);
-	csc_coefficient_a1(dev, video->mCscA[0]);
-	csc_coefficient_a2(dev, video->mCscA[1]);
-	csc_coefficient_a3(dev, video->mCscA[2]);
-	csc_coefficient_a4(dev, video->mCscA[3]);
-	csc_coefficient_b1(dev, video->mCscB[0]);
-	csc_coefficient_b2(dev, video->mCscB[1]);
-	csc_coefficient_b3(dev, video->mCscB[2]);
-	csc_coefficient_b4(dev, video->mCscB[3]);
-	csc_coefficient_c1(dev, video->mCscC[0]);
-	csc_coefficient_c2(dev, video->mCscC[1]);
-	csc_coefficient_c3(dev, video->mCscC[2]);
-	csc_coefficient_c4(dev, video->mCscC[3]);
-	csc_scale_factor(dev, video->mCscScale);
+	csc_coefficient_a1(dev, video->mcsc_a[0]);
+	csc_coefficient_a2(dev, video->mcsc_a[1]);
+	csc_coefficient_a3(dev, video->mcsc_a[2]);
+	csc_coefficient_a4(dev, video->mcsc_a[3]);
+	csc_coefficient_b1(dev, video->mcsc_b[0]);
+	csc_coefficient_b2(dev, video->mcsc_b[1]);
+	csc_coefficient_b3(dev, video->mcsc_b[2]);
+	csc_coefficient_b4(dev, video->mcsc_b[3]);
+	csc_coefficient_c1(dev, video->mcsc_c[0]);
+	csc_coefficient_c2(dev, video->mcsc_c[1]);
+	csc_coefficient_c3(dev, video->mcsc_c[2]);
+	csc_coefficient_c4(dev, video->mcsc_c[3]);
+	csc_scale_factor(dev, video->mcsc_scale);
 	csc_color_depth(dev, color_depth);
 }

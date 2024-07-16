@@ -7,7 +7,7 @@
 
 typedef enum {
 	INTERFACE_NOT_DEFINED = -1, I2S = 0, SPDIF, HBR, GPA, DMA
-} interfaceType_t;
+} interface_type_t;
 
 typedef enum {
 	PACKET_NOT_DEFINED = -1, AUDIO_SAMPLE = 1, HBR_STREAM
@@ -29,7 +29,7 @@ typedef enum {
 	MAT,
 	DST,
 	WMAPRO
-} codingType_t;
+} coding_type_t;
 
 typedef enum {
 	DMA_NOT_DEFINED = -1,
@@ -38,7 +38,7 @@ typedef enum {
 	DMA_16_BEAT_INCREMENT,
 	DMA_UNUSED_BEAT_INCREMENT,
 	DMA_UNSPECIFIED_INCREMENT
-} dmaIncrement_t;
+} dma_increment_t;
 
 /* Supplementary Audio type, table 8-14 HDMI 2.0 Spec. pg 79 */
 typedef enum {
@@ -47,30 +47,30 @@ typedef enum {
 	AUDIO_FOR_VIS_IMP_SPOKEN,
 	AUDIO_FOR_HEAR_IMPAIRED,
 	ADDITIONAL_AUDIO
-} suppl_A_Type_t;
+} suppl_a_type_t;
 
 /* Audio Metadata Packet Header, table 8-4 HDMI 2.0 Spec. pg 71 */
 typedef struct {
-	u8 m3dAudio;
-	u8 mNumViews;
-	u8 mNumAudioStreams;
-} audioMetaDataHeader_t;
+	u8 m3d_audio;
+	u8 mnum_views;
+	u8 mnum_audio_streams;
+} audio_metadata_header_t;
 
 /* Audio Metadata Descriptor, table 8-13 HDMI 2.0 Spec. pg 78 */
 typedef struct {
-	u8 mMultiviewRightLeft;
-	u8 mLC_Valid;
-	u8 mSuppl_A_Valid;
-	u8 mSuppl_A_Mixed;
-	suppl_A_Type_t mSuppl_A_Type;
-	u8 mLanguage_Code[3];	/*ISO 639.2 alpha-3 code, examples: eng,fre,spa,por,jpn,chi */
+	u8 mmultiview_right_left;
+	u8 mlc_valid;
+	u8 msuppl_a_valid;
+	u8 msuppl_a_mixed;
+	suppl_a_type_t msuppl_a_type;
+	u8 mlanguage_code[3];    /*ISO 639.2 alpha-3 code, examples: eng,fre,spa,por,jpn,chi */
 
-} audioMetaDataDescriptor_t;
+} audio_metadata_descriptor_t;
 
 typedef struct {
-	audioMetaDataHeader_t mAudioMetaDataHeader;
-	audioMetaDataDescriptor_t mAudioMetaDataDescriptor[4];
-} audioMetaDataPacket_t;
+	audio_metadata_header_t maudio_metadata_header;
+	audio_metadata_descriptor_t maudio_metadata_descriptor[4];
+} audio_metadata_packet_t;
 
 /**
  * For detailed handling of this structure,
@@ -83,57 +83,54 @@ typedef struct {
 
 	u64 stop_addr;
 
-	interfaceType_t mInterfaceType;
+	interface_type_t minterface_type;
 
-	codingType_t mCodingType; /** (audioParams_t *params, see InfoFrame) */
+	coding_type_t mcoding_type; /** (audio_params_t *params, see InfoFrame) */
 
-	int mChannelAllocation; /** channel allocation (audioParams_t *params,
-						   see InfoFrame) */
+	int mchannel_allocation;    /** channel allocation (audio_params_t *params, see InfoFrame) */
 
-	u8 mSampleSize;	/**  sample size (audioParams_t *params, 16 to 24) */
+	u8 msample_size;            /**  sample size (audio_params_t *params, 16 to 24) */
 
-	u32 mSamplingFrequency;	/** sampling frequency (audioParams_t *params, kHz) */
+	u32 msampling_frequency;    /** sampling frequency (audio_params_t *params, kHz) */
 
-	u8 mLevelShiftValue; /** level shift value (audioParams_t *params,
-						 see InfoFrame) */
+	u8 mLevel_shift_value;      /** level shift value (audio_params_t *params, see InfoFrame) */
 
-	u8 mDownMixInhibitFlag;	/** down-mix inhibit flag (audioParams_t *params,
-							see InfoFrame) */
+	u8 mdown_mix_inhibit_flag;  /** down-mix inhibit flag (audio_params_t *params, see InfoFrame) */
 
-	u8 mIecCopyright; /** IEC copyright */
+	u8 miec_copyright;          /** IEC copyright */
 
-	u8 mIecCgmsA; /** IEC CGMS-A */
+	u8 miec_cgms_a;             /** IEC CGMS-A */
 
-	u8 mIecPcmMode;	/** IEC PCM mode */
+	u8 miec_pcm_mode;           /** IEC PCM mode */
 
-	u8 mIecCategoryCode; /** IEC category code */
+	u8 miec_category_code;      /** IEC category code */
 
-	u8 mIecSourceNumber; /** IEC source number */
+	u8 miec_source_number;      /** IEC source number */
 
-	u8 mIecClockAccuracy; /** IEC clock accuracy */
+	u8 miec_clock_accuracy;     /** IEC clock accuracy */
 
-	packet_t mPacketType; /** packet type. currently only Audio Sample (AUDS)
-						  and High Bit Rate (HBR) are supported */
+	packet_t mpacket_type;      /** packet type. currently only Audio Sample (AUDS)
+	                                and High Bit Rate (HBR) are supported */
 
-	u16 mClockFsFactor; /** Input audio clock Fs factor used at the audio
-						packetizer to calculate the CTS value and ACR packet
-						insertion rate */
+	u16 mclock_fsfactor;        /** Input audio clock Fs factor used at the audio
+	                                packetizer to calculate the CTS value and ACR packet
+	                                insertion rate */
 
-	dmaIncrement_t mDmaBeatIncrement; /** Incremental burst modes: unspecified
-									lengths (upper limit is 1kB boundary) and
-									INCR4, INCR8, and INCR16 fixed-beat burst */
+	dma_increment_t mdma_beat_increment; /** Incremental burst modes: unspecified
+	                                        lengths (upper limit is 1kB boundary) an
+	                                        INCR4, INCR8, and INCR16 fixed-beat burst */
 
-	u8 mDmaThreshold; /** When the number of samples in the Audio FIFO is lower
-						than the threshold, the DMA engine requests a new burst
-						request to the AHB master interface */
+	u8 mdma_threshold;          /** When the number of samples in the Audio FIFO is lower
+	                                than the threshold, the DMA engine requests a new burst
+	                                request to the AHB master interface */
 
-	u8 mDmaHlock; /** Master burst lock mechanism */
+	u8 mdma_hlock;              /** Master burst lock mechanism */
 
-	u8 mGpaInsertPucv;	/* discard incoming (Parity, Channel status, User bit,
-				   Valid and B bit) data and insert data configured in
-				   controller instead */
-	audioMetaDataPacket_t mAudioMetaDataPacket; /** Audio Multistream variables, to be written to the Audio Metadata Packet */
-} audioParams_t;
+	u8 mgpa_insert_pucv;        /* discard incoming (Parity, Channel status, User bit,
+	                               Valid and B bit) data and insert data configured in
+	                               controller instead */
+	audio_metadata_packet_t maudio_metadata_packet; /** Audio Multistream variables, to be written to the Audio Metadata Packet */
+} audio_params_t;
 
 /**
  * Initial set up of package and prepare it to be configured. Set audio mute to on.
@@ -150,7 +147,7 @@ int audio_Initialize(hdmi_tx_dev_t *dev);
  * @param ratioClk: ratio clock (TMDS / Pixel) [0.01]
  * @return TRUE if successful
  */
-int audio_configure(hdmi_tx_dev_t *dev, audioParams_t * params);
+int audio_configure(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * Mute audio.
@@ -164,8 +161,6 @@ int audio_mute(hdmi_tx_dev_t *dev, u8 state);
 u32 hdmi_compute_n(u32 freq, u32 pixel_clk);
 u32 hdmi_compute_cts(u32 n, u32 pixel_clk, u32 sample_rate);
 
-
-
 /**
  * This method reset the parameters structure to a known state
  * SPDIF 16bits 32Khz Linear PCM
@@ -173,28 +168,28 @@ u32 hdmi_compute_cts(u32 n, u32 pixel_clk, u32 sample_rate);
  * to start from a stable and known condition avoid overflows.
  * @param params pointer to the audio parameters structure
  */
-void audio_reset(hdmi_tx_dev_t *dev, audioParams_t * params);
+void audio_reset(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * @param params pointer to the audio parameters structure
  * @return number of audio channels transmitted -1
  */
-u8 audio_channel_count(hdmi_tx_dev_t *dev, audioParams_t * params);
+u8 audio_channel_count(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * @param params pointer to the audio parameters structure
  */
-u8 audio_iec_original_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params);
+u8 audio_iec_original_sampling_freq(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * @param params pointer to the audio parameters structure
  */
-u8 audio_iec_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params);
+u8 audio_iec_sampling_freq(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * @param params pointer to the audio parameters structure
  */
-u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audioParams_t * params);
+u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audio_params_t * params);
 
 /**
  * return if channel is enabled or not using the user's channel allocation
@@ -203,7 +198,7 @@ u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audioParams_t * params);
  * @param channel in question -1
  * @return 1 if channel is to be enabled, 0 otherwise
  */
-u8 audio_is_channel_en(hdmi_tx_dev_t *dev, audioParams_t * params, u8 channel);
+u8 audio_is_channel_en(hdmi_tx_dev_t *dev, audio_params_t * params, u8 channel);
 
 
-#endif				/* AUDIO_H_ */
+#endif /* AUDIO_H_ */

@@ -6,6 +6,7 @@
 #include "base_common.h"
 #include "reg.h"
 #include "cdma.h"
+#include "sys_debug.h"
 
 #define CDMA_CHL_CTRL		 0x0800
 #define CDMA_INT_MAST		 0x0808
@@ -73,8 +74,8 @@ union cdma_des_cfg {
 	struct {
 		u32 start           : 1;
 		u32 resv1           : 1;
-		u32 EOD             : 1;
-		u32 EOD_int_enable  : 1;
+		u32 eod             : 1;
+		u32 eod_int_enable  : 1;
 		u32 mode            : 1; //0: 1-D   1: 2-d
 		u32 fixed_enable    : 2; //0: no fixed  1:fixed data
 		u32 data_fmt        : 1; //0: 8bit   1: 16bit
@@ -85,21 +86,21 @@ union cdma_des_cfg {
 };
 
 
-enum CDMA_TASK_STATUS {
+enum cdma_task_status {
 	CDMA_STATUS_STOP,
 	CDMA_STATUS_RUN,
 };
 
-enum CDMA_JOB_TYPE {
+enum cdma_job_type {
 	CDMA_JOB_1D,
 	CDMA_JOB_2D,
 };
 
 struct cdma_job {
-	enum CDMA_JOB_TYPE enJobType;
+	enum cdma_job_type job_type;
 	union {
-		struct cdma_1d_param Param1d;
-		struct cdma_2d_param Param2d;
+		struct cdma_1d_param param_1d;
+		struct cdma_2d_param param_2d;
 	};
 	wait_queue_head_t cond_queue;
 	bool avail;
@@ -111,12 +112,12 @@ struct cdma_task_ctx {
 	spinlock_t job_lock;
 	atomic_t num;
 	atomic_t status;
-	struct cdma_job *pstWorkingJob;
+	struct cdma_job *workingjobs;
 };
 
 static uintptr_t reg_base_cdma;
 static struct timespec64 start_time;
-static struct cdma_task_ctx stCdmaTaskCtx;
+static struct cdma_task_ctx g_cdma_task_ctx;
 
 
 static int _cdma_1d_copy(struct cdma_1d_param *param)
@@ -126,7 +127,7 @@ static int _cdma_1d_copy(struct cdma_1d_param *param)
 	union cdma_des_cfg cfg;
 
 	if (_reg_read(reg_base_cdma + CDMA_CMD_FIFO_STATUS) == FIFO_FULL_STATUS) {
-		pr_err("command fifo full.\n");
+		TRACE_SYS(DBG_ERR, "command fifo full.\n");
 		return -1;
 	}
 
@@ -157,8 +158,8 @@ static int _cdma_1d_copy(struct cdma_1d_param *param)
 	//cfg
 	cfg.raw = 0;
 	cfg.b.start = 1;
-	cfg.b.EOD = 1;
-	cfg.b.EOD_int_enable = 1;
+	cfg.b.eod = 1;
+	cfg.b.eod_int_enable = 1;
 	cfg.b.mode = 0;  //1-D
 	cfg.b.data_fmt = param->data_type;
 	_reg_write(reg_base_cdma + CDMA_CFG, cfg.raw);
@@ -173,7 +174,7 @@ static int _cdma_2d_copy(struct cdma_2d_param *param)
 	union cdma_des_cfg cfg;
 
 	if (_reg_read(reg_base_cdma + CDMA_CMD_FIFO_STATUS) == FIFO_FULL_STATUS) {
-		pr_err("command fifo full.\n");
+		TRACE_SYS(DBG_ERR, "command fifo full.\n");
 		return -1;
 	}
 
@@ -205,12 +206,12 @@ static int _cdma_2d_copy(struct cdma_2d_param *param)
 	//cfg
 	cfg.raw = 0;
 	cfg.b.start = 1;
-	cfg.b.EOD = 1;
-	cfg.b.EOD_int_enable = 1;
+	cfg.b.eod = 1;
+	cfg.b.eod_int_enable = 1;
 	cfg.b.mode = 1;  //2-D
-	cfg.b.fixed_enable = param->isFixed ? 1 : 0;
+	cfg.b.fixed_enable = param->fixed_enable ? 1 : 0;
 	cfg.b.data_fmt = param->data_type;
-	cfg.b.fixed_value = param->isFixed ? param->fixed_value : 0;
+	cfg.b.fixed_value = param->fixed_enable ? param->fixed_value : 0;
 	_reg_write(reg_base_cdma + CDMA_CFG, cfg.raw);
 
 	return 0;
@@ -218,105 +219,106 @@ static int _cdma_2d_copy(struct cdma_2d_param *param)
 
 
 
-int _cdma_push_job(struct cdma_job *pstJob)
+int _cdma_push_job(struct cdma_job *job)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&stCdmaTaskCtx.job_lock, flags);
-	list_add_tail(&pstJob->list, &stCdmaTaskCtx.job_queue);
-	atomic_inc(&stCdmaTaskCtx.num);
-	spin_unlock_irqrestore(&stCdmaTaskCtx.job_lock, flags);
+	spin_lock_irqsave(&g_cdma_task_ctx.job_lock, flags);
+	list_add_tail(&job->list, &g_cdma_task_ctx.job_queue);
+	atomic_inc(&g_cdma_task_ctx.num);
+	spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 
 	return 0;
 }
 
 void _cdma_try_schedule(void)
 {
-	struct cdma_job *pstJob = NULL;
+	struct cdma_job *job = NULL;
 	unsigned long flags;
 	int ret = 0;
 
-	if (atomic_read(&stCdmaTaskCtx.status) == CDMA_STATUS_RUN)
+	if (atomic_read(&g_cdma_task_ctx.status) == CDMA_STATUS_RUN)
 		return;
 
-	if (atomic_read(&stCdmaTaskCtx.num) > 0) {
-		spin_lock_irqsave(&stCdmaTaskCtx.job_lock, flags);
-		if (!list_empty(&stCdmaTaskCtx.job_queue)) {
-			pstJob = list_first_entry(&stCdmaTaskCtx.job_queue,
+	if (atomic_read(&g_cdma_task_ctx.num) > 0) {
+		spin_lock_irqsave(&g_cdma_task_ctx.job_lock, flags);
+		if (!list_empty(&g_cdma_task_ctx.job_queue)) {
+			job = list_first_entry(&g_cdma_task_ctx.job_queue,
 				struct cdma_job, list);
 		}
-		if (!pstJob) {
-			pr_err("cdma job NULL\n");
-			spin_unlock_irqrestore(&stCdmaTaskCtx.job_lock, flags);
+
+		if (!job) {
+			TRACE_SYS(DBG_ERR, "cdma job NULL\n");
+			spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 			return;
 		}
 
-		if (pstJob->enJobType == CDMA_JOB_1D)
-			ret = _cdma_1d_copy(&pstJob->Param1d);
+		if (job->job_type == CDMA_JOB_1D)
+			ret = _cdma_1d_copy(&job->param_1d);
 		else
-			ret = _cdma_2d_copy(&pstJob->Param2d);
+			ret = _cdma_2d_copy(&job->param_2d);
 
 		if (!ret) {
-			stCdmaTaskCtx.pstWorkingJob = pstJob;
-			list_del_init(&pstJob->list);
-			atomic_dec(&stCdmaTaskCtx.num);
-			atomic_set(&stCdmaTaskCtx.status, CDMA_STATUS_RUN);
+			g_cdma_task_ctx.workingjobs = job;
+			list_del_init(&job->list);
+			atomic_dec(&g_cdma_task_ctx.num);
+			atomic_set(&g_cdma_task_ctx.status, CDMA_STATUS_RUN);
 		}
-		spin_unlock_irqrestore(&stCdmaTaskCtx.job_lock, flags);
+		spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 	}
 }
 
 static void cdma_job_finish(void)
 {
-	struct cdma_job *pstJob = stCdmaTaskCtx.pstWorkingJob;
+	struct cdma_job *job = g_cdma_task_ctx.workingjobs;
 	unsigned long flags;
 
-	spin_lock_irqsave(&stCdmaTaskCtx.job_lock, flags);
-	stCdmaTaskCtx.pstWorkingJob = NULL;
-	atomic_set(&stCdmaTaskCtx.status, CDMA_STATUS_STOP);
-	if (pstJob) {
-		pstJob->avail = CVI_TRUE;
-		wake_up_interruptible(&pstJob->cond_queue);
+	spin_lock_irqsave(&g_cdma_task_ctx.job_lock, flags);
+	g_cdma_task_ctx.workingjobs = NULL;
+	atomic_set(&g_cdma_task_ctx.status, CDMA_STATUS_STOP);
+	if (job) {
+		job->avail = true;
+		wake_up_interruptible(&job->cond_queue);
 	}
-	spin_unlock_irqrestore(&stCdmaTaskCtx.job_lock, flags);
+	spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 
 	_cdma_try_schedule();
 }
 
-int _cdma_copy(enum CDMA_JOB_TYPE enJobType, void *param)
+int _cdma_copy(enum cdma_job_type job_type, void *param)
 {
-	struct cdma_job *pJob;
+	struct cdma_job *job;
 	int ret = 0;
 
-	pJob = vzalloc(sizeof(*pJob));
-	if (pJob == NULL) {
-		pr_err("[%s] vzalloc fail.\n", __func__);
+	job = vzalloc(sizeof(*job));
+	if (job == NULL) {
+		TRACE_SYS(DBG_ERR, "[%s] vzalloc fail.\n", __func__);
 		return -1;
 	}
 
-	pJob->enJobType = enJobType;
-	pJob->avail = false;
-	memcpy(&pJob->Param1d, param, sizeof(*param));
-	init_waitqueue_head(&pJob->cond_queue);
+	job->job_type = job_type;
+	job->avail = false;
+	memcpy(&job->param_1d, param, sizeof(*param));
+	init_waitqueue_head(&job->cond_queue);
 
-	if (enJobType == CDMA_JOB_1D)
-		memcpy(&pJob->Param1d, param, sizeof(struct cdma_1d_param));
+	if (job_type == CDMA_JOB_1D)
+		memcpy(&job->param_1d, param, sizeof(struct cdma_1d_param));
 	else
-		memcpy(&pJob->Param2d, param, sizeof(struct cdma_2d_param));
+		memcpy(&job->param_2d, param, sizeof(struct cdma_2d_param));
 
-	_cdma_push_job(pJob);
+	_cdma_push_job(job);
 	_cdma_try_schedule();
 
-	ret = wait_event_interruptible(pJob->cond_queue, pJob->avail);
+	ret = wait_event_interruptible(job->cond_queue, job->avail);
 	// ret < 0, interrupt by a signal
 	// ret = 0, condition true
 
-	if (pJob->avail)
+	if (job->avail)
 		ret = 0;
 	else
 		ret = -1;
 
-	vfree(pJob);
+	vfree(job);
 	return ret;
 }
 
@@ -324,11 +326,11 @@ void cdma_set_base_addr(void *cdma_base)
 {
 	reg_base_cdma = (uintptr_t)cdma_base;
 
-	stCdmaTaskCtx.pstWorkingJob = NULL;
-	spin_lock_init(&stCdmaTaskCtx.job_lock);
-	INIT_LIST_HEAD(&stCdmaTaskCtx.job_queue);
-	atomic_set(&stCdmaTaskCtx.num, 0);
-	atomic_set(&stCdmaTaskCtx.status, CDMA_STATUS_STOP);
+	g_cdma_task_ctx.workingjobs = NULL;
+	spin_lock_init(&g_cdma_task_ctx.job_lock);
+	INIT_LIST_HEAD(&g_cdma_task_ctx.job_queue);
+	atomic_set(&g_cdma_task_ctx.num, 0);
+	atomic_set(&g_cdma_task_ctx.status, CDMA_STATUS_STOP);
 }
 
 void cdma_irq_handler(void)
@@ -346,8 +348,8 @@ void cdma_irq_handler(void)
 	if (int_status.b.rf_des_int == 1) {
 		ktime_get_ts64(&time);
 		duration = get_diff_in_us(start_time, time);
-		pr_info("cdma interrupt status:%x\n", int_status.raw);
-		pr_info("%s: time-consumption(%d)us\n", __func__, duration);
+		TRACE_SYS(DBG_INFO, "cdma interrupt status:%x\n", int_status.raw);
+		TRACE_SYS(DBG_INFO, "%s: time-consumption(%d)us\n", __func__, duration);
 		//disable cdma
 		ctrl.b.cdma_enable = 0;
 		ctrl.b.int_enable = 0;
@@ -356,16 +358,15 @@ void cdma_irq_handler(void)
 	}
 }
 
-int cvi_cdma_copy1d(struct cdma_1d_param *param)
+int cdma_copy1d(struct cdma_1d_param *param)
 {
 	return _cdma_copy(CDMA_JOB_1D, param);
 }
-EXPORT_SYMBOL_GPL(cvi_cdma_copy1d);
+EXPORT_SYMBOL_GPL(cdma_copy1d);
 
 
-int cvi_cdma_copy2d(struct cdma_2d_param *param)
+int cdma_copy2d(struct cdma_2d_param *param)
 {
 	return _cdma_copy(CDMA_JOB_2D, param);
 }
-EXPORT_SYMBOL_GPL(cvi_cdma_copy2d);
-
+EXPORT_SYMBOL_GPL(cdma_copy2d);

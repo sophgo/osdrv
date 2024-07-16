@@ -24,10 +24,6 @@ typedef struct {
     BOOL    reset;
     Uint32  aclk_div;
     Uint32  cclk_div;
-#if defined(CNM_FPGA_PLATFORM)
-    Uint32  readDelay;              /* 0 ~ 1000 cycles */
-    Uint32  writeDelay;             /* 0 ~ 1000 cycles */
-#endif
 } TestDevConfig;
 
 extern BOOL CNM_InitTestDev(

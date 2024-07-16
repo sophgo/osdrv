@@ -1,4 +1,4 @@
-#ifdef ENV_CVITEST
+#ifdef ENVTEST
 #include <common.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 #include <linux/dma-map-ops.h>
 #endif
-#endif  // ENV_CVITEST
+#endif  // ENVTEST
 
 #include "vi_sys.h"
 #include "dwa_reg.h"
@@ -40,7 +40,7 @@ static uintptr_t dwa_reg_base[DWA_DEV_MAX_CNT];
 /****************************************************************************
  * Initial info
  ***************************************************************************/
-const u8 hcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
+const unsigned char hcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
 	{0x00, 0x40, 0x00, 0x00},
 	{0xff, 0x40, 0x01, 0x00},
 	{0xfe, 0x3f, 0x02, 0x01},
@@ -74,7 +74,7 @@ const u8 hcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
 	{0x00, 0x02, 0x3f, 0xff},
 	{0x00, 0x01, 0x40, 0xff},
 };
-const u8 vcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
+const unsigned char vcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
 	{0x00, 0x40, 0x00, 0x00},
 	{0xff, 0x40, 0x01, 0x00},
 	{0xfe, 0x3f, 0x02, 0x01},
@@ -134,7 +134,7 @@ void dwa_disable(int top_id)
 void dwa_init(int top_id)
 {
 	uintptr_t i = 0;
-	u8 interp_h_shift_num = 0, interp_v_shift_num = 0;
+	unsigned char interp_h_shift_num = 0, interp_v_shift_num = 0;
 
 	/*
 	union vi_sys_intr intr_mask;
@@ -203,7 +203,7 @@ void dwa_reset(int top_id)
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void dwa_intr_ctrl(u8 intr_mask, int top_id)
+void dwa_intr_ctrl(unsigned char intr_mask, int top_id)
 {
 	_reg_write(dwa_reg_base[top_id] + REG_DWA_INT_EN, intr_mask);
 }
@@ -215,7 +215,7 @@ void dwa_intr_ctrl(u8 intr_mask, int top_id)
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void dwa_intr_clr(u8 intr_mask, int top_id)
+void dwa_intr_clr(unsigned char intr_mask, int top_id)
 {
 	_reg_write(dwa_reg_base[top_id] + REG_DWA_INT_CLR, intr_mask);
 }
@@ -227,7 +227,7 @@ void dwa_intr_clr(u8 intr_mask, int top_id)
  *
  * @return: The interrupt's status. 1 if active.
  */
-u8 dwa_intr_status(int top_id)
+unsigned char dwa_intr_status(int top_id)
 {
 	return _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_STATUS);
 }
@@ -338,22 +338,22 @@ void dwa_engine(struct dwa_cfg *cfg, int top_id)
 #endif
 }
 
-u8 dwa_cmdq_intr_status(u8 top_id)
+unsigned char dwa_cmdq_intr_status(unsigned char top_id)
 {
 	return cmdq_intr_status(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE);
 }
 
-void dwa_cmdq_intr_clr(u8 top_id, u8 intr_status)
+void dwa_cmdq_intr_clr(unsigned char top_id, unsigned char intr_status)
 {
 	cmdq_intr_clr(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE, intr_status);
 }
 
-void dwa_cmdq_sw_restart(u8 top_id)
+void dwa_cmdq_sw_restart(unsigned char top_id)
 {
 	cmdq_sw_restart(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE);
 }
 
-bool dwa_cmdq_is_sw_restart(u8 top_id)
+bool dwa_cmdq_is_sw_restart(unsigned char top_id)
 {
 	return cmdq_is_sw_restart(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE);
 }
@@ -366,14 +366,14 @@ bool dwa_cmdq_is_sw_restart(u8 top_id)
  * @param cfgs: settings for these dwa's operations
  * @param cnt: number of dwa operations
  */
-void dwa_engine_cmdq(int top_id, const void *cmdq_addr, struct dwa_cfg **cfgs, u8 cnt)
+void dwa_engine_cmdq(int top_id, const void *cmdq_addr, struct dwa_cfg **cfgs, unsigned char cnt)
 {
-	u8 i = 0, cmd_idx = 0;
+	unsigned char i = 0, cmd_idx = 0;
 	union cmdq_set *cmd_start;
-	u64 dwa_apb_base = top_id ? REG_DWA1_BASE_FOR_CMDQ : REG_DWA0_BASE_FOR_CMDQ;
+	unsigned long long dwa_apb_base = top_id ? REG_DWA1_BASE_FOR_CMDQ : REG_DWA0_BASE_FOR_CMDQ;
 
 	cmd_start = (union cmdq_set *)cmdq_addr;
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "cmd_start(%px)\n",cmd_start);
+	TRACE_DWA(DBG_DEBUG, "cmd_start(%px)\n",cmd_start);
 
 	//memset(cmd_start, 0, sizeof(union cmdq_set) * DWA_CMDQ_MAX_REG_CNT * cnt);
 	//_reg_write(dwa_reg_base[top_id] + REG_DWA_GLB_CTRL, 0x00000001);
@@ -533,7 +533,7 @@ void dwa_engine_cmdq(int top_id, const void *cmdq_addr, struct dwa_cfg **cfgs, u
 	__dma_map_area((void *)cmdq_addr
 		, sizeof(union cmdq_set) * DWA_CMDQ_MAX_REG_CNT * cnt, DMA_TO_DEVICE);
 #endif
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "cmdq buf addr:%#lx\n", (uintptr_t)virt_to_phys((void *)cmdq_addr));
+	TRACE_DWA(DBG_DEBUG, "cmdq buf addr:%#lx\n", (uintptr_t)virt_to_phys((void *)cmdq_addr));
 
 	cmdq_intr_ctrl(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE, 0x02);
 	cmdq_engine(dwa_reg_base[top_id] + REG_DWA_CMDQ_BASE, (uintptr_t)virt_to_phys((void *)cmdq_addr), (dwa_apb_base) >> 22,
@@ -547,13 +547,13 @@ void dwa_engine_cmdq(int top_id, const void *cmdq_addr, struct dwa_cfg **cfgs, u
  */
 bool dwa_is_finish(int top_id)
 {
-	u32 cycles = _reg_read(dwa_reg_base[top_id] + REG_DWA_FRAME_RUN_TIME);
+	unsigned int cycles = _reg_read(dwa_reg_base[top_id] + REG_DWA_FRAME_RUN_TIME);
 
 	udelay(100);
 	return (cycles == _reg_read(dwa_reg_base[top_id] + REG_DWA_FRAME_RUN_TIME));
 }
 
-u32 dwa_read_en_status(int top_id)
+unsigned int dwa_read_en_status(int top_id)
 {
 	return (u32)_reg_read(dwa_reg_base[top_id] + REG_DWA_GLB_CTRL);
 }
@@ -562,92 +562,92 @@ u32 dwa_read_en_status(int top_id)
  * dwa_clk_gating enable - set dwa's clk gating.
  * @param en: On/Off clk gating.
  */
-void dwa_enable_clk_gating(int top_id, u8 en)
+void dwa_enable_clk_gating(int top_id, unsigned char en)
 {
-	u8 val = en ? 0xff : 0x0;
+	unsigned char val = en ? 0xff : 0x0;
 
 	_reg_write(dwa_reg_base[top_id] + REG_DWA_CG_EN, val);
 }
 
 void dwa_dump_register(int top_id)
 {
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_GLB_CTRL                          =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_GLB_CTRL));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DATA_FORMAT                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DATA_FORMAT));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_AXIM                              =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_AXIM));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_CG_EN                             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_CG_EN));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INT_EN                            =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_EN));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INT_CLR                           =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_CLR));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INT_STATUS                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_STATUS));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_SRC_DATA_RD_BW                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_SRC_DATA_RD_BW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DST_DATA_WR_BW		               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DST_DATA_WR_BW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_ID_BW	                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_TABLE_BW		               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TABLE_BW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_CACHE_HIT_NUM                =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_HIT_NUM));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_CACHE_MISS_NUM               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_MISS_NUM));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_CACHE_SLICE_NUM              =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_SLICE_NUM));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_FRAME_RUN_TIME                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_FRAME_RUN_TIME));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_ID_RDMA_ERR_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_RDMA_ERR_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_ID_RDMA_ERR_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_RDMA_ERR_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_ADDR_LOW        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_ADDR_HIGH       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_CNT             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_CNT));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_SLICE_START_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_SLICE_START_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_SLICE_START_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_SLICE_START_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS0                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS0));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS1                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS1));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS2                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS2));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS3                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS3));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS4                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS4));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS5                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS5));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS6                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS6));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS7                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS7));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS8                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS8));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS9                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS9));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS10                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS10));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_DEBUG_BUS11                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS11));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_ID_BASE_ADDR_LOW             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_MESH_ID_BASE_ADDR_HIGH            =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_IMG_SRC_SIZE                      =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_IMG_SRC_SIZE));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_SRC_PITCHW                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_SRC_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_SRC_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_IMG_DST_SIZE                      =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_IMG_DST_SIZE));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_R_Y_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_G_U_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_IMG_BASE_ADDR_LOW));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_IMG_BASE_ADDR_HIGH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_PITCH));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_B_V_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_OFFSET));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL0               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL0));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL1               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL1));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL2               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL2));
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "REG_DWA_SRC_DATA_CACHE_CTRL               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_SRC_DATA_CACHE_CTRL));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_GLB_CTRL                          =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_GLB_CTRL));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DATA_FORMAT                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DATA_FORMAT));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_AXIM                              =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_AXIM));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_CG_EN                             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_CG_EN));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INT_EN                            =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_EN));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INT_CLR                           =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_CLR));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INT_STATUS                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INT_STATUS));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_SRC_DATA_RD_BW                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_SRC_DATA_RD_BW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DST_DATA_WR_BW		               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DST_DATA_WR_BW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_ID_BW	                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_TABLE_BW		               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TABLE_BW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_CACHE_HIT_NUM                =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_HIT_NUM));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_CACHE_MISS_NUM               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_MISS_NUM));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_CACHE_SLICE_NUM              =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_CACHE_SLICE_NUM));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_FRAME_RUN_TIME                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_FRAME_RUN_TIME));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_ID_RDMA_ERR_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_RDMA_ERR_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_ID_RDMA_ERR_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_RDMA_ERR_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_ADDR_LOW        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_ADDR_HIGH       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_TBL_RDMA_ERR_CNT             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_TBL_RDMA_ERR_CNT));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_SLICE_START_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_SLICE_START_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_SLICE_START_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_SLICE_START_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS0                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS0));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS1                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS1));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS2                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS2));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS3                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS3));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS4                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS4));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS5                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS5));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS6                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS6));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS7                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS7));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS8                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS8));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS9                        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS9));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS10                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS10));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_DEBUG_BUS11                       =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_DEBUG_BUS11));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_ID_BASE_ADDR_LOW             =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_MESH_ID_BASE_ADDR_HIGH            =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_MESH_ID_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_IMG_SRC_SIZE                      =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_IMG_SRC_SIZE));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_SRC_PITCHW                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_SRC_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_SRC_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_SRC_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_SRC_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_SRC_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_SRC_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_SRC_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_SRC_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_IMG_DST_SIZE                      =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_IMG_DST_SIZE));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_R_Y_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_R_Y_DST_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_G_U_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_G_U_DST_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_DST_IMG_BASE_ADDR_LOW         =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_IMG_BASE_ADDR_LOW));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_DST_IMG_BASE_ADDR_HIGH        =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_IMG_BASE_ADDR_HIGH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_DST_PITCH                     =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_PITCH));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_B_V_DST_OFFSET                    =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_B_V_DST_OFFSET));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL0               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL0));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL1               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL1));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_INTERP_OUTPUT_CTRL2               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_INTERP_OUTPUT_CTRL2));
+	TRACE_DWA(DBG_DEBUG, "REG_DWA_SRC_DATA_CACHE_CTRL               =0x%08x\n", _reg_read(dwa_reg_base[top_id] + REG_DWA_SRC_DATA_CACHE_CTRL));
 }
 
-void dwa_dump_cmdq(u64 cmdq_addr, u32 num_cmd)
+void dwa_dump_cmdq(unsigned long long cmdq_addr, unsigned int num_cmd)
 {
-	u32 i;
+	unsigned int i;
 	union cmdq_set *cmd_start = (union cmdq_set *)cmdq_addr;
 
 
-	CVI_TRACE_DWA(CVI_DBG_DEBUG, "cmdq vir addr=0x%08llx, num=%d\n", cmdq_addr, num_cmd);
+	TRACE_DWA(DBG_DEBUG, "cmdq vir addr=0x%08llx, num=%d\n", cmdq_addr, num_cmd);
 	for (i = 0; i < num_cmd; i++) {
-		CVI_TRACE_DWA(CVI_DBG_DEBUG, "[%02d] [0x%08x]=0x%08x\n",
+		TRACE_DWA(DBG_DEBUG, "[%02d] [0x%08x]=0x%08x\n",
 			i, cmd_start[i].reg.addr << 2,
 			cmd_start[i].reg.data);
 	}

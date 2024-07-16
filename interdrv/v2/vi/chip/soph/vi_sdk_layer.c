@@ -2,11 +2,11 @@
 #include <linux/uaccess.h>
 
 #include <vi_sdk_layer.h>
-#include <linux/cvi_base_ctx.h>
-#include <linux/cvi_buffer.h>
-#include <linux/cvi_vi_ctx.h>
-#include <linux/cvi_defines.h>
-#include <linux/cvi_errno.h>
+#include <base_ctx.h>
+#include <linux/comm_buffer.h>
+#include <vi_ctx.h>
+#include <linux/defines.h>
+#include <linux/comm_errno.h>
 #include <ldc_cb.h>
 #include <vi_raw_dump.h>
 #include "base_common.h"
@@ -18,99 +18,99 @@
  * Global parameters
  ****************************************************************************/
 
-extern struct cvi_vi_ctx *gViCtx;
-extern struct cvi_gdc_mesh g_vi_mesh[VI_MAX_CHN_NUM];
-static struct cvi_vi_dev *gvdev;
-static struct mlv_i_s gmLVi[VI_MAX_DEV_NUM];
+extern struct sop_vi_ctx *g_vi_ctx;
+extern struct gdc_mesh g_vi_mesh[VI_MAX_CHN_NUM];
+static struct sop_vi_dev *gvdev;
+static struct mlv_i_s g_mlv_i[VI_MAX_DEV_NUM];
 
 static struct crop_size_s dis_i_data[VI_MAX_DEV_NUM] = { 0 };
 static u32 dis_i_frm_num[VI_MAX_DEV_NUM] = { 0 };
 static u32 dis_flag[VI_MAX_DEV_NUM] = { 0 };
 static wait_queue_head_t dis_wait_q[VI_MAX_DEV_NUM];
-struct vb_jobs_t stVijobs[VI_MAX_CHN_NUM];
+struct vb_jobs_t vi_jobs[VI_MAX_CHN_NUM];
 
-static inline s32 check_vi_dev_valid(VI_DEV dev)
+static inline int check_vi_dev_valid(int dev)
 {
 	if (dev > (VI_MAX_DEV_NUM - 1) || dev < 0) {
 		vi_pr(VI_ERR, "dev num expect 0~%d, but now %d Caller is %p\n",
-			VI_MAX_DEV_NUM - 1, dev, __builtin_return_address(0));
-		return CVI_ERR_VI_INVALID_DEVID;
+		      VI_MAX_DEV_NUM - 1, dev, __builtin_return_address(0));
+		return ERR_VI_INVALID_DEVID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vi_chn_valid(VI_CHN chn)
+static inline int check_vi_chn_valid(int chn)
 {
 	if (chn > (VI_MAX_CHN_NUM - 1) || chn < 0) {
 		vi_pr(VI_ERR, "chn num expect 0~%d, but now %d Caller is %p\n",
 			VI_MAX_CHN_NUM - 1, chn, __builtin_return_address(0));
-		return CVI_ERR_VI_INVALID_CHNID;
+		return ERR_VI_INVALID_CHNID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vi_chn_enable(VI_CHN chn)
+static inline int check_vi_chn_enable(int chn)
 {
-	if (!gViCtx->isChnEnable[chn]) {
+	if (!g_vi_ctx->is_chn_enable[chn]) {
 		vi_pr(VI_ERR, "chn %d, not created Caller is %p\n",
 			chn, __builtin_return_address(0));
-		return CVI_ERR_VI_FAILED_NOT_ENABLED;
+		return ERR_VI_FAILED_NOT_ENABLED;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vi_pipe_valid(VI_PIPE pipe)
+static inline int check_vi_pipe_valid(int pipe)
 {
 	if (pipe < 0 || pipe > (VI_MAX_PIPE_NUM - 1)) {
 		vi_pr(VI_ERR, "pipe num expect 0~%d, but now %d Caller is %p\n",
 			VI_MAX_PIPE_NUM - 1, pipe, __builtin_return_address(0));
-		return CVI_ERR_VI_INVALID_PIPEID;
+		return ERR_VI_INVALID_PIPEID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vi_pipe_created(VI_PIPE pipe)
+static inline int check_vi_pipe_created(int pipe)
 {
-	if (!gViCtx->isPipeCreated[pipe]) {
+	if (!g_vi_ctx->is_pipe_created[pipe]) {
 		vi_pr(VI_ERR, "pipe %d not created Caller is %p\n",
 			pipe, __builtin_return_address(0));
-		return CVI_ERR_VI_FAILED_NOT_ENABLED;
+		return ERR_VI_FAILED_NOT_ENABLED;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vi_size_valid(int w, int h)
+static inline int check_vi_size_valid(int w, int h)
 {
 	if (w > VI_DEV_MAX_WIDTH || h > VI_DEV_MAX_HEIGHT) {
 		vi_pr(VI_ERR, "size is too large w:%d h:%d Caller is %p\n",
 			w, h, __builtin_return_address(0));
-		return CVI_ERR_VI_INVALID_PARA;
+		return ERR_VI_INVALID_PARA;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 /****************************************************************************
  * SDK layer APIs
  ****************************************************************************/
-static int _vi_sdk_drv_qbuf(struct cvi_buffer *buf, s32 chnId)
+static int _vi_sdk_drv_qbuf(struct video_buffer *buf, int raw_id, int chn_id)
 {
-	struct cvi_isp_buf *qbuf;
+	struct sop_isp_buf *qbuf;
 	u8 i = 0;
 
-	qbuf = kzalloc(sizeof(struct cvi_isp_buf), GFP_ATOMIC);
+	qbuf = kzalloc(sizeof(struct sop_isp_buf), GFP_ATOMIC);
 	if (qbuf == NULL) {
-		vi_pr(VI_ERR, "qbuf kzalloc size(%zu) failed\n", sizeof(struct cvi_isp_buf));
+		vi_pr(VI_ERR, "qbuf kzalloc size(%zu) failed\n", sizeof(struct sop_isp_buf));
 		return -ENOMEM;
 	}
 
-	qbuf->buf.index = vi_get_raw_num_by_dev(&gvdev->ctx, chnId);
-	switch (buf->enPixelFormat) {
+	qbuf->buf.index = raw_id * VI_MAX_CHN_NUM + chn_id;
+	switch (buf->pixel_format) {
 	default:
 	case PIXEL_FORMAT_YUV_PLANAR_420:
 	case PIXEL_FORMAT_YUV_PLANAR_422:
@@ -136,29 +136,29 @@ static int _vi_sdk_drv_qbuf(struct cvi_buffer *buf, s32 chnId)
 		qbuf->buf.planes[i].addr = buf->phy_addr[i];
 	}
 
-	cvi_isp_rdy_buf_queue(gvdev, qbuf);
+	sop_isp_rdy_buf_queue(gvdev, qbuf);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static int vi_set_dev_bind_info(VI_DEV ViDev, VI_DEV_BIND_PIPE_S *pstDevBindAttr)
+static int vi_set_dev_bind_info(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 {
 	struct isp_ctx *ctx = &gvdev->ctx;
 	int raw_num = 0;
 	int mac_num = 0;
 	int ret = -1;
 
-	if (!pstDevBindAttr->u32Num) {
+	if (!dev_bind_attr->num) {
 		vi_pr(VI_ERR, "no bind attr have been set\n");
 		return ret;
 	}
 
-	if (pstDevBindAttr->PipeId[0] >= VI_MAX_DEV_NUM) {
-		vi_pr(VI_ERR, "invalid mac(%d)\n", pstDevBindAttr->PipeId[0]);
+	if (dev_bind_attr->pipe_id[0] >= VI_MAX_DEV_NUM) {
+		vi_pr(VI_ERR, "invalid mac(%d)\n", dev_bind_attr->pipe_id[0]);
 		return ret;
 	}
 
-	mac_num = pstDevBindAttr->PipeId[0];
+	mac_num = dev_bind_attr->pipe_id[0];
 	raw_num = mac_num;
 
 #if defined(__CV186X__)
@@ -173,67 +173,70 @@ static int vi_set_dev_bind_info(VI_DEV ViDev, VI_DEV_BIND_PIPE_S *pstDevBindAttr
 		return ret;
 	}
 
-	if ((gViCtx->devAttr[ViDev].enInputDataType == VI_DATA_TYPE_YUV ||
-	     gViCtx->devAttr[ViDev].enInputDataType == VI_DATA_TYPE_YUV_EARLY) &&
-	      (gViCtx->devAttr[ViDev].enWorkMode > 0 &&
-	       gViCtx->devAttr[ViDev].enIntfMode >= VI_MODE_BT656 &&
-	       gViCtx->devAttr[ViDev].enIntfMode <= VI_MODE_BT1120_INTERLEAVED)) { // bt_demux
+	if ((g_vi_ctx->dev_attr[vi_dev].input_data_type == VI_DATA_TYPE_YUV ||
+	     g_vi_ctx->dev_attr[vi_dev].input_data_type == VI_DATA_TYPE_YUV_EARLY) &&
+	      (g_vi_ctx->dev_attr[vi_dev].work_mode > 0 &&
+	       g_vi_ctx->dev_attr[vi_dev].intf_mode >= VI_MODE_BT656 &&
+	       g_vi_ctx->dev_attr[vi_dev].intf_mode <= VI_MODE_BT1120_INTERLEAVED)) { // bt_demux
 		if (!(raw_num >= ISP_PRERAW_LITE0 && raw_num <= ISP_PRERAW_LITE1)) {
-			vi_pr(VI_ERR, "invalid bind mac(%d) from vi dev(%d)\n", mac_num, ViDev);
+			vi_pr(VI_ERR, "invalid bind mac(%d) from vi dev(%d)\n", mac_num, vi_dev);
 			return ret;
 		}
 	} else {
 		if (!(raw_num >= ISP_PRERAW0 && raw_num <= ISP_PRERAW5)) {
-			vi_pr(VI_ERR, "invalid bind mac(%d) from vi dev(%d)\n", mac_num, ViDev);
+			vi_pr(VI_ERR, "invalid bind mac(%d) from vi dev(%d)\n", mac_num, vi_dev);
 			return ret;
 		}
 	}
 
-	vi_pr(VI_INFO, "dev(%d) raw_num_%d bind to mac(%d)\n", ViDev, raw_num, mac_num);
+	vi_pr(VI_INFO, "dev(%d) raw_num_%d bind to mac(%d)\n", vi_dev, raw_num, mac_num);
 	ctx->isp_bind_info[raw_num].is_bind = true;
-	ctx->isp_bind_info[raw_num].bind_dev_num = ViDev;
+	ctx->isp_bind_info[raw_num].bind_dev_num = vi_dev;
 	ret = 0;
 
 	return ret;
 }
 
-int vi_sdk_qbuf(MMF_CHN_S chn, void *data)
+int vi_sdk_qbuf(mmf_chn_s chn, void *data)
 {
-	VB_BLK blk = vb_get_block_with_id(gViCtx->chnAttr[chn.s32ChnId].u32BindVbPool,
-					gViCtx->blk_size[chn.s32ChnId], CVI_ID_VI);
-	SIZE_S size = gViCtx->chnAttr[chn.s32ChnId].stSize;
-	int rc = CVI_SUCCESS;
+	struct isp_ctx *ctx = &gvdev->ctx;
+	int buf_chn = ctx->raw_chnstr_num[chn.dev_id] + chn.chn_id;
+
+	vb_blk blk = vb_get_block_with_id(g_vi_ctx->chn_attr[buf_chn].bind_vb_pool,
+					g_vi_ctx->blk_size[buf_chn], ID_VI);
+	size_s size = g_vi_ctx->chn_attr[buf_chn].size;
+	int rc = 0;
 
 	if (blk == VB_INVALID_HANDLE) {
-		gViCtx->chnStatus[chn.s32ChnId].u32VbFail++;
-		vi_pr(VI_DBG, "Can't acquire VB BLK for VI, size(%d)\n", gViCtx->blk_size[chn.s32ChnId]);
+		g_vi_ctx->chn_status[buf_chn].vb_fail++;
+		vi_pr(VI_DBG, "Can't acquire VB BLK for VI, size(%d)\n", g_vi_ctx->blk_size[buf_chn]);
 		return -ENOMEM;
 	}
 
 	// workaround for ldc 64-align for width/height.
-	if (gViCtx->enRotation[chn.s32ChnId] != ROTATION_0 || gViCtx->stLDCAttr[chn.s32ChnId].bEnable) {
-		size.u32Width = ALIGN(size.u32Width, LDC_ALIGN);
-		size.u32Height = ALIGN(size.u32Height, LDC_ALIGN);
+	if (g_vi_ctx->rotation[buf_chn] != ROTATION_0 || g_vi_ctx->ldc_attr[buf_chn].enable) {
+		size.width = ALIGN(size.width, LDC_ALIGN);
+		size.height = ALIGN(size.height, LDC_ALIGN);
 	}
 
-	base_get_frame_info(gViCtx->chnAttr[chn.s32ChnId].enPixelFormat
+	base_get_frame_info(g_vi_ctx->chn_attr[buf_chn].pixel_format
 			   , size
 			   , &((struct vb_s *)blk)->buf
 			   , vb_handle2phys_addr(blk)
 			   , DEFAULT_ALIGN);
 
-	((struct vb_s *)blk)->buf.s16OffsetTop = 0;
-	((struct vb_s *)blk)->buf.s16OffsetRight = size.u32Width - gViCtx->chnAttr[chn.s32ChnId].stSize.u32Width;
-	((struct vb_s *)blk)->buf.s16OffsetLeft = 0;
-	((struct vb_s *)blk)->buf.s16OffsetBottom = size.u32Height - gViCtx->chnAttr[chn.s32ChnId].stSize.u32Height;
+	((struct vb_s *)blk)->buf.offset_top = 0;
+	((struct vb_s *)blk)->buf.offset_right = size.width - g_vi_ctx->chn_attr[buf_chn].size.width;
+	((struct vb_s *)blk)->buf.offset_left = 0;
+	((struct vb_s *)blk)->buf.offset_bottom = size.height - g_vi_ctx->chn_attr[buf_chn].size.height;
 
-	rc = vb_qbuf(chn, CHN_TYPE_OUT, &stVijobs[chn.s32ChnId], blk);
+	rc = vb_qbuf(chn, CHN_TYPE_OUT, &vi_jobs[buf_chn], blk);
 	if (rc != 0) {
 		vi_pr(VI_ERR, "vb_qbuf failed\n");
 		return rc;
 	}
 
-	rc = _vi_sdk_drv_qbuf(&((struct vb_s *)blk)->buf, chn.s32ChnId);
+	rc = _vi_sdk_drv_qbuf(&((struct vb_s *)blk)->buf, chn.dev_id, chn.chn_id);
 	if (rc != 0) {
 		vi_pr(VI_ERR, "_vi_sdk_drv_qbuf failed\n");
 		return rc;
@@ -253,35 +256,35 @@ void vi_fill_mlv_info(struct vb_s *blk, u8 dev, struct mlv_i_s *m_lv_i, u8 is_vp
 	if (is_vpss_offline) {
 		u8 snr_num = blk->buf.dev_num;
 
-		blk->buf.motion_lv = gmLVi[snr_num].mlv_i_level;
-		memcpy(blk->buf.motion_table, gmLVi[snr_num].mlv_i_table, MO_TBL_SIZE);
+		blk->buf.motion_lv = g_mlv_i[snr_num].mlv_i_level;
+		memcpy(blk->buf.motion_table, g_mlv_i[snr_num].mlv_i_table, MO_TBL_SIZE);
 	} else {
 		u8 snr_num = dev;
 
-		m_lv_i->mlv_i_level = gmLVi[snr_num].mlv_i_level;
-		memcpy(m_lv_i->mlv_i_table, gmLVi[snr_num].mlv_i_table, MO_TBL_SIZE);
+		m_lv_i->mlv_i_level = g_mlv_i[snr_num].mlv_i_level;
+		memcpy(m_lv_i->mlv_i_table, g_mlv_i[snr_num].mlv_i_table, MO_TBL_SIZE);
 	}
 }
 
-s32 vi_set_motion_lv(struct mlv_info_s mlv_i)
+int vi_set_motion_lv(struct mlv_info_s mlv_i)
 {
 	if (mlv_i.sensor_num >= VI_MAX_DEV_NUM)
-		return CVI_FAILURE;
+		return -1;
 
-	gmLVi[mlv_i.sensor_num].mlv_i_level = mlv_i.mlv;
-	memcpy(gmLVi[mlv_i.sensor_num].mlv_i_table, mlv_i.mtable, MO_TBL_SIZE);
+	g_mlv_i[mlv_i.sensor_num].mlv_i_level = mlv_i.mlv;
+	memcpy(g_mlv_i[mlv_i.sensor_num].mlv_i_table, mlv_i.mtable, MO_TBL_SIZE);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 void vi_fill_dis_info(struct vb_s *blk)
 {
 	u8 snr_num = blk->buf.dev_num;
 	u32 frm_num = blk->buf.frm_num;
-	u8 isSetDisInfo = false;
+	u8 is_set_dis_info = false;
 	static struct crop_size_s dis_i[VI_MAX_DEV_NUM] = { 0 };
 
-	if (gViCtx->isDisEnable[snr_num]) {
+	if (g_vi_ctx->is_dis_enable[snr_num]) {
 		if (!wait_event_timeout(dis_wait_q[snr_num], dis_flag[snr_num] == 1, msecs_to_jiffies(10))) {
 			vi_pr(VI_ERR, "snr(%d) frm(%d) timeout\n", snr_num, frm_num);
 		}
@@ -289,11 +292,11 @@ void vi_fill_dis_info(struct vb_s *blk)
 		if (dis_flag[snr_num] == 1) {
 			if (dis_i_frm_num[snr_num] == frm_num) {
 				dis_i[snr_num] = dis_i_data[snr_num];
-				isSetDisInfo = true;
+				is_set_dis_info = true;
 			}
 
-			vi_pr(VI_DBG, "isSetDisInfo(%d) fill dis snr(%d), frm(%d), crop(%d, %d, %d, %d)\n"
-				, isSetDisInfo
+			vi_pr(VI_DBG, "is_set_dis_info(%d) fill dis snr(%d), frm(%d), crop(%d, %d, %d, %d)\n"
+				, is_set_dis_info
 				, snr_num
 				, frm_num
 				, dis_i[snr_num].start_x
@@ -311,7 +314,7 @@ void vi_fill_dis_info(struct vb_s *blk)
 	}
 }
 
-s32 vi_set_dis_info(struct dis_info_s dis_i)
+int vi_set_dis_info(struct dis_info_s dis_i)
 {
 	u32 frm_num = dis_i.frm_num;
 	u8 snr_num = dis_i.sensor_num;
@@ -319,7 +322,7 @@ s32 vi_set_dis_info(struct dis_info_s dis_i)
 
 	if (dis_i.sensor_num >= VI_MAX_DEV_NUM) {
 		vi_pr(VI_ERR, "invalid sensor_num(%d)\n", dis_i.sensor_num);
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	vi_pr(VI_DBG, "set dis snr(%d), frm(%d), crop(%d, %d, %d, %d)\n"
@@ -338,258 +341,257 @@ s32 vi_set_dis_info(struct dis_info_s dis_i)
 		wake_up(&dis_wait_q[snr_num]);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_set_bypass_frm(VI_PIPE pipe, u8 bypass_num)
+int vi_set_bypass_frm(int pipe, u8 bypass_num)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
 	ret = check_vi_pipe_valid(pipe);
-	if (ret != CVI_SUCCESS)
+	if (ret != 0)
 		return ret;
 
-	gViCtx->bypass_frm[pipe] = bypass_num;
+	g_vi_ctx->bypass_frm[pipe] = bypass_num;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_set_dev_attr(VI_DEV ViDev, const VI_DEV_ATTR_S *pstDevAttr)
+int vi_set_dev_attr(int vi_dev, const vi_dev_attr_s *dev_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	u32 chn_num = 1;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	memcpy(&gViCtx->devAttr[ViDev], pstDevAttr, sizeof(VI_DEV_ATTR_S));
+	memcpy(&g_vi_ctx->dev_attr[vi_dev], dev_attr, sizeof(vi_dev_attr_s));
 
-	if (pstDevAttr->enInputDataType == VI_DATA_TYPE_YUV) {
-		switch (pstDevAttr->enWorkMode) {
-		case VI_WORK_MODE_1Multiplex:
+	if (dev_attr->input_data_type == VI_DATA_TYPE_YUV) {
+		switch (dev_attr->work_mode) {
+		case VI_WORK_MODE_1MULTIPLEX:
 			chn_num = 1;
 			break;
-		case VI_WORK_MODE_2Multiplex:
+		case VI_WORK_MODE_2MULTIPLEX:
 			chn_num = 2;
 			break;
-		case VI_WORK_MODE_3Multiplex:
+		case VI_WORK_MODE_3MULTIPLEX:
 			chn_num = 3;
 			break;
-		case VI_WORK_MODE_4Multiplex:
+		case VI_WORK_MODE_4MULTIPLEX:
 			chn_num = 4;
 			break;
 		default:
-			vi_pr(VI_ERR, "SNR work mode(%d) is wrong\n", pstDevAttr->enWorkMode);
-			return CVI_FAILURE;
+			vi_pr(VI_ERR, "SNR work mode(%d) is wrong\n", dev_attr->work_mode);
+			return -1;
 		}
 	}
 
-	gViCtx->devAttr[ViDev].chn_num = chn_num;
+	g_vi_ctx->dev_attr[vi_dev].chn_num = chn_num;
 
-	vi_pr(VI_DBG, "dev=%d chn_num=%d\n", ViDev, chn_num);
+	vi_pr(VI_DBG, "dev=%d chn_num=%d\n", vi_dev, chn_num);
 
 	return ret;
 }
 
-s32 vi_get_dev_attr(VI_DEV ViDev, VI_DEV_ATTR_S *pstDevAttr)
+int vi_get_dev_attr(int vi_dev, vi_dev_attr_s *dev_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	*pstDevAttr = gViCtx->devAttr[ViDev];
+	*dev_attr = g_vi_ctx->dev_attr[vi_dev];
 
 	return ret;
 }
 
-s32 vi_set_dev_bind_attr(VI_DEV ViDev, const VI_DEV_BIND_PIPE_S *pstDevBindAttr)
+int vi_set_dev_bind_attr(int vi_dev, const vi_dev_bind_pipe_s *dev_bind_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	memcpy(&gViCtx->devBindPipeAttr[ViDev], pstDevBindAttr, sizeof(VI_DEV_BIND_PIPE_S));
+	memcpy(&g_vi_ctx->bind_pipe_attr[vi_dev], dev_bind_attr, sizeof(vi_dev_bind_pipe_s));
 
 	return ret;
 }
 
-s32 vi_get_dev_bind_attr(VI_DEV ViDev, VI_DEV_BIND_PIPE_S *pstDevBindAttr)
+int vi_get_dev_bind_attr(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	*pstDevBindAttr = gViCtx->devBindPipeAttr[ViDev];
+	*dev_bind_attr = g_vi_ctx->bind_pipe_attr[vi_dev];
 
 	return ret;
 }
 
-s32 vi_enable_dev(VI_DEV ViDev)
+int vi_enable_dev(int vi_dev)
 {
-	s32 ret = CVI_SUCCESS;
-	s32 raw_num = ISP_PRERAW0;
+	int ret = 0;
+	int raw_num = ISP_PRERAW0;
 	struct isp_ctx *ctx = &gvdev->ctx;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->devAttr[ViDev].stSize.u32Width == 0 &&
-		gViCtx->devAttr[ViDev].stSize.u32Height == 0) {
-		vi_pr(VI_ERR, "Call SetDevAttr first\n");
-		return CVI_ERR_VI_FAILED_NOTCONFIG;
+	if (g_vi_ctx->dev_attr[vi_dev].size.width == 0 &&
+	    g_vi_ctx->dev_attr[vi_dev].size.height == 0) {
+		vi_pr(VI_ERR, "Call Setdev_attr first\n");
+		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	ret = vi_set_dev_bind_info(ViDev, &gViCtx->devBindPipeAttr[ViDev]);
+	ret = vi_set_dev_bind_info(vi_dev, &g_vi_ctx->bind_pipe_attr[vi_dev]);
 	if (ret != 0) {
 		vi_pr(VI_ERR, "bind failed\n");
-		return CVI_ERR_VI_INVALID_PARA;
+		return ERR_VI_INVALID_PARA;
 	}
 
-	raw_num = vi_get_raw_num_by_dev(ctx, (u8)ViDev);
+	raw_num = vi_get_raw_num_by_dev(ctx, (u8)vi_dev);
 
-	ctx->isp_pipe_cfg[raw_num].is_offline_scaler = ctx->isp_pipe_offline_sc[(u8)ViDev];
+	ctx->isp_pipe_cfg[raw_num].is_offline_scaler = ctx->isp_pipe_offline_sc[(u8)vi_dev];
 
-	if (gViCtx->devAttr[ViDev].enInputDataType == VI_DATA_TYPE_YUV ||
-	    gViCtx->devAttr[ViDev].enInputDataType == VI_DATA_TYPE_YUV_EARLY) {
+	if (g_vi_ctx->dev_attr[vi_dev].input_data_type == VI_DATA_TYPE_YUV ||
+	    g_vi_ctx->dev_attr[vi_dev].input_data_type == VI_DATA_TYPE_YUV_EARLY) {
 		ctx->isp_pipe_cfg[raw_num].is_yuv_sensor	= true;
-		ctx->isp_pipe_cfg[raw_num].infMode		= gViCtx->devAttr[ViDev].enIntfMode;
-		ctx->isp_pipe_cfg[raw_num].muxMode		= gViCtx->devAttr[ViDev].enWorkMode;
-		ctx->isp_pipe_cfg[raw_num].enDataSeq		= gViCtx->devAttr[ViDev].enDataSeq;
-		ctx->isp_pipe_cfg[raw_num].yuv_scene_mode	= gViCtx->devAttr[ViDev].enYuvSceneMode;
+		ctx->isp_pipe_cfg[raw_num].inf_mode		= g_vi_ctx->dev_attr[vi_dev].intf_mode;
+		ctx->isp_pipe_cfg[raw_num].mux_mode		= g_vi_ctx->dev_attr[vi_dev].work_mode;
+		ctx->isp_pipe_cfg[raw_num].data_seq		= g_vi_ctx->dev_attr[vi_dev].data_seq;
+		ctx->isp_pipe_cfg[raw_num].yuv_scene_mode	= g_vi_ctx->dev_attr[vi_dev].yuv_scene_mode;
 	}
 
-	if (gViCtx->devAttr[ViDev].enIntfMode == VI_MODE_LVDS) {
+	if (g_vi_ctx->dev_attr[vi_dev].intf_mode == VI_MODE_LVDS) {
 		ctx->is_sublvds_path = true;
 		vi_pr(VI_WARN, "SUBLVDS_PATH_ON(%d)\n", ctx->is_sublvds_path);
 	}
 
-	dis_flag[ViDev] = 0;
-	init_waitqueue_head(&dis_wait_q[ViDev]);
+	dis_flag[vi_dev] = 0;
+	init_waitqueue_head(&dis_wait_q[vi_dev]);
 
 	ctx->isp_pipe_enable[raw_num] = true;
-	gViCtx->isDevEnable[ViDev] = true;
-	gViCtx->total_dev_num++;
+	g_vi_ctx->is_dev_enable[vi_dev] = true;
+	g_vi_ctx->total_dev_num++;
 
 #ifndef FPGA_PORTING
-	vi_mac_clk_ctrl(gvdev, gViCtx->devBindPipeAttr[ViDev].PipeId[0], true);
+	vi_mac_clk_ctrl(gvdev, g_vi_ctx->bind_pipe_attr[vi_dev].pipe_id[0], true);
 #endif
 	vi_pr(VI_DBG, "dev_%d, raw_num(%d) enable=%d, total_dev_num=%d\n",
-		ViDev, raw_num, gViCtx->isDevEnable[ViDev], gViCtx->total_dev_num);
+		vi_dev, raw_num, g_vi_ctx->is_dev_enable[vi_dev], g_vi_ctx->total_dev_num);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_disable_dev(VI_DEV ViDev)
+int vi_disable_dev(int vi_dev)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	u8 i = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isDevEnable[ViDev] == CVI_FALSE) {
-		vi_pr(VI_DBG, "vi dev(%d) is already disabled.", ViDev);
-		return CVI_SUCCESS;
+	if (g_vi_ctx->is_dev_enable[vi_dev] == 0) {
+		vi_pr(VI_DBG, "vi dev(%d) is already disabled.", vi_dev);
+		return 0;
 	}
 
-	gViCtx->isDevEnable[ViDev] = false;
-	memset(&gViCtx->devAttr[ViDev], 0, sizeof(VI_DEV_ATTR_S));
+	g_vi_ctx->is_dev_enable[vi_dev] = false;
+	memset(&g_vi_ctx->dev_attr[vi_dev], 0, sizeof(vi_dev_attr_s));
 
-	for (i = 0; i < gViCtx->total_dev_num; i++) {
-		if (gViCtx->isDevEnable[i]) {
+	for (i = 0; i < g_vi_ctx->total_dev_num; i++) {
+		if (g_vi_ctx->is_dev_enable[i])
 			return ret;
-		}
 	}
 
 #ifndef FPGA_PORTING
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (gViCtx->devBindPipeAttr[i].u32Num) {
-			vi_mac_clk_ctrl(gvdev, gViCtx->devBindPipeAttr[i].PipeId[0], false);
-			memset(&gViCtx->devBindPipeAttr[i], 0, sizeof(VI_DEV_BIND_PIPE_S));
+		if (g_vi_ctx->bind_pipe_attr[i].num) {
+			vi_mac_clk_ctrl(gvdev, g_vi_ctx->bind_pipe_attr[i].pipe_id[0], false);
+			memset(&g_vi_ctx->bind_pipe_attr[i], 0, sizeof(vi_dev_bind_pipe_s));
 		}
 	}
 #endif
 
-	memset(gViCtx, 0, sizeof(struct cvi_vi_ctx));
+	memset(g_vi_ctx, 0, sizeof(struct sop_vi_ctx));
 
 	return ret;
 }
 
-s32 vi_create_pipe(VI_PIPE ViPipe, VI_PIPE_ATTR_S *pstPipeAttr)
+int vi_create_pipe(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isPipeCreated[ViPipe] == CVI_TRUE) {
-		vi_pr(VI_ERR, "Pipe(%d) has been created\n", ViPipe);
-		return CVI_ERR_VI_PIPE_EXIST;
+	if (g_vi_ctx->is_pipe_created[vi_pipe] == 1) {
+		vi_pr(VI_ERR, "Pipe(%d) has been created\n", vi_pipe);
+		return ERR_VI_PIPE_EXIST;
 	}
 
-	ret = check_vi_size_valid(pstPipeAttr->u32MaxW, pstPipeAttr->u32MaxH);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_size_valid(pipe_attr->max_width, pipe_attr->max_height);
+	if (ret != 0)
 		return ret;
 
-	//Clear pipeAttr first.
-	memset(&gViCtx->pipeAttr[ViPipe], 0, sizeof(gViCtx->pipeAttr[ViPipe]));
+	//Clear pipe_attr first.
+	memset(&g_vi_ctx->pipe_attr[vi_pipe], 0, sizeof(g_vi_ctx->pipe_attr[vi_pipe]));
 
-	gViCtx->isPipeCreated[ViPipe] = true;
-	if (!(gViCtx->enSource[ViPipe] == VI_PIPE_FRAME_SOURCE_USER_FE ||
-		gViCtx->enSource[ViPipe] == VI_PIPE_FRAME_SOURCE_USER_BE))
-		gViCtx->enSource[ViPipe] = VI_PIPE_FRAME_SOURCE_DEV;
-	gViCtx->pipeAttr[ViPipe] = *pstPipeAttr;
+	g_vi_ctx->is_pipe_created[vi_pipe] = true;
+	if (!(g_vi_ctx->source[vi_pipe] == VI_PIPE_FRAME_SOURCE_USER_FE ||
+	      g_vi_ctx->source[vi_pipe] == VI_PIPE_FRAME_SOURCE_USER_BE))
+		g_vi_ctx->source[vi_pipe] = VI_PIPE_FRAME_SOURCE_DEV;
+	g_vi_ctx->pipe_attr[vi_pipe] = *pipe_attr;
 
-	vi_pr(VI_DBG, "pipeCreated=%d\n", gViCtx->isPipeCreated[ViPipe]);
+	vi_pr(VI_DBG, "pipeCreated=%d\n", g_vi_ctx->is_pipe_created[vi_pipe]);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_destroy_pipe(VI_PIPE ViPipe)
+int vi_destroy_pipe(int vi_pipe)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isPipeCreated[ViPipe] == false) {
-		vi_pr(VI_INFO, "Pipe(%d) has been not created\n", ViPipe);
-		return CVI_SUCCESS;
+	if (!g_vi_ctx->is_pipe_created[vi_pipe]) {
+		vi_pr(VI_INFO, "Pipe(%d) has been not created\n", vi_pipe);
+		return 0;
 	}
 
-	memset(&gViCtx->pipeAttr[ViPipe], 0, sizeof(VI_PIPE_ATTR_S));
-	memset(&gViCtx->dumpAttr[ViPipe], 0, sizeof(VI_DUMP_ATTR_S));
-	memset(&gViCtx->pipeCrop[ViPipe], 0, sizeof(CROP_INFO_S));
-	gViCtx->isPipeCreated[ViPipe] = false;
+	memset(&g_vi_ctx->pipe_attr[vi_pipe], 0, sizeof(vi_pipe_attr_s));
+	memset(&g_vi_ctx->dump_attr[vi_pipe], 0, sizeof(vi_dump_attr_s));
+	memset(&g_vi_ctx->pipe_crop[vi_pipe], 0, sizeof(crop_info_s));
+	g_vi_ctx->is_pipe_created[vi_pipe] = false;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_start_pipe(VI_PIPE ViPipe)
+int vi_start_pipe(int vi_pipe)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->pipeAttr[0].enCompressMode == COMPRESS_MODE_TILE) {
+	if (g_vi_ctx->pipe_attr[0].compress_mode == COMPRESS_MODE_TILE) {
 		ctx->is_dpcm_on = true;
 		vi_pr(VI_WARN, "ISP_COMPRESS_ON(%d)\n", ctx->is_dpcm_on);
 	}
@@ -599,76 +601,76 @@ s32 vi_start_pipe(VI_PIPE ViPipe)
 	return ret;
 }
 
-s32 vi_set_chn_attr(VI_PIPE ViPipe, VI_CHN ViChn, VI_CHN_ATTR_S *pstChnAttr)
+int vi_set_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 {
-	s32 ret = CVI_SUCCESS;
-	VB_CAL_CONFIG_S stVbCalConfig;
+	int ret = 0;
+	vb_cal_config_s vb_cal_config;
 	u32 chn_num = 1;
-	u8 chn_str = gViCtx->total_chn_num;
+	u8 chn_str = g_vi_ctx->total_chn_num;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	if (pstChnAttr->enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_420 ||
-		pstChnAttr->enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_422) //RGB sensor or YUV sensor
-		pstChnAttr->enPixelFormat = PIXEL_FORMAT_NV21;
+	if (chn_attr->pixel_format == PIXEL_FORMAT_YUV_PLANAR_420 ||
+	    chn_attr->pixel_format == PIXEL_FORMAT_YUV_PLANAR_422) //RGB sensor or YUV sensor
+		chn_attr->pixel_format = PIXEL_FORMAT_NV21;
 
-	pstChnAttr->u32BindVbPool = VB_INVALID_POOLID;
-	chn_num = gViCtx->total_chn_num + gViCtx->devAttr[ViChn].chn_num;
+	chn_attr->bind_vb_pool = VB_INVALID_POOLID;
+	chn_num = g_vi_ctx->total_chn_num + g_vi_ctx->dev_attr[vi_chn].chn_num;
 
 	for (; chn_str < chn_num; chn_str++) {
-		gViCtx->chnAttr[chn_str] = *pstChnAttr;
+		g_vi_ctx->chn_attr[chn_str] = *chn_attr;
 
-		COMMON_GetPicBufferConfig(pstChnAttr->stSize.u32Width, pstChnAttr->stSize.u32Height,
-					pstChnAttr->enPixelFormat, DATA_BITWIDTH_8
-					, COMPRESS_MODE_NONE, DEFAULT_ALIGN, &stVbCalConfig);
+		common_getpicbufferconfig(chn_attr->size.width, chn_attr->size.height,
+					  chn_attr->pixel_format, DATA_BITWIDTH_8,
+					  COMPRESS_MODE_NONE, DEFAULT_ALIGN, &vb_cal_config);
 
-		gViCtx->blk_size[chn_str] = stVbCalConfig.u32VBSize;
+		g_vi_ctx->blk_size[chn_str] = vb_cal_config.vb_size;
 	}
 
-	gViCtx->total_chn_num += gViCtx->devAttr[ViChn].chn_num;
+	g_vi_ctx->total_chn_num += g_vi_ctx->dev_attr[vi_chn].chn_num;
 
-	vi_pr(VI_DBG, "total_chn_num=%d, blk_size=%d\n", gViCtx->total_chn_num, stVbCalConfig.u32VBSize);
-
-	return ret;
-}
-
-s32 vi_get_chn_attr(VI_PIPE ViPipe, VI_CHN ViChn, VI_CHN_ATTR_S *pstChnAttr)
-{
-	s32 ret = CVI_SUCCESS;
-
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	*pstChnAttr = gViCtx->chnAttr[ViChn];
+	vi_pr(VI_DBG, "total_chn_num=%d, blk_size=%d\n", g_vi_ctx->total_chn_num, vb_cal_config.vb_size);
 
 	return ret;
 }
 
-s32 vi_set_dev_timing_attr(VI_DEV ViDev, const VI_DEV_TIMING_ATTR_S *pstTimingAttr)
+int vi_get_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->stTimingAttr[ViDev] = *pstTimingAttr;
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
+		return ret;
 
-	if (pstTimingAttr->s32FrmRate > 30)
+	*chn_attr = g_vi_ctx->chn_attr[vi_chn];
+
+	return ret;
+}
+
+int vi_set_dev_timing_attr(int vi_dev, const vi_dev_timing_attr_s *timing_attr)
+{
+	int ret = 0;
+
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
+		return ret;
+
+	g_vi_ctx->timing_attr[vi_dev] = *timing_attr;
+
+	if (timing_attr->frm_rate > 30)
 		gvdev->usr_pic_delay = msecs_to_jiffies(33);
-	else if (pstTimingAttr->s32FrmRate > 0)
-		gvdev->usr_pic_delay = msecs_to_jiffies(1000 / pstTimingAttr->s32FrmRate);
+	else if (timing_attr->frm_rate > 0)
+		gvdev->usr_pic_delay = msecs_to_jiffies(1000 / timing_attr->frm_rate);
 	else
 		gvdev->usr_pic_delay = 0;
 
@@ -678,77 +680,77 @@ s32 vi_set_dev_timing_attr(VI_DEV ViDev, const VI_DEV_TIMING_ATTR_S *pstTimingAt
 	return ret;
 }
 
-s32 vi_get_dev_timing_attr(VI_DEV ViDev, VI_DEV_TIMING_ATTR_S *pstTimingAttr)
+int vi_get_dev_timing_attr(int vi_dev, vi_dev_timing_attr_s *timing_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_dev_valid(ViDev);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isDevEnable[ViDev] == CVI_FALSE) {
+	if (g_vi_ctx->is_dev_enable[vi_dev] == 0) {
 		vi_pr(VI_ERR, "EnableDev first\n");
-		return CVI_ERR_VI_FAILED_NOT_ENABLED;
+		return ERR_VI_FAILED_NOT_ENABLED;
 	}
 
-	if (gViCtx->stTimingAttr[ViDev].bEnable == CVI_FALSE) {
+	if (g_vi_ctx->timing_attr[vi_dev].enable == 0) {
 		vi_pr(VI_ERR, "SetDevTimingAttr first\n");
-		return CVI_ERR_VI_FAILED_NOTCONFIG;
+		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	*pstTimingAttr = gViCtx->stTimingAttr[ViDev];
+	*timing_attr = g_vi_ctx->timing_attr[vi_dev];
 
 	return ret;
 }
 
-s32 vi_get_pipe_status(VI_PIPE ViPipe, VI_PIPE_STATUS_S *pstStatus)
+int vi_get_pipe_status(int vi_pipe, vi_pipe_status_s *pipe_status)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	pstStatus->bEnable = gViCtx->isChnEnable[ViPipe];
-	pstStatus->stSize.u32Height = gViCtx->pipeAttr[ViPipe].u32MaxH;
-	pstStatus->stSize.u32Width = gViCtx->pipeAttr[ViPipe].u32MaxW;
-	pstStatus->u32FrameRate = gViCtx->pipeAttr[ViPipe].stFrameRate.s32SrcFrameRate;
+	pipe_status->enable = g_vi_ctx->is_chn_enable[vi_pipe];
+	pipe_status->size.height = g_vi_ctx->pipe_attr[vi_pipe].max_height;
+	pipe_status->size.width = g_vi_ctx->pipe_attr[vi_pipe].max_width;
+	pipe_status->frame_rate = g_vi_ctx->pipe_attr[vi_pipe].frame_rate.src_frame_rate;
 
 	return ret;
 }
 
-s32 vi_get_chn_status(VI_CHN ViChn, VI_CHN_STATUS_S *pstStatus)
+int vi_get_chn_status(int vi_chn, vi_chn_status_s *pipe_status)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_enable(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_enable(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	*pstStatus = gViCtx->chnStatus[ViChn];
+	*pipe_status = g_vi_ctx->chn_status[vi_chn];
 
 	return ret;
 }
 
-s32 vi_set_pipe_frame_source(VI_PIPE ViPipe, const VI_PIPE_FRAME_SOURCE_E enSource)
+int vi_set_pipe_frame_source(int vi_pipe, const vi_pipe_frame_source_e source)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->enSource[ViPipe] = enSource;
-	gvdev->isp_source = (u32)enSource;
-	gvdev->ctx.isp_pipe_cfg[ISP_PRERAW0].is_raw_replay_fe = (gvdev->isp_source == CVI_ISP_SOURCE_FE);
-	gvdev->ctx.isp_pipe_cfg[ISP_PRERAW0].is_raw_replay_be = (gvdev->isp_source == CVI_ISP_SOURCE_BE);
+	g_vi_ctx->source[vi_pipe] = source;
+	gvdev->isp_source = (u32)source;
+	gvdev->ctx.isp_pipe_cfg[ISP_PRERAW0].is_raw_replay_fe = (gvdev->isp_source == ISP_SOURCE_FE);
+	gvdev->ctx.isp_pipe_cfg[ISP_PRERAW0].is_raw_replay_be = (gvdev->isp_source == ISP_SOURCE_BE);
 
 	vi_pr(VI_INFO, "isp_source=%d\n", gvdev->isp_source);
 	vi_pr(VI_INFO, "ISP_PRERAW0.is_raw_replay_fe=%d, ISP_PRERAW0.is_raw_replay_be=%d\n",
@@ -758,78 +760,78 @@ s32 vi_set_pipe_frame_source(VI_PIPE ViPipe, const VI_PIPE_FRAME_SOURCE_E enSour
 	return ret;
 }
 
-s32 vi_get_pipe_frame_source(VI_PIPE ViPipe, VI_PIPE_FRAME_SOURCE_E *penSource)
+int vi_get_pipe_frame_source(int vi_pipe, vi_pipe_frame_source_e *psource)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	*penSource = gViCtx->enSource[ViPipe];
+	*psource = g_vi_ctx->source[vi_pipe];
 
 	return ret;
 }
 
-s32 vi_send_pipe_raw(VI_PIPE ViPipe, const VIDEO_FRAME_INFO_S *pstVideoFrame)
+int vi_send_pipe_raw(int vi_pipe, const video_frame_info_s *pvideo_frame)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
 	u64 phy_addr;
 	u32 dmaid_le, dmaid_se;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->enSource[ViPipe] == VI_PIPE_FRAME_SOURCE_DEV) {
-		vi_pr(VI_ERR, "Pipe(%d) source(%d) incorrect.\n", ViPipe, gViCtx->enSource[ViPipe]);
-		return CVI_FAILURE;
+	if (g_vi_ctx->source[vi_pipe] == VI_PIPE_FRAME_SOURCE_DEV) {
+		vi_pr(VI_ERR, "Pipe(%d) source(%d) incorrect.\n", vi_pipe, g_vi_ctx->source[vi_pipe]);
+		return -1;
 	}
 
-	if (IS_FRAME_OFFSET_INVALID(pstVideoFrame->stVFrame)) {
+	if (IS_FRAME_OFFSET_INVALID(pvideo_frame->video_frame)) {
 		vi_pr(VI_ERR, "Pipe(%d) frame size (%d %d) offset (%d %d %d %d) invalid\n",
-			ViPipe, pstVideoFrame->stVFrame.u32Width, pstVideoFrame->stVFrame.u32Height,
-			pstVideoFrame->stVFrame.s16OffsetLeft, pstVideoFrame->stVFrame.s16OffsetRight,
-			pstVideoFrame->stVFrame.s16OffsetTop, pstVideoFrame->stVFrame.s16OffsetBottom);
-		return CVI_ERR_VI_INVALID_PARA;
+			vi_pipe, pvideo_frame->video_frame.width, pvideo_frame->video_frame.height,
+			pvideo_frame->video_frame.offset_left, pvideo_frame->video_frame.offset_right,
+			pvideo_frame->video_frame.offset_top, pvideo_frame->video_frame.offset_bottom);
+		return ERR_VI_INVALID_PARA;
 	}
 
-	if (gViCtx->enSource[ViPipe] == VI_PIPE_FRAME_SOURCE_USER_FE) {
+	if (g_vi_ctx->source[vi_pipe] == VI_PIPE_FRAME_SOURCE_USER_FE) {
 		dmaid_le = ISP_BLK_ID_DMA_CTL_SPLT_FE0_RDMA_LE;
 		dmaid_se = ISP_BLK_ID_DMA_CTL_SPLT_FE0_RDMA_SE;
 		// TODO
 		// tile mode
-	} else if (gViCtx->enSource[ViPipe] == VI_PIPE_FRAME_SOURCE_USER_BE) {
+	} else if (g_vi_ctx->source[vi_pipe] == VI_PIPE_FRAME_SOURCE_USER_BE) {
 		dmaid_le = ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE;
 		dmaid_se = ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE;
 	}
 
-	if (pstVideoFrame->stVFrame.enDynamicRange == DYNAMIC_RANGE_HDR10) {
+	if (pvideo_frame->video_frame.dynamic_range == DYNAMIC_RANGE_HDR10) {
 		ctx->is_hdr_on = true;
 		ctx->isp_pipe_cfg[ISP_PRERAW0].is_hdr_on = true;
 		vi_pr(VI_INFO, "HDR_ON(%d) for raw replay\n", ctx->is_hdr_on);
 	}
 
-	gvdev->usr_fmt.width	= pstVideoFrame->stVFrame.u32Width;
-	gvdev->usr_fmt.height	= pstVideoFrame->stVFrame.u32Height;
-	gvdev->usr_fmt.code	= pstVideoFrame->stVFrame.enBayerFormat;
-	gvdev->usr_crop.left	= pstVideoFrame->stVFrame.s16OffsetLeft;
-	gvdev->usr_crop.top	= pstVideoFrame->stVFrame.s16OffsetTop;
-	gvdev->usr_crop.width	= (pstVideoFrame->stVFrame.s16OffsetRight != 0)
-					? pstVideoFrame->stVFrame.s16OffsetRight
-					: pstVideoFrame->stVFrame.u32Width;
-	gvdev->usr_crop.height	= (pstVideoFrame->stVFrame.s16OffsetBottom != 0)
-					? pstVideoFrame->stVFrame.s16OffsetBottom
-					: pstVideoFrame->stVFrame.u32Height;
+	gvdev->usr_fmt.width	= pvideo_frame->video_frame.width;
+	gvdev->usr_fmt.height	= pvideo_frame->video_frame.height;
+	gvdev->usr_fmt.code	= pvideo_frame->video_frame.bayer_format;
+	gvdev->usr_crop.left	= pvideo_frame->video_frame.offset_left;
+	gvdev->usr_crop.top	= pvideo_frame->video_frame.offset_top;
+	gvdev->usr_crop.width	= (pvideo_frame->video_frame.offset_right != 0)
+					? pvideo_frame->video_frame.offset_right
+					: pvideo_frame->video_frame.width;
+	gvdev->usr_crop.height	= (pvideo_frame->video_frame.offset_bottom != 0)
+					? pvideo_frame->video_frame.offset_bottom
+					: pvideo_frame->video_frame.height;
 
-	phy_addr = pstVideoFrame->stVFrame.u64PhyAddr[0];
+	phy_addr = pvideo_frame->video_frame.phyaddr[0];
 	ispblk_dma_setaddr(ctx, dmaid_le, phy_addr);
 	gvdev->usr_pic_phy_addr[ISP_RAW_PATH_LE] = phy_addr;
 	vi_pr(VI_INFO, "raw_replay le(0x%llx)\n", gvdev->usr_pic_phy_addr[ISP_RAW_PATH_LE]);
 
 	if (ctx->is_hdr_on) {
-		phy_addr = pstVideoFrame->stVFrame.u64PhyAddr[1];
+		phy_addr = pvideo_frame->video_frame.phyaddr[1];
 		ispblk_dma_setaddr(ctx, dmaid_se, phy_addr);
 		gvdev->usr_pic_phy_addr[ISP_RAW_PATH_SE] = phy_addr;
 		vi_pr(VI_INFO, "raw_replay se(0x%llx)\n", gvdev->usr_pic_phy_addr[ISP_RAW_PATH_SE]);
@@ -842,58 +844,63 @@ s32 vi_send_pipe_raw(VI_PIPE ViPipe, const VIDEO_FRAME_INFO_S *pstVideoFrame)
 	return ret;
 }
 
-s32 vi_enable_chn(VI_CHN ViChn)
+int vi_enable_chn(int vi_chn)
 {
 	int rc = 0, i = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
-	enum cvi_isp_raw raw_num = ISP_PRERAW0;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	u8 create_thread = false;
-	u8 dev_num = 0;
 
-	for (i = 0; i < gViCtx->total_chn_num; i++) {
-		u8 num_buffers = 0;
-		MMF_CHN_S chn = {.enModId = CVI_ID_VI, .s32DevId = 0, .s32ChnId = i};
-
-		if (i == 0)
-			num_buffers = CVI_VI_CHN_0_BUF;
-		else if (i == 1)
-			num_buffers = CVI_VI_CHN_1_BUF;
-		else if (i == 2)
-			num_buffers = CVI_VI_CHN_2_BUF;
-		else
-			num_buffers = CVI_VI_CHN_3_BUF;
-
-		ViChn = i;
-		gViCtx->isChnEnable[ViChn] = CVI_TRUE;
-		gViCtx->chnStatus[ViChn].bEnable = CVI_TRUE;
-		gViCtx->chnStatus[ViChn].stSize.u32Width = gViCtx->chnAttr[ViChn].stSize.u32Width;
-		gViCtx->chnStatus[ViChn].stSize.u32Height = gViCtx->chnAttr[ViChn].stSize.u32Height;
-		gViCtx->chnStatus[ViChn].u32IntCnt = 0;
-		gViCtx->chnStatus[ViChn].u32FrameNum = 0;
-		gViCtx->chnStatus[ViChn].u64PrevTime = 0;
-		gViCtx->chnStatus[ViChn].u32FrameRate = 0;
-
-		base_mod_jobs_init(&stVijobs[chn.s32ChnId], 0, num_buffers, gViCtx->chnAttr[i].u32Depth);
-
-		raw_num = vi_get_raw_num_by_dev(ctx, i);
-		if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
-			u8 j = 0;
-
-			for (j = 0; j < num_buffers; j++) {
-				rc = vi_sdk_qbuf(chn, NULL);
-				if (rc) {
-					vi_pr(VI_ERR, "vi_qbuf error (%d)", rc);
-					goto ERR_QBUF;
-				}
-			}
+	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
+		if (!ctx->isp_pipe_enable[raw_num]) {
+			continue;
 		}
-	}
 
-	for (dev_num = ISP_PRERAW0; dev_num < gViCtx->total_dev_num; dev_num++) {
-		raw_num = vi_get_raw_num_by_dev(ctx, dev_num);
+		if (_is_right_tile(ctx, raw_num))
+			continue;
+
 		if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
 			create_thread = true;
-			break;
+		}
+
+		for (i = 0;
+			i < (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor ? (ctx->isp_pipe_cfg[raw_num].mux_mode + 1) : 1);
+			i++) {
+			u8 num_buffers = 0;
+			mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = raw_num, .chn_id = i};
+
+			if (i == 0)
+				num_buffers = VI_CHN_0_BUF;
+			else if (i == 1)
+				num_buffers = VI_CHN_1_BUF;
+			else if (i == 2)
+				num_buffers = VI_CHN_2_BUF;
+			else
+				num_buffers = VI_CHN_3_BUF;
+
+			vi_chn = ctx->raw_chnstr_num[raw_num] + i;
+			g_vi_ctx->is_chn_enable[vi_chn] = 1;
+			g_vi_ctx->chn_status[vi_chn].enable = 1;
+			g_vi_ctx->chn_status[vi_chn].size.width = g_vi_ctx->chn_attr[vi_chn].size.width;
+			g_vi_ctx->chn_status[vi_chn].size.height = g_vi_ctx->chn_attr[vi_chn].size.height;
+			g_vi_ctx->chn_status[vi_chn].int_cnt = 0;
+			g_vi_ctx->chn_status[vi_chn].frame_num = 0;
+			g_vi_ctx->chn_status[vi_chn].prev_time = 0;
+			g_vi_ctx->chn_status[vi_chn].frame_rate = 0;
+
+			base_mod_jobs_init(&vi_jobs[vi_chn], 0, num_buffers, g_vi_ctx->chn_attr[vi_chn].depth);
+
+			if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
+				u8 j = 0;
+
+				for (j = 0; j < num_buffers; j++) {
+					rc = vi_sdk_qbuf(chn, NULL);
+					if (rc) {
+						vi_pr(VI_ERR, "vi_qbuf error (%d)", rc);
+						goto ERR_QBUF;
+					}
+				}
+			}
 		}
 	}
 
@@ -919,37 +926,37 @@ ERR_START_STREAMING:
 	vi_destory_thread(gvdev, E_VI_TH_EVENT_HANDLER);
 ERR_CREATE_THREAD:
 ERR_QBUF:
-	for (i = 0; i < gViCtx->total_chn_num; i++) {
-		MMF_CHN_S chn = {.enModId = CVI_ID_VI, .s32DevId = 0, .s32ChnId = i};
+	for (i = 0; i < g_vi_ctx->total_chn_num; i++) {
+		mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = 0, .chn_id = i};
 
-		base_mod_jobs_exit(&stVijobs[chn.s32ChnId]);
+		base_mod_jobs_exit(&vi_jobs[chn.chn_id]);
 	}
 
 	return rc;
 }
 
-s32 vi_disable_chn(VI_CHN ViChn)
+int vi_disable_chn(int vi_chn)
 {
-	int rc = CVI_SUCCESS, i = 0, j = 0;
+	int rc = 0, i = 0, j = 0;
+	struct isp_ctx *ctx = &gvdev->ctx;
 
-	for (i = 0; i < gViCtx->total_chn_num; i++) {
-		ViChn = i;
+	for (i = 0; i < ctx->total_chn_num; i++) {
+		vi_chn = i;
 
-		gViCtx->isChnEnable[ViChn] = CVI_FALSE;
-		gViCtx->chnStatus[ViChn].bEnable = CVI_FALSE;
-		gViCtx->chnStatus[ViChn].u32FrameNum = 0;
-		gViCtx->chnStatus[ViChn].u64PrevTime = 0;
-		gViCtx->chnStatus[ViChn].u32FrameRate = 0;
+		g_vi_ctx->is_chn_enable[vi_chn] = 0;
+		g_vi_ctx->chn_status[vi_chn].enable = 0;
+		g_vi_ctx->chn_status[vi_chn].frame_num = 0;
+		g_vi_ctx->chn_status[vi_chn].prev_time = 0;
+		g_vi_ctx->chn_status[vi_chn].frame_rate = 0;
 
 #if 0
-		if (g_vi_mesh[ViChn].paddr && g_vi_mesh[ViChn].paddr != DEFAULT_MESH_PADDR) {
-			base_ion_free(g_vi_mesh[ViChn].paddr);
-		}
+		if (g_vi_mesh[vi_chn].paddr && g_vi_mesh[vi_chn].paddr != DEFAULT_MESH_PADDR)
+			base_ion_free(g_vi_mesh[vi_chn].paddr);
 #endif
-		g_vi_mesh[ViChn].paddr = 0;
-		g_vi_mesh[ViChn].vaddr = 0;
+		g_vi_mesh[vi_chn].paddr = 0;
+		g_vi_mesh[vi_chn].vaddr = 0;
 
-		if (ViChn == (gViCtx->total_chn_num - 1)) {
+		if (vi_chn == (ctx->total_chn_num - 1)) {
 
 			vi_destory_thread(gvdev, E_VI_TH_EVENT_HANDLER);
 			vi_destory_dbg_thread(gvdev);
@@ -961,246 +968,245 @@ s32 vi_disable_chn(VI_CHN ViChn)
 
 			atomic_set(&gvdev->isp_streamon, 0);
 
-			for (j = 0; j < gViCtx->total_chn_num; j++) {
-				MMF_CHN_S chn = {.enModId = CVI_ID_VI, .s32DevId = 0, .s32ChnId = j};
+			for (j = 0; j < ctx->total_chn_num; j++) {
+				mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = 0, .chn_id = j};
 
-				base_mod_jobs_exit(&stVijobs[chn.s32ChnId]);
+				base_mod_jobs_exit(&vi_jobs[chn.chn_id]);
 			}
 
-			gViCtx->total_chn_num = 0;
-			gViCtx->total_dev_num = 0;
+			ctx->total_chn_num = 0;
+			g_vi_ctx->total_chn_num = 0;
+			g_vi_ctx->total_dev_num = 0;
 		}
 	}
-
 	return rc;
 }
 
-s32 vi_sdk_enable_chn(VI_PIPE ViPipe, VI_CHN ViChn)
+int vi_sdk_enable_chn(int vi_pipe, int vi_chn)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isChnEnable[ViChn] == CVI_TRUE) {
-		vi_pr(VI_ERR, "vi chn(%d) is already enabled.\n", ViChn);
-		return CVI_ERR_VI_FAILED_NOT_DISABLED;
+	if (g_vi_ctx->is_chn_enable[vi_chn] == 1) {
+		vi_pr(VI_ERR, "vi chn(%d) is already enabled.\n", vi_chn);
+		return ERR_VI_FAILED_NOT_DISABLED;
 	}
 
-	if (gViCtx->total_dev_num != ViChn + 1)
-		return CVI_SUCCESS;
+	if (g_vi_ctx->total_dev_num != vi_chn + 1)
+		return 0;
 
 	ret = vi_get_ion_buf(gvdev);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "VI getIonBuf is failed\n");
 		return ret;
 	}
 
 	ret = vi_enable_chn(0);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "VI enable chn is failed\n");
 		return ret;
 	}
 
-	return CVI_SUCCESS_ALL_CHN;
+	return 0;
 }
 
-s32 vi_sdk_disable_chn(VI_PIPE ViPipe, VI_CHN ViChn)
+int vi_sdk_disable_chn(int vi_pipe, int vi_chn)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	u8  i = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->isChnEnable[ViChn] == CVI_FALSE) {
-		vi_pr(VI_INFO, "vi chn(%d) is already disabled.", ViChn);
-		return CVI_SUCCESS;
+	if (g_vi_ctx->is_chn_enable[vi_chn] == 0) {
+		vi_pr(VI_INFO, "vi chn(%d) is already disabled.", vi_chn);
+		return 0;
 	}
 
-	gViCtx->isChnEnable[ViChn] = CVI_FALSE;
-	memset(&gViCtx->chnAttr[ViChn], 0, sizeof(VI_CHN_ATTR_S));
-	memset(&gViCtx->chnCrop[ViChn], 0, sizeof(VI_CROP_INFO_S));
+	g_vi_ctx->is_chn_enable[vi_chn] = 0;
+	memset(&g_vi_ctx->chn_attr[vi_chn], 0, sizeof(vi_chn_attr_s));
+	memset(&g_vi_ctx->chn_crop[vi_chn], 0, sizeof(vi_crop_info_s));
 
-	for (i = 0; i < gViCtx->total_chn_num; i++) {
-		if (gViCtx->isChnEnable[i]) {
-			return CVI_SUCCESS;
-		}
+	for (i = 0; i < g_vi_ctx->total_chn_num; i++) {
+		if (g_vi_ctx->is_chn_enable[i])
+			return 0;
 	}
 
 	ret = vi_disable_chn(0);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "VI disable chn is failed\n");
 		return ret;
 	}
 
 	ret = vi_free_ion_buf(gvdev);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "VI freeIonBuf is failed\n");
-		return CVI_ERR_SYS_ILLEGAL_PARAM;
+		return ERR_SYS_ILLEGAL_PARAM;
 	}
 
-	return CVI_SUCCESS_ALL_CHN;
+	return 0;
 }
 
-s32 vi_get_chn_frame(VI_PIPE ViPipe, VI_CHN ViChn, VIDEO_FRAME_INFO_S *pstFrameInfo, s32 s32MilliSec)
+int vi_get_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info, int millisec)
 {
-	VB_BLK blk;
+	vb_blk blk;
 	struct vb_s *vb;
-	s32 ret;
-	MMF_CHN_S chn = {.enModId = CVI_ID_VI, .s32DevId = ViPipe, .s32ChnId = ViChn};
-	s32 i = 0;
+	int ret;
+	mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = vi_pipe, .chn_id = vi_chn};
+	int i = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_enable(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_enable(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	memset(pstFrameInfo, 0, sizeof(*pstFrameInfo));
-	ret = base_get_chn_buffer(chn, &stVijobs[chn.s32ChnId], &blk, s32MilliSec);
-	if (ret != CVI_SUCCESS) {
-		vi_pr(VI_DBG, "vi get buf fail\n");
-		return CVI_FAILURE;
+	memset(frame_info, 0, sizeof(*frame_info));
+	ret = base_get_chn_buffer(chn, &vi_jobs[chn.chn_id], &blk, millisec);
+	if (ret != 0) {
+		vi_pr(VI_ERR, "vi get pipe_%d, chn_%d buf fail\n", vi_pipe, vi_chn);
+		return -1;
 	}
 
 	vb = (struct vb_s *)blk;
-	if (ViChn >= VI_EXT_CHN_START)
-		pstFrameInfo->stVFrame.enPixelFormat = gViCtx->stExtChnAttr[ViChn - VI_EXT_CHN_START].enPixelFormat;
+	if (vi_chn >= VI_EXT_CHN_START)
+		frame_info->video_frame.pixel_format = g_vi_ctx->ext_chn_attr[vi_chn - VI_EXT_CHN_START].pixel_format;
 	else
-		pstFrameInfo->stVFrame.enPixelFormat = gViCtx->chnAttr[ViChn].enPixelFormat;
-	pstFrameInfo->stVFrame.u32Width = vb->buf.size.u32Width;
-	pstFrameInfo->stVFrame.u32Height = vb->buf.size.u32Height;
-	pstFrameInfo->stVFrame.u32TimeRef = vb->buf.frm_num;
-	pstFrameInfo->stVFrame.u64PTS = vb->buf.u64PTS;
+		frame_info->video_frame.pixel_format = g_vi_ctx->chn_attr[vi_chn].pixel_format;
+	frame_info->video_frame.width = vb->buf.size.width;
+	frame_info->video_frame.height = vb->buf.size.height;
+	frame_info->video_frame.time_ref = vb->buf.frm_num;
+	frame_info->video_frame.pts = vb->buf.pts;
 	for (i = 0; i < 3; ++i) {
-		pstFrameInfo->stVFrame.u64PhyAddr[i] = vb->buf.phy_addr[i];
-		pstFrameInfo->stVFrame.u32Length[i] = vb->buf.length[i];
-		pstFrameInfo->stVFrame.u32Stride[i] = vb->buf.stride[i];
+		frame_info->video_frame.phyaddr[i] = vb->buf.phy_addr[i];
+		frame_info->video_frame.length[i] = vb->buf.length[i];
+		frame_info->video_frame.stride[i] = vb->buf.stride[i];
 	}
 
-	pstFrameInfo->stVFrame.s16OffsetTop = vb->buf.s16OffsetTop;
-	pstFrameInfo->stVFrame.s16OffsetBottom = vb->buf.s16OffsetBottom;
-	pstFrameInfo->stVFrame.s16OffsetLeft = vb->buf.s16OffsetLeft;
-	pstFrameInfo->stVFrame.s16OffsetRight = vb->buf.s16OffsetRight;
-	pstFrameInfo->stVFrame.pPrivateData = vb;
+	frame_info->video_frame.offset_top = vb->buf.offset_top;
+	frame_info->video_frame.offset_bottom = vb->buf.offset_bottom;
+	frame_info->video_frame.offset_left = vb->buf.offset_left;
+	frame_info->video_frame.offset_right = vb->buf.offset_right;
+	frame_info->video_frame.private_data = vb;
 
 	vi_pr(VI_DBG, "pixfmt(%d), w(%d), h(%d), pts(%lld), addr(0x%llx, 0x%llx, 0x%llx)\n",
-			pstFrameInfo->stVFrame.enPixelFormat, pstFrameInfo->stVFrame.u32Width,
-			pstFrameInfo->stVFrame.u32Height, pstFrameInfo->stVFrame.u64PTS,
-			pstFrameInfo->stVFrame.u64PhyAddr[0], pstFrameInfo->stVFrame.u64PhyAddr[1],
-			pstFrameInfo->stVFrame.u64PhyAddr[2]);
+			frame_info->video_frame.pixel_format, frame_info->video_frame.width,
+			frame_info->video_frame.height, frame_info->video_frame.pts,
+			frame_info->video_frame.phyaddr[0], frame_info->video_frame.phyaddr[1],
+			frame_info->video_frame.phyaddr[2]);
 	vi_pr(VI_DBG, "length(%d, %d, %d), stride(%d, %d, %d)\n",
-			pstFrameInfo->stVFrame.u32Length[0], pstFrameInfo->stVFrame.u32Length[1],
-			pstFrameInfo->stVFrame.u32Length[2], pstFrameInfo->stVFrame.u32Stride[0],
-			pstFrameInfo->stVFrame.u32Stride[1], pstFrameInfo->stVFrame.u32Stride[2]);
+			frame_info->video_frame.length[0], frame_info->video_frame.length[1],
+			frame_info->video_frame.length[2], frame_info->video_frame.stride[0],
+			frame_info->video_frame.stride[1], frame_info->video_frame.stride[2]);
 
 	return ret;
 }
 
-s32 vi_release_chn_frame(VI_PIPE ViPipe, VI_CHN ViChn, VIDEO_FRAME_INFO_S *pstFrameInfo)
+int vi_release_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info)
 {
-	VB_BLK blk;
-	s32 ret = CVI_SUCCESS;
+	vb_blk blk;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_enable(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_enable(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	blk = vb_phys_addr2handle(pstFrameInfo->stVFrame.u64PhyAddr[0]);
+	blk = vb_phys_addr2handle(frame_info->video_frame.phyaddr[0]);
 	if (blk == VB_INVALID_HANDLE) {
-		vi_pr(VI_ERR, "Invalid phy-address(%llx) in pstVideoFrame. Can't find VB_BLK.\n"
-			    , pstFrameInfo->stVFrame.u64PhyAddr[0]);
-		return CVI_FAILURE;
+		vi_pr(VI_ERR, "Invalid phy-address(%llx) in pvideo_frame. Can't find vb_blk.\n"
+			    , frame_info->video_frame.phyaddr[0]);
+		return -1;
 	}
 
-	if (vb_release_block(blk) != CVI_SUCCESS)
-		return CVI_FAILURE;
+	if (vb_release_block(blk) != 0)
+		return -1;
 
 	vi_pr(VI_DBG, "release chn frame, addr(0x%llx)\n",
-			pstFrameInfo->stVFrame.u64PhyAddr[0]);
+			frame_info->video_frame.phyaddr[0]);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_set_chn_crop(VI_PIPE ViPipe, VI_CHN ViChn, VI_CROP_INFO_S *pstChnCrop)
+int vi_set_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
 	struct isp_ctx *ctx = &gvdev->ctx;
 	struct vi_rect crop;
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (!ctx->isp_pipe_cfg[ViPipe].is_offline_scaler) { //online2sc
+	if (!ctx->isp_pipe_cfg[vi_pipe].is_offline_scaler) { //online2sc
 		vi_pr(VI_ERR, "not support online2sc");
-		return CVI_ERR_VI_NOT_SUPPORT;
+		return ERR_VI_NOT_SUPPORT;
 	}
 
-	if ((pstChnCrop->stCropRect.s32X + pstChnCrop->stCropRect.u32Width) >
-		gViCtx->pipeAttr[ViPipe].u32MaxW ||
-		(pstChnCrop->stCropRect.s32Y + pstChnCrop->stCropRect.u32Height) >
-		gViCtx->pipeAttr[ViPipe].u32MaxH) {
+	if ((chn_crop->crop_rect.x + chn_crop->crop_rect.width) >
+		g_vi_ctx->pipe_attr[vi_pipe].max_width ||
+		(chn_crop->crop_rect.y + chn_crop->crop_rect.height) >
+		g_vi_ctx->pipe_attr[vi_pipe].max_height) {
 		vi_pr(VI_ERR, "crop_x(%d)+w(%d) or y(%d)+h(%d) is bigger than chn_w(%d)_h(%d)\n",
-					pstChnCrop->stCropRect.s32X,
-					pstChnCrop->stCropRect.u32Width,
-					pstChnCrop->stCropRect.s32Y,
-					pstChnCrop->stCropRect.u32Height,
-					gViCtx->pipeAttr[ViPipe].u32MaxW,
-					gViCtx->pipeAttr[ViPipe].u32MaxH);
-		return CVI_ERR_VI_INVALID_PARA;
+					chn_crop->crop_rect.x,
+					chn_crop->crop_rect.width,
+					chn_crop->crop_rect.y,
+					chn_crop->crop_rect.height,
+					g_vi_ctx->pipe_attr[vi_pipe].max_width,
+					g_vi_ctx->pipe_attr[vi_pipe].max_height);
+		return ERR_VI_INVALID_PARA;
 	}
 
-	crop.x = pstChnCrop->stCropRect.s32X;
-	crop.y = pstChnCrop->stCropRect.s32Y;
-	crop.w = pstChnCrop->stCropRect.u32Width;
-	crop.h = pstChnCrop->stCropRect.u32Height;
+	crop.x = chn_crop->crop_rect.x;
+	crop.y = chn_crop->crop_rect.y;
+	crop.w = chn_crop->crop_rect.width;
+	crop.h = chn_crop->crop_rect.height;
 
 	vi_pr(VI_INFO, "set chn crop x(%d), y(%d), w(%d), h(%d)\n", crop.x, crop.y, crop.w, crop.h);
 
 	//for tile mode crop, don't update crop now;
-	if (!ctx->isp_pipe_cfg[ViPipe].is_tile) {
+	if (!ctx->isp_pipe_cfg[vi_pipe].is_tile) {
 		ispblk_crop_config(ctx, ISP_BLK_ID_YUV_CROP_Y, crop);
 		crop.x >>= 1;
 		crop.y >>= 1;
@@ -1209,74 +1215,72 @@ s32 vi_set_chn_crop(VI_PIPE ViPipe, VI_CHN ViChn, VI_CROP_INFO_S *pstChnCrop)
 		ispblk_crop_config(ctx, ISP_BLK_ID_YUV_CROP_C, crop);
 	}
 
-	gViCtx->chnAttr[ViChn].stSize.u32Width	= pstChnCrop->stCropRect.u32Width;
-	gViCtx->chnAttr[ViChn].stSize.u32Height	= pstChnCrop->stCropRect.u32Height;
-	gViCtx->chnCrop[ViChn]			= *pstChnCrop;
+	g_vi_ctx->chn_attr[vi_chn].size.width	= chn_crop->crop_rect.width;
+	g_vi_ctx->chn_attr[vi_chn].size.height	= chn_crop->crop_rect.height;
+	g_vi_ctx->chn_crop[vi_chn]			= *chn_crop;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_chn_crop(VI_PIPE ViPipe, VI_CHN ViChn, VI_CROP_INFO_S *pstChnCrop)
+int vi_get_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	*pstChnCrop = gViCtx->chnCrop[ViChn];
+	*chn_crop = g_vi_ctx->chn_crop[vi_chn];
 
 	return ret;
 }
 
 //TODO need refactor
-s32 vi_set_pipe_crop(VI_PIPE ViPipe, CROP_INFO_S *pstCropInfo)
+int vi_set_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
 	struct vi_rect crop;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (pstCropInfo->stRect.s32X % 2 || pstCropInfo->stRect.s32Y % 2 ||
-		pstCropInfo->stRect.u32Width % 2 || pstCropInfo->stRect.u32Height % 2) {
+	if (crop_info->rect.x % 2 || crop_info->rect.y % 2 ||
+	    crop_info->rect.width % 2 || crop_info->rect.height % 2) {
 		vi_pr(VI_ERR, "crop_x(%d)_y(%d)_w(%d)_h(%d) must be multiple of 2.\n",
-					pstCropInfo->stRect.s32X,
-					pstCropInfo->stRect.s32Y,
-					pstCropInfo->stRect.u32Width,
-					pstCropInfo->stRect.u32Height);
-		return CVI_ERR_VI_INVALID_PARA;
+		      crop_info->rect.x, crop_info->rect.y,
+		      crop_info->rect.width, crop_info->rect.height);
+		return ERR_VI_INVALID_PARA;
 	}
 
-	if (pstCropInfo->stRect.s32X < 0 || pstCropInfo->stRect.s32Y < 0 ||
-		pstCropInfo->stRect.s32X + pstCropInfo->stRect.u32Width > gViCtx->pipeAttr[ViPipe].u32MaxW ||
-		pstCropInfo->stRect.s32Y + pstCropInfo->stRect.u32Height > gViCtx->pipeAttr[ViPipe].u32MaxH) {
+	if (crop_info->rect.x < 0 || crop_info->rect.y < 0 ||
+	    crop_info->rect.x + crop_info->rect.width > g_vi_ctx->pipe_attr[vi_pipe].max_width ||
+	    crop_info->rect.y + crop_info->rect.height > g_vi_ctx->pipe_attr[vi_pipe].max_height) {
 		vi_pr(VI_ERR, "crop_x(%d)_y(%d) is invalid.\n",
-					pstCropInfo->stRect.s32X,
-					pstCropInfo->stRect.s32Y);
-		return CVI_ERR_VI_INVALID_PARA;
+					crop_info->rect.x,
+					crop_info->rect.y);
+		return ERR_VI_INVALID_PARA;
 	}
 
-	gViCtx->pipeCrop[ViPipe] = *pstCropInfo;
+	g_vi_ctx->pipe_crop[vi_pipe] = *crop_info;
 
-	crop.x = pstCropInfo->stRect.s32X;
-	crop.y = pstCropInfo->stRect.s32Y;
-	crop.w = pstCropInfo->stRect.u32Width;
-	crop.h = pstCropInfo->stRect.u32Height;
+	crop.x = crop_info->rect.x;
+	crop.y = crop_info->rect.y;
+	crop.w = crop_info->rect.width;
+	crop.h = crop_info->rect.height;
 
 	vi_pr(VI_INFO, "set chn crop x(%d), y(%d), w(%d), h(%d)\n", crop.x, crop.y, crop.w, crop.h);
 
@@ -1285,151 +1289,152 @@ s32 vi_set_pipe_crop(VI_PIPE ViPipe, CROP_INFO_S *pstCropInfo)
 	crop.h >>= 1;
 	ispblk_crop_config(ctx, ISP_BLK_ID_YUV_CROP_C, crop);
 
-	gViCtx->chnAttr[0].stSize.u32Width	= pstCropInfo->stRect.u32Width;
-	gViCtx->chnAttr[0].stSize.u32Height	= pstCropInfo->stRect.u32Height;
-	gViCtx->chnCrop[0].stCropRect		= pstCropInfo->stRect;
+	g_vi_ctx->chn_attr[0].size.width	= crop_info->rect.width;
+	g_vi_ctx->chn_attr[0].size.height	= crop_info->rect.height;
+	g_vi_ctx->chn_crop[0].crop_rect		= crop_info->rect;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_pipe_crop(VI_PIPE ViPipe, CROP_INFO_S *pstCropInfo)
+int vi_get_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	*pstCropInfo = gViCtx->pipeCrop[ViPipe];
+	*crop_info = g_vi_ctx->pipe_crop[vi_pipe];
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_set_pipe_attr(VI_PIPE ViPipe, VI_PIPE_ATTR_S *pstPipeAttr)
+int vi_set_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->pipeAttr[ViPipe] = *pstPipeAttr;
+	g_vi_ctx->pipe_attr[vi_pipe] = *pipe_attr;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_pipe_attr(VI_PIPE ViPipe, VI_PIPE_ATTR_S *pstPipeAttr)
+int vi_get_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	if (gViCtx->pipeAttr[ViPipe].u32MaxW == 0 &&
-		gViCtx->pipeAttr[ViPipe].u32MaxH == 0) {
-		vi_pr(VI_ERR, "SetPipeAttr first\n");
-		return CVI_ERR_VI_FAILED_NOTCONFIG;
+	if (g_vi_ctx->pipe_attr[vi_pipe].max_width == 0 &&
+	    g_vi_ctx->pipe_attr[vi_pipe].max_height == 0) {
+		vi_pr(VI_ERR, "Setpipe_attr first\n");
+		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	*pstPipeAttr = gViCtx->pipeAttr[ViPipe];
+	*pipe_attr = g_vi_ctx->pipe_attr[vi_pipe];
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_set_pipe_dump_attr(VI_PIPE ViPipe, VI_DUMP_ATTR_S *pstDumpAttr)
+int vi_set_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->dumpAttr[ViPipe] = *pstDumpAttr;
+	g_vi_ctx->dump_attr[vi_pipe] = *dump_attr;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_pipe_dump_attr(VI_PIPE ViPipe, VI_DUMP_ATTR_S *pstDumpAttr)
+int vi_get_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	*pstDumpAttr = gViCtx->dumpAttr[ViPipe];
+	*dump_attr = g_vi_ctx->dump_attr[vi_pipe];
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_pipe_frame(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo, s32 s32MilliSec)
+int vi_get_pipe_frame(int vi_pipe, video_frame_info_s *frame_info, int millisec)
 {
-	s32 ret;
-	struct cvi_vip_isp_raw_blk dump[2];
-	u32 u32BlkSize, dev_frm_w, dev_frm_h, frm_w, frm_h, raw_num;
-	u64 u64PhyAddr = 0, addr = 0x00;
-	VB_BLK  tempVB = VB_INVALID_HANDLE;
+	int ret;
+	struct sop_vip_isp_raw_blk dump[2];
+	u32 dev_frm_w, dev_frm_h, frm_w, frm_h, raw_num;
+	u64 phyaddr = 0, addr = 0x00;
+	vb_blk  tmp_vb = VB_INVALID_HANDLE;
+	int blk_size;
 	int dev_id = 0, frm_num = 1, i = 0;
 	struct vi_rect rawdump_crop;
 	struct isp_ctx *ctx = &gvdev->ctx;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
 	if (atomic_read(&gvdev->isp_streamoff) == 1) {
 		vi_pr(VI_ERR, "StartStream first\n");
-		return CVI_ERR_VI_FAILED_NOTCONFIG;
+		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	if (gViCtx->dumpAttr[ViPipe].bEnable == CVI_FALSE) {
+	if (g_vi_ctx->dump_attr[vi_pipe].enable == 0) {
 		vi_pr(VI_ERR, "SetPipeDumpAttr first\n");
-		return CVI_ERR_VI_FAILED_NOTCONFIG;
+		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	if (gViCtx->dumpAttr[ViPipe].enDumpType == VI_DUMP_TYPE_YUV ||
-		gViCtx->dumpAttr[ViPipe].enDumpType == VI_DUMP_TYPE_IR) {
+	if (g_vi_ctx->dump_attr[vi_pipe].dump_type == VI_DUMP_TYPE_YUV ||
+	    g_vi_ctx->dump_attr[vi_pipe].dump_type == VI_DUMP_TYPE_IR) {
 		vi_pr(VI_ERR, "IR or yuv raw dump is not supported.\n");
-		return CVI_ERR_VI_FAILED_NOT_ENABLED;
+		return ERR_VI_FAILED_NOT_ENABLED;
 	}
 
 	memset(dump, 0, sizeof(dump));
-	raw_num = vi_get_raw_num_by_dev(ctx, ViPipe);
+	raw_num = vi_get_raw_num_by_dev(ctx, vi_pipe);
 	dump[0].raw_dump.raw_num = raw_num;
 
-	dev_frm_w = gViCtx->devAttr[ViPipe].stSize.u32Width;
-	dev_frm_h = gViCtx->devAttr[ViPipe].stSize.u32Height;
+	dev_frm_w = g_vi_ctx->dev_attr[vi_pipe].size.width;
+	dev_frm_h = g_vi_ctx->dev_attr[vi_pipe].size.height;
 
 	memset(&rawdump_crop, 0, sizeof(rawdump_crop));
-	if ((pstFrameInfo[0].stVFrame.s16OffsetTop != 0) ||
-		(pstFrameInfo[0].stVFrame.s16OffsetBottom != 0) ||
-		(pstFrameInfo[0].stVFrame.s16OffsetLeft != 0) ||
-		(pstFrameInfo[0].stVFrame.s16OffsetRight != 0)) {
-		rawdump_crop.x = pstFrameInfo[0].stVFrame.s16OffsetLeft;
-		rawdump_crop.y = pstFrameInfo[0].stVFrame.s16OffsetTop;
-		rawdump_crop.w = dev_frm_w - rawdump_crop.x - pstFrameInfo[0].stVFrame.s16OffsetRight;
-		rawdump_crop.h = dev_frm_h - rawdump_crop.y - pstFrameInfo[0].stVFrame.s16OffsetBottom;
+	if ((frame_info[0].video_frame.offset_top != 0) ||
+	     frame_info[0].video_frame.offset_bottom != 0 ||
+	     frame_info[0].video_frame.offset_left != 0 ||
+	     frame_info[0].video_frame.offset_right != 0) {
+		rawdump_crop.x = frame_info[0].video_frame.offset_left;
+		rawdump_crop.y = frame_info[0].video_frame.offset_top;
+		rawdump_crop.w = dev_frm_w - rawdump_crop.x - frame_info[0].video_frame.offset_right;
+		rawdump_crop.h = dev_frm_h - rawdump_crop.y - frame_info[0].video_frame.offset_bottom;
 
 		vi_pr(VI_INFO, "set rawdump crop x(%d), y(%d), w(%d), h(%d)\n",
 			rawdump_crop.x, rawdump_crop.y, rawdump_crop.w, rawdump_crop.h);
@@ -1443,275 +1448,270 @@ s32 vi_get_pipe_frame(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo, s32 s32M
 	ctx->isp_pipe_cfg[raw_num].rawdump_crop = rawdump_crop;
 	ctx->isp_pipe_cfg[raw_num].rawdump_crop_se = rawdump_crop;
 
-	gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
-	gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+	g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+	g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 
-	u32BlkSize = VI_GetRawBufferSize(frm_w, frm_h,
-					PIXEL_FORMAT_RGB_BAYER_12BPP,
-					gViCtx->pipeAttr[0].enCompressMode,
-					16, gViCtx->isTile);
-	vi_pr(VI_INFO, "frm_w(%d), frm_h(%d), u32BlkSize: %d\n",
-		frm_w, frm_h, u32BlkSize);
+	blk_size = vi_getrawbuffersize(frm_w, frm_h, PIXEL_FORMAT_RGB_BAYER_12BPP,
+				       g_vi_ctx->pipe_attr[0].compress_mode, 16, g_vi_ctx->is_tile);
+	vi_pr(VI_INFO, "frm_w(%d), frm_h(%d), blk_size: %d\n", frm_w, frm_h, blk_size);
 
 	/* Check if it is valid, such as the frame from VPSS. */
-	if (pstFrameInfo[0].stVFrame.u64PhyAddr[0] != 0) {
+	if (!frame_info[0].video_frame.phyaddr[0]) {
 		/* If it is valid, we can use its VB to receive raw frames. */
-		tempVB = vb_phys_addr2handle(pstFrameInfo[0].stVFrame.u64PhyAddr[0]);
+		tmp_vb = vb_phys_addr2handle(frame_info[0].video_frame.phyaddr[0]);
 	}
 
-	if (tempVB == VB_INVALID_HANDLE) {
+	if (tmp_vb == VB_INVALID_HANDLE) {
 
-		gViCtx->vi_raw_blk[0] = vb_get_block_with_id(VB_INVALID_POOLID, u32BlkSize, CVI_ID_VI);
-		if (gViCtx->vi_raw_blk[0] == VB_INVALID_HANDLE) {
+		g_vi_ctx->vi_raw_blk[0] = vb_get_block_with_id(VB_INVALID_POOLID, blk_size, ID_VI);
+		if (g_vi_ctx->vi_raw_blk[0] == VB_INVALID_HANDLE) {
 			vi_pr(VI_ERR, "Alloc VB blk for RAW_LE dump failed\n");
-			return CVI_FAILURE;
+			return -1;
 		}
 
-		u64PhyAddr = vb_handle2phys_addr(gViCtx->vi_raw_blk[0]);
+		phyaddr = vb_handle2phys_addr(g_vi_ctx->vi_raw_blk[0]);
 
 	} else {
 
-		if (u32BlkSize > pstFrameInfo[0].stVFrame.u32Length[0]) {
+		if (blk_size > frame_info[0].video_frame.length[0]) {
 			vi_pr(VI_ERR, "input vb blk too small, in: %d, rq: %d\n",
-				u32BlkSize, pstFrameInfo[0].stVFrame.u32Length[0]);
-			return CVI_FAILURE;
+				blk_size, frame_info[0].video_frame.length[0]);
+			return -1;
 		}
 
-		u64PhyAddr = pstFrameInfo[0].stVFrame.u64PhyAddr[0];
-		gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+		phyaddr = frame_info[0].video_frame.phyaddr[0];
+		g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 	}
 
-	dump[0].raw_dump.phy_addr = u64PhyAddr;
+	dump[0].raw_dump.phy_addr = phyaddr;
 
 	if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
 		frm_num = 2;
-		tempVB = VB_INVALID_HANDLE;
+		tmp_vb = VB_INVALID_HANDLE;
 
-		if (pstFrameInfo[1].stVFrame.u64PhyAddr[0] != 0) {
-			tempVB = vb_phys_addr2handle(pstFrameInfo[1].stVFrame.u64PhyAddr[0]);
+		if (frame_info[1].video_frame.phyaddr[0] != 0) {
+			tmp_vb = vb_phys_addr2handle(frame_info[1].video_frame.phyaddr[0]);
 
-			if (tempVB == VB_INVALID_HANDLE) {
-				addr = pstFrameInfo[0].stVFrame.u64PhyAddr[0] +
-					pstFrameInfo[0].stVFrame.u32Length[0];
+			if (tmp_vb == VB_INVALID_HANDLE) {
+				addr = frame_info[0].video_frame.phyaddr[0] +
+					frame_info[0].video_frame.length[0];
 			}
 
 			/* You can use the second half of the same VB to receive SE raw frame. */
-			if (addr == pstFrameInfo[1].stVFrame.u64PhyAddr[0]) {
-				tempVB = 0;
+			if (addr == frame_info[1].video_frame.phyaddr[0]) {
+				tmp_vb = 0;
 			}
 		}
 
-		if (tempVB == VB_INVALID_HANDLE) {
+		if (tmp_vb == VB_INVALID_HANDLE) {
 
-			gViCtx->vi_raw_blk[1] = vb_get_block_with_id(VB_INVALID_POOLID, u32BlkSize, CVI_ID_VI);
-			if (gViCtx->vi_raw_blk[1] == VB_INVALID_HANDLE) {
-				vb_release_block(gViCtx->vi_raw_blk[0]);
-				gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+			g_vi_ctx->vi_raw_blk[1] = vb_get_block_with_id(VB_INVALID_POOLID, blk_size, ID_VI);
+			if (g_vi_ctx->vi_raw_blk[1] == VB_INVALID_HANDLE) {
+				vb_release_block(g_vi_ctx->vi_raw_blk[0]);
+				g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 				vi_pr(VI_ERR, "Alloc VB blk for RAW_SE dump failed\n");
-				return CVI_FAILURE;
+				return -1;
 			}
 
-			u64PhyAddr = vb_handle2phys_addr(gViCtx->vi_raw_blk[1]);
+			phyaddr = vb_handle2phys_addr(g_vi_ctx->vi_raw_blk[1]);
 
 		} else {
 
-			if (u32BlkSize > pstFrameInfo[1].stVFrame.u32Length[0]) {
+			if (blk_size > frame_info[1].video_frame.length[0]) {
 				vi_pr(VI_ERR, "input vb blk too small, in: %d, rq: %d\n",
-					u32BlkSize, pstFrameInfo[1].stVFrame.u32Length[0]);
-				return CVI_FAILURE;
+					blk_size, frame_info[1].video_frame.length[0]);
+				return -1;
 			}
 
-			u64PhyAddr = pstFrameInfo[1].stVFrame.u64PhyAddr[0];
-			gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+			phyaddr = frame_info[1].video_frame.phyaddr[0];
+			g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 		}
 
-		dump[1].raw_dump.phy_addr = u64PhyAddr;
+		dump[1].raw_dump.phy_addr = phyaddr;
 	}
 
-	if (s32MilliSec >= 0)
-		dump[0].time_out = dump[1].time_out = s32MilliSec;
+	if (millisec >= 0)
+		dump[0].time_out = dump[1].time_out = millisec;
 
 	ret = isp_raw_dump(gvdev, &dump[0]);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "_isp_raw_dump fail\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	if (dump[0].is_b_not_rls) {
-		if (gViCtx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[0]);
-			gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[0]);
+			g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 		}
-		if (gViCtx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[1]);
-			gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[1]);
+			g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 		}
 
 		vi_pr(VI_ERR, "Release pipe frame first, buffer not release.\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	if (dump[0].is_timeout) {
-		if (gViCtx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[0]);
-			gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[0]);
+			g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 		}
 
-		if (gViCtx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[1]);
-			gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[1]);
+			g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 		}
 
-		vi_pr(VI_ERR, "Get pipe frame time out(%d)\n", s32MilliSec);
-		return CVI_FAILURE;
+		vi_pr(VI_ERR, "Get pipe frame time out(%d)\n", millisec);
+		return -1;
 	}
 
 	if (dump[0].is_sig_int) {
-		if (gViCtx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[0]);
-			gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[0]);
+			g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 		}
 
-		if (gViCtx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
-			vb_release_block(gViCtx->vi_raw_blk[1]);
-			gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+		if (g_vi_ctx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
+			vb_release_block(g_vi_ctx->vi_raw_blk[1]);
+			g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 		}
 
 		vi_pr(VI_ERR, "Get pipe frame signal interrupt\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
 
 	for (; i < frm_num; i++) {
-		pstFrameInfo[i].stVFrame.u64PhyAddr[0]  = dump[i].raw_dump.phy_addr;
-		pstFrameInfo[i].stVFrame.u32Length[0]   = u32BlkSize;
-		pstFrameInfo[i].stVFrame.enBayerFormat  = gViCtx->devAttr[dev_id].enBayerFormat;
-		pstFrameInfo[i].stVFrame.enCompressMode = gViCtx->pipeAttr[0].enCompressMode;
-		pstFrameInfo[i].stVFrame.u32Width       = dump[i].src_w;
-		pstFrameInfo[i].stVFrame.u32Height      = dump[i].src_h;
-		pstFrameInfo[i].stVFrame.s16OffsetLeft  = dump[i].crop_x;
-		pstFrameInfo[i].stVFrame.s16OffsetTop   = dump[i].crop_y;
-		pstFrameInfo[i].stVFrame.u32TimeRef     = dump[i].frm_num;
+		frame_info[i].video_frame.phyaddr[0]  = dump[i].raw_dump.phy_addr;
+		frame_info[i].video_frame.length[0]   = blk_size;
+		frame_info[i].video_frame.bayer_format  = g_vi_ctx->dev_attr[dev_id].bayer_format;
+		frame_info[i].video_frame.compress_mode = g_vi_ctx->pipe_attr[0].compress_mode;
+		frame_info[i].video_frame.width       = dump[i].src_w;
+		frame_info[i].video_frame.height      = dump[i].src_h;
+		frame_info[i].video_frame.offset_left  = dump[i].crop_x;
+		frame_info[i].video_frame.offset_top   = dump[i].crop_y;
+		frame_info[i].video_frame.time_ref     = dump[i].frm_num;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_release_pipe_frame(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo)
+int vi_release_pipe_frame(int vi_pipe, video_frame_info_s *frame_info)
 {
 	u8 i = 0;
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
 	for (i = 0; i < ISP_PRERAW_MAX; i++) {
 		free_isp_byr(i);
 	}
 
-	if (gViCtx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
-		vb_release_block(gViCtx->vi_raw_blk[0]);
-		gViCtx->vi_raw_blk[0] = VB_INVALID_HANDLE;
+	if (g_vi_ctx->vi_raw_blk[0] != VB_INVALID_HANDLE) {
+		vb_release_block(g_vi_ctx->vi_raw_blk[0]);
+		g_vi_ctx->vi_raw_blk[0] = VB_INVALID_HANDLE;
 	}
 
-	if (gViCtx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
-		vb_release_block(gViCtx->vi_raw_blk[1]);
-		gViCtx->vi_raw_blk[1] = VB_INVALID_HANDLE;
+	if (g_vi_ctx->vi_raw_blk[1] != VB_INVALID_HANDLE) {
+		vb_release_block(g_vi_ctx->vi_raw_blk[1]);
+		g_vi_ctx->vi_raw_blk[1] = VB_INVALID_HANDLE;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_get_smooth_rawdump(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo, s32 s32MilliSec)
+int vi_get_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info, int millisec)
 {
-	s32 ret;
+	int ret;
 	struct isp_ctx *ctx = &gvdev->ctx;
-	struct cvi_vip_isp_raw_blk dump[2];
+	struct sop_vip_isp_raw_blk dump[2];
 	int dev_id = 0, frm_num = 1, i = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
 	memset(dump, 0, sizeof(dump));
-	dump[0].raw_dump.raw_num = dump[1].raw_dump.raw_num = vi_get_raw_num_by_dev(ctx, ViPipe);
-	dump[0].time_out = dump[1].time_out = s32MilliSec;
+	dump[0].raw_dump.raw_num = dump[1].raw_dump.raw_num = vi_get_raw_num_by_dev(ctx, vi_pipe);
+	dump[0].time_out = dump[1].time_out = millisec;
 
 	ret = isp_get_smooth_raw_dump(gvdev, dump);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "isp_smooth_raw_dump failed\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	if (dump[0].is_b_not_rls) {
 		vi_pr(VI_ERR, "Release pipe frame first, buffer not release.\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	if (dump[0].is_timeout) {
-		vi_pr(VI_ERR, "Get pipe frame time out(%d)\n", s32MilliSec);
-		return CVI_FAILURE;
+		vi_pr(VI_ERR, "Get pipe frame time out(%d)\n", millisec);
+		return -1;
 	}
 
 	if (dump[0].is_sig_int) {
 		vi_pr(VI_ERR, "Get pipe frame signal interrupt\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
-	if ((gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_LINE) ||
-		(gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_FRAME) ||
-		(gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_FRAME_FULL_RATE)) {
+	if (g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
+	    g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
+	    g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
 		frm_num = 2;
-	} else {
+	else
 		frm_num = 1;
-	}
 
 	for (; i < frm_num; i++) {
-		pstFrameInfo[i].stVFrame.u64PhyAddr[0]  = dump[i].raw_dump.phy_addr;
-		pstFrameInfo[i].stVFrame.u32Length[0]   = dump[i].raw_dump.size;
-		pstFrameInfo[i].stVFrame.enBayerFormat  = gViCtx->devAttr[dev_id].enBayerFormat;
-		pstFrameInfo[i].stVFrame.enCompressMode = gViCtx->pipeAttr[0].enCompressMode;
-		pstFrameInfo[i].stVFrame.u32Width       = dump[i].src_w;
-		pstFrameInfo[i].stVFrame.u32Height      = dump[i].src_h;
-		pstFrameInfo[i].stVFrame.s16OffsetLeft  = dump[i].crop_x;
-		pstFrameInfo[i].stVFrame.s16OffsetTop   = dump[i].crop_y;
-		pstFrameInfo[i].stVFrame.u32TimeRef     = dump[i].frm_num;
+		frame_info[i].video_frame.phyaddr[0]  = dump[i].raw_dump.phy_addr;
+		frame_info[i].video_frame.length[0]   = dump[i].raw_dump.size;
+		frame_info[i].video_frame.bayer_format  = g_vi_ctx->dev_attr[dev_id].bayer_format;
+		frame_info[i].video_frame.compress_mode = g_vi_ctx->pipe_attr[0].compress_mode;
+		frame_info[i].video_frame.width       = dump[i].src_w;
+		frame_info[i].video_frame.height      = dump[i].src_h;
+		frame_info[i].video_frame.offset_left  = dump[i].crop_x;
+		frame_info[i].video_frame.offset_top   = dump[i].crop_y;
+		frame_info[i].video_frame.time_ref     = dump[i].frm_num;
 		vi_pr(VI_DBG, "Get paddr(0x%llx) size(%d) frm_num(%d)\n",
-			pstFrameInfo[i].stVFrame.u64PhyAddr[0],
-			pstFrameInfo[i].stVFrame.u32Length[0],
-			pstFrameInfo[i].stVFrame.u32TimeRef);
+			frame_info[i].video_frame.phyaddr[0],
+			frame_info[i].video_frame.length[0],
+			frame_info[i].video_frame.time_ref);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_put_smooth_rawdump(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo)
+int vi_put_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info)
 {
-	s32 ret;
+	int ret;
 	struct isp_ctx *ctx = &gvdev->ctx;
-	struct cvi_vip_isp_raw_blk dump[2];
-	VB_BLK vb;
+	struct sop_vip_isp_raw_blk dump[2];
+	vb_blk vb;
 	int frm_num, i, dev_num;
 
 	memset(dump, 0, sizeof(dump));
 
-	if ((gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_LINE) ||
-		(gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_FRAME) ||
-		(gViCtx->devAttr[ViPipe].stWDRAttr.enWDRMode == WDR_MODE_2To1_FRAME_FULL_RATE)) {
+	if (g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
+	    g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
+	    g_vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
 		frm_num = 2;
-	} else {
+	else
 		frm_num = 1;
-	}
 
 	for (i = 0; i < frm_num; i++) {
-		vb = vb_phys_addr2handle(pstFrameInfo[i].stVFrame.u64PhyAddr[0]);
+		vb = vb_phys_addr2handle(frame_info[i].video_frame.phyaddr[0]);
 		if (vb == VB_INVALID_HANDLE) {
 			vi_pr(VI_ERR, "Can't get valid vb_blk.\n");
-			return CVI_FAILURE;
+			return -1;
 		}
 
-		dump[i].raw_dump.phy_addr = pstFrameInfo[i].stVFrame.u64PhyAddr[0];
+		dump[i].raw_dump.phy_addr = frame_info[i].video_frame.phyaddr[0];
 		vi_pr(VI_DBG, "Put paddr(0x%llx)\n", dump[i].raw_dump.phy_addr);
 
 		dev_num = dump[i].raw_dump.raw_num;
@@ -1719,30 +1719,29 @@ s32 vi_put_smooth_rawdump(VI_PIPE ViPipe, VIDEO_FRAME_INFO_S *pstFrameInfo)
 	}
 
 	ret = isp_put_smooth_raw_dump(gvdev, dump);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		vi_pr(VI_ERR, "isp_put_smooth_raw_dump failed\n");
-		return CVI_FAILURE;
+		return -1;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static s32 _vi_update_rotation_mesh(VI_CHN ViChn, ROTATION_E enRotation)
+static int _vi_update_rotation_mesh(int vi_chn, rotation_e rotation)
 {
-	struct cvi_gdc_mesh *pmesh = &g_vi_mesh[ViChn];
+	struct gdc_mesh *pmesh = &g_vi_mesh[vi_chn];
 
 	mutex_lock(&pmesh->lock);
 	pmesh->paddr = DEFAULT_MESH_PADDR;
-	gViCtx->enRotation[ViChn] = enRotation;
+	g_vi_ctx->rotation[vi_chn] = rotation;
 	mutex_unlock(&pmesh->lock);
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static s32 _vi_update_ldc_mesh(VPSS_CHN ViChn, const VI_LDC_ATTR_S *pstLDCAttr,
-	u64 paddr)
+static int _vi_update_ldc_mesh(vpss_chn vi_chn, const vi_ldc_attr_s *ldc_attr, u64 paddr)
 {
 	u64 paddr_old;
-	struct cvi_gdc_mesh *pmesh = &g_vi_mesh[ViChn];
+	struct gdc_mesh *pmesh = &g_vi_mesh[vi_chn];
 
 	mutex_lock(&pmesh->lock);
 	if (pmesh->paddr) {
@@ -1753,173 +1752,171 @@ static s32 _vi_update_ldc_mesh(VPSS_CHN ViChn, const VI_LDC_ATTR_S *pstLDCAttr,
 	pmesh->paddr = paddr;
 	pmesh->vaddr = NULL;
 
-	gViCtx->stLDCAttr[ViChn] = *pstLDCAttr;
+	g_vi_ctx->ldc_attr[vi_chn] = *ldc_attr;
 	mutex_unlock(&pmesh->lock);
 
-	vi_pr(VI_DBG, "Chn(%d) mesh base(0x%llx)\n", ViChn, (unsigned long long)paddr);
-	vi_pr(VI_DBG, "bEnable=%d, apect=%d, xyratio=%d, xoffset=%d, yoffset=%d, ratio=%d, rotation=%d\n",
-			pstLDCAttr->bEnable, pstLDCAttr->stAttr.bAspect,
-			pstLDCAttr->stAttr.s32XYRatio, pstLDCAttr->stAttr.s32CenterXOffset,
-			pstLDCAttr->stAttr.s32CenterYOffset, pstLDCAttr->stAttr.s32DistortionRatio,
-			pstLDCAttr->stAttr.enRotation);
-	return CVI_SUCCESS;
+	vi_pr(VI_DBG, "Chn(%d) mesh base(0x%llx)\n", vi_chn, (unsigned long long)paddr);
+	vi_pr(VI_DBG, "enable=%d, apect=%d, xyratio=%d, xoffset=%d, yoffset=%d, ratio=%d, rotation=%d\n",
+			ldc_attr->enable, ldc_attr->attr.aspect,
+			ldc_attr->attr.x_ratio, ldc_attr->attr.center_x_offset,
+			ldc_attr->attr.center_y_offset, ldc_attr->attr.distortion_ratio,
+			ldc_attr->attr.rotation);
+	return 0;
 }
 
-
-s32 vi_set_chn_rotation(VI_PIPE ViPipe, VI_CHN ViChn, ROTATION_E enRotation)
+int vi_set_chn_rotation(int vi_pipe, int vi_chn, rotation_e rotation)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	vi_pr(VI_DBG, "Chn(%d) rotation(%d).\n", ViChn, enRotation);
+	vi_pr(VI_DBG, "Chn(%d) rotation(%d).\n", vi_chn, rotation);
 
-	return _vi_update_rotation_mesh(ViChn, enRotation);
+	return _vi_update_rotation_mesh(vi_chn, rotation);
 }
 
-s32 vi_get_chn_rotation(VI_PIPE ViPipe, VI_CHN ViChn, ROTATION_E *enRotation)
+int vi_get_chn_rotation(int vi_pipe, int vi_chn, rotation_e *rotation)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_pipe_created(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_created(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	*enRotation = gViCtx->enRotation[ViChn];
+	*rotation = g_vi_ctx->rotation[vi_chn];
 
 	return ret;
 }
 
-s32 vi_set_chn_ldc_attr(VI_CHN ViChn, const VI_LDC_ATTR_S *pstLDCAttr,
-	u64 mesh_addr)
+int vi_set_chn_ldc_attr(int vi_chn, const vi_ldc_attr_s *ldc_attr, u64 mesh_addr)
 {
-	vi_pr(VI_DBG, "Chn(%d) mesh base(0x%llx)\n", ViChn, (unsigned long long)mesh_addr);
-	return _vi_update_ldc_mesh(ViChn, pstLDCAttr, mesh_addr);
+	vi_pr(VI_DBG, "Chn(%d) mesh base(0x%llx)\n", vi_chn, (unsigned long long)mesh_addr);
+	return _vi_update_ldc_mesh(vi_chn, ldc_attr, mesh_addr);
 }
 
-s32 vi_get_chn_ldc_attr(VI_PIPE ViPipe, VI_CHN ViChn, struct vi_chn_ldc_cfg *cfg)
+int vi_get_chn_ldc_attr(int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	cfg->ViChn = ViChn;
-	cfg->stLDCAttr = gViCtx->stLDCAttr[ViChn];
-	cfg->meshHandle = g_vi_mesh[ViChn].paddr;
+	cfg->vi_chn = vi_chn;
+	cfg->ldc_attr = g_vi_ctx->ldc_attr[vi_chn];
+	cfg->mesh_handle = g_vi_mesh[vi_chn].paddr;
 
 	return ret;
 }
 
-s32 vi_set_chn_flip_mirror(VI_PIPE ViPipe, VI_CHN ViChn, struct vi_chn_flip_mirror_cfg *cfg)
+int vi_set_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_enable(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_enable(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->chnAttr[ViChn].bFlip = cfg->bFlip;
-	gViCtx->chnAttr[ViChn].bMirror = cfg->bMirror;
+	g_vi_ctx->chn_attr[vi_chn].flip = cfg->flip;
+	g_vi_ctx->chn_attr[vi_chn].mirror = cfg->mirror;
 
 	return ret;
 }
 
-s32 vi_get_chn_flip_mirror(VI_PIPE ViPipe, VI_CHN ViChn, struct vi_chn_flip_mirror_cfg *cfg)
+int vi_get_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_enable(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_enable(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	cfg->bFlip = gViCtx->chnAttr[ViChn].bFlip;
-	cfg->bMirror = gViCtx->chnAttr[ViChn].bMirror;
+	cfg->flip = g_vi_ctx->chn_attr[vi_chn].flip;
+	cfg->mirror = g_vi_ctx->chn_attr[vi_chn].mirror;
 
 	return ret;
 }
 
-s32 vi_attach_vb_pool(VI_PIPE ViPipe, VI_CHN ViChn, VB_POOL VbPool)
+int vi_attach_vb_pool(int vi_pipe, int vi_chn, vb_pool vbp)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->chnAttr[ViChn].u32BindVbPool = VbPool;
+	g_vi_ctx->chn_attr[vi_chn].bind_vb_pool = vbp;
 
-	vi_pr(VI_DBG, "Chn(%d) attach VbPool(%d)\n", ViChn, gViCtx->chnAttr[ViChn].u32BindVbPool);
+	vi_pr(VI_DBG, "Chn(%d) attach VbPool(%d)\n", vi_chn, g_vi_ctx->chn_attr[vi_chn].bind_vb_pool);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 vi_detach_vb_pool(VI_PIPE ViPipe, VI_CHN ViChn)
+int vi_detach_vb_pool(int vi_pipe, int vi_chn)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = check_vi_pipe_valid(ViPipe);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_pipe_valid(vi_pipe);
+	if (ret != 0)
 		return ret;
 
-	ret = check_vi_chn_valid(ViChn);
-	if (ret != CVI_SUCCESS)
+	ret = check_vi_chn_valid(vi_chn);
+	if (ret != 0)
 		return ret;
 
-	gViCtx->chnAttr[ViChn].u32BindVbPool = VB_INVALID_POOLID;
+	g_vi_ctx->chn_attr[vi_chn].bind_vb_pool = VB_INVALID_POOLID;
 
-	vi_pr(VI_DBG, "Chn(%d) detach VbPool\n", ViChn);
+	vi_pr(VI_DBG, "Chn(%d) detach VbPool\n", vi_chn);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 /*****************************************************************************
  *  SDK layer ioctl operations for vi.c
  ****************************************************************************/
-long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
+long vi_sdk_ctrl(struct sop_vi_dev *vdev, struct vi_ext_control *p)
 {
 	u32 id = p->sdk_id;
 	long rc = -EINVAL;
@@ -1928,10 +1925,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	switch (id) {
 	case VI_SDK_SET_DEV_ATTR:
 	{
-		VI_DEV_ATTR_S dev_attr;
+		vi_dev_attr_s dev_attr;
 
-		if (copy_from_user(&dev_attr, p->sdk_cfg.ptr, sizeof(VI_DEV_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&dev_attr, p->sdk_cfg.ptr, sizeof(vi_dev_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_attr_s copy from user fail.\n");
 			break;
 		}
 
@@ -1940,12 +1937,12 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_DEV_ATTR:
 	{
-		VI_DEV_ATTR_S dev_attr;
+		vi_dev_attr_s dev_attr;
 
 		rc = vi_get_dev_attr(p->sdk_cfg.dev, &dev_attr);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &dev_attr, sizeof(VI_DEV_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_ATTR_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &dev_attr, sizeof(vi_dev_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_attr_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -1955,10 +1952,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_DEV_BIND_ATTR:
 	{
-		VI_DEV_BIND_PIPE_S dev_bind_attr;
+		vi_dev_bind_pipe_s dev_bind_attr;
 
-		if (copy_from_user(&dev_bind_attr, p->sdk_cfg.ptr, sizeof(VI_DEV_BIND_PIPE_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_BIND_PIPE_S copy from user fail.\n");
+		if (copy_from_user(&dev_bind_attr, p->sdk_cfg.ptr, sizeof(vi_dev_bind_pipe_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_bind_pipe_s copy from user fail.\n");
 			break;
 		}
 
@@ -1967,12 +1964,12 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_DEV_BIND_ATTR:
 	{
-		VI_DEV_BIND_PIPE_S dev_bind_attr;
+		vi_dev_bind_pipe_s dev_bind_attr;
 
 		rc = vi_get_dev_bind_attr(p->sdk_cfg.dev, &dev_bind_attr);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &dev_bind_attr, sizeof(VI_DEV_BIND_PIPE_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_BIND_PIPE_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &dev_bind_attr, sizeof(vi_dev_bind_pipe_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_bind_pipe_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -1992,10 +1989,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_CREATE_PIPE:
 	{
-		VI_PIPE_ATTR_S pipe_attr;
+		vi_pipe_attr_s pipe_attr;
 
-		if (copy_from_user(&pipe_attr, p->sdk_cfg.ptr, sizeof(VI_PIPE_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&pipe_attr, p->sdk_cfg.ptr, sizeof(vi_pipe_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_attr_s copy from user fail.\n");
 			break;
 		}
 
@@ -2009,10 +2006,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_PIPE_ATTR:
 	{
-		VI_PIPE_ATTR_S pipe_attr;
+		vi_pipe_attr_s pipe_attr;
 
-		if (copy_from_user(&pipe_attr, p->sdk_cfg.ptr, sizeof(VI_PIPE_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&pipe_attr, p->sdk_cfg.ptr, sizeof(vi_pipe_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_attr_s copy from user fail.\n");
 			break;
 		}
 
@@ -2022,14 +2019,14 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_PIPE_ATTR:
 	{
-		VI_PIPE_ATTR_S pipe_attr;
+		vi_pipe_attr_s pipe_attr;
 
 		memset(&pipe_attr, 0, sizeof(pipe_attr));
 
 		rc = vi_get_pipe_attr(p->sdk_cfg.pipe, &pipe_attr);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &pipe_attr, sizeof(VI_PIPE_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_ATTR_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &pipe_attr, sizeof(vi_pipe_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_attr_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2047,10 +2044,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_CHN_ATTR:
 	{
-		VI_CHN_ATTR_S chn_attr;
+		vi_chn_attr_s chn_attr;
 
-		if (copy_from_user(&chn_attr, p->sdk_cfg.ptr, sizeof(VI_CHN_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_CHN_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&chn_attr, p->sdk_cfg.ptr, sizeof(vi_chn_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_chn_attr_s copy from user fail.\n");
 			break;
 		}
 
@@ -2059,11 +2056,11 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_CHN_ATTR:
 	{
-		VI_CHN_ATTR_S chn_attr;
+		vi_chn_attr_s chn_attr;
 
 		rc = vi_get_chn_attr(p->sdk_cfg.pipe, p->sdk_cfg.chn, &chn_attr);
-		if (copy_to_user(p->sdk_cfg.ptr, &chn_attr, sizeof(VI_CHN_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_ATTR_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &chn_attr, sizeof(vi_chn_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_attr_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2095,7 +2092,7 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_ENABLE_DIS:
 	{
-		gViCtx->isDisEnable[p->sdk_cfg.pipe] = 1;
+		g_vi_ctx->is_dis_enable[p->sdk_cfg.pipe] = 1;
 
 		vi_pr(VI_DBG, "pipe_%d enable dis\n", p->sdk_cfg.pipe);
 
@@ -2104,7 +2101,7 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_DISABLE_DIS:
 	{
-		gViCtx->isDisEnable[p->sdk_cfg.pipe] = 0;
+		g_vi_ctx->is_dis_enable[p->sdk_cfg.pipe] = 0;
 
 		if (wq_has_sleeper(&dis_wait_q[p->sdk_cfg.pipe])) {
 			dis_flag[p->sdk_cfg.pipe] = 1;
@@ -2135,10 +2132,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_PIPE_FRM_SRC:
 	{
-		VI_PIPE_FRAME_SOURCE_E src;
+		vi_pipe_frame_source_e src;
 
-		if (copy_from_user(&src, p->sdk_cfg.ptr, sizeof(VI_PIPE_FRAME_SOURCE_E)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_FRAME_SOURCE_E copy from user fail.\n");
+		if (copy_from_user(&src, p->sdk_cfg.ptr, sizeof(vi_pipe_frame_source_e)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_frame_source_e copy from user fail.\n");
 			break;
 		}
 
@@ -2147,22 +2144,22 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_PIPE_FRM_SRC:
 	{
-		VI_PIPE_FRAME_SOURCE_E src;
+		vi_pipe_frame_source_e src;
 
 		rc = vi_get_pipe_frame_source(p->sdk_cfg.pipe, &src);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &src, sizeof(VI_PIPE_FRAME_SOURCE_E)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_FRAME_SOURCE_E copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &src, sizeof(vi_pipe_frame_source_e)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_frame_source_e copy to user fail.\n");
 			break;
 		}
 		break;
 	}
 	case VI_SDK_SEND_PIPE_RAW:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info;
+		video_frame_info_s v_frm_info;
 
-		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s)) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
@@ -2171,10 +2168,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_DEV_TIMING_ATTR:
 	{
-		VI_DEV_TIMING_ATTR_S dev_timing_attr;
+		vi_dev_timing_attr_s dev_timing_attr;
 
-		if (copy_from_user(&dev_timing_attr, p->sdk_cfg.ptr, sizeof(VI_DEV_TIMING_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_TIMING_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&dev_timing_attr, p->sdk_cfg.ptr, sizeof(vi_dev_timing_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_timing_attr_s copy from user fail.\n");
 			break;
 		}
 
@@ -2183,12 +2180,12 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_DEV_TIMING_ATTR:
 	{
-		VI_DEV_TIMING_ATTR_S dev_timing_attr;
+		vi_dev_timing_attr_s dev_timing_attr;
 
 		rc = vi_get_dev_timing_attr(p->sdk_cfg.dev, &dev_timing_attr);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &dev_timing_attr, sizeof(VI_DEV_TIMING_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_DEV_TIMING_ATTR_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &dev_timing_attr, sizeof(vi_dev_timing_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_dev_timing_attr_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2196,12 +2193,12 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_PIPE_STATUS:
 	{
-		VI_PIPE_STATUS_S stStatus;
+		vi_pipe_status_s status;
 
-		rc = vi_get_pipe_status(p->sdk_cfg.pipe, &stStatus);
+		rc = vi_get_pipe_status(p->sdk_cfg.pipe, &status);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &stStatus, sizeof(VI_PIPE_STATUS_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_STATUS_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &status, sizeof(vi_pipe_status_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_status_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2210,26 +2207,26 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_DEV_STATUS:
 	{
-		u8 bStatus = gViCtx->isDevEnable[p->sdk_cfg.dev];
+		u8 status = g_vi_ctx->is_dev_enable[p->sdk_cfg.dev];
 
-		if (copy_to_user(p->sdk_cfg.ptr, &bStatus, sizeof(bStatus)) != 0) {
+		if (copy_to_user(p->sdk_cfg.ptr, &status, sizeof(status)) != 0) {
 			vi_pr(VI_ERR, "VI_SDK_GET_DEV_STATUS copy to user fail.\n");
 			rc = -1;
 			break;
 		}
 
-		rc = CVI_SUCCESS;
+		rc = 0;
 
 		break;
 	}
 	case VI_SDK_GET_CHN_STATUS:
 	{
-		VI_CHN_STATUS_S stStatus;
+		vi_chn_status_s status;
 
-		rc = vi_get_chn_status(p->sdk_cfg.chn, &stStatus);
+		rc = vi_get_chn_status(p->sdk_cfg.chn, &status);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &stStatus, sizeof(VI_CHN_STATUS_S)) != 0) {
-			vi_pr(VI_ERR, "VI_CHN_STATUS_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &status, sizeof(vi_chn_status_s)) != 0) {
+			vi_pr(VI_ERR, "vi_chn_status_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2238,17 +2235,17 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_CHN_FRAME:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info;
+		video_frame_info_s v_frm_info;
 
-		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s)) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
 		rc = vi_get_chn_frame(p->sdk_cfg.pipe, p->sdk_cfg.chn, &v_frm_info, p->sdk_cfg.val);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &v_frm_info, sizeof(VIDEO_FRAME_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &v_frm_info, sizeof(video_frame_info_s)) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2256,10 +2253,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_RELEASE_CHN_FRAME:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info;
+		video_frame_info_s v_frm_info;
 
-		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(&v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s)) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
@@ -2268,10 +2265,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_CHN_CROP:
 	{
-		VI_CROP_INFO_S chn_crop;
+		vi_crop_info_s chn_crop;
 
-		if (copy_from_user(&chn_crop, p->sdk_cfg.ptr, sizeof(VI_CROP_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VI_CROP_INFO_S copy from user fail.\n");
+		if (copy_from_user(&chn_crop, p->sdk_cfg.ptr, sizeof(vi_crop_info_s)) != 0) {
+			vi_pr(VI_ERR, "vi_crop_info_s copy from user fail.\n");
 			break;
 		}
 
@@ -2280,14 +2277,14 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_CHN_CROP:
 	{
-		VI_CROP_INFO_S chn_crop;
+		vi_crop_info_s chn_crop;
 
 		memset(&chn_crop, 0, sizeof(chn_crop));
 
 		rc = vi_get_chn_crop(p->sdk_cfg.pipe, p->sdk_cfg.chn, &chn_crop);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &chn_crop, sizeof(VI_CROP_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "VI_CROP_INFO_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &chn_crop, sizeof(vi_crop_info_s)) != 0) {
+			vi_pr(VI_ERR, "vi_crop_info_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2295,26 +2292,26 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_PIPE_CROP:
 	{
-		CROP_INFO_S stCropInfo;
+		crop_info_s crop_info;
 
-		if (copy_from_user(&stCropInfo, p->sdk_cfg.ptr, sizeof(CROP_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "CROP_INFO_S copy from user fail.\n");
+		if (copy_from_user(&crop_info, p->sdk_cfg.ptr, sizeof(crop_info_s)) != 0) {
+			vi_pr(VI_ERR, "crop_info_s copy from user fail.\n");
 			break;
 		}
 
-		rc = vi_set_pipe_crop(p->sdk_cfg.pipe, &stCropInfo);
+		rc = vi_set_pipe_crop(p->sdk_cfg.pipe, &crop_info);
 		break;
 	}
 	case VI_SDK_GET_PIPE_CROP:
 	{
-		CROP_INFO_S stCropInfo;
+		crop_info_s crop_info;
 
-		memset(&stCropInfo, 0, sizeof(CROP_INFO_S));
+		memset(&crop_info, 0, sizeof(crop_info_s));
 
-		rc = vi_get_pipe_crop(p->sdk_cfg.pipe, &stCropInfo);
+		rc = vi_get_pipe_crop(p->sdk_cfg.pipe, &crop_info);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &stCropInfo, sizeof(CROP_INFO_S)) != 0) {
-			vi_pr(VI_ERR, "CROP_INFO_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &crop_info, sizeof(crop_info_s)) != 0) {
+			vi_pr(VI_ERR, "crop_info_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2322,17 +2319,17 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_PIPE_FRAME:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info[2];
+		video_frame_info_s v_frm_info[2];
 
-		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
 		rc = vi_get_pipe_frame(p->sdk_cfg.pipe, v_frm_info, p->sdk_cfg.val);
 
-		if (copy_to_user(p->sdk_cfg.ptr, v_frm_info, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, v_frm_info, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2340,10 +2337,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_RELEASE_PIPE_FRAME:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info[2];
+		video_frame_info_s v_frm_info[2];
 
-		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
@@ -2352,16 +2349,16 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_START_SMOOTH_RAWDUMP:
 	{
-		struct cvi_vip_isp_smooth_raw_param param;
-		struct cvi_vip_isp_raw_blk *raw_blk;
+		struct sop_vip_isp_smooth_raw_param param;
+		struct sop_vip_isp_raw_blk *raw_blk;
 		u32 size;
 
-		if (copy_from_user(&param, p->sdk_cfg.ptr, sizeof(struct cvi_vip_isp_smooth_raw_param)) != 0) {
-			vi_pr(VI_ERR, "cvi_vip_isp_smooth_raw_param copy from user fail.\n");
+		if (copy_from_user(&param, p->sdk_cfg.ptr, sizeof(struct sop_vip_isp_smooth_raw_param)) != 0) {
+			vi_pr(VI_ERR, "sop_vip_isp_smooth_raw_param copy from user fail.\n");
 			break;
 		}
 
-		size = sizeof(struct cvi_vip_isp_raw_blk) * param.frm_num;
+		size = sizeof(struct sop_vip_isp_raw_blk) * param.frm_num;
 		raw_blk = kmalloc(size, GFP_KERNEL);
 		if (raw_blk == NULL) {
 			vi_pr(VI_ERR, "kmalloc failed need size(0x%x).\n", size);
@@ -2370,7 +2367,7 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 		}
 
 		if (copy_from_user(raw_blk, (void __user *)param.raw_blk, size)) {
-			vi_pr(VI_ERR, "cvi_vip_isp_raw_blk copy from user fail.\n");
+			vi_pr(VI_ERR, "sop_vip_isp_raw_blk copy from user fail.\n");
 			kfree(raw_blk);
 			break;
 		}
@@ -2384,9 +2381,9 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_STOP_SMOOTH_RAWDUMP:
 	{
-		struct cvi_vip_isp_smooth_raw_param param;
+		struct sop_vip_isp_smooth_raw_param param;
 
-		if (copy_from_user(&param, p->sdk_cfg.ptr, sizeof(struct cvi_vip_isp_smooth_raw_param)) != 0)
+		if (copy_from_user(&param, p->sdk_cfg.ptr, sizeof(struct sop_vip_isp_smooth_raw_param)) != 0)
 			break;
 
 		param.raw_num = vi_get_raw_num_by_dev(&vdev->ctx, param.raw_num);
@@ -2395,17 +2392,17 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_GET_SMOOTH_RAWDUMP:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info[2];
+		video_frame_info_s v_frm_info[2];
 
-		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
 		rc = vi_get_smooth_rawdump(p->sdk_cfg.pipe, v_frm_info, p->sdk_cfg.val);
 
-		if (copy_to_user(p->sdk_cfg.ptr, v_frm_info, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, v_frm_info, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2413,10 +2410,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_PUT_SMOOTH_RAWDUMP:
 	{
-		VIDEO_FRAME_INFO_S v_frm_info[2];
+		video_frame_info_s v_frm_info[2];
 
-		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(VIDEO_FRAME_INFO_S) * 2) != 0) {
-			vi_pr(VI_ERR, "VIDEO_FRAME_INFO_S copy from user fail.\n");
+		if (copy_from_user(v_frm_info, p->sdk_cfg.ptr, sizeof(video_frame_info_s) * 2) != 0) {
+			vi_pr(VI_ERR, "video_frame_info_s copy from user fail.\n");
 			break;
 		}
 
@@ -2432,14 +2429,14 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 			break;
 		}
 
-		rc = vi_set_chn_rotation(p->sdk_cfg.pipe, p->sdk_cfg.chn, cfg.enRotation);
+		rc = vi_set_chn_rotation(p->sdk_cfg.pipe, p->sdk_cfg.chn, cfg.rotation);
 		break;
 	}
 	case VI_SDK_GET_CHN_ROTATION:
 	{
 		struct vi_chn_rot_cfg cfg;
 
-		rc = vi_get_chn_rotation(p->sdk_cfg.pipe, p->sdk_cfg.chn, &cfg.enRotation);
+		rc = vi_get_chn_rotation(p->sdk_cfg.pipe, p->sdk_cfg.chn, &cfg.rotation);
 
 		if (copy_to_user(p->sdk_cfg.ptr, &cfg, sizeof(struct vi_chn_rot_cfg)) != 0) {
 			vi_pr(VI_ERR, "vi_chn_rot_cfg copy to user fail.\n");
@@ -2452,21 +2449,21 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	case VI_SDK_SET_CHN_LDC:
 	{
 		struct vi_chn_ldc_cfg cfg;
-		VI_CHN ViChn;
+		int vi_chn;
 		u64 mesh_addr;
 
-		const VI_LDC_ATTR_S *pstLDCAttr = NULL;
+		const vi_ldc_attr_s *ldc_attr = NULL;
 
 		if (copy_from_user(&cfg, p->sdk_cfg.ptr, sizeof(cfg)) != 0) {
 			vi_pr(VI_ERR, "vi_chn_ldc_cfg copy from user fail.\n");
 			break;
 		}
 
-		ViChn = cfg.ViChn;
-		mesh_addr = cfg.meshHandle;
-		pstLDCAttr = &cfg.stLDCAttr;
+		vi_chn = cfg.vi_chn;
+		mesh_addr = cfg.mesh_handle;
+		ldc_attr = &cfg.ldc_attr;
 
-		rc = vi_set_chn_ldc_attr(ViChn, pstLDCAttr, mesh_addr);
+		rc = vi_set_chn_ldc_attr(vi_chn, ldc_attr, mesh_addr);
 		break;
 	}
 	case VI_SDK_GET_CHN_LDC:
@@ -2511,49 +2508,49 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	case VI_SDK_ATTACH_VB_POOL:
 	{
 		struct vi_vb_pool_cfg cfg;
-		VI_PIPE ViPipe;
-		VI_CHN ViChn;
-		VB_POOL VbPool;
+		int vi_pipe;
+		int vi_chn;
+		vb_pool vbp;
 
 		if (copy_from_user(&cfg, p->sdk_cfg.ptr, sizeof(cfg)) != 0) {
 			vi_pr(VI_ERR, "vi_attach_vb_pool copy from user fail.\n");
 			break;
 		}
 
-		ViPipe = cfg.ViPipe;
-		ViChn = cfg.ViChn;
-		VbPool = (VB_POOL)cfg.VbPool;
+		vi_pipe = cfg.vi_pipe;
+		vi_chn = cfg.vi_chn;
+		vbp = (vb_pool)cfg.vb_pool;
 
-		rc = vi_attach_vb_pool(ViPipe, ViChn, VbPool);
+		rc = vi_attach_vb_pool(vi_pipe, vi_chn, vbp);
 		break;
 	}
 	case VI_SDK_DETACH_VB_POOL:
 	{
 		struct vi_vb_pool_cfg cfg;
-		VI_PIPE ViPipe;
-		VI_CHN ViChn;
+		int vi_pipe;
+		int vi_chn;
 
 		if (copy_from_user(&cfg, p->sdk_cfg.ptr, sizeof(cfg)) != 0) {
 			vi_pr(VI_ERR, "vi_detach_vb_pool copy from user fail.\n");
 			break;
 		}
 
-		ViPipe = cfg.ViPipe;
-		ViChn = cfg.ViChn;
+		vi_pipe = cfg.vi_pipe;
+		vi_chn = cfg.vi_chn;
 
-		rc = vi_detach_vb_pool(ViPipe, ViChn);
+		rc = vi_detach_vb_pool(vi_pipe, vi_chn);
 		break;
 	}
 	case VI_SDK_GET_PIPE_DUMP_ATTR:
 	{
-		VI_DUMP_ATTR_S dump_attr;
+		vi_dump_attr_s dump_attr;
 
 		memset(&dump_attr, 0, sizeof(dump_attr));
 
 		rc = vi_get_pipe_dump_attr(p->sdk_cfg.pipe, &dump_attr);
 
-		if (copy_to_user(p->sdk_cfg.ptr, &dump_attr, sizeof(VI_DUMP_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_ATTR_S copy to user fail.\n");
+		if (copy_to_user(p->sdk_cfg.ptr, &dump_attr, sizeof(vi_dump_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_attr_s copy to user fail.\n");
 			rc = -1;
 			break;
 		}
@@ -2562,10 +2559,10 @@ long vi_sdk_ctrl(struct cvi_vi_dev *vdev, struct vi_ext_control *p)
 	}
 	case VI_SDK_SET_PIPE_DUMP_ATTR:
 	{
-		VI_DUMP_ATTR_S dump_attr;
+		vi_dump_attr_s dump_attr;
 
-		if (copy_from_user(&dump_attr, p->sdk_cfg.ptr, sizeof(VI_DUMP_ATTR_S)) != 0) {
-			vi_pr(VI_ERR, "VI_PIPE_ATTR_S copy from user fail.\n");
+		if (copy_from_user(&dump_attr, p->sdk_cfg.ptr, sizeof(vi_dump_attr_s)) != 0) {
+			vi_pr(VI_ERR, "vi_pipe_attr_s copy from user fail.\n");
 			break;
 		}
 

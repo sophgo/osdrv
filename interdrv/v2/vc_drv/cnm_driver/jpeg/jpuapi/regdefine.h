@@ -127,15 +127,6 @@ NIEUPORT REGISTERS
 #define MJPEG_INST_CTRL_START_REG   (NPT_PROC_BASE + 0x000)
 #define MJPEG_INST_CTRL_STATUS_REG  (NPT_PROC_BASE + 0x004)
 
-
-#if defined(CNM_FPGA_PLATFORM)
-#define MAX_OUTOFORDER_DELAY            500
-#define MAX_AXI_DELAY                   1000
-#define MJPEG_OUTOFORDER_LATENCY        (0x0500FFF0)        /* 32'h?5??_fff0 */
-#define MJPEG_READ_DELAY                (0x04000000)
-#define MJPEG_WRITE_DELAY               (0x04000004)
-#endif /* CNM_FPGA_PLATFORM */
-
 #define CLK_SEL_BASE        0x06000000
 #define CLK_SEL_RST         (CLK_SEL_BASE + 0x000)
 #define CLK_SEL_ACLK        (CLK_SEL_BASE + 0x004)

@@ -12,8 +12,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
-#include <linux/cvi_defines.h>
-#include <linux/cvi_vip.h>
+#include <linux/defines.h>
 #include <vip/rgn_drv.h>
 
 enum sclr_gop {
@@ -27,9 +26,9 @@ enum sclr_gop {
 
 
 /**
- * struct cvi_rgn - RGN IP abstraction
+ * struct rgn - RGN IP abstraction
  */
-struct cvi_rgn_dev {
+struct rgn_dev {
 	struct miscdevice	miscdev;
 
 	struct device		*dev;

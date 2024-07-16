@@ -16,9 +16,8 @@
 #include <linux/streamline_annotate.h>
 #include <linux/version.h>
 #include <uapi/linux/sched/types.h>
-#include <linux/vi_tun_cfg.h>
-#include <linux/vi_isp.h>
-#include <linux/vi_uapi.h>
+#include <vi_tun_cfg.h>
+#include <vi_isp.h>
 #include <vi_common.h>
 #include <vip/vi_drv.h>
 #include <vi_defines.h>
@@ -29,24 +28,25 @@ enum cvi_isp_buf_status {
 };
 
 struct isp_buffer {
-	enum cvi_isp_raw  raw_num;
+	enum sop_isp_raw	raw_num;
 	uint8_t	          is_ext;
-	enum cvi_isp_fe_chn_num chn_num;
-	uint64_t          addr;
-	struct vi_rect    crop_le;
-	struct vi_rect    crop_se;
-	struct isp_grid_s_info rgbmap_i;
-	struct isp_grid_s_info lmap_i;
-	struct list_head  list;
-	uint32_t          byr_size;
-	uint32_t          frm_num;
-	uint32_t          ir_idx;
+	enum sop_isp_fe_chn_num chn_num;
+	struct vi_rect		crop_le;
+	struct vi_rect		crop_se;
+	struct isp_grid_s_info	rgbmap_i;
+	struct isp_grid_s_info	lmap_i;
+	struct list_head	list;
+	u64			addr;
+	u32			byr_size;
+	u32			frm_num;
+	u32			ir_idx;
+	struct timespec64	timestamp;
 };
 
 struct isp_queue {
-	struct list_head rdy_queue;
-	uint32_t num_rdy;
-	enum cvi_isp_raw raw_num;
+	struct list_head	rdy_queue;
+	u32			num_rdy;
+	enum sop_isp_raw	raw_num;
 };
 
 extern spinlock_t buf_lock;

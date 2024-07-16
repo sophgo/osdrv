@@ -23,15 +23,11 @@
 #endif
 #endif  // ENV_CVITEST
 
-#include <linux/cvi_comm_vo.h>
-
 #include "vo_common.h"
 #include "disp.h"
-#include "disp_reg.h"
+#include "vo_reg.h"
 #include "reg.h"
 #include "dsi_phy.h"
-#include "reg_disp.h"
-#include "reg_vgop.h"
 
 /****************************************************************************
  * Global parameters
@@ -39,7 +35,7 @@
 static struct disp_oenc_cfg g_oenc_cfg[MAX_OSD_ENC_INST];
 static struct disp_odma_cfg g_odma_cfg[DISP_MAX_INST];
 static struct disp_cfg g_disp_cfg[DISP_MAX_INST];
-static struct disp_timing disp_timing[DISP_MAX_INST];
+static struct disp_timing g_disp_timing[DISP_MAX_INST];
 static uintptr_t reg_vo_mac_base[DISP_MAX_INST];
 static uintptr_t reg_disp_base[DISP_MAX_INST];
 static uintptr_t reg_dsi_mac_base[DISP_MAX_INST];
@@ -311,16 +307,16 @@ void disp_set_vo_type_sel(u8 inst, enum disp_vo_sel vo_sel)
 	_reg_write(REG_VO_MAC_VO_MUX(inst), vo_mux.raw);
 }
 
-void disp_mux_sel(u8 inst, enum disp_vo_sel sel)
-{
-	_reg_write_mask(REG_VO_MAC_VO_MUX(inst), 0x07, sel);
-}
-
 enum disp_vo_sel disp_mux_get(u8 inst)
 {
-	return _reg_read(REG_VO_MAC_VO_MUX(inst)) & 0x07;
+	union disp_vo_mux_sel vo_mux;
+
+	vo_mux.raw = _reg_read(REG_VO_MAC_VO_MUX(inst));
+
+	return vo_mux.b.vo_sel_type;
 }
 EXPORT_SYMBOL_GPL(disp_mux_get);
+
 
 /**
  * disp_set_intr_mask - disp's interrupt mask.
@@ -405,7 +401,7 @@ union disp_dbg_status disp_get_dbg_status(u8 inst, bool clr)
  * @param inst: instance of display
  * @param online_odma_mask: display's online or odma interrupt mask.
  */
-void disp_set_odma_intr_mask(u8 inst, union disp_online_odma_intr_sel online_odma_mask)
+void disp_set_odma_intr_mask(u8 inst, union disp_odma_intr_sel online_odma_mask)
 {
 	_reg_write_mask(REG_DISP_INT_ON_ODMA_SEL(inst), 0x300, online_odma_mask.raw);
 }
@@ -416,11 +412,10 @@ void disp_set_odma_intr_mask(u8 inst, union disp_online_odma_intr_sel online_odm
  * @param inst: instance of display
  * @param online_odma_mask: display's online or odma interrupt mask.
  */
-void disp_get_odma_intr_mask(u8 inst, union disp_online_odma_intr_sel *online_odma_mask)
+void disp_get_odma_intr_mask(u8 inst, union disp_odma_intr_sel *online_odma_mask)
 {
 	online_odma_mask->raw = _reg_read(REG_DISP_INT_ON_ODMA_SEL(inst));
 }
-
 
 /**
  * disp_odma_fifofull_clr - clear odma's fifo full err
@@ -544,6 +539,7 @@ void disp_odma_set_fmt(u8 inst, enum disp_format fmt)
 
 	if (fmt == DISP_FMT_BF16)
 		tmp |= BIT(23);
+
 	_reg_write_mask(REG_DISP_ODMA_CFG(inst), 0x0080ff00, tmp);
 
 	g_odma_cfg[inst].fmt = fmt;
@@ -565,50 +561,6 @@ void disp_odma_enable(u8 inst, bool enable)
 		g_odma_cfg[inst].enable = enable;
 	}
 }
-
-#if 0
-union sclr_odma_dbg_status sclr_odma_get_dbg_status(u8 inst)
-{
-	union sclr_odma_dbg_status status;
-
-	status.raw = _reg_read(REG_SCL_ODMA_DBG(inst));
-
-	return status;
-}
-
-void sclr_odma_get_sb_default(struct sclr_odma_sb_cfg *cfg)
-{
-	memset(cfg, 0, sizeof(*cfg));
-	cfg->sb_nb = 3;
-	cfg->sb_full_nb = 2;
-}
-
-void sclr_odma_set_sb(u8 inst, struct sclr_odma_sb_cfg *cfg)
-{
-	u32 val = 0;
-
-	val |= (cfg->sb_mode << SC_ODMA_REG_SB_MODE_OFFSET) & SC_ODMA_REG_SB_MODE_MASK;
-	val |= (cfg->sb_size << SC_ODMA_REG_SB_SIZE_OFFSET) & SC_ODMA_REG_SB_SIZE_MASK;
-	val |= (cfg->sb_nb << SC_ODMA_REG_SB_NB_OFFSET) & SC_ODMA_REG_SB_NB_MASK;
-	val |= (cfg->sb_full_nb << SC_ODMA_REG_SB_FULL_NB_OFFSET) & SC_ODMA_REG_SB_FULL_NB_MASK;
-	val |= (cfg->sb_sw_wptr << SC_ODMA_REG_SB_SW_WPTR_OFFSET) & SC_ODMA_REG_SB_SW_WPTR_MASK;
-	val |= (cfg->sb_set_str << SC_ODMA_REG_SB_SET_STR_OFFSET) & SC_ODMA_REG_SB_SET_STR_MASK;
-	val |= (cfg->sb_sw_clr << SC_ODMA_REG_SB_SW_CLR_OFFSET) & SC_ODMA_REG_SB_SW_CLR_MASK;
-
-	_reg_write(REG_SCL_ODMA_SB_CTRL(inst), val);
-}
-
-void sclr_odma_clear_sb(u8 inst)
-{
-	u32 val = 0;
-
-	val |= (1 << SC_ODMA_REG_SB_SET_STR_OFFSET) & SC_ODMA_REG_SB_SET_STR_MASK;
-	val |= (1 << SC_ODMA_REG_SB_SW_CLR_OFFSET) & SC_ODMA_REG_SB_SW_CLR_MASK;
-
-	_reg_write(REG_SCL_ODMA_SB_CTRL(inst), val);
-}
-
-#endif
 
 /****************************************************************************
  * OSD Compression(OSD Encoder)
@@ -654,7 +606,7 @@ void disp_oenc_set_cfg(u8 oenc_inst, struct disp_oenc_cfg *oenc_cfg)
 		//disp_oenc_trig
 		_reg_write_mask(REG_VO_SYS_OENC_INT_GO(oenc_inst), BIT(0), 1);
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[%s]Invalid oenc(%d), oenc only has 2 engine(0 & 1)", __func__, oenc_inst);
+		TRACE_VO(DBG_ERR, "[%s]Invalid oenc(%d), oenc only has 2 engine(0 & 1)", __func__, oenc_inst);
 	}
 }
 
@@ -672,17 +624,17 @@ struct disp_oenc_cfg *disp_oenc_get_cfg(u8 oenc_inst)
 		oenc_trig.go_intr.raw = _reg_read(REG_VO_SYS_OENC_INT_GO(oenc_inst));
 
 		if (oenc_trig.go_intr.b.done)
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] SCLR OSD Compression done!!\n");
+			TRACE_VO(DBG_DEBUG, "[disp] SCLR OSD Compression done!!\n");
 
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] SCLR OSD Compression INTR vector:");
+		TRACE_VO(DBG_DEBUG, "[disp] SCLR OSD Compression INTR vector:");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(0))
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "Successful!!\n");
+			TRACE_VO(DBG_DEBUG, "Successful!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(2))
-			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Bitstream size great than limiter!!\n");
+			TRACE_VO(DBG_ERR, "Fail, Bitstream size great than limiter!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(3))
-			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Watch Dog time-out!!\n");
+			TRACE_VO(DBG_ERR, "Fail, Watch Dog time-out!!\n");
 		if (oenc_trig.go_intr.b.intr_vec & BIT(4))
-			CVI_TRACE_VO(CVI_DBG_ERR, "Fail, Out of Dram Write protection region!!\n");
+			TRACE_VO(DBG_ERR, "Fail, Out of Dram Write protection region!!\n");
 
 		g_oenc_cfg[oenc_inst].cfg.raw = _reg_read(REG_VO_SYS_OENC_CFG(oenc_inst));
 		g_oenc_cfg[oenc_inst].bso_adr = _reg_read(REG_VO_SYS_OENC_BSO_ADDR(oenc_inst));
@@ -690,7 +642,7 @@ struct disp_oenc_cfg *disp_oenc_get_cfg(u8 oenc_inst)
 		g_oenc_cfg[oenc_inst].bso_mem_size.w = ALIGN(g_oenc_cfg[oenc_inst].bso_sz, 16) & 0x3fff;
 		g_oenc_cfg[oenc_inst].bso_mem_size.h = ALIGN(g_oenc_cfg[oenc_inst].bso_sz, 16) >> 14;
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such oenc_inst(%d). ", __func__, oenc_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 oenc_inst, no such oenc_inst(%d). ", __func__, oenc_inst);
 		return NULL;
 	}
 
@@ -709,23 +661,6 @@ void disp_reg_shadow_sel(u8 inst, bool read_shadow)
 {
 	_reg_write_mask(REG_DISP_CFG(inst), BIT(18),
 			(read_shadow ? 0x0 : BIT(18)));
-}
-
-/**
- * disp_reg_shadow_mask - reg won't be update by sw/hw until unmask.
- *
- * @param mask: true(mask); false(unmask)
- * @return: mask status before modification.
- */
-bool disp_reg_shadow_mask(u8 inst, bool mask)
-{
-	bool is_masked = (_reg_read(REG_DISP_CFG(inst)) & BIT(17));
-
-	if (is_masked != mask)
-		_reg_write_mask(REG_DISP_CFG(inst), BIT(17),
-				(mask ? BIT(17) : 0));
-
-	return is_masked;
 }
 
 /**
@@ -759,12 +694,12 @@ void disp_reg_set_shadow_mask(u8 inst, bool shadow_mask)
 void disp_gop_set_cfg(u8 inst, u8 layer, struct disp_gop_cfg *cfg, bool update)
 {
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return;
 	}
 
@@ -777,8 +712,6 @@ void disp_gop_set_cfg(u8 inst, u8 layer, struct disp_gop_cfg *cfg, bool update)
 		_reg_write(REG_DISP_GOP_COLORKEY(inst, layer), cfg->colorkey);
 	_reg_write(REG_DISP_GOP_FONTBOX_CTRL(inst, layer), cfg->fb_ctrl.raw);
 
-	// // ECO item for threshold invert
-	// _reg_write_mask(REG_DISP_BASE(inst) + 0x90f8, 0x1, cfg->fb_ctrl.b.lo_thr_inv);
 	// set odec cfg
 	_reg_write(REG_DISP_GOP_DEC_CTRL(inst, layer), cfg->odec_cfg.odec_ctrl.raw);
 
@@ -818,28 +751,20 @@ int disp_gop_setup_256LUT(u8 inst, u8 layer, u16 length, u16 *data)
 	u16 i = 0;
 	struct disp_gop_cfg gop_cfg;
 
-#if 0
-	void *vip_clk_reg = ioremap(0x3002008, 4);
-	u32 vip_pll = ioread32(vip_clk_reg);
-
-	iounmap(vip_clk_reg);
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "hw vip clk:%#x\n", vip_pll);
-#endif
-
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] %s:  inst(%d) layer(%d) length(%d)\n", __func__, inst, layer, length);
+	TRACE_VO(DBG_DEBUG, "[disp] %s: inst(%d) layer(%d) length(%d)\n", __func__, inst, layer, length);
 	gop_cfg = *disp_gop_get_cfg(inst, layer);
 
 	if (layer < DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
-			_reg_read(REG_DISP_GOP_CFG(inst, layer)),
-			_reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
+		TRACE_VO(DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
+			     _reg_read(REG_DISP_GOP_CFG(inst, layer)),
+			     _reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 
 	if (length >= 256) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "LUT length(%d) error, should less or equal to 256!\n", length);
+		TRACE_VO(DBG_ERR, "LUT length(%d) error, should less or equal to 256!\n", length);
 		return -1;
 	}
 
@@ -848,32 +773,35 @@ int disp_gop_setup_256LUT(u8 inst, u8 layer, u16 length, u16 *data)
 		//Disable OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), 0x0);
 
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d). Length is %d.\n",
-			layer, inst, length);
+		TRACE_VO(DBG_DEBUG, "[disp] update 256LUT in gop1 of display. layer(%d), sc(%d). Length is %d.\n",
+			 layer, inst, length);
+
 		for (i = 0; i < length; ++i) {
 			_reg_write(REG_DISP_GOP_256LUT0(inst, layer),
 						(i << 16) | *(data + i));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), BIT(16));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), ~BIT(16));
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "write LUT index:%d value:%#x\n", i, *(data + i));
+			TRACE_VO(DBG_DEBUG, "write LUT index:%d value:%#x\n", i, *(data + i));
 		}
 #if 0 /* do not read when normal operation */
 		for (i = 0; i < length; ++i) {
 			_reg_write(REG_DISP_GOP_256LUT0(inst, layer), (i << 16));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), BIT(17));
 			_reg_write(REG_DISP_GOP_256LUT1(inst, layer), ~BIT(17));
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "read LUT index:%d value:%#x\n",
-				i, _reg_read(REG_DISP_GOP_256LUT1(inst, layer)) & 0xFFFF);
+			TRACE_VO(DBG_DEBUG, "read LUT index:%d value:%#x\n",
+				     i, _reg_read(REG_DISP_GOP_256LUT1(inst, layer)) & 0xFFFF);
 		}
 #endif
 		//Enable original OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), gop_cfg.gop_ctrl.raw);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "After update LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
+		TRACE_VO(DBG_DEBUG, "After update LUT, gop_cfg ctrl:%#x\n",
+			 _reg_read(REG_DISP_GOP_CFG(inst, layer)));
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -890,11 +818,11 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 	struct disp_gop_cfg gop_cfg = *disp_gop_get_cfg(inst, layer);
 
 	if (layer < DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
-			_reg_read(REG_DISP_GOP_CFG(inst, layer)),
-			_reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
+		TRACE_VO(DBG_DEBUG, "before update LUT, gop_cfg ctrl:%#x fmt:%#x\n",
+			 _reg_read(REG_DISP_GOP_CFG(inst, layer)),
+			 _reg_read(REG_DISP_GOP_FMT(inst, 0, layer)));
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
 
@@ -906,8 +834,8 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 		//Disable OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), 0x0);
 
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 256LUT in gop1 of display. layer(%d), sc(%d), Index is %d.\n",
-				layer, inst, index);
+		TRACE_VO(DBG_DEBUG, "[disp] update 256LUT in gop1 of display. layer(%d), sc(%d), Index is %d.\n",
+			 layer, inst, index);
 		_reg_write(REG_DISP_GOP_256LUT0(inst, layer),
 					(index << 16) | data);
 		_reg_write(REG_DISP_GOP_256LUT1(inst, layer), BIT(16));
@@ -915,12 +843,14 @@ int disp_gop_update_256LUT(u8 inst, u8 layer, u16 index, u16 data)
 
 		//Enable original OW enable in gop ctrl register
 		_reg_write(REG_DISP_GOP_CFG(inst, layer), gop_cfg.gop_ctrl.raw);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "After upadte LUT, gop_cfg ctrl:%#x\n", _reg_read(REG_DISP_GOP_CFG(inst, layer)));
+		TRACE_VO(DBG_DEBUG, "After upadte LUT, gop_cfg ctrl:%#x\n",
+			     _reg_read(REG_DISP_GOP_CFG(inst, layer)));
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(disp_gop_update_256LUT);
@@ -939,27 +869,26 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 	u16 i = 0;
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
+
 	if (length > 16)
 		return -1;
 
 	if (inst < DISP_MAX_INST) {
 		disp_reg_set_shadow_mask(inst, true);
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-vip][sc] update 16LUT in gop1 of display. Length is %d.\n", length);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 16LUT in gop1 of display. Length is %d.\n", length);
+		TRACE_VO(DBG_DEBUG, "[disp] update 16LUT in gop1 of display. Length is %d.\n", length);
 		for (i = 0; i <= length; i += 2) {
 			_reg_write(REG_DISP_GOP_16LUT(inst, layer, i / 2),
 						((*(data + i + 1) << 16) | (*(data + i))));
 		}
-
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -974,27 +903,27 @@ int disp_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 int disp_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data)
 {
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return -1;
 	}
+
 	if (index > 16)
 		return -1;
 
 	if (inst < DISP_MAX_INST) {
 		disp_reg_set_shadow_mask(inst, true);
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] update 16LUT in gop1 of display. Index is %d.\n", index);
+		TRACE_VO(DBG_DEBUG, "[disp] update 16LUT in gop1 of display. Index is %d.\n", index);
 		if (index % 2 == 0) {
 			_reg_write_mask(REG_DISP_GOP_16LUT(inst, layer, index / 2), 0xFFFF, data);
 		} else {
 			_reg_write_mask(REG_DISP_GOP_16LUT(inst, layer, index / 2), 0xFFFF0000, data);
 		}
-
 		disp_reg_set_shadow_mask(inst, false);
 	} else {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
+
 	return 0;
 }
 
@@ -1019,21 +948,22 @@ void disp_gop_ow_set_cfg(u8 inst, u8 layer, u8 ow_inst, struct disp_gop_ow_cfg *
 	static const u8 reg_map_fmt[DISP_GOP_FMT_MAX] = {0, 0x4, 0x5, 0x8, 0xa, 0xc};
 
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (ow_inst >= DISP_MAX_GOP_OW_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
 		return;
 	}
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "[cvi-disp] %s: inst:%d layer:%d ow_inst:%d ow_cfg->fmt:%d\n",
-		__func__, inst, layer, ow_inst, ow_cfg->fmt);
+
+	TRACE_VO(DBG_DEBUG, "[disp] %s: inst:%d layer:%d ow_inst:%d ow_cfg->fmt:%d\n",
+		     __func__, inst, layer, ow_inst, ow_cfg->fmt);
 
 	disp_reg_set_shadow_mask(inst, true);
 	_reg_write(REG_DISP_GOP_FMT(inst, layer, ow_inst),
@@ -1069,17 +999,17 @@ EXPORT_SYMBOL_GPL(disp_gop_ow_set_cfg);
 void disp_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 {
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (ow_inst >= DISP_MAX_GOP_OW_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such ow_inst(%d). ", __func__, ow_inst);
 		return;
 	}
 
@@ -1098,17 +1028,17 @@ void disp_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 void disp_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct disp_gop_fb_cfg *fb_cfg)
 {
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return;
 	}
 
 	if (fb_inst >= DISP_MAX_GOP_FB_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
 		return;
 	}
 
@@ -1136,17 +1066,17 @@ void disp_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct disp_gop_fb_cfg *
 u32 disp_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst)
 {
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return -1;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 layer, no such layer(%d). ", __func__, layer);
 		return -1;
 	}
 
 	if (fb_inst >= DISP_MAX_GOP_FB_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 gop_fb_inst, no such inst(%d). ", __func__, fb_inst);
 		return -1;
 	}
 
@@ -1165,17 +1095,17 @@ void disp_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, u8 oenc_inst, struct dis
 	struct disp_oenc_cfg *oenc_cfg;
 
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
 	if (layer >= DISP_MAX_GOP_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 2 inst, no such inst(%d). ", __func__, layer);
 		return;
 	}
 
 	if (oenc_inst >= MAX_OSD_ENC_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 oenc_inst, no such inst(%d). ", __func__, oenc_inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 oenc_inst, no such inst(%d). ", __func__, oenc_inst);
 		return;
 	}
 
@@ -1200,7 +1130,7 @@ void disp_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, u8 oenc_inst, struct dis
 void disp_cover_set_cfg(u8 inst, u8 cover_w_inst, struct disp_cover_cfg *cover_cfg)
 {
 	if (inst >= DISP_MAX_INST) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[bm-vip][disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
+		TRACE_VO(DBG_ERR, "[disp] %s: only 0 ~ 1 disp_inst, no such inst(%d). ", __func__, inst);
 		return;
 	}
 
@@ -1316,19 +1246,15 @@ void disp_set_cfg(u8 inst, struct disp_cfg *cfg)
 	if (!cfg->disp_from_sc) {
 		disp_set_mem(inst, &cfg->mem);
 		disp_reg_set_shadow_mask(inst, true);
-
 		// _reg_write_mask(REG_DISP_PITCH_Y(inst), 0xf0000000,
 		// 		cfg->burst << 28);
-
 		disp_set_in_csc(inst, cfg->in_csc);
 	} else {
 		disp_reg_set_shadow_mask(inst, true);
 		// csc only needed if disp from dram
-		disp_set_out_mode(inst, DISP_OUT_DISABLE);
 	}
 
 	disp_set_out_csc(inst, cfg->out_csc);
-
 	_reg_write_mask(REG_DISP_CFG(inst), 0x0000f09f, tmp);
 	_reg_write_mask(REG_DISP_CATCH(inst), BIT(0), cfg->cache_mode);
 	// _reg_write_mask(REG_DISP_FIFO_TH(inst), 0xff, cfg->y_thresh);
@@ -1345,13 +1271,13 @@ void disp_set_cfg(u8 inst, struct disp_cfg *cfg)
 		tmp = 0;
 		break;
 	}
+
 	tmp |= cfg->drop_mode << 18;
 	_reg_write_mask(REG_DISP_PAT_COLOR4(inst), 0x000f0000, tmp);
-
 	disp_reg_set_shadow_mask(inst, false);
+
 	g_disp_cfg[inst] = *cfg;
 }
-EXPORT_SYMBOL_GPL(disp_set_cfg);
 
 /**
  * disp_get_cfg - get disp's cfg
@@ -1362,7 +1288,6 @@ struct disp_cfg *disp_get_cfg(u8 inst)
 {
 	return &g_disp_cfg[inst];
 }
-EXPORT_SYMBOL_GPL(disp_get_cfg);
 
 /**
  * disp_cfg_setup_from_reg - get settings from register.
@@ -1392,29 +1317,6 @@ void disp_cfg_setup_from_reg(u8 inst)
 	g_disp_cfg[inst].c_thresh = (tmp >> 16) & 0xff;
 }
 
-#if 0
-void _fill_disp_timing(struct disp_timing *timing, struct sync_info *sync_info)
-{
-	timing->vtotal = sync_info->vid_vsa_lines + sync_info->vid_vbp_lines
-			+ sync_info->vid_active_lines + sync_info->vid_vfp_lines - 1;
-	timing->htotal = sync_info->vid_hsa_pixels + sync_info->vid_hbp_pixels
-			+ sync_info->vid_hline_pixels + sync_info->vid_hfp_pixels - 1;
-	timing->vsync_start = 1;
-	timing->vsync_end = timing->vsync_start + sync_info->vid_vsa_lines - 1;
-	timing->vfde_start = timing->vmde_start =
-		timing->vsync_start + sync_info->vid_vsa_lines + sync_info->vid_vbp_lines;
-	timing->vfde_end = timing->vmde_end =
-		timing->vfde_start + sync_info->vid_active_lines - 1;
-	timing->hsync_start = 1;
-	timing->hsync_end = timing->hsync_start + sync_info->vid_hsa_pixels - 1;
-	timing->hfde_start = timing->hmde_start =
-		timing->hsync_start + sync_info->vid_hsa_pixels + sync_info->vid_hbp_pixels;
-	timing->hfde_end = timing->hmde_end =
-		timing->hfde_start + sync_info->vid_hline_pixels - 1;
-	timing->vsync_pol = sync_info->vid_vsa_pos_polarity;
-	timing->hsync_pol = sync_info->vid_hsa_pos_polarity;
-}
-#endif
 /**
  * disp_set_timing - modify disp's timing-generator.
  *
@@ -1451,13 +1353,13 @@ void disp_set_timing(u8 inst, struct disp_timing *timing)
 
 	if (is_enable)
 		disp_tgen_enable(inst, true);
-	disp_timing[inst] = *timing;
+	g_disp_timing[inst] = *timing;
 }
 EXPORT_SYMBOL_GPL(disp_set_timing);
 
 struct disp_timing *disp_get_timing(u8 inst)
 {
-	return &disp_timing[inst];
+	return &g_disp_timing[inst];
 }
 EXPORT_SYMBOL_GPL(disp_get_timing);
 
@@ -1499,33 +1401,34 @@ EXPORT_SYMBOL_GPL(disp_get_hw_timing);
  */
 int disp_set_rect(u8 inst, struct disp_rect rect)
 {
-	if ((rect.y > disp_timing[inst].vfde_end) ||
-	    (rect.x > disp_timing[inst].hfde_end) ||
-	    ((disp_timing[inst].vfde_start + rect.y + rect.h - 1) >
-	      disp_timing[inst].vfde_end) ||
-	    ((disp_timing[inst].hfde_start + rect.x + rect.w - 1) >
-	      disp_timing[inst].hfde_end)) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi-vip][disp] %s: dev(%d) me's pos(%d, %d) size(%d, %d)\n",
-				__func__, inst, rect.x, rect.y, rect.w, rect.h);
-		CVI_TRACE_VO(CVI_DBG_ERR, " out of range(%d, %d, %d, %d).\n",
-				disp_timing[inst].hfde_start, disp_timing[inst].vfde_start,
-				disp_timing[inst].hfde_end, disp_timing[inst].vfde_end);
+	if (rect.y > g_disp_timing[inst].vfde_end ||
+	    rect.x > g_disp_timing[inst].hfde_end ||
+	    ((g_disp_timing[inst].vfde_start + rect.y + rect.h - 1) >
+	      g_disp_timing[inst].vfde_end) ||
+	    ((g_disp_timing[inst].hfde_start + rect.x + rect.w - 1) >
+	      g_disp_timing[inst].hfde_end)) {
+		TRACE_VO(DBG_ERR, "[disp] %s: dev(%d) me's pos(%d, %d) size(%d, %d)\n",
+			 __func__, inst, rect.x, rect.y, rect.w, rect.h);
+		TRACE_VO(DBG_ERR, " out of range(%d, %d, %d, %d).\n",
+			 g_disp_timing[inst].hfde_start, g_disp_timing[inst].vfde_start,
+			 g_disp_timing[inst].hfde_end, g_disp_timing[inst].vfde_end);
 		return -EINVAL;
 	}
 
-	disp_timing[inst].vmde_start = rect.y + disp_timing[inst].vfde_start;
-	disp_timing[inst].hmde_start = rect.x + disp_timing[inst].hfde_start;
-	disp_timing[inst].vmde_end = disp_timing[inst].vmde_start + rect.h - 1;
-	disp_timing[inst].hmde_end = disp_timing[inst].hmde_start + rect.w - 1;
+	g_disp_timing[inst].vmde_start = rect.y + g_disp_timing[inst].vfde_start;
+	g_disp_timing[inst].hmde_start = rect.x + g_disp_timing[inst].hfde_start;
+	g_disp_timing[inst].vmde_end = g_disp_timing[inst].vmde_start + rect.h - 1;
+	g_disp_timing[inst].hmde_end = g_disp_timing[inst].hmde_start + rect.w - 1;
 
 	disp_reg_set_shadow_mask(inst, true);
 
 	_reg_write(REG_DISP_HMDE(inst),
-		   (disp_timing[inst].hmde_end << 16) | disp_timing[inst].hmde_start);
+		   (g_disp_timing[inst].hmde_end << 16) | g_disp_timing[inst].hmde_start);
 	_reg_write(REG_DISP_VMDE(inst),
-		   (disp_timing[inst].vmde_end << 16) | disp_timing[inst].vmde_start);
+		   (g_disp_timing[inst].vmde_end << 16) | g_disp_timing[inst].vmde_start);
 
 	disp_reg_set_shadow_mask(inst, false);
+
 	return 0;
 }
 
@@ -1578,11 +1481,11 @@ void disp_set_mem(u8 inst, struct disp_mem *mem)
 }
 
 /**
- * disp_set_csc - configure disp's input CSC's coefficient/offset
+ * _disp_set_in_csc - configure disp's input CSC's coefficient/offset
  *
  * @param cfg: The settings for CSC
  */
-void disp_set_csc(u8 inst, struct disp_csc_matrix *cfg)
+void _disp_set_in_csc(u8 inst, struct disp_csc_matrix *cfg)
 {
 	_reg_write(REG_DISP_IN_CSC0(inst), BIT(31) |
 		   (cfg->coef[0][1] << 16) | (cfg->coef[0][0]));
@@ -1611,7 +1514,7 @@ void disp_set_in_csc(u8 inst, enum disp_csc csc)
 	if (csc == DISP_CSC_NONE) {
 		_reg_write(REG_DISP_IN_CSC0(inst), 0);
 	} else if (csc < DISP_CSC_MAX) {
-		disp_set_csc(inst, &csc_mtrx[csc]);
+		_disp_set_in_csc(inst, &csc_mtrx[csc]);
 	}
 
 	g_disp_cfg[inst].in_csc = csc;
@@ -1658,6 +1561,8 @@ void disp_set_out_csc(u8 inst, enum disp_csc csc)
 void disp_set_pattern(u8 inst, enum disp_pat_type type,
 			   enum disp_pat_color color, const u16 *rgb)
 {
+	disp_enable_window_bgcolor(inst, false);
+
 	switch (type) {
 	case PAT_TYPE_OFF:
 		_reg_write_mask(REG_DISP_PAT_CFG(inst), 0x16, 0);
@@ -1691,7 +1596,7 @@ void disp_set_pattern(u8 inst, enum disp_pat_type type,
 		break;
 	}
 	default:
-		CVI_TRACE_VO(CVI_DBG_ERR, "%s - unacceptiable pattern-type(%d)\n", __func__, type);
+		TRACE_VO(DBG_ERR, "%s - unacceptiable pattern-type(%d)\n", __func__, type);
 		break;
 	}
 	_reg_write_mask(REG_DISP_CFG(inst), BIT(7), BIT(7));
@@ -1787,19 +1692,10 @@ void disp_lvdstx_set(u8 inst, union disp_lvdstx cfg)
 {
 	_reg_write(REG_VO_MAC_LVDSTX(inst), cfg.raw);
 }
-EXPORT_SYMBOL_GPL(disp_lvdstx_set);
 
 void disp_lvdstx_get(u8 inst, union disp_lvdstx *cfg)
 {
 	cfg->raw = _reg_read(REG_VO_MAC_LVDSTX(inst));
-}
-
-void disp_bt656_72mhz_vo_mux_set(u8 inst)
-{
-	_reg_write(REG_VO_MAC_VO_MUX3(inst), 0x03000000);
-	_reg_write(REG_VO_MAC_VO_MUX4(inst), 0x07060504);
-	_reg_write(REG_VO_MAC_VO_MUX5(inst), 0x000A0908);
-	_reg_write(REG_VO_MAC_BT_CFG(inst), 0x00000001);
 }
 
 void disp_bt_set(u8 inst, union disp_bt_enc enc, union disp_bt_sync_code sync)
@@ -1837,82 +1733,56 @@ void disp_set_srgb_ttl_4x(u8 inst, bool is_4x)
 	_reg_write(REG_VO_MAC_SRGB_CTRL(inst), vo_srgb_ctrl.raw);
 }
 
-void disp_set_intf(u8 inst, enum disp_vo_intf intf)
+void disp_bt_en(u8 inst)
 {
-	bool data_en[5] = {true, true, true, true};
-
-#if 0	// FIXME:
-	void *pll_reg = ioremap(0x03002840, 4);
-	u32 pll = ioread32(pll_reg) & 0xf5;
-
-	if (intf == DISP_VO_INTF_DISABLE)
-		iowrite32(pll, pll_reg);
-	else
-		iowrite32(pll | 0x0a, pll_reg);
-	iounmap(pll_reg);
-#endif
-	dphy_init(inst, intf);
-
-	if (intf == DISP_VO_INTF_DISABLE) {
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
-	} else if ((intf == DISP_VO_INTF_BT601) || (intf == DISP_VO_INTF_BT656) || (intf == DISP_VO_INTF_BT1120)) {
-		if (intf == DISP_VO_INTF_BT601)
-			disp_set_vo_type_sel(inst, DISP_VO_SEL_BT601);
-		else if (intf == DISP_VO_INTF_BT656)
-			disp_set_vo_type_sel(inst, DISP_VO_SEL_BT656);
-		else if (intf == DISP_VO_INTF_BT1120)
-			disp_set_vo_type_sel(inst, DISP_VO_SEL_BT1120);
-		dphy_dsi_lane_en(inst, true, data_en, false);
-	} else if (intf == DISP_VO_INTF_I80) {
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_I80);
-		dphy_dsi_lane_en(inst, true, data_en, false);
-		_reg_write_mask(REG_VO_MAC_MCU_IF_CTRL(inst), BIT(0), 1);
-	} else if (intf == DISP_VO_INTF_I80_HW) {
-		dphy_dsi_lane_en(inst, true, data_en, false);
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_HW_MCU);
-	} else if (intf == DISP_VO_INTF_SW) {
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_SW);
-	} else if (intf == DISP_VO_INTF_MIPI) {
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
-	} else if (intf == DISP_VO_INTF_LVDS) {
-		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
-	}
+	_reg_write(REG_VO_MAC_BT_CFG(inst), 0x1);
 }
-EXPORT_SYMBOL_GPL(disp_set_intf);
+EXPORT_SYMBOL_GPL(disp_bt_en);
 
 /**
- * disp_set_out_mode - Control display output's mode. CSC/Quantization/HSV
- *
- * @param inst: (0~1), the instance of display which want to be configured.
- * @param mode: csc/quant/hsv/none
+ * disp_vo_mux_sel - remap vo mux
+ * @param vo_mux_sel: origin vo mux
+ * @param vo_mux: mapped vo mux
  */
-void disp_set_out_mode(u8 inst, enum disp_out_mode mode)
+void disp_vo_mux_sel(u8 inst, int vo_sel, int vo_mux)
 {
-	u32 tmp = 0;
+	u32 value = 0;
+	uintptr_t reg_addr = REG_VO_MAC_VO_MUX0(inst) +  (vo_sel / 4) * 4;
+	u32 offset = (vo_sel % 4) * 8;
 
-	switch (mode) {
-	case DISP_OUT_CSC:
-		tmp = BIT(0);
-		break;
-	case DISP_OUT_QUANT_BF16:
-		tmp |= BIT(23);
-		tmp |= BIT(1) | BIT(0);
-		break;
-	case DISP_OUT_QUANT:
-		tmp |= BIT(1) | BIT(0);
-		break;
-	case DISP_OUT_HSV:
-		tmp = BIT(4);
-		break;
-	case DISP_OUT_DISABLE:
-		break;
+	if (vo_sel == VO_VIVO_CLK) {
+		_reg_write(REG_VO_MAC_VO_MUX7(inst), 0x30000);
 	}
 
-	//FIXME:
-	// _reg_write_mask(REG_DISP_CSC_EN(inst), 0x01000013, tmp);
-
-	// g_odma_cfg[inst].csc_cfg.mode = mode;
+	value = _reg_read(reg_addr);
+	value |= (vo_mux << offset);
+	_reg_write(reg_addr, value);
 }
+EXPORT_SYMBOL_GPL(disp_vo_mux_sel);
+
+void disp_set_intf(u8 inst, enum vo_disp_intf intf)
+{
+	dphy_init(inst, intf);
+
+	if (intf >= VO_DISP_INTF_MAX)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
+	else if (intf == VO_DISP_INTF_DSI)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
+	else if (intf == VO_DISP_INTF_LVDS)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
+	else if (intf == VO_DISP_INTF_HDMI)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_DISABLE);
+	else if (intf == VO_DISP_INTF_BT601)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_BT601);
+	else if (intf == VO_DISP_INTF_BT656)
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_BT656);
+	else if (intf == VO_DISP_INTF_BT1120) {
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_BT1120);
+	}
+
+	//to do: prgb/srgb i80(sw_i80/hw_mcu)
+}
+EXPORT_SYMBOL_GPL(disp_set_intf);
 
 /**
  * disp_timing_setup_from_reg - get settings from register.
@@ -1923,36 +1793,36 @@ void disp_timing_setup_from_reg(u8 inst)
 	u32 tmp = 0;
 
 	tmp = _reg_read(REG_DISP_CFG(inst));
-	disp_timing[inst].vsync_pol = (tmp & 0x20);
-	disp_timing[inst].hsync_pol = (tmp & 0x40);
+	g_disp_timing[inst].vsync_pol = (tmp & 0x20);
+	g_disp_timing[inst].hsync_pol = (tmp & 0x40);
 
 	tmp = _reg_read(REG_DISP_TOTAL(inst));
-	disp_timing[inst].vtotal = tmp & 0xffff;
-	disp_timing[inst].htotal = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].vtotal = tmp & 0xffff;
+	g_disp_timing[inst].htotal = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_VSYNC(inst));
-	disp_timing[inst].vsync_start = tmp & 0xffff;
-	disp_timing[inst].vsync_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].vsync_start = tmp & 0xffff;
+	g_disp_timing[inst].vsync_end = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_VFDE(inst));
-	disp_timing[inst].vfde_start = tmp & 0xffff;
-	disp_timing[inst].vfde_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].vfde_start = tmp & 0xffff;
+	g_disp_timing[inst].vfde_end = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_VMDE(inst));
-	disp_timing[inst].vmde_start = tmp & 0xffff;
-	disp_timing[inst].vmde_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].vmde_start = tmp & 0xffff;
+	g_disp_timing[inst].vmde_end = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_HSYNC(inst));
-	disp_timing[inst].hsync_start = tmp & 0xffff;
-	disp_timing[inst].hsync_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].hsync_start = tmp & 0xffff;
+	g_disp_timing[inst].hsync_end = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_HFDE(inst));
-	disp_timing[inst].hfde_start = tmp & 0xffff;
-	disp_timing[inst].hfde_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].hfde_start = tmp & 0xffff;
+	g_disp_timing[inst].hfde_end = (tmp >> 16) & 0xffff;
 
 	tmp = _reg_read(REG_DISP_HMDE(inst));
-	disp_timing[inst].hmde_start = tmp & 0xffff;
-	disp_timing[inst].hmde_end = (tmp >> 16) & 0xffff;
+	g_disp_timing[inst].hmde_start = tmp & 0xffff;
+	g_disp_timing[inst].hmde_end = (tmp >> 16) & 0xffff;
 }
 
 void disp_checksum_en(u8 inst, bool enable)
@@ -1966,7 +1836,6 @@ void disp_get_checksum_status(u8 inst, struct disp_checksum_status *status)
 	status->checksum_base.raw = _reg_read(REG_DISP_CHECKSUM0(inst));
 	status->axi_read_from_dram = _reg_read(REG_DISP_CHECKSUM1(inst));
 	status->axi_read_from_gop = _reg_read(REG_DISP_CHECKSUM2(inst));
-
 }
 
 /**
@@ -1987,7 +1856,7 @@ void dsi_clr_mode(u8 inst)
 {
 	u32 mode = _reg_read(REG_DSI_MAC_EN(inst)) & 0x7;
 
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: mac_en reg(%#x)\n", __func__, mode);
+	TRACE_VO(DBG_DEBUG, "%s: mac_en reg(%#x)\n", __func__, mode);
 	if (mode != DISP_DSI_MODE_IDLE)
 		_reg_write_mask(REG_DSI_MAC_EN(inst), 0x7, mode);
 }
@@ -2072,7 +1941,7 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 	int ret;
 	char str[128];
 
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s; count(%d)\n", __func__, count);
+	TRACE_VO(DBG_DEBUG, "%s; count(%d)\n", __func__, count);
 	while (count != 0) {
 		if (count <= DISP_MAX_DSI_LP) {
 			packet_count = count;
@@ -2085,7 +1954,7 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 		count -= packet_count;
 		val = 0x01 | ((packet_count - 1) << 8) | (count ? 0 : 0x10000);
 		_reg_write(REG_DSI_ESC(inst), val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: esc reg(%#x)\n", __func__, val);
+		TRACE_VO(DBG_DEBUG, "%s: esc reg(%#x)\n", __func__, val);
 
 		snprintf(str, 128, "%s: packet_count(%d) data(", __func__, packet_count);
 		for (i = 0; i < packet_count; i += 4) {
@@ -2102,12 +1971,12 @@ int dsi_long_packet_raw(u8 inst, const u8 *data, u8 count)
 			_reg_write(addr + i, val);
 			snprintf(str + strlen(str), 128 - strlen(str), "%#x ", val);
 		}
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "%s)\n", str);
+		TRACE_VO(DBG_DEBUG, "%s)\n", str);
 
 		dsi_set_mode(inst, DISP_DSI_MODE_ESC);
 		ret = _dsi_chk_and_clean_mode(inst, DISP_DSI_MODE_ESC);
 		if (ret != 0) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "%s: packet_count(%d) data0(%#x)\n", __func__, packet_count, data[0]);
+			TRACE_VO(DBG_ERR, "%s: packet_count(%d) data0(%#x)\n", __func__, packet_count, data[0]);
 			break;
 		}
 	}
@@ -2129,7 +1998,7 @@ int dsi_long_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 	u16 crc;
 
 	if (count > 128 - 6) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "%s: count(%d) invalid\n", __func__, count);
+		TRACE_VO(DBG_ERR, "%s: count(%d) invalid\n", __func__, count);
 		return -1;
 	}
 
@@ -2173,7 +2042,7 @@ int dsi_short_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 		val |= data[0] << 8;
 	}
 
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: dev(%d) val(0x%x)\n", __func__, inst, val);
+	TRACE_VO(DBG_DEBUG, "%s: dev(%d) val(0x%x)\n", __func__, inst, val);
 
 	if (!sw_mode) {
 		_reg_write_mask(REG_DSI_HS_0(inst), 0x00ffffff, val);
@@ -2197,20 +2066,20 @@ int dsi_short_packet(u8 inst, u8 di, const u8 *data, u8 count, bool sw_mode)
 int dsi_dcs_write_buffer(u8 inst, u8 di, const void *data, size_t len, bool sw_mode)
 {
 	if (len == 0) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: 0 param unacceptable.\n", __func__);
+		TRACE_VO(DBG_ERR, "[mipi_tx] %s: 0 param unacceptable.\n", __func__);
 		return -1;
 	}
 
 	if ((di == 0x06) || (di == 0x05) || (di == 0x04) || (di == 0x03)) {
 		if (len != 1) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: cmd(0x%02x) should has 1 param.\n", __func__, di);
+			TRACE_VO(DBG_ERR, "[mipi_tx] %s: cmd(0x%02x) should has 1 param.\n", __func__, di);
 			return -1;
 		}
 		return dsi_short_packet(inst, di, data, len, sw_mode);
 	}
 	if ((di == 0x15) || (di == 0x37) || (di == 0x13) || (di == 0x14) || (di == 0x23)) {
 		if (len != 2) {
-			CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: cmd(0x%02x) should has 2 param.\n", __func__, di);
+			TRACE_VO(DBG_ERR, "[mipi_tx] %s: cmd(0x%02x) should has 2 param.\n", __func__, di);
 			return -1;
 		}
 		return dsi_short_packet(inst, di, data, len, sw_mode);
@@ -2240,7 +2109,7 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 		len = 4;
 
 	if (dsi_get_mode(inst) == DISP_DSI_MODE_HS) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: not work in HS.\n", __func__);
+		TRACE_VO(DBG_ERR, "[mipi_tx] %s: not work in HS.\n", __func__);
 		return -1;
 	}
 
@@ -2258,7 +2127,7 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 	// goto BTA
 	dsi_set_mode(inst, DISP_DSI_MODE_ESC);
 	if (_dsi_chk_and_clean_mode(inst, DISP_DSI_MODE_ESC) != 0) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: BTA error.\n", __func__);
+		TRACE_VO(DBG_ERR, "[mipi_tx] %s: BTA error.\n", __func__);
 		return ret;
 	}
 
@@ -2281,17 +2150,17 @@ int dsi_dcs_read_buffer(u8 inst, u8 di, const u16 data_param, u8 *data, size_t l
 			data[i] = (rx_data >> (i * 8)) & 0xff;
 		break;
 	case ACK_WR:
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: dcs read, ack with error(%#x %#x).\n"
+		TRACE_VO(DBG_ERR, "[mipi_tx] %s: dcs read, ack with error(%#x %#x).\n"
 			, __func__, (rx_data >> 8) & 0xff, (rx_data >> 16) & 0xff);
 		ret = -1;
 		break;
 	default:
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_mipi_tx] %s: unknown DT, %#x.", __func__, rx_data);
+		TRACE_VO(DBG_ERR, "[mipi_tx] %s: unknown DT, %#x.", __func__, rx_data);
 		ret = -1;
 		break;
 	}
 
-	// CVI_TRACE_VO(CVI_DBG_DEBUG, "%s: %#x %#x\n", __func__, rx_data0, rx_data1);
+	// TRACE_VO(DBG_DEBUG, "%s: %#x %#x\n", __func__, rx_data0, rx_data1);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dsi_dcs_read_buffer);
@@ -2316,219 +2185,6 @@ int disp_dsi_config(u8 inst, u8 lane_num, enum disp_dsi_fmt fmt, u16 width)
 }
 EXPORT_SYMBOL_GPL(disp_dsi_config);
 
-void i80_sw_mode(u8 inst, bool enable)
-{
-	_reg_write_mask(REG_VO_MAC_MCU_IF_CTRL(inst), BIT(11) | BIT(1), enable ? 0x802 : 0x000);
-
-	if (enable) {
-		disp_tgen_enable(inst, true);
-		mdelay(40);
-		disp_tgen_enable(inst, false);
-	}
-}
-
-void i80_packet(u8 inst, u32 cmd)
-{
-	u8 cnt = 0;
-
-	_reg_write(REG_VO_MAC_MCU_SW_CTRL(inst), cmd);
-	_reg_write_mask(REG_VO_MAC_MCU_SW_CTRL(inst), BIT(31), BIT(31));
-
-	do {
-		udelay(1);
-		if (_reg_read(REG_VO_MAC_MCU_SW_CTRL(inst)) & BIT(24))
-			break;
-	} while (++cnt < 10);
-
-	if (cnt == 10)
-		CVI_TRACE_VO(CVI_DBG_ERR, "[cvi_vip] %s: cmd(%#x) not ready.\n", __func__, cmd);
-}
-
-bool i80_chk_idle(u8 inst)
-{
-#define I80_BUSY_WAITING_TIMES 50
-#define I80_CLEAR_TRAIL 3
-	u8 cnt = 0, i = 0;
-
-	for (i = 0; i < I80_CLEAR_TRAIL; ++i) {
-		do {
-			if (_reg_read(REG_VO_MAC_MCU_STATUS(inst)) == 0x08)
-				return true;
-			usleep_range(1 * 1000, 3 * 1000);
-		} while (++cnt < I80_BUSY_WAITING_TIMES);
-
-		CVI_TRACE_VO(CVI_DBG_ERR, "%s: waiting idle failed. sw try to clear it.\n", __func__);
-		_reg_write_mask(REG_VO_MAC_MCU_IF_CTRL(inst), BIT(10), BIT(10));
-	}
-
-	CVI_TRACE_VO(CVI_DBG_ERR, "%s: failed.\n", __func__);
-	return false;
-}
-
-void i80_run(u8 inst)
-{
-	if (!i80_chk_idle(inst))
-		return; //do nothing if i80 status not idle
-
-	_reg_write_mask(REG_VO_MAC_MCU_IF_CTRL(inst), BIT(11), BIT(11));
-
-	i80_chk_idle(inst); //wait i80 idle
-}
-
-void disp_set_i80_if(u8 inst, u8 sw_mode, enum disp_hw_mcu_format format)
-{
-	union  disp_mcu_if_ctrl mcu_if_ctrl;
-	union  disp_hw_mcu_auto hw_mcu_auto;
-
-	mcu_if_ctrl.raw = _reg_read(REG_VO_MAC_MCU_IF_CTRL(inst));
-	hw_mcu_auto.raw = _reg_read(REG_VO_MAC_HW_MCU_AUTO(inst));
-
-	if (sw_mode) {
-		//for sw mcu mode
-		mcu_if_ctrl.b.i80_if_en = false;
-		mcu_if_ctrl.b.i80_hw_if_en = false;
-		mcu_if_ctrl.b.i80_sw_mode_en = true;
-	} else {
-		//hw mcu
-		mcu_if_ctrl.b.i80_if_en = false;
-		mcu_if_ctrl.b.i80_sw_mode_en = false;
-		mcu_if_ctrl.b.i80_hw_if_en = true;
-		if (I80_HW_FORMAT_RGB565 == format) {
-			hw_mcu_auto.b.mcu_565 = true;
-		} else if (I80_HW_FORMAT_RGB888 == format) {
-			hw_mcu_auto.b.mcu_565 = false;
-		}
-	}
-
-	_reg_write(REG_VO_MAC_MCU_IF_CTRL(inst), mcu_if_ctrl.raw);
-	_reg_write(REG_VO_MAC_HW_MCU_AUTO(inst), hw_mcu_auto.raw);
-}
-
-#if 0
-void i80_hw_packet(u8 inst, u32 cmd)
-{
-	_reg_write(REG_VO_MAC_HW_MCU_CMD0(inst), cmd);
-
-	//_reg_write_mask(REG_VO_MAC_HW_MCU_AUTO, BIT(0), 0);//rising edge to trig
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(4), BIT(4)); //sw_tx_num=3
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(5), BIT(5));
-}
-#endif
-
-void i80_hw_set_cmd0(u8 inst, u32 cmd)
-{
-	_reg_write(REG_VO_MAC_HW_MCU_CMD0(inst), cmd);
-}
-
-void i80_hw_set_cmd1(u8 inst, u32 cmd)
-{
-	cmd = (_reg_read(REG_VO_MAC_HW_MCU_CMD0(inst)) | cmd << 16);
-	_reg_write(REG_VO_MAC_HW_MCU_CMD0(inst), cmd);
-}
-
-void i80_hw_set_cmd2(u8 inst, u32 cmd)
-{
-	_reg_write(REG_VO_MAC_HW_MCU_CMD1(inst), cmd);
-}
-
-void i80_hw_set_cmd3(u8 inst, u32 cmd)
-{
-	cmd = (_reg_read(REG_VO_MAC_HW_MCU_CMD1(inst)) | cmd << 16);
-	_reg_write(REG_VO_MAC_HW_MCU_CMD1(inst), cmd);
-}
-
-int i80_hw_set_cmd_cnt(u8 inst, u32 cmdcnt)
-{
-	if (cmdcnt > 16) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[i80] %s: hw  mcu cmd takes max 16 cmds but (%d) set.\n", __func__, cmdcnt);
-		return -1;
-	}
-	cmdcnt = ((cmdcnt & 0xF) - 1) << 4;
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), 0xF0, cmdcnt);
-
-	return 0;
-}
-
-void i80_set_pre_cmd_en(u8 inst)
-{
-	// 1 : insert cmd before H.W. MCU data send
-	// use reg_sw_tx related config, if this bit set to high
-	// a. please set reg_sw_tx related config
-	// b. set hfde_str number > reg_sw_tx_num
-	_reg_write_mask(REG_VO_MAC_HW_MCU_AUTO(inst), BIT(5), BIT(5));
-}
-
-int i80_hw_stop(u8 inst)
-{
-	int cnt = 0;
-
-	//rising edge to stop
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(1), 0);
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(1), BIT(1));
-	cnt = 0;
-	do {
-		udelay(1);
-		//check hw_mcu_flag
-		if (_reg_read(REG_VO_MAC_HW_MCU_CMD(inst)) & BIT(7)) {
-			_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(7),  BIT(7));
-			return 0;
-		}
-	} while (++cnt < 10);
-	return -1;
-}
-
-// TODO:
-int i80_hw_trig(u8 inst)
-{
-	int cnt = 0;
-
-	i80_hw_stop(inst);
-	//rising edge to trig
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(0), 0);
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(0), BIT(0));
-	do {
-		udelay(1);
-		//check hw_mcu_flag
-		if (_reg_read(REG_VO_MAC_HW_MCU_CMD(inst)) & BIT(6)) {
-			break;
-		}
-	} while (++cnt < 10);
-
-	cnt = 0;
-	do {
-		udelay(1);
-		if (_reg_read(REG_VO_MAC_HW_MCU_CMD(inst)) & BIT(3)) {
-			//check sw_tx_done
-			break;
-		}
-	} while (++cnt < 10);
-
-	if (cnt == 10) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "[I80] %s: hw  mcu cmd not ready.\n", __func__);
-		return -1;
-	}
-	_reg_write_mask(REG_VO_MAC_HW_MCU_CMD(inst), BIT(6),  BIT(6));
-	return 0;
-}
-
-void i80_set_trig_stop(u8 inst)
-{
-	//set MCU stop
-	_reg_write_mask(REG_VO_MAC_HW_MCU_AUTO(inst), BIT(1), BIT(1));
-	_reg_write_mask(REG_VO_MAC_HW_MCU_AUTO(inst), BIT(0), 0);
-
-}
-
-#if 0
-void disp_clk_set(void)
-{
-	// disp0 clk ctrl
-	_reg_write(REG_VO_SYS_CLK_CTRL0, 0x10);
-	// disp1 clk ctrl
-	_reg_write(REG_VO_SYS_CLK_CTRL1, 0x20002);
-}
-#endif
-
 /****************************************************************************
  * DISPLAY CTRL
  ****************************************************************************/
@@ -2539,7 +2195,7 @@ void disp_clk_set(void)
 void disp_ctrl_init(bool is_resume)
 {
 	union disp_intr_sel intr_mask;
-	union disp_online_odma_intr_sel online_odma_mask;
+	union disp_odma_intr_sel online_odma_mask;
 	bool disp_from_sc = false;
 	unsigned int i = 0, j = 0;
 
@@ -2550,7 +2206,7 @@ void disp_ctrl_init(bool is_resume)
 		// init variables
 		memset(&g_odma_cfg, 0, sizeof(g_odma_cfg));
 		memset(&g_disp_cfg, 0, sizeof(g_disp_cfg));
-		memset(&disp_timing, 0, sizeof(disp_timing));
+		memset(&g_disp_timing, 0, sizeof(g_disp_timing));
 
 		// init disp mask up lock
 		spin_lock_init(&disp_mask_spinlock);
@@ -2623,382 +2279,3 @@ void trigger_8051(void)
 		iowrite32(ioread32(retrain_reg) & ~0xF, retrain_reg);
 	}
 }
-
-void dump_disp_register(u8 inst)
-{
-	uintptr_t disp_base = REG_DISP_BASE(inst);
-
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "disp inst(%d) base address=0x%08lx\n", inst, disp_base);
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_00=0x%08x\n", _reg_read(disp_base + DISP_REG_00));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_01=0x%08x\n", _reg_read(disp_base + DISP_REG_01));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_02=0x%08x\n", _reg_read(disp_base + DISP_REG_02));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_03=0x%08x\n", _reg_read(disp_base + DISP_REG_03));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_04=0x%08x\n", _reg_read(disp_base + DISP_REG_04));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_05=0x%08x\n", _reg_read(disp_base + DISP_REG_05));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_06=0x%08x\n", _reg_read(disp_base + DISP_REG_06));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_07=0x%08x\n", _reg_read(disp_base + DISP_REG_07));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_08=0x%08x\n", _reg_read(disp_base + DISP_REG_08));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_12=0x%08x\n", _reg_read(disp_base + DISP_REG_12));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_13=0x%08x\n", _reg_read(disp_base + DISP_REG_13));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_14=0x%08x\n", _reg_read(disp_base + DISP_REG_14));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_15=0x%08x\n", _reg_read(disp_base + DISP_REG_15));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_16=0x%08x\n", _reg_read(disp_base + DISP_REG_16));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_17=0x%08x\n", _reg_read(disp_base + DISP_REG_17));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_18=0x%08x\n", _reg_read(disp_base + DISP_REG_18));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_19=0x%08x\n", _reg_read(disp_base + DISP_REG_19));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_20=0x%08x\n", _reg_read(disp_base + DISP_REG_20));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_21=0x%08x\n", _reg_read(disp_base + DISP_REG_21));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_22=0x%08x\n", _reg_read(disp_base + DISP_REG_22));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_23=0x%08x\n", _reg_read(disp_base + DISP_REG_23));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_24=0x%08x\n", _reg_read(disp_base + DISP_REG_24));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_25=0x%08x\n", _reg_read(disp_base + DISP_REG_25));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_26=0x%08x\n", _reg_read(disp_base + DISP_REG_26));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_27=0x%08x\n", _reg_read(disp_base + DISP_REG_27));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_28=0x%08x\n", _reg_read(disp_base + DISP_REG_28));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_29=0x%08x\n", _reg_read(disp_base + DISP_REG_29));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_30=0x%08x\n", _reg_read(disp_base + DISP_REG_30));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_31=0x%08x\n", _reg_read(disp_base + DISP_REG_31));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_32=0x%08x\n", _reg_read(disp_base + DISP_REG_32));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_33=0x%08x\n", _reg_read(disp_base + DISP_REG_33));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_34=0x%08x\n", _reg_read(disp_base + DISP_REG_34));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_35=0x%08x\n", _reg_read(disp_base + DISP_REG_35));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_36=0x%08x\n", _reg_read(disp_base + DISP_REG_36));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_37=0x%08x\n", _reg_read(disp_base + DISP_REG_37));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_38=0x%08x\n", _reg_read(disp_base + DISP_REG_38));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_39=0x%08x\n", _reg_read(disp_base + DISP_REG_39));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_40=0x%08x\n", _reg_read(disp_base + DISP_REG_40));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_41=0x%08x\n", _reg_read(disp_base + DISP_REG_41));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_42=0x%08x\n", _reg_read(disp_base + DISP_REG_42));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_43=0x%08x\n", _reg_read(disp_base + DISP_REG_43));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_AXI_ST=0x%08x\n", _reg_read(disp_base + DISP_REG_AXI_ST));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_CATCH=0x%08x\n", _reg_read(disp_base + DISP_REG_CATCH));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_CHK_CTRL=0x%08x\n", _reg_read(disp_base + DISP_REG_CHK_CTRL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_CHK_RD_OSD=0x%08x\n", _reg_read(disp_base + DISP_CHK_RD_OSD));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_CHK_RD_IMG=0x%08x\n", _reg_read(disp_base + DISP_CHK_RD_IMG));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_3E=0x%08x\n", _reg_read(disp_base + DISP_REG_3E));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_3F=0x%08x\n", _reg_read(disp_base + DISP_REG_3F));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_IMG_BWL=0x%08x\n", _reg_read(disp_base + DISP_REG_IMG_BWL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_GAMMA_CTRL=0x%08x\n", _reg_read(disp_base + DISP_REG_GAMMA_CTRL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_GAMMA_WR_LUT=0x%08x\n", _reg_read(disp_base + DISP_REG_GAMMA_WR_LUT));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_GAMMA_RD_LUT=0x%08x\n", _reg_read(disp_base + DISP_REG_GAMMA_RD_LUT));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_MCU_IF_CTRL=0x%08x\n", _reg_read(disp_base + DISP_REG_MCU_IF_CTRL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_MCU_SW_CTRL=0x%08x\n", _reg_read(disp_base + DISP_REG_MCU_SW_CTRL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_MCU_STATUS=0x%08x\n", _reg_read(disp_base + DISP_REG_MCU_STATUS));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_AUTO=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_AUTO));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_0=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_0));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_1=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_1));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_2=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_2));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_3=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_3));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_4=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_4));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_5=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_5));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_6=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_6));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_CMD_7=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_CMD_7));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_HW_MCU_OV=0x%08x\n", _reg_read(disp_base + DISP_REG_HW_MCU_OV));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_SRGB_CTRL=0x%08x\n", _reg_read(disp_base + DISP_REG_SRGB_CTRL));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_TGEN_LITE_SIZE=0x%08x\n", _reg_read(disp_base + DISP_REG_TGEN_LITE_SIZE));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_TGEN_LITE_VS=0x%08x\n", _reg_read(disp_base + DISP_REG_TGEN_LITE_VS));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_REG_TGEN_LITE_HS=0x%08x\n", _reg_read(disp_base + DISP_REG_TGEN_LITE_HS));
-}
-
-void disp_dump_gop_register(int inst)
-{
-	u32 val, i, j;
-	uintptr_t gop_base = REG_DISP_GOP_BASE(inst);
-
-	if (inst >= DISP_MAX_INST)
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "sc(%d) out of range\n", inst);
-
-	for (i = 0; i < DISP_MAX_GOP_INST; i++) {
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "disp(%d) gop%d\n", inst, i);
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d enable =========================\n", i);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_80);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_80=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow0_en=%d, reg_ow1_en=%d, reg_ow2_en=%d, reg_ow3_en=%d\n",
-				(val & DISP_VGOP_OW0_EN_MASK) >> DISP_VGOP_OW0_EN_OFFSET,
-				(val & DISP_VGOP_OW1_EN_MASK) >> DISP_VGOP_OW1_EN_OFFSET,
-				(val & DISP_VGOP_OW2_EN_MASK) >> DISP_VGOP_OW2_EN_OFFSET,
-				(val & DISP_VGOP_OW3_EN_MASK) >> DISP_VGOP_OW3_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow4_en=%d, reg_ow5_en=%d, reg_ow6_en=%d, reg_ow7_en=%d\n",
-				(val & DISP_VGOP_OW0_EN_MASK) >> DISP_VGOP_OW4_EN_OFFSET,
-				(val & DISP_VGOP_OW1_EN_MASK) >> DISP_VGOP_OW5_EN_OFFSET,
-				(val & DISP_VGOP_OW2_EN_MASK) >> DISP_VGOP_OW6_EN_OFFSET,
-				(val & DISP_VGOP_OW3_EN_MASK) >> DISP_VGOP_OW3_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_vgop_hscal=%d, reg_vgop_vscal=%d, reg_clr_key_en=%d\n",
-				(val & DISP_VGOP_VGOP_HSCAL_MASK) >> DISP_VGOP_VGOP_HSCAL_OFFSET,
-				(val & DISP_VGOP_VGOP_VSCAL_MASK) >> DISP_VGOP_VGOP_VSCAL_OFFSET,
-				(val & DISP_VGOP_CLR_KEY_EN_MASK) >> DISP_VGOP_CLR_KEY_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_vgop_arlen=%d, reg_vgop_sw_rst=%d\n",
-				(val & DISP_VGOP_VGOP_ARLEN_MASK) >> DISP_VGOP_VGOP_ARLEN_OFFSET,
-				(val & DISP_VGOP_VGOP_SW_RST_MASK) >> DISP_VGOP_VGOP_SW_RST_OFFSET);
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d OW =========================\n", i);
-		for (j = 0; j < DISP_MAX_GOP_OW_INST; j++) {
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_0 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_0(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_format=0x%02x\n", j,
-					(val & DISP_VGOP_OW0_FORMAT_MASK) >> DISP_VGOP_OW0_FORMAT_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_1 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_1(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_h_start=%d, reg_ow%d_h_end=%d\n",
-					j, (val & DISP_VGOP_OW0_H_START_MASK) >> DISP_VGOP_OW0_H_START_OFFSET,
-					j, (val & DISP_VGOP_OW0_H_END_MASK) >> DISP_VGOP_OW0_H_END_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_2 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_2(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_v_start=%d, reg_ow%d_v_end=%d\n",
-					j, (val & DISP_VGOP_OW0_V_START_MASK) >> DISP_VGOP_OW0_V_START_OFFSET,
-					j, (val & DISP_VGOP_OW0_V_END_MASK) >> DISP_VGOP_OW0_V_END_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_3 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_3(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_dram_str_adr_l = 0x%08x\n", j,
-					(val &
-					DISP_VGOP_OW0_DRAM_STR_ADR_L_MASK) >> DISP_VGOP_OW0_DRAM_STR_ADR_L_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_4 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_4(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_dram_str_adr_h = 0x%08x\n", j,
-					(val &
-					DISP_VGOP_OW0_DRAM_STR_ADR_H_MASK) >> DISP_VGOP_OW0_DRAM_STR_ADR_H_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_5 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_5(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_dram_strip = %d, reg_ow%d_crop_pixels = %d\n",
-					j,
-					(val & DISP_VGOP_OW0_DRAM_STRIP_MASK) >> (DISP_VGOP_OW0_DRAM_STRIP_OFFSET - 4),
-					j, (val & DISP_VGOP_OW0_CROP_PIXELS_MASK) >> DISP_VGOP_OW0_CROP_PIXELS_OFFSET);
-			val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_6 + j * 0x20);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_6(ow%d)=0x%08x\n", j, val);
-			CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow%d_dram_hsize = %d, reg_ow%d_dram_vsize = %d\n",
-					j,
-					(val & DISP_VGOP_OW0_DRAM_HSIZE_MASK) >> (DISP_VGOP_OW0_DRAM_HSIZE_OFFSET - 4),
-					j, (val & DISP_VGOP_OW0_DRAM_VSIZE_MASK) >> DISP_VGOP_OW0_DRAM_VSIZE_OFFSET);
-		}
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d Ctrl =========================\n", i);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_83);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_83=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_clr_key=0x%08x\n",
-				(val & DISP_VGOP_CLR_KEY_MASK) >> DISP_VGOP_CLR_KEY_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_84);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_84=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_const_argb0=0x%04x, reg_const_argb1=0x%04x\n",
-				(val & DISP_VGOP_CONST_ARGB0_MASK) >> DISP_VGOP_CONST_ARGB0_OFFSET,
-				(val & DISP_VGOP_CONST_ARGB1_MASK) >> DISP_VGOP_CONST_ARGB1_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_85);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_85=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_vgop_debug=0x%08x\n",
-				(val & DISP_VGOP_VGOP_DEBUG_MASK) >> DISP_VGOP_VGOP_DEBUG_OFFSET);
-
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d FB =========================\n", i);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_86);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_86=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb_clr_hi_thr=%d, reg_fb_clr_lo_thr=%d\n",
-				(val & DISP_VGOP_FB_CLR_HI_THR_MASK) >> DISP_VGOP_FB_CLR_HI_THR_OFFSET,
-				(val & DISP_VGOP_FB_CLR_LO_THR_MASK) >> DISP_VGOP_FB_CLR_LO_THR_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb_init=%d, reg_fb_font_is_dark=%d\n",
-				(val & DISP_VGOP_FB_INIT_MASK) >> DISP_VGOP_FB_INIT_OFFSET,
-				(val & DISP_VGOP_FB_FONT_IS_DARK_MASK) >> DISP_VGOP_FB_FONT_IS_DARK_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb_diff_fnum=%d\n",
-				(val & DISP_VGOP_FB_DIFF_FNUM_MASK) >> DISP_VGOP_FB_DIFF_FNUM_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_87);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_87=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb0_width=%d, reg_fb0_pix_thr=%d\n",
-				(val & DISP_VGOP_FB0_WIDTH_MASK) >> DISP_VGOP_FB0_WIDTH_OFFSET,
-				(val & DISP_VGOP_FB0_PIX_THR_MASK) >> DISP_VGOP_FB0_PIX_THR_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb0_sample_rate=%d, reg_fb0_num=%d\n",
-				(val & DISP_VGOP_FB0_SAMPLE_RATE_MASK) >> DISP_VGOP_FB0_SAMPLE_RATE_OFFSET,
-				(val & DISP_VGOP_FB0_NUM_MASK) >> DISP_VGOP_FB0_NUM_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb0_attached_idx=%d, reg_fb0_en=%d\n",
-				(val & DISP_VGOP_FB0_ATTACHED_IDX_MASK) >> DISP_VGOP_FB0_ATTACHED_IDX_OFFSET,
-				(val & DISP_VGOP_FB0_EN_MASK) >> DISP_VGOP_FB0_EN_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_88);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_88=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb0_init_st=0x%08x\n",
-				(val & DISP_VGOP_FB0_INIT_ST_MASK) >> DISP_VGOP_FB0_INIT_ST_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_89);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_89=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb0_record=0x%08x\n",
-				(val & DISP_VGOP_FB0_RECORD_MASK) >> DISP_VGOP_FB0_RECORD_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_90);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_90=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb1_width=%d, reg_fb1_pix_thr=%d\n",
-				(val & DISP_VGOP_FB1_WIDTH_MASK) >> DISP_VGOP_FB1_WIDTH_OFFSET,
-				(val & DISP_VGOP_FB1_PIX_THR_MASK) >> DISP_VGOP_FB1_PIX_THR_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb1_sample_rate=%d, reg_fb1_num=%d\n",
-				(val & DISP_VGOP_FB1_SAMPLE_RATE_MASK) >> DISP_VGOP_FB1_SAMPLE_RATE_OFFSET,
-				(val & DISP_VGOP_FB1_NUM_MASK) >> DISP_VGOP_FB1_NUM_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb1_attached_idx=%d, reg_fb1_en=%d\n",
-				(val & DISP_VGOP_FB1_ATTACHED_IDX_MASK) >> DISP_VGOP_FB1_ATTACHED_IDX_OFFSET,
-				(val & DISP_VGOP_FB1_EN_MASK) >> DISP_VGOP_FB1_EN_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_91);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_91=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb1_init_st=0x%08x\n",
-				(val & DISP_VGOP_FB1_INIT_ST_MASK) >> DISP_VGOP_FB1_INIT_ST_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_92);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_92=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_fb1_record=0x%08x\n",
-				(val & DISP_VGOP_FB1_RECORD_MASK) >> DISP_VGOP_FB1_RECORD_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_BW_LIMIT);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_BW_LIMIT=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_bwl_win=%d, reg_bwl_vld=%d, reg_bwl_en=%d\n",
-				(val & DISP_VGOP_BWL_WIN_MASK) >> DISP_VGOP_BWL_WIN_OFFSET,
-				(val & DISP_VGOP_BWL_VLD_MASK) >> DISP_VGOP_BWL_VLD_OFFSET,
-				(val & DISP_VGOP_BWL_EN_MASK) >> DISP_VGOP_BWL_EN_OFFSET);
-
-		//ODEC
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d ODEC =========================\n", i);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_DEC_00);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_DEC_00=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG,
-				"    reg_odec_en=%d, reg_odec_int_en=%d, reg_odec_int_clr=%d, reg_odec_wdt_en=%d\n",
-				(val & DISP_VGOP_ODEC_EN_MASK) >> DISP_VGOP_ODEC_EN_OFFSET,
-				(val & DISP_VGOP_ODEC_INT_EN_MASK) >> DISP_VGOP_ODEC_INT_EN_OFFSET,
-				(val & DISP_VGOP_ODEC_INT_CLR_MASK) >> DISP_VGOP_ODEC_INT_CLR_OFFSET,
-				(val & DISP_VGOP_ODEC_WDT_EN_MASK) >> DISP_VGOP_ODEC_WDT_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG,
-				"    reg_odec_dbg_ridx=0x%04x, reg_odec_done=%d, reg_odec_attached_idx=%d\n",
-				(val & DISP_VGOP_ODEC_DBG_RIDX_MASK) >> DISP_VGOP_ODEC_DBG_RIDX_OFFSET,
-				(val & DISP_VGOP_ODEC_DONE_MASK) >> DISP_VGOP_ODEC_DONE_OFFSET,
-				(val & DISP_VGOP_ODEC_ATTACHED_IDX_MASK) >> DISP_VGOP_ODEC_ATTACHED_IDX_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_odec_wdt_fdiv_bit=%d, reg_odec_int_vec=0x%08x\n",
-				(val & DISP_VGOP_ODEC_INT_VEC_MASK) >> DISP_VGOP_ODEC_INT_VEC_OFFSET,
-				(val & DISP_VGOP_ODEC_WDT_FDIV_BIT_MASK) >> DISP_VGOP_ODEC_WDT_FDIV_BIT_OFFSET);
-
-		//ODEC_DBG
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_DEC_01);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_DEC_01=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_odec_dbg_rdata=0x%08x\n",
-				(val & DISP_VGOP_ODEC_DBG_RDATA_MASK) >> DISP_VGOP_ODEC_DBG_RDATA_OFFSET);
-
-		//LUT-4
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "========================= GOP%d LUT16 =========================\n", i);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_0);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_0=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt0=0x%04x, reg_lut16_cnt1=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT0_MASK) >> DISP_VGOP_LUT16_CNT0_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT1_MASK) >> DISP_VGOP_LUT16_CNT1_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_1);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_1=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt2=0x%04x, reg_lut16_cnt3=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT2_MASK) >> DISP_VGOP_LUT16_CNT2_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT3_MASK) >> DISP_VGOP_LUT16_CNT3_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_2);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_2=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt4=0x%04x, reg_lut16_cnt5=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT4_MASK) >> DISP_VGOP_LUT16_CNT4_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT5_MASK) >> DISP_VGOP_LUT16_CNT5_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_3);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_3=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt6=0x%04x, reg_lut16_cnt7=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT6_MASK) >> DISP_VGOP_LUT16_CNT6_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT7_MASK) >> DISP_VGOP_LUT16_CNT7_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_4);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_4=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt8=0x%04x, reg_lut16_cnt9=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT8_MASK) >> DISP_VGOP_LUT16_CNT8_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT9_MASK) >> DISP_VGOP_LUT16_CNT9_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_5);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_5=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt10=0x%04x, reg_lut16_cnt11=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT10_MASK) >> DISP_VGOP_LUT16_CNT10_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT11_MASK) >> DISP_VGOP_LUT16_CNT11_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_6);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_6=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt12=0x%04x, reg_lut16_cnt13=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT12_MASK) >> DISP_VGOP_LUT16_CNT12_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT13_MASK) >> DISP_VGOP_LUT16_CNT13_OFFSET);
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_LUT16_7);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_LUT16_7=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_lut16_cnt14=0x%04x, reg_lut16_cnt15=0x%04x\n",
-				(val & DISP_VGOP_LUT16_CNT14_MASK) >> DISP_VGOP_LUT16_CNT14_OFFSET,
-				(val & DISP_VGOP_LUT16_CNT15_MASK) >> DISP_VGOP_LUT16_CNT15_OFFSET);
-	}
-}
-
-void disp_show_gop_status(int inst)
-{
-	u32 val, i;
-	uintptr_t gop_base = REG_DISP_GOP_BASE(inst);
-
-	if (inst >= DISP_MAX_INST)
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "sc(%d) out of range\n", inst);
-
-	for (i = 0; i < DISP_MAX_GOP_INST; i++) {
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "sc(%d) gop%d\n", inst, i);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_REG_80);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_REG_80=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow0_en=%d, reg_ow1_en=%d, reg_ow2_en=%d, reg_ow3_en=%d\n",
-				(val & DISP_VGOP_OW0_EN_MASK) >> DISP_VGOP_OW0_EN_OFFSET,
-				(val & DISP_VGOP_OW1_EN_MASK) >> DISP_VGOP_OW1_EN_OFFSET,
-				(val & DISP_VGOP_OW2_EN_MASK) >> DISP_VGOP_OW2_EN_OFFSET,
-				(val & DISP_VGOP_OW3_EN_MASK) >> DISP_VGOP_OW3_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_ow4_en=%d, reg_ow5_en=%d, reg_ow6_en=%d, reg_ow7_en=%d\n",
-				(val & DISP_VGOP_OW0_EN_MASK) >> DISP_VGOP_OW4_EN_OFFSET,
-				(val & DISP_VGOP_OW1_EN_MASK) >> DISP_VGOP_OW5_EN_OFFSET,
-				(val & DISP_VGOP_OW2_EN_MASK) >> DISP_VGOP_OW6_EN_OFFSET,
-				(val & DISP_VGOP_OW3_EN_MASK) >> DISP_VGOP_OW3_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_vgop_hscal=%d, reg_vgop_vscal=%d, reg_clr_key_en=%d\n",
-				(val & DISP_VGOP_VGOP_HSCAL_MASK) >> DISP_VGOP_VGOP_HSCAL_OFFSET,
-				(val & DISP_VGOP_VGOP_VSCAL_MASK) >> DISP_VGOP_VGOP_VSCAL_OFFSET,
-				(val & DISP_VGOP_CLR_KEY_EN_MASK) >> DISP_VGOP_CLR_KEY_EN_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_vgop_arlen=%d, reg_vgop_sw_rst=%d\n",
-				(val & DISP_VGOP_VGOP_ARLEN_MASK) >> DISP_VGOP_VGOP_ARLEN_OFFSET,
-				(val & DISP_VGOP_VGOP_SW_RST_MASK) >> DISP_VGOP_VGOP_SW_RST_OFFSET);
-
-		val = _reg_read(gop_base + i * 0x200 + DISP_VGOP_DEC_00);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "DISP_VGOP_DEC_00=0x%08x\n", val);
-		CVI_TRACE_VO(CVI_DBG_DEBUG,
-				"    reg_odec_en=%d, reg_odec_int_en=%d, reg_odec_int_clr=%d, reg_odec_wdt_en=%d\n",
-				(val & DISP_VGOP_OW0_EN_MASK) >> DISP_VGOP_ODEC_EN_OFFSET,
-				(val & DISP_VGOP_ODEC_INT_EN_MASK) >> DISP_VGOP_ODEC_INT_EN_OFFSET,
-				(val & DISP_VGOP_ODEC_INT_CLR_MASK) >> DISP_VGOP_ODEC_INT_CLR_OFFSET,
-				(val & DISP_VGOP_ODEC_WDT_EN_MASK) >> DISP_VGOP_OW2_EN_MASK);
-		CVI_TRACE_VO(CVI_DBG_DEBUG,
-				"    reg_odec_dbg_ridx=0x%04x, reg_odec_done=%d, reg_odec_attached_idx=%d\n",
-				(val & DISP_VGOP_ODEC_DBG_RIDX_MASK) >> DISP_VGOP_ODEC_DBG_RIDX_OFFSET,
-				(val & DISP_VGOP_ODEC_DONE_MASK) >> DISP_VGOP_ODEC_DONE_OFFSET,
-				(val & DISP_VGOP_ODEC_ATTACHED_IDX_MASK) >> DISP_VGOP_ODEC_ATTACHED_IDX_OFFSET);
-		CVI_TRACE_VO(CVI_DBG_DEBUG, "    reg_odec_wdt_fdiv_bit=%d, reg_odec_int_vec=0x%08x\n",
-				(val & DISP_VGOP_ODEC_INT_VEC_MASK) >> DISP_VGOP_ODEC_INT_VEC_OFFSET,
-				(val & DISP_VGOP_ODEC_WDT_FDIV_BIT_MASK) >> DISP_VGOP_ODEC_WDT_FDIV_BIT_OFFSET);
-	}
-}
-
-void dump_disp_odma_register(u8 inst)
-{
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "*** dump_disp(%d)_register ***\n", inst);
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_CFG(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_CFG(inst)));
-
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_Y_L(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_Y_L(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_Y_H(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_Y_H(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_U_L(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_U_L(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_U_H(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_U_H(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_V_L(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_V_L(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_V_H(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_V_H(inst)));
-
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_PITCH_Y(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_PITCH_Y(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_PITCH_C(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_PITCH_C(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_X_STR(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_X_STR(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_Y_STR(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_Y_STR(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_WIDETH(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_WIDETH(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_HEIGHT(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_HEIGHT(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_DEBUG(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_DEBUG(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_LINE_TARGET(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_LINE_TARGET(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_CYCLE_LINE(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_CYCLE_LINE(inst)));
-	_reg_write(REG_DISP_ODMA_LATCH_LINE(inst), 0x1);
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "VODEV(%d) REG_DISP_ODMA_LATCH_LINE(inst)=0x%08x\n", inst, _reg_read(REG_DISP_ODMA_LATCH_LINE(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_FIFO_CFG(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_FIFO_CFG(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_FIFO_WH(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_FIFO_WH(inst)));
-	CVI_TRACE_VO(CVI_DBG_DEBUG, "REG_DISP_ODMA_FIFO_LMT(inst)=0x%08x\n", _reg_read(REG_DISP_ODMA_FIFO_LMT(inst)));
-}
-
-

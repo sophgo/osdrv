@@ -702,9 +702,9 @@ initialize JPU by calling JPU_Init() before calling this function.
         Uint32 *hwRevision,
         Uint32 *hwProductId);
 
-    JpgRet JPU_GetExtAddr(int coreidx, Uint32 *extAddr);
+    JpgRet JPU_GetExtAddr(int core_idx, Uint32 *extAddr);
 
-    void JPU_SetExtAddr(int coreidx, Uint32 extAddr);
+    void JPU_SetExtAddr(int core_idx, Uint32 extAddr);
 /**
 * @brief
 This function resets JPU and initializes all the internal contexts.
@@ -719,7 +719,7 @@ Operation was done successfully, which means the JPU has been reset successfully
 Operation was failed, which means the JPU was unable to reset.
 @endverbatim
 */
-    JpgRet JPU_HWReset(void);
+    JpgRet JPU_HWReset(int core_idx);
 /**
 * @brief This function resets JPU by using the reset register.
 * @param None
@@ -729,7 +729,8 @@ Operation was failed, which means the JPU was unable to reset.
 Operation was done successfully, which means the JPU has been reset successfully.
 @endverbatim
 */
-    JpgRet JPU_SWReset(int coreidx, JpgHandle handle);
+    JpgRet JPU_SWReset(int core_idx, JpgHandle handle);
+    void JPU_SWTopReset(int core_idx);
 
     // function for decode
 /**
@@ -1410,7 +1411,9 @@ etc.).
         void * parameter);
 
 JpgRet JPU_SetJpgPendingInstEx(JpgDecHandle handle, void *data);
-
+int JPU_RequestCore(int timeout);
+int JPU_ReleaseCore(int core_idx);
+JpgRet JPU_DecSetParam(JpgDecHandle pHandle, JpgDecOpenParam * pop);
 
 #ifdef __cplusplus
 }

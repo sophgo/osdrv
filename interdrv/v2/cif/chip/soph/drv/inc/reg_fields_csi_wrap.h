@@ -13,3706 +13,3706 @@ extern "C" {
 #endif
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_PHY_TOP_00 {
+union reg_sensor_phy_top_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_PHY_MODE                 : 3;
+		uint32_t sensor_phy_mode                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_04 {
+union reg_sensor_phy_top_04 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_CLKRX_SOURCE                 : 18;
+		uint32_t en_clkrx_source                 : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_08 {
+union reg_sensor_phy_top_08 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_RXBUS_CLK                    : 18;
+		uint32_t en_rxbus_clk                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_10 {
+union reg_sensor_phy_top_10 {
 	uint32_t raw;
 	struct {
-		uint32_t PD_MIPI_LANE                    : 18;
+		uint32_t pd_mipi_lane                    : 18;
 		uint32_t _rsv_18                         : 2;
-		uint32_t PD_PLL                          : 3;
+		uint32_t pd_pll                          : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t PD_REF_LANE                     : 3;
+		uint32_t pd_ref_lane                     : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_14 {
+union reg_sensor_phy_top_14 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_LPCD                    : 18;
+		uint32_t en_mipi_lpcd                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_18 {
+union reg_sensor_phy_top_18 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_LPTX                    : 18;
+		uint32_t en_mipi_lptx                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_1C {
+union reg_sensor_phy_top_1c {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_LPRX                    : 18;
+		uint32_t en_mipi_lprx                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_20 {
+union reg_sensor_phy_top_20 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_DEMUX                        : 18;
+		uint32_t en_demux                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_24 {
+union reg_sensor_phy_top_24 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_PREAMP                       : 18;
+		uint32_t en_preamp                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_28 {
+union reg_sensor_phy_top_28 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_VCM_DET                      : 18;
+		uint32_t en_vcm_det                      : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_2C {
+union reg_sensor_phy_top_2c {
 	uint32_t raw;
 	struct {
-		uint32_t EN_HVCMI                        : 18;
+		uint32_t en_hvcmi                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_30 {
+union reg_sensor_phy_top_30 {
 	uint32_t raw;
 	struct {
-		uint32_t SEL_MIPI_IQ                     : 18;
+		uint32_t sel_mipi_iq                     : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_34 {
+union reg_sensor_phy_top_34 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_LVDS                         : 18;
+		uint32_t en_lvds                         : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_38 {
+union reg_sensor_phy_top_38 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_LVDS_LDO                     : 18;
+		uint32_t en_lvds_ldo                     : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_3C {
+union reg_sensor_phy_top_3c {
 	uint32_t raw;
 	struct {
-		uint32_t EN_SUBLVDS                      : 3;
+		uint32_t en_sublvds                      : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_40 {
+union reg_sensor_phy_top_40 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_DRV                     : 18;
+		uint32_t en_mipi_drv                     : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_44 {
+union reg_sensor_phy_top_44 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_LDO                     : 18;
+		uint32_t en_mipi_ldo                     : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_48 {
+union reg_sensor_phy_top_48 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_DATA_SER                : 18;
+		uint32_t en_mipi_data_ser                : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_4C {
+union reg_sensor_phy_top_4c {
 	uint32_t raw;
 	struct {
-		uint32_t EN_CLKBUSL                      : 3;
+		uint32_t en_clkbusl                      : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t EN_CLKBUSR                      : 3;
+		uint32_t en_clkbusr                      : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t EN_CLKBUSL_TO_EXTL              : 3;
+		uint32_t en_clkbusl_to_extl              : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t EN_CLKBUSR_TO_EXTR              : 3;
+		uint32_t en_clkbusr_to_extr              : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t EN_EXTL_TO_CLKBUSL              : 3;
+		uint32_t en_extl_to_clkbusl              : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t EN_EXTR_TO_CLKBUSR              : 3;
+		uint32_t en_extr_to_clkbusr              : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_50 {
+union reg_sensor_phy_top_50 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_TST                          : 3;
+		uint32_t en_tst                          : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t TST_BYPASS_VREF                 : 3;
+		uint32_t tst_bypass_vref                 : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t TST_MIPI_CLKIQ_INV              : 3;
+		uint32_t tst_mipi_clkiq_inv              : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t TST_VCMI_DET                    : 18;
+		uint32_t tst_vcmi_det                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_54 {
+union reg_sensor_phy_top_54 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_LCKDET                       : 3;
+		uint32_t en_lckdet                       : 3;
 		uint32_t _rsv_3                          : 13;
-		uint32_t MIPI_TXPLL_LOCK                 : 3;
+		uint32_t mipi_txpll_lock                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_58 {
+union reg_sensor_phy_top_58 {
 	uint32_t raw;
 	struct {
-		uint32_t DIV_OUT_SEL_0                   : 2;
+		uint32_t div_out_sel_0                   : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t DIV_SEL_0                       : 1;
+		uint32_t div_sel_0                       : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t DISP_DIVSEL_0                   : 7;
+		uint32_t disp_divsel_0                   : 7;
 		uint32_t _rsv_15                         : 1;
-		uint32_t SEL_MIPI_TXPLL_ICTRL_0          : 4;
-		uint32_t LOOP_DIV_0                      : 2;
+		uint32_t sel_mipi_txpll_ictrl_0          : 4;
+		uint32_t loop_div_0                      : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_5C {
+union reg_sensor_phy_top_5c {
 	uint32_t raw;
 	struct {
-		uint32_t DIV_OUT_SEL_1                   : 2;
+		uint32_t div_out_sel_1                   : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t DIV_SEL_1                       : 1;
+		uint32_t div_sel_1                       : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t DISP_DIVSEL_1                   : 7;
+		uint32_t disp_divsel_1                   : 7;
 		uint32_t _rsv_15                         : 1;
-		uint32_t SEL_MIPI_TXPLL_ICTRL_1          : 4;
-		uint32_t LOOP_DIV_1                      : 2;
+		uint32_t sel_mipi_txpll_ictrl_1          : 4;
+		uint32_t loop_div_1                      : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_60 {
+union reg_sensor_phy_top_60 {
 	uint32_t raw;
 	struct {
-		uint32_t DIV_OUT_SEL_2                   : 2;
+		uint32_t div_out_sel_2                   : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t DIV_SEL_2                       : 1;
+		uint32_t div_sel_2                       : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t DISP_DIVSEL_2                   : 7;
+		uint32_t disp_divsel_2                   : 7;
 		uint32_t _rsv_15                         : 1;
-		uint32_t SEL_MIPI_TXPLL_ICTRL_2          : 4;
-		uint32_t LOOP_DIV_2                      : 2;
+		uint32_t sel_mipi_txpll_ictrl_2          : 4;
+		uint32_t loop_div_2                      : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_64 {
+union reg_sensor_phy_top_64 {
 	uint32_t raw;
 	struct {
-		uint32_t CSEL_PREAMP0                    : 3;
+		uint32_t csel_preamp0                    : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSEL_PREAMP1                    : 3;
+		uint32_t csel_preamp1                    : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t CSEL_PREAMP2                    : 3;
+		uint32_t csel_preamp2                    : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t CSEL_PREAMP3                    : 3;
+		uint32_t csel_preamp3                    : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t CSEL_PREAMP4                    : 3;
+		uint32_t csel_preamp4                    : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t CSEL_PREAMP5                    : 3;
+		uint32_t csel_preamp5                    : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t CSEL_PREAMP6                    : 3;
+		uint32_t csel_preamp6                    : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t CSEL_PREAMP7                    : 3;
+		uint32_t csel_preamp7                    : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_68 {
+union reg_sensor_phy_top_68 {
 	uint32_t raw;
 	struct {
-		uint32_t CSEL_PREAMP8                    : 3;
+		uint32_t csel_preamp8                    : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSEL_PREAMP9                    : 3;
+		uint32_t csel_preamp9                    : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t CSEL_PREAMP10                   : 3;
+		uint32_t csel_preamp10                   : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t CSEL_PREAMP11                   : 3;
+		uint32_t csel_preamp11                   : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t CSEL_PREAMP12                   : 3;
+		uint32_t csel_preamp12                   : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t CSEL_PREAMP13                   : 3;
+		uint32_t csel_preamp13                   : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t CSEL_PREAMP14                   : 3;
+		uint32_t csel_preamp14                   : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t CSEL_PREAMP15                   : 3;
+		uint32_t csel_preamp15                   : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_6C {
+union reg_sensor_phy_top_6c {
 	uint32_t raw;
 	struct {
-		uint32_t CSEL_PREAMP16                   : 3;
+		uint32_t csel_preamp16                   : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSEL_PREAMP17                   : 3;
+		uint32_t csel_preamp17                   : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t SWAP_RXDATA_INV                 : 18;
+		uint32_t swap_rxdata_inv                 : 18;
 		uint32_t _rsv_26                         : 2;
-		uint32_t EN_PREAMP_HSPEED0               : 2;
-		uint32_t EN_PREAMP_HSPEED1               : 2;
+		uint32_t en_preamp_hspeed0               : 2;
+		uint32_t en_preamp_hspeed1               : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_70 {
+union reg_sensor_phy_top_70 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_PREAMP_HSPEED2               : 2;
-		uint32_t EN_PREAMP_HSPEED3               : 2;
-		uint32_t EN_PREAMP_HSPEED4               : 2;
-		uint32_t EN_PREAMP_HSPEED5               : 2;
-		uint32_t EN_PREAMP_HSPEED6               : 2;
-		uint32_t EN_PREAMP_HSPEED7               : 2;
-		uint32_t EN_PREAMP_HSPEED8               : 2;
-		uint32_t EN_PREAMP_HSPEED9               : 2;
-		uint32_t EN_PREAMP_HSPEED10              : 2;
-		uint32_t EN_PREAMP_HSPEED11              : 2;
-		uint32_t EN_PREAMP_HSPEED12              : 2;
-		uint32_t EN_PREAMP_HSPEED13              : 2;
-		uint32_t EN_PREAMP_HSPEED14              : 2;
-		uint32_t EN_PREAMP_HSPEED15              : 2;
-		uint32_t EN_PREAMP_HSPEED16              : 2;
-		uint32_t EN_PREAMP_HSPEED17              : 2;
+		uint32_t en_preamp_hspeed2               : 2;
+		uint32_t en_preamp_hspeed3               : 2;
+		uint32_t en_preamp_hspeed4               : 2;
+		uint32_t en_preamp_hspeed5               : 2;
+		uint32_t en_preamp_hspeed6               : 2;
+		uint32_t en_preamp_hspeed7               : 2;
+		uint32_t en_preamp_hspeed8               : 2;
+		uint32_t en_preamp_hspeed9               : 2;
+		uint32_t en_preamp_hspeed10              : 2;
+		uint32_t en_preamp_hspeed11              : 2;
+		uint32_t en_preamp_hspeed12              : 2;
+		uint32_t en_preamp_hspeed13              : 2;
+		uint32_t en_preamp_hspeed14              : 2;
+		uint32_t en_preamp_hspeed15              : 2;
+		uint32_t en_preamp_hspeed16              : 2;
+		uint32_t en_preamp_hspeed17              : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_74 {
+union reg_sensor_phy_top_74 {
 	uint32_t raw;
 	struct {
-		uint32_t RSEL_PREAMP0                    : 3;
+		uint32_t rsel_preamp0                    : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t RSEL_PREAMP1                    : 3;
+		uint32_t rsel_preamp1                    : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t RSEL_PREAMP2                    : 3;
+		uint32_t rsel_preamp2                    : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t RSEL_PREAMP3                    : 3;
+		uint32_t rsel_preamp3                    : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t RSEL_PREAMP4                    : 3;
+		uint32_t rsel_preamp4                    : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t RSEL_PREAMP5                    : 3;
+		uint32_t rsel_preamp5                    : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t RSEL_PREAMP6                    : 3;
+		uint32_t rsel_preamp6                    : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t RSEL_PREAMP7                    : 3;
+		uint32_t rsel_preamp7                    : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_78 {
+union reg_sensor_phy_top_78 {
 	uint32_t raw;
 	struct {
-		uint32_t RSEL_PREAMP8                    : 3;
+		uint32_t rsel_preamp8                    : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t RSEL_PREAMP9                    : 3;
+		uint32_t rsel_preamp9                    : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t RSEL_PREAMP10                   : 3;
+		uint32_t rsel_preamp10                   : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t RSEL_PREAMP11                   : 3;
+		uint32_t rsel_preamp11                   : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t RSEL_PREAMP12                   : 3;
+		uint32_t rsel_preamp12                   : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t RSEL_PREAMP13                   : 3;
+		uint32_t rsel_preamp13                   : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t RSEL_PREAMP14                   : 3;
+		uint32_t rsel_preamp14                   : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t RSEL_PREAMP15                   : 3;
+		uint32_t rsel_preamp15                   : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_7C {
+union reg_sensor_phy_top_7c {
 	uint32_t raw;
 	struct {
-		uint32_t RSEL_PREAMP16                   : 3;
+		uint32_t rsel_preamp16                   : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t RSEL_PREAMP17                   : 3;
+		uint32_t rsel_preamp17                   : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_80 {
+union reg_sensor_phy_top_80 {
 	uint32_t raw;
 	struct {
-		uint32_t SEL_RXCLK_SKEW0                 : 4;
-		uint32_t SEL_RXCLK_SKEW1                 : 4;
-		uint32_t SEL_RXCLK_SKEW2                 : 4;
-		uint32_t SEL_RXCLK_SKEW3                 : 4;
-		uint32_t SEL_RXCLK_SKEW4                 : 4;
-		uint32_t SEL_RXCLK_SKEW5                 : 4;
-		uint32_t SEL_RXCLK_SKEW6                 : 4;
-		uint32_t SEL_RXCLK_SKEW7                 : 4;
+		uint32_t sel_rxclk_skew0                 : 4;
+		uint32_t sel_rxclk_skew1                 : 4;
+		uint32_t sel_rxclk_skew2                 : 4;
+		uint32_t sel_rxclk_skew3                 : 4;
+		uint32_t sel_rxclk_skew4                 : 4;
+		uint32_t sel_rxclk_skew5                 : 4;
+		uint32_t sel_rxclk_skew6                 : 4;
+		uint32_t sel_rxclk_skew7                 : 4;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_84 {
+union reg_sensor_phy_top_84 {
 	uint32_t raw;
 	struct {
-		uint32_t SEL_RXCLK_SKEW8                 : 4;
-		uint32_t SEL_RXCLK_SKEW9                 : 4;
-		uint32_t SEL_RXCLK_SKEW10                : 4;
-		uint32_t SEL_RXCLK_SKEW11                : 4;
-		uint32_t SEL_RXCLK_SKEW12                : 4;
-		uint32_t SEL_RXCLK_SKEW13                : 4;
-		uint32_t SEL_RXCLK_SKEW14                : 4;
-		uint32_t SEL_RXCLK_SKEW15                : 4;
+		uint32_t sel_rxclk_skew8                 : 4;
+		uint32_t sel_rxclk_skew9                 : 4;
+		uint32_t sel_rxclk_skew10                : 4;
+		uint32_t sel_rxclk_skew11                : 4;
+		uint32_t sel_rxclk_skew12                : 4;
+		uint32_t sel_rxclk_skew13                : 4;
+		uint32_t sel_rxclk_skew14                : 4;
+		uint32_t sel_rxclk_skew15                : 4;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_88 {
+union reg_sensor_phy_top_88 {
 	uint32_t raw;
 	struct {
-		uint32_t SEL_RXCLK_SKEW16                : 4;
-		uint32_t SEL_RXCLK_SKEW17                : 4;
+		uint32_t sel_rxclk_skew16                : 4;
+		uint32_t sel_rxclk_skew17                : 4;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_90 {
+union reg_sensor_phy_top_90 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_DS0_P                       : 18;
+		uint32_t gpo_ds0_p                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_94 {
+union reg_sensor_phy_top_94 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_DS1_P                       : 18;
+		uint32_t gpo_ds1_p                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_98 {
+union reg_sensor_phy_top_98 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_DS0_N                       : 18;
+		uint32_t gpo_ds0_n                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_9C {
+union reg_sensor_phy_top_9c {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_DS1_N                       : 18;
+		uint32_t gpo_ds1_n                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_A0 {
+union reg_sensor_phy_top_a0 {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_RPU4P7_P                    : 18;
+		uint32_t gpi_rpu4p7_p                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_A4 {
+union reg_sensor_phy_top_a4 {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_RPU4P7_N                    : 18;
+		uint32_t gpi_rpu4p7_n                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_A8 {
+union reg_sensor_phy_top_a8 {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_ST_P                        : 18;
+		uint32_t gpi_st_p                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_AC {
+union reg_sensor_phy_top_ac {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_ST_N                        : 18;
+		uint32_t gpi_st_n                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_B0 {
+union reg_sensor_phy_top_b0 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_TRIM0                   : 3;
+		uint32_t en_mipi_trim0                   : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t EN_MIPI_TRIM1                   : 3;
+		uint32_t en_mipi_trim1                   : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t EN_MIPI_TRIM2                   : 3;
+		uint32_t en_mipi_trim2                   : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t EN_MIPI_TRIM3                   : 3;
+		uint32_t en_mipi_trim3                   : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t EN_MIPI_TRIM4                   : 3;
+		uint32_t en_mipi_trim4                   : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t EN_MIPI_TRIM5                   : 3;
+		uint32_t en_mipi_trim5                   : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t EN_MIPI_TRIM6                   : 3;
+		uint32_t en_mipi_trim6                   : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t EN_MIPI_TRIM7                   : 3;
+		uint32_t en_mipi_trim7                   : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_B4 {
+union reg_sensor_phy_top_b4 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_TRIM8                   : 3;
+		uint32_t en_mipi_trim8                   : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t EN_MIPI_TRIM9                   : 3;
+		uint32_t en_mipi_trim9                   : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t EN_MIPI_TRIM10                  : 3;
+		uint32_t en_mipi_trim10                  : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t EN_MIPI_TRIM11                  : 3;
+		uint32_t en_mipi_trim11                  : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t EN_MIPI_TRIM12                  : 3;
+		uint32_t en_mipi_trim12                  : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t EN_MIPI_TRIM13                  : 3;
+		uint32_t en_mipi_trim13                  : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t EN_MIPI_TRIM14                  : 3;
+		uint32_t en_mipi_trim14                  : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t EN_MIPI_TRIM15                  : 3;
+		uint32_t en_mipi_trim15                  : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_B8 {
+union reg_sensor_phy_top_b8 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_TRIM16                  : 3;
+		uint32_t en_mipi_trim16                  : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t EN_MIPI_TRIM17                  : 3;
+		uint32_t en_mipi_trim17                  : 3;
 		uint32_t _rsv_7                          : 21;
-		uint32_t EN_MIPI_DE_DRV0                 : 2;
-		uint32_t EN_MIPI_DE_DRV1                 : 2;
+		uint32_t en_mipi_de_drv0                 : 2;
+		uint32_t en_mipi_de_drv1                 : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_BC {
+union reg_sensor_phy_top_bc {
 	uint32_t raw;
 	struct {
-		uint32_t EN_MIPI_DE_DRV2                 : 2;
-		uint32_t EN_MIPI_DE_DRV3                 : 2;
-		uint32_t EN_MIPI_DE_DRV4                 : 2;
-		uint32_t EN_MIPI_DE_DRV5                 : 2;
-		uint32_t EN_MIPI_DE_DRV6                 : 2;
-		uint32_t EN_MIPI_DE_DRV7                 : 2;
-		uint32_t EN_MIPI_DE_DRV8                 : 2;
-		uint32_t EN_MIPI_DE_DRV9                 : 2;
-		uint32_t EN_MIPI_DE_DRV10                : 2;
-		uint32_t EN_MIPI_DE_DRV11                : 2;
-		uint32_t EN_MIPI_DE_DRV12                : 2;
-		uint32_t EN_MIPI_DE_DRV13                : 2;
-		uint32_t EN_MIPI_DE_DRV14                : 2;
-		uint32_t EN_MIPI_DE_DRV15                : 2;
-		uint32_t EN_MIPI_DE_DRV16                : 2;
-		uint32_t EN_MIPI_DE_DRV17                : 2;
+		uint32_t en_mipi_de_drv2                 : 2;
+		uint32_t en_mipi_de_drv3                 : 2;
+		uint32_t en_mipi_de_drv4                 : 2;
+		uint32_t en_mipi_de_drv5                 : 2;
+		uint32_t en_mipi_de_drv6                 : 2;
+		uint32_t en_mipi_de_drv7                 : 2;
+		uint32_t en_mipi_de_drv8                 : 2;
+		uint32_t en_mipi_de_drv9                 : 2;
+		uint32_t en_mipi_de_drv10                : 2;
+		uint32_t en_mipi_de_drv11                : 2;
+		uint32_t en_mipi_de_drv12                : 2;
+		uint32_t en_mipi_de_drv13                : 2;
+		uint32_t en_mipi_de_drv14                : 2;
+		uint32_t en_mipi_de_drv15                : 2;
+		uint32_t en_mipi_de_drv16                : 2;
+		uint32_t en_mipi_de_drv17                : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_C0 {
+union reg_sensor_phy_top_c0 {
 	uint32_t raw;
 	struct {
-		uint32_t SEL_VREF_LDO_0                  : 2;
-		uint32_t SEL_VREF_LDO_1                  : 2;
-		uint32_t SEL_VREF_LDO_2                  : 2;
+		uint32_t sel_vref_ldo_0                  : 2;
+		uint32_t sel_vref_ldo_1                  : 2;
+		uint32_t sel_vref_ldo_2                  : 2;
 		uint32_t _rsv_6                          : 2;
-		uint32_t EN_MIPI_ULPS                    : 18;
+		uint32_t en_mipi_ulps                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_C4 {
+union reg_sensor_phy_top_c4 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_CLK_INV                      : 18;
+		uint32_t ad_clk_inv                      : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_D0 {
+union reg_sensor_phy_top_d0 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_D0_DATA                      : 8;
-		uint32_t AD_D1_DATA                      : 8;
-		uint32_t AD_D2_DATA                      : 8;
-		uint32_t AD_D3_DATA                      : 8;
+		uint32_t ad_d0_data                      : 8;
+		uint32_t ad_d1_data                      : 8;
+		uint32_t ad_d2_data                      : 8;
+		uint32_t ad_d3_data                      : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_D4 {
+union reg_sensor_phy_top_d4 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_D4_DATA                      : 8;
-		uint32_t AD_D5_DATA                      : 8;
-		uint32_t AD_D6_DATA                      : 8;
-		uint32_t AD_D7_DATA                      : 8;
+		uint32_t ad_d4_data                      : 8;
+		uint32_t ad_d5_data                      : 8;
+		uint32_t ad_d6_data                      : 8;
+		uint32_t ad_d7_data                      : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_D8 {
+union reg_sensor_phy_top_d8 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_D8_DATA                      : 8;
-		uint32_t AD_D9_DATA                      : 8;
-		uint32_t AD_D10_DATA                     : 8;
-		uint32_t AD_D11_DATA                     : 8;
+		uint32_t ad_d8_data                      : 8;
+		uint32_t ad_d9_data                      : 8;
+		uint32_t ad_d10_data                     : 8;
+		uint32_t ad_d11_data                     : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DC {
+union reg_sensor_phy_top_dc {
 	uint32_t raw;
 	struct {
-		uint32_t AD_D12_DATA                     : 8;
-		uint32_t AD_D13_DATA                     : 8;
-		uint32_t AD_D14_DATA                     : 8;
-		uint32_t AD_D15_DATA                     : 8;
+		uint32_t ad_d12_data                     : 8;
+		uint32_t ad_d13_data                     : 8;
+		uint32_t ad_d14_data                     : 8;
+		uint32_t ad_d15_data                     : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_E0 {
+union reg_sensor_phy_top_e0 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_D16_DATA                     : 8;
-		uint32_t AD_D17_DATA                     : 8;
+		uint32_t ad_d16_data                     : 8;
+		uint32_t ad_d17_data                     : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_E4 {
+union reg_sensor_phy_top_e4 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_LPOUTN                       : 18;
+		uint32_t ad_lpoutn                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_E8 {
+union reg_sensor_phy_top_e8 {
 	uint32_t raw;
 	struct {
-		uint32_t AD_LPOUTP                       : 18;
+		uint32_t ad_lpoutp                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_EC {
+union reg_sensor_phy_top_ec {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_DESKEW_CODE0              : 1;
-		uint32_t FORCE_DESKEW_CODE1              : 1;
-		uint32_t FORCE_DESKEW_CODE2              : 1;
-		uint32_t FORCE_DESKEW_CODE3              : 1;
-		uint32_t FORCE_DESKEW_CODE4              : 1;
-		uint32_t FORCE_DESKEW_CODE5              : 1;
-		uint32_t FORCE_DESKEW_CODE6              : 1;
-		uint32_t FORCE_DESKEW_CODE7              : 1;
-		uint32_t FORCE_DESKEW_CODE8              : 1;
-		uint32_t FORCE_DESKEW_CODE9              : 1;
-		uint32_t FORCE_DESKEW_CODE10             : 1;
-		uint32_t FORCE_DESKEW_CODE11             : 1;
-		uint32_t FORCE_DESKEW_CODE12             : 1;
-		uint32_t FORCE_DESKEW_CODE13             : 1;
-		uint32_t FORCE_DESKEW_CODE14             : 1;
-		uint32_t FORCE_DESKEW_CODE15             : 1;
-		uint32_t FORCE_DESKEW_CODE16             : 1;
-		uint32_t FORCE_DESKEW_CODE17             : 1;
+		uint32_t force_deskew_code0              : 1;
+		uint32_t force_deskew_code1              : 1;
+		uint32_t force_deskew_code2              : 1;
+		uint32_t force_deskew_code3              : 1;
+		uint32_t force_deskew_code4              : 1;
+		uint32_t force_deskew_code5              : 1;
+		uint32_t force_deskew_code6              : 1;
+		uint32_t force_deskew_code7              : 1;
+		uint32_t force_deskew_code8              : 1;
+		uint32_t force_deskew_code9              : 1;
+		uint32_t force_deskew_code10             : 1;
+		uint32_t force_deskew_code11             : 1;
+		uint32_t force_deskew_code12             : 1;
+		uint32_t force_deskew_code13             : 1;
+		uint32_t force_deskew_code14             : 1;
+		uint32_t force_deskew_code15             : 1;
+		uint32_t force_deskew_code16             : 1;
+		uint32_t force_deskew_code17             : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_F0 {
+union reg_sensor_phy_top_f0 {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_CODE0                    : 8;
-		uint32_t DESKEW_CODE1                    : 8;
-		uint32_t DESKEW_CODE2                    : 8;
-		uint32_t DESKEW_CODE3                    : 8;
+		uint32_t deskew_code0                    : 8;
+		uint32_t deskew_code1                    : 8;
+		uint32_t deskew_code2                    : 8;
+		uint32_t deskew_code3                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_F4 {
+union reg_sensor_phy_top_f4 {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_CODE4                    : 8;
-		uint32_t DESKEW_CODE5                    : 8;
-		uint32_t DESKEW_CODE6                    : 8;
-		uint32_t DESKEW_CODE7                    : 8;
+		uint32_t deskew_code4                    : 8;
+		uint32_t deskew_code5                    : 8;
+		uint32_t deskew_code6                    : 8;
+		uint32_t deskew_code7                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_F8 {
+union reg_sensor_phy_top_f8 {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_CODE8                    : 8;
-		uint32_t DESKEW_CODE9                    : 8;
-		uint32_t DESKEW_CODE10                   : 8;
-		uint32_t DESKEW_CODE11                   : 8;
+		uint32_t deskew_code8                    : 8;
+		uint32_t deskew_code9                    : 8;
+		uint32_t deskew_code10                   : 8;
+		uint32_t deskew_code11                   : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_FC {
+union reg_sensor_phy_top_fc {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_CODE12                   : 8;
-		uint32_t DESKEW_CODE13                   : 8;
-		uint32_t DESKEW_CODE14                   : 8;
-		uint32_t DESKEW_CODE15                   : 8;
+		uint32_t deskew_code12                   : 8;
+		uint32_t deskew_code13                   : 8;
+		uint32_t deskew_code14                   : 8;
+		uint32_t deskew_code15                   : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_100 {
+union reg_sensor_phy_top_100 {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_CODE16                   : 8;
-		uint32_t DESKEW_CODE17                   : 8;
+		uint32_t deskew_code16                   : 8;
+		uint32_t deskew_code17                   : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_104 {
+union reg_sensor_phy_top_104 {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_RTERM                     : 18;
+		uint32_t force_rterm                     : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_108 {
+union reg_sensor_phy_top_108 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_RTERM                        : 18;
+		uint32_t en_rterm                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_10C {
+union reg_sensor_phy_top_10c {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_RTERM_CAP                 : 18;
+		uint32_t force_rterm_cap                 : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_110 {
+union reg_sensor_phy_top_110 {
 	uint32_t raw;
 	struct {
-		uint32_t EN_RTERM_CAP                    : 18;
+		uint32_t en_rterm_cap                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_120 {
+union reg_sensor_phy_top_120 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM0_VTT                        : 14;
+		uint32_t cam0_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM0_VS_STR                     : 14;
+		uint32_t cam0_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_124 {
+union reg_sensor_phy_top_124 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM0_VS_STP                     : 14;
+		uint32_t cam0_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM0_HTT                        : 14;
+		uint32_t cam0_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_128 {
+union reg_sensor_phy_top_128 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM0_HS_STR                     : 14;
+		uint32_t cam0_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM0_HS_STP                     : 14;
+		uint32_t cam0_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_12C {
+union reg_sensor_phy_top_12c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM0_VS_POL                     : 1;
-		uint32_t CAM0_HS_POL                     : 1;
-		uint32_t CAM0_TGEN_EN                    : 1;
+		uint32_t cam0_vs_pol                     : 1;
+		uint32_t cam0_hs_pol                     : 1;
+		uint32_t cam0_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_130 {
+union reg_sensor_phy_top_130 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM1_VTT                        : 14;
+		uint32_t cam1_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM1_VS_STR                     : 14;
+		uint32_t cam1_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_134 {
+union reg_sensor_phy_top_134 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM1_VS_STP                     : 14;
+		uint32_t cam1_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM1_HTT                        : 14;
+		uint32_t cam1_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_138 {
+union reg_sensor_phy_top_138 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM1_HS_STR                     : 14;
+		uint32_t cam1_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM1_HS_STP                     : 14;
+		uint32_t cam1_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_13C {
+union reg_sensor_phy_top_13c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM1_VS_POL                     : 1;
-		uint32_t CAM1_HS_POL                     : 1;
-		uint32_t CAM1_TGEN_EN                    : 1;
+		uint32_t cam1_vs_pol                     : 1;
+		uint32_t cam1_hs_pol                     : 1;
+		uint32_t cam1_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_140 {
+union reg_sensor_phy_top_140 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM2_VTT                        : 14;
+		uint32_t cam2_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM2_VS_STR                     : 14;
+		uint32_t cam2_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_144 {
+union reg_sensor_phy_top_144 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM2_VS_STP                     : 14;
+		uint32_t cam2_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM2_HTT                        : 14;
+		uint32_t cam2_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_148 {
+union reg_sensor_phy_top_148 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM2_HS_STR                     : 14;
+		uint32_t cam2_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM2_HS_STP                     : 14;
+		uint32_t cam2_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_14C {
+union reg_sensor_phy_top_14c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM2_VS_POL                     : 1;
-		uint32_t CAM2_HS_POL                     : 1;
-		uint32_t CAM2_TGEN_EN                    : 1;
+		uint32_t cam2_vs_pol                     : 1;
+		uint32_t cam2_hs_pol                     : 1;
+		uint32_t cam2_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_150 {
+union reg_sensor_phy_top_150 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM3_VTT                        : 14;
+		uint32_t cam3_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM3_VS_STR                     : 14;
+		uint32_t cam3_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_154 {
+union reg_sensor_phy_top_154 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM3_VS_STP                     : 14;
+		uint32_t cam3_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM3_HTT                        : 14;
+		uint32_t cam3_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_158 {
+union reg_sensor_phy_top_158 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM3_HS_STR                     : 14;
+		uint32_t cam3_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM3_HS_STP                     : 14;
+		uint32_t cam3_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_15C {
+union reg_sensor_phy_top_15c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM3_VS_POL                     : 1;
-		uint32_t CAM3_HS_POL                     : 1;
-		uint32_t CAM3_TGEN_EN                    : 1;
+		uint32_t cam3_vs_pol                     : 1;
+		uint32_t cam3_hs_pol                     : 1;
+		uint32_t cam3_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_160 {
+union reg_sensor_phy_top_160 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM4_VTT                        : 14;
+		uint32_t cam4_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM4_VS_STR                     : 14;
+		uint32_t cam4_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_164 {
+union reg_sensor_phy_top_164 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM4_VS_STP                     : 14;
+		uint32_t cam4_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM4_HTT                        : 14;
+		uint32_t cam4_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_168 {
+union reg_sensor_phy_top_168 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM4_HS_STR                     : 14;
+		uint32_t cam4_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM4_HS_STP                     : 14;
+		uint32_t cam4_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_16C {
+union reg_sensor_phy_top_16c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM4_VS_POL                     : 1;
-		uint32_t CAM4_HS_POL                     : 1;
-		uint32_t CAM4_TGEN_EN                    : 1;
+		uint32_t cam4_vs_pol                     : 1;
+		uint32_t cam4_hs_pol                     : 1;
+		uint32_t cam4_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_170 {
+union reg_sensor_phy_top_170 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM5_VTT                        : 14;
+		uint32_t cam5_vtt                        : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM5_VS_STR                     : 14;
+		uint32_t cam5_vs_str                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_174 {
+union reg_sensor_phy_top_174 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM5_VS_STP                     : 14;
+		uint32_t cam5_vs_stp                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM5_HTT                        : 14;
+		uint32_t cam5_htt                        : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_178 {
+union reg_sensor_phy_top_178 {
 	uint32_t raw;
 	struct {
-		uint32_t CAM5_HS_STR                     : 14;
+		uint32_t cam5_hs_str                     : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CAM5_HS_STP                     : 14;
+		uint32_t cam5_hs_stp                     : 14;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_17C {
+union reg_sensor_phy_top_17c {
 	uint32_t raw;
 	struct {
-		uint32_t CAM5_VS_POL                     : 1;
-		uint32_t CAM5_HS_POL                     : 1;
-		uint32_t CAM5_TGEN_EN                    : 1;
+		uint32_t cam5_vs_pol                     : 1;
+		uint32_t cam5_hs_pol                     : 1;
+		uint32_t cam5_tgen_en                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DFT_180 {
+union reg_sensor_phy_top_dft_180 {
 	uint32_t raw;
 	struct {
-		uint32_t RO_DESKEW_CODE0                 : 8;
-		uint32_t RO_DESKEW_CODE1                 : 8;
-		uint32_t RO_DESKEW_CODE2                 : 8;
-		uint32_t RO_DESKEW_CODE3                 : 8;
+		uint32_t ro_deskew_code0                 : 8;
+		uint32_t ro_deskew_code1                 : 8;
+		uint32_t ro_deskew_code2                 : 8;
+		uint32_t ro_deskew_code3                 : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DFT_184 {
+union reg_sensor_phy_top_dft_184 {
 	uint32_t raw;
 	struct {
-		uint32_t RO_DESKEW_CODE4                 : 8;
-		uint32_t RO_DESKEW_CODE5                 : 8;
-		uint32_t RO_DESKEW_CODE6                 : 8;
-		uint32_t RO_DESKEW_CODE7                 : 8;
+		uint32_t ro_deskew_code4                 : 8;
+		uint32_t ro_deskew_code5                 : 8;
+		uint32_t ro_deskew_code6                 : 8;
+		uint32_t ro_deskew_code7                 : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DFT_188 {
+union reg_sensor_phy_top_dft_188 {
 	uint32_t raw;
 	struct {
-		uint32_t RO_DESKEW_CODE8                 : 8;
-		uint32_t RO_DESKEW_CODE9                 : 8;
-		uint32_t RO_DESKEW_CODE10                : 8;
-		uint32_t RO_DESKEW_CODE11                : 8;
+		uint32_t ro_deskew_code8                 : 8;
+		uint32_t ro_deskew_code9                 : 8;
+		uint32_t ro_deskew_code10                : 8;
+		uint32_t ro_deskew_code11                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DFT_18C {
+union reg_sensor_phy_top_dft_18c {
 	uint32_t raw;
 	struct {
-		uint32_t RO_DESKEW_CODE12                : 8;
-		uint32_t RO_DESKEW_CODE13                : 8;
-		uint32_t RO_DESKEW_CODE14                : 8;
-		uint32_t RO_DESKEW_CODE15                : 8;
+		uint32_t ro_deskew_code12                : 8;
+		uint32_t ro_deskew_code13                : 8;
+		uint32_t ro_deskew_code14                : 8;
+		uint32_t ro_deskew_code15                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DFT_190 {
+union reg_sensor_phy_top_dft_190 {
 	uint32_t raw;
 	struct {
-		uint32_t RO_DESKEW_CODE16                : 8;
-		uint32_t RO_DESKEW_CODE17                : 8;
+		uint32_t ro_deskew_code16                : 8;
+		uint32_t ro_deskew_code17                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_DBG_1F0 {
+union reg_sensor_phy_top_dbg_1f0 {
 	uint32_t raw;
 	struct {
-		uint32_t DBG_SEL                         : 16;
-		uint32_t DBG_CK_SEL                      : 8;
+		uint32_t dbg_sel                         : 16;
+		uint32_t dbg_ck_sel                      : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_200 {
+union reg_sensor_phy_top_200 {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_GPIO_P                    : 18;
+		uint32_t force_gpio_p                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_204 {
+union reg_sensor_phy_top_204 {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_GPIO_N                    : 18;
+		uint32_t force_gpio_n                    : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_208 {
+union reg_sensor_phy_top_208 {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_IE_P                        : 18;
+		uint32_t gpi_ie_p                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_20C {
+union reg_sensor_phy_top_20c {
 	uint32_t raw;
 	struct {
-		uint32_t GPI_IE_N                        : 18;
+		uint32_t gpi_ie_n                        : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_210 {
+union reg_sensor_phy_top_210 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_OEN_P                       : 18;
+		uint32_t gpo_oen_p                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_214 {
+union reg_sensor_phy_top_214 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_OEN_N                       : 18;
+		uint32_t gpo_oen_n                       : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_218 {
+union reg_sensor_phy_top_218 {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_I_P                         : 18;
+		uint32_t gpo_i_p                         : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_21C {
+union reg_sensor_phy_top_21c {
 	uint32_t raw;
 	struct {
-		uint32_t GPO_I_N                         : 18;
+		uint32_t gpo_i_n                         : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_220 {
+union reg_sensor_phy_top_220 {
 	uint32_t raw;
 	struct {
-		uint32_t SW_UP                           : 1;
-		uint32_t EN_SSC                          : 1;
-		uint32_t SSC_MODE                        : 2;
-		uint32_t SYN_MODE                        : 1;
+		uint32_t sw_up                           : 1;
+		uint32_t en_ssc                          : 1;
+		uint32_t ssc_mode                        : 2;
+		uint32_t syn_mode                        : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_224 {
+union reg_sensor_phy_top_224 {
 	uint32_t raw;
 	struct {
-		uint32_t SET                             : 32;
+		uint32_t set                             : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_228 {
+union reg_sensor_phy_top_228 {
 	uint32_t raw;
 	struct {
-		uint32_t SPAN                            : 16;
+		uint32_t span                            : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_22C {
+union reg_sensor_phy_top_22c {
 	uint32_t raw;
 	struct {
-		uint32_t STEP                            : 24;
+		uint32_t step                            : 24;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_230 {
+union reg_sensor_phy_top_230 {
 	uint32_t raw;
 	struct {
-		uint32_t MIPI_TX_PRBS9_EN                : 18;
+		uint32_t mipi_tx_prbs9_en                : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_234 {
+union reg_sensor_phy_top_234 {
 	uint32_t raw;
 	struct {
-		uint32_t FORCE_TX_DATA                   : 18;
+		uint32_t force_tx_data                   : 18;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_238 {
+union reg_sensor_phy_top_238 {
 	uint32_t raw;
 	struct {
-		uint32_t TX_DATA0                        : 8;
-		uint32_t TX_DATA1                        : 8;
-		uint32_t TX_DATA2                        : 8;
-		uint32_t TX_DATA3                        : 8;
+		uint32_t tx_data0                        : 8;
+		uint32_t tx_data1                        : 8;
+		uint32_t tx_data2                        : 8;
+		uint32_t tx_data3                        : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_23C {
+union reg_sensor_phy_top_23c {
 	uint32_t raw;
 	struct {
-		uint32_t TX_DATA4                        : 8;
-		uint32_t TX_DATA5                        : 8;
-		uint32_t TX_DATA6                        : 8;
-		uint32_t TX_DATA7                        : 8;
+		uint32_t tx_data4                        : 8;
+		uint32_t tx_data5                        : 8;
+		uint32_t tx_data6                        : 8;
+		uint32_t tx_data7                        : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_240 {
+union reg_sensor_phy_top_240 {
 	uint32_t raw;
 	struct {
-		uint32_t TX_DATA8                        : 8;
-		uint32_t TX_DATA9                        : 8;
-		uint32_t TX_DATA10                       : 8;
-		uint32_t TX_DATA11                       : 8;
+		uint32_t tx_data8                        : 8;
+		uint32_t tx_data9                        : 8;
+		uint32_t tx_data10                       : 8;
+		uint32_t tx_data11                       : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_244 {
+union reg_sensor_phy_top_244 {
 	uint32_t raw;
 	struct {
-		uint32_t TX_DATA12                       : 8;
-		uint32_t TX_DATA13                       : 8;
-		uint32_t TX_DATA14                       : 8;
-		uint32_t TX_DATA15                       : 8;
+		uint32_t tx_data12                       : 8;
+		uint32_t tx_data13                       : 8;
+		uint32_t tx_data14                       : 8;
+		uint32_t tx_data15                       : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_TOP_248 {
+union reg_sensor_phy_top_248 {
 	uint32_t raw;
 	struct {
-		uint32_t TX_DATA16                       : 8;
-		uint32_t TX_DATA17                       : 8;
+		uint32_t tx_data16                       : 8;
+		uint32_t tx_data17                       : 8;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_PHY_8L_00 {
+union reg_sensor_phy_8l_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MODE                     : 2;
+		uint32_t sensor_mode                     : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_04 {
+union reg_sensor_phy_8l_04 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_D0_SEL                 : 4;
-		uint32_t CSI_LANE_D1_SEL                 : 4;
-		uint32_t CSI_LANE_D2_SEL                 : 4;
-		uint32_t CSI_LANE_D3_SEL                 : 4;
-		uint32_t CSI_LANE_D4_SEL                 : 4;
-		uint32_t CSI_LANE_D5_SEL                 : 4;
-		uint32_t CSI_LANE_D6_SEL                 : 4;
-		uint32_t CSI_LANE_D7_SEL                 : 4;
+		uint32_t csi_lane_d0_sel                 : 4;
+		uint32_t csi_lane_d1_sel                 : 4;
+		uint32_t csi_lane_d2_sel                 : 4;
+		uint32_t csi_lane_d3_sel                 : 4;
+		uint32_t csi_lane_d4_sel                 : 4;
+		uint32_t csi_lane_d5_sel                 : 4;
+		uint32_t csi_lane_d6_sel                 : 4;
+		uint32_t csi_lane_d7_sel                 : 4;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_08 {
+union reg_sensor_phy_8l_08 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_CK_SEL                 : 4;
-		uint32_t CSI_LANE_CK_PNSWAP              : 1;
+		uint32_t csi_lane_ck_sel                 : 4;
+		uint32_t csi_lane_ck_pnswap              : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t CSI_LANE_D0_PNSWAP              : 1;
-		uint32_t CSI_LANE_D1_PNSWAP              : 1;
-		uint32_t CSI_LANE_D2_PNSWAP              : 1;
-		uint32_t CSI_LANE_D3_PNSWAP              : 1;
-		uint32_t CSI_LANE_D4_PNSWAP              : 1;
-		uint32_t CSI_LANE_D5_PNSWAP              : 1;
-		uint32_t CSI_LANE_D6_PNSWAP              : 1;
-		uint32_t CSI_LANE_D7_PNSWAP              : 1;
-		uint32_t CSI_CK_PHASE                    : 8;
+		uint32_t csi_lane_d0_pnswap              : 1;
+		uint32_t csi_lane_d1_pnswap              : 1;
+		uint32_t csi_lane_d2_pnswap              : 1;
+		uint32_t csi_lane_d3_pnswap              : 1;
+		uint32_t csi_lane_d4_pnswap              : 1;
+		uint32_t csi_lane_d5_pnswap              : 1;
+		uint32_t csi_lane_d6_pnswap              : 1;
+		uint32_t csi_lane_d7_pnswap              : 1;
+		uint32_t csi_ck_phase                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_0C {
+union reg_sensor_phy_8l_0c {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_LANE_EN                  : 8;
+		uint32_t deskew_lane_en                  : 8;
 		uint32_t _rsv_8                          : 8;
-		uint32_t PRBS9_TEST_PERIOD               : 16;
+		uint32_t prbs9_test_period               : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_10 {
+union reg_sensor_phy_8l_10 {
 	uint32_t raw;
 	struct {
-		uint32_t T_HS_SETTLE                     : 8;
-		uint32_t T_ALL_ZERO                      : 8;
-		uint32_t AUTO_IGNORE                     : 1;
-		uint32_t AUTO_SYNC                       : 1;
+		uint32_t t_hs_settle                     : 8;
+		uint32_t t_all_zero                      : 8;
+		uint32_t auto_ignore                     : 1;
+		uint32_t auto_sync                       : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_14 {
+union reg_sensor_phy_8l_14 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_D0_SEL_H               : 1;
-		uint32_t CSI_LANE_D1_SEL_H               : 1;
-		uint32_t CSI_LANE_D2_SEL_H               : 1;
-		uint32_t CSI_LANE_D3_SEL_H               : 1;
-		uint32_t CSI_LANE_D4_SEL_H               : 1;
-		uint32_t CSI_LANE_D5_SEL_H               : 1;
-		uint32_t CSI_LANE_D6_SEL_H               : 1;
-		uint32_t CSI_LANE_D7_SEL_H               : 1;
-		uint32_t CSI_LANE_CK_SEL_H               : 1;
+		uint32_t csi_lane_d0_sel_h               : 1;
+		uint32_t csi_lane_d1_sel_h               : 1;
+		uint32_t csi_lane_d2_sel_h               : 1;
+		uint32_t csi_lane_d3_sel_h               : 1;
+		uint32_t csi_lane_d4_sel_h               : 1;
+		uint32_t csi_lane_d5_sel_h               : 1;
+		uint32_t csi_lane_d6_sel_h               : 1;
+		uint32_t csi_lane_d7_sel_h               : 1;
+		uint32_t csi_lane_ck_sel_h               : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_20 {
+union reg_sensor_phy_8l_20 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_INV_EN                    : 1;
+		uint32_t slvds_inv_en                    : 1;
 		uint32_t _rsv_1                          : 1;
-		uint32_t SLVDS_BIT_MODE                  : 2;
-		uint32_t SLVDS_LANE_EN                   : 8;
-		uint32_t SLVDS_FORCE_RESYNC              : 1;
-		uint32_t SLVDS_RESYNC                    : 1;
+		uint32_t slvds_bit_mode                  : 2;
+		uint32_t slvds_lane_en                   : 8;
+		uint32_t slvds_force_resync              : 1;
+		uint32_t slvds_resync                    : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_SAV_1ST                   : 12;
+		uint32_t slvds_sav_1st                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_24 {
+union reg_sensor_phy_8l_24 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_SAV_2ND                   : 12;
+		uint32_t slvds_sav_2nd                   : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_SAV_3RD                   : 12;
+		uint32_t slvds_sav_3rd                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_28 {
+union reg_sensor_phy_8l_28 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_D0_SYNC_STATE             : 2;
+		uint32_t slvds_d0_sync_state             : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t SLVDS_D1_SYNC_STATE             : 2;
+		uint32_t slvds_d1_sync_state             : 2;
 		uint32_t _rsv_6                          : 2;
-		uint32_t SLVDS_D2_SYNC_STATE             : 2;
+		uint32_t slvds_d2_sync_state             : 2;
 		uint32_t _rsv_10                         : 2;
-		uint32_t SLVDS_D3_SYNC_STATE             : 2;
+		uint32_t slvds_d3_sync_state             : 2;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_D4_SYNC_STATE             : 2;
+		uint32_t slvds_d4_sync_state             : 2;
 		uint32_t _rsv_18                         : 2;
-		uint32_t SLVDS_D5_SYNC_STATE             : 2;
+		uint32_t slvds_d5_sync_state             : 2;
 		uint32_t _rsv_22                         : 2;
-		uint32_t SLVDS_D6_SYNC_STATE             : 2;
+		uint32_t slvds_d6_sync_state             : 2;
 		uint32_t _rsv_26                         : 2;
-		uint32_t SLVDS_D7_SYNC_STATE             : 2;
+		uint32_t slvds_d7_sync_state             : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_30 {
+union reg_sensor_phy_8l_30 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_LANE_EN                  : 8;
-		uint32_t SLVSEC_SKEW_CNT_EN              : 1;
-		uint32_t SLVSEC_TRAIN_SEQ_CHK_EN         : 1;
+		uint32_t slvsec_lane_en                  : 8;
+		uint32_t slvsec_skew_cnt_en              : 1;
+		uint32_t slvsec_train_seq_chk_en         : 1;
 		uint32_t _rsv_10                         : 6;
-		uint32_t SLVSEC_SKEW_CONS                : 5;
-		uint32_t SLVSEC_FORCE_RESYNC             : 1;
-		uint32_t SLVSEC_RESYNC                   : 1;
+		uint32_t slvsec_skew_cons                : 5;
+		uint32_t slvsec_force_resync             : 1;
+		uint32_t slvsec_resync                   : 1;
 		uint32_t _rsv_23                         : 1;
-		uint32_t SLVSEC_UNSTABLE_SKEW_CNT        : 8;
+		uint32_t slvsec_unstable_skew_cnt        : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_34 {
+union reg_sensor_phy_8l_34 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_SYNC_SYMBOL              : 9;
+		uint32_t slvsec_sync_symbol              : 9;
 		uint32_t _rsv_9                          : 1;
-		uint32_t SLVSEC_STANDBY_SYMBOL           : 9;
+		uint32_t slvsec_standby_symbol           : 9;
 		uint32_t _rsv_19                         : 1;
-		uint32_t SLVSEC_DESKEW_SYMBOL            : 9;
+		uint32_t slvsec_deskew_symbol            : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_38 {
+union reg_sensor_phy_8l_38 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PRBS9_TEST_PERIOD        : 16;
+		uint32_t slvsec_prbs9_test_period        : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_3C {
+union reg_sensor_phy_8l_3c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_CLR             : 32;
+		uint32_t slvsec_phy_intr_clr             : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_40 {
+union reg_sensor_phy_8l_40 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_MASK            : 32;
+		uint32_t slvsec_phy_intr_mask            : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_44 {
+union reg_sensor_phy_8l_44 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_STATUS          : 32;
+		uint32_t slvsec_phy_intr_status          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_48 {
+union reg_sensor_phy_8l_48 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D0_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D0_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d0_test_pat_en           : 1;
+		uint32_t slvsec_d0_clr_test_pat_err      : 1;
+		uint32_t slvsec_d0_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_4C {
+union reg_sensor_phy_8l_4c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D0_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d0_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d0_test_pat_err          : 1;
+		uint32_t slvsec_d0_test_pat_pass         : 1;
+		uint32_t slvsec_d0_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D0_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D0_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D0_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D0_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D0_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d0_start_code_err        : 1;
+		uint32_t slvsec_d0_end_code_err          : 1;
+		uint32_t slvsec_d0_deskew_code_err       : 1;
+		uint32_t slvsec_d0_standby_code_err      : 1;
+		uint32_t slvsec_d0_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_50 {
+union reg_sensor_phy_8l_50 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D1_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D1_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d1_test_pat_en           : 1;
+		uint32_t slvsec_d1_clr_test_pat_err      : 1;
+		uint32_t slvsec_d1_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_54 {
+union reg_sensor_phy_8l_54 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D1_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d1_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d1_test_pat_err          : 1;
+		uint32_t slvsec_d1_test_pat_pass         : 1;
+		uint32_t slvsec_d1_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D1_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D1_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D1_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D1_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D1_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d1_start_code_err        : 1;
+		uint32_t slvsec_d1_end_code_err          : 1;
+		uint32_t slvsec_d1_deskew_code_err       : 1;
+		uint32_t slvsec_d1_standby_code_err      : 1;
+		uint32_t slvsec_d1_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_58 {
+union reg_sensor_phy_8l_58 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D2_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D2_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D2_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d2_test_pat_en           : 1;
+		uint32_t slvsec_d2_clr_test_pat_err      : 1;
+		uint32_t slvsec_d2_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_5C {
+union reg_sensor_phy_8l_5c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D2_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D2_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D2_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D2_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d2_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d2_test_pat_err          : 1;
+		uint32_t slvsec_d2_test_pat_pass         : 1;
+		uint32_t slvsec_d2_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D2_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D2_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D2_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D2_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D2_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d2_start_code_err        : 1;
+		uint32_t slvsec_d2_end_code_err          : 1;
+		uint32_t slvsec_d2_deskew_code_err       : 1;
+		uint32_t slvsec_d2_standby_code_err      : 1;
+		uint32_t slvsec_d2_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_60 {
+union reg_sensor_phy_8l_60 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D3_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D3_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D3_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d3_test_pat_en           : 1;
+		uint32_t slvsec_d3_clr_test_pat_err      : 1;
+		uint32_t slvsec_d3_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_64 {
+union reg_sensor_phy_8l_64 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D3_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D3_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D3_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D3_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d3_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d3_test_pat_err          : 1;
+		uint32_t slvsec_d3_test_pat_pass         : 1;
+		uint32_t slvsec_d3_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D3_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D3_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D3_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D3_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D3_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d3_start_code_err        : 1;
+		uint32_t slvsec_d3_end_code_err          : 1;
+		uint32_t slvsec_d3_deskew_code_err       : 1;
+		uint32_t slvsec_d3_standby_code_err      : 1;
+		uint32_t slvsec_d3_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_68 {
+union reg_sensor_phy_8l_68 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D4_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D4_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D4_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d4_test_pat_en           : 1;
+		uint32_t slvsec_d4_clr_test_pat_err      : 1;
+		uint32_t slvsec_d4_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_6C {
+union reg_sensor_phy_8l_6c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D4_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D4_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D4_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D4_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d4_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d4_test_pat_err          : 1;
+		uint32_t slvsec_d4_test_pat_pass         : 1;
+		uint32_t slvsec_d4_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D4_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D4_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D4_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D4_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D4_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d4_start_code_err        : 1;
+		uint32_t slvsec_d4_end_code_err          : 1;
+		uint32_t slvsec_d4_deskew_code_err       : 1;
+		uint32_t slvsec_d4_standby_code_err      : 1;
+		uint32_t slvsec_d4_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_70 {
+union reg_sensor_phy_8l_70 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D5_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D5_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D5_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d5_test_pat_en           : 1;
+		uint32_t slvsec_d5_clr_test_pat_err      : 1;
+		uint32_t slvsec_d5_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_74 {
+union reg_sensor_phy_8l_74 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D5_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D5_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D5_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D5_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d5_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d5_test_pat_err          : 1;
+		uint32_t slvsec_d5_test_pat_pass         : 1;
+		uint32_t slvsec_d5_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D5_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D5_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D5_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D5_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D5_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d5_start_code_err        : 1;
+		uint32_t slvsec_d5_end_code_err          : 1;
+		uint32_t slvsec_d5_deskew_code_err       : 1;
+		uint32_t slvsec_d5_standby_code_err      : 1;
+		uint32_t slvsec_d5_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_78 {
+union reg_sensor_phy_8l_78 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D6_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D6_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D6_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d6_test_pat_en           : 1;
+		uint32_t slvsec_d6_clr_test_pat_err      : 1;
+		uint32_t slvsec_d6_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_7C {
+union reg_sensor_phy_8l_7c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D6_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D6_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D6_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D6_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d6_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d6_test_pat_err          : 1;
+		uint32_t slvsec_d6_test_pat_pass         : 1;
+		uint32_t slvsec_d6_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D6_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D6_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D6_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D6_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D6_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d6_start_code_err        : 1;
+		uint32_t slvsec_d6_end_code_err          : 1;
+		uint32_t slvsec_d6_deskew_code_err       : 1;
+		uint32_t slvsec_d6_standby_code_err      : 1;
+		uint32_t slvsec_d6_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_80 {
+union reg_sensor_phy_8l_80 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D7_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D7_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D7_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d7_test_pat_en           : 1;
+		uint32_t slvsec_d7_clr_test_pat_err      : 1;
+		uint32_t slvsec_d7_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_84 {
+union reg_sensor_phy_8l_84 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D7_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D7_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D7_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D7_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d7_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d7_test_pat_err          : 1;
+		uint32_t slvsec_d7_test_pat_pass         : 1;
+		uint32_t slvsec_d7_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D7_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D7_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D7_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D7_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D7_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d7_start_code_err        : 1;
+		uint32_t slvsec_d7_end_code_err          : 1;
+		uint32_t slvsec_d7_deskew_code_err       : 1;
+		uint32_t slvsec_d7_standby_code_err      : 1;
+		uint32_t slvsec_d7_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_DBG_90 {
+union reg_sensor_phy_8l_dbg_90 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_HS_STATE                     : 1;
-		uint32_t CK_ULPS_STATE                   : 1;
-		uint32_t CK_STOPSTATE                    : 1;
-		uint32_t CK_ERR_STATE                    : 1;
-		uint32_t DESKEW_STATE                    : 2;
+		uint32_t ck_hs_state                     : 1;
+		uint32_t ck_ulps_state                   : 1;
+		uint32_t ck_stopstate                    : 1;
+		uint32_t ck_err_state                    : 1;
+		uint32_t deskew_state                    : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_DBG_94 {
+union reg_sensor_phy_8l_dbg_94 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_DATAHS_STATE                 : 3;
+		uint32_t d0_datahs_state                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t D1_DATAHS_STATE                 : 3;
+		uint32_t d1_datahs_state                 : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t D2_DATAHS_STATE                 : 3;
+		uint32_t d2_datahs_state                 : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t D3_DATAHS_STATE                 : 3;
+		uint32_t d3_datahs_state                 : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t D4_DATAHS_STATE                 : 3;
+		uint32_t d4_datahs_state                 : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t D5_DATAHS_STATE                 : 3;
+		uint32_t d5_datahs_state                 : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t D6_DATAHS_STATE                 : 3;
+		uint32_t d6_datahs_state                 : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t D7_DATAHS_STATE                 : 3;
+		uint32_t d7_datahs_state                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_98 {
+union reg_sensor_phy_8l_status_98 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_CLR                : 8;
-		uint32_t D0_LP_STATUS_CLR                : 8;
-		uint32_t D1_LP_STATUS_CLR                : 8;
-		uint32_t D2_LP_STATUS_CLR                : 8;
+		uint32_t ck_lp_status_clr                : 8;
+		uint32_t d0_lp_status_clr                : 8;
+		uint32_t d1_lp_status_clr                : 8;
+		uint32_t d2_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_9C {
+union reg_sensor_phy_8l_status_9c {
 	uint32_t raw;
 	struct {
-		uint32_t D3_LP_STATUS_CLR                : 8;
-		uint32_t D4_LP_STATUS_CLR                : 8;
-		uint32_t D5_LP_STATUS_CLR                : 8;
-		uint32_t D6_LP_STATUS_CLR                : 8;
+		uint32_t d3_lp_status_clr                : 8;
+		uint32_t d4_lp_status_clr                : 8;
+		uint32_t d5_lp_status_clr                : 8;
+		uint32_t d6_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_A0 {
+union reg_sensor_phy_8l_status_a0 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_LP_STATUS_CLR                : 8;
+		uint32_t d7_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_A4 {
+union reg_sensor_phy_8l_status_a4 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_OUT                : 8;
-		uint32_t D0_LP_STATUS_OUT                : 8;
-		uint32_t D1_LP_STATUS_OUT                : 8;
-		uint32_t D2_LP_STATUS_OUT                : 8;
+		uint32_t ck_lp_status_out                : 8;
+		uint32_t d0_lp_status_out                : 8;
+		uint32_t d1_lp_status_out                : 8;
+		uint32_t d2_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_A8 {
+union reg_sensor_phy_8l_status_a8 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_LP_STATUS_OUT                : 8;
-		uint32_t D4_LP_STATUS_OUT                : 8;
-		uint32_t D5_LP_STATUS_OUT                : 8;
-		uint32_t D6_LP_STATUS_OUT                : 8;
+		uint32_t d3_lp_status_out                : 8;
+		uint32_t d4_lp_status_out                : 8;
+		uint32_t d5_lp_status_out                : 8;
+		uint32_t d6_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_STATUS_AC {
+union reg_sensor_phy_8l_status_ac {
 	uint32_t raw;
 	struct {
-		uint32_t D7_LP_STATUS_OUT                : 8;
+		uint32_t d7_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_0 {
+union reg_sensor_phy_8l_d0_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_EN                     : 1;
-		uint32_t D0_PRBS9_CLR_ERR                : 1;
-		uint32_t D0_PRBS9_SOURCE                 : 1;
-		uint32_t D0_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d0_prbs9_en                     : 1;
+		uint32_t d0_prbs9_clr_err                : 1;
+		uint32_t d0_prbs9_source                 : 1;
+		uint32_t d0_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D0_CALIB_MAX                    : 8;
-		uint32_t D0_CALIB_STEP                   : 8;
-		uint32_t D0_CALIB_PATTERN                : 8;
+		uint32_t d0_calib_max                    : 8;
+		uint32_t d0_calib_step                   : 8;
+		uint32_t d0_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_1 {
+union reg_sensor_phy_8l_d0_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_EN                     : 1;
-		uint32_t D0_CALIB_SOURCE                 : 1;
-		uint32_t D0_CALIB_MODE                   : 1;
-		uint32_t D0_CALIB_IGNORE                 : 1;
-		uint32_t D0_CALIB_SETTLE                 : 3;
-		uint32_t D0_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D0_CALIB_SET_PHASE              : 8;
-		uint32_t D0_CALIB_CYCLE                  : 16;
+		uint32_t d0_calib_en                     : 1;
+		uint32_t d0_calib_source                 : 1;
+		uint32_t d0_calib_mode                   : 1;
+		uint32_t d0_calib_ignore                 : 1;
+		uint32_t d0_calib_settle                 : 3;
+		uint32_t d0_calib_phase_no_shift         : 1;
+		uint32_t d0_calib_set_phase              : 8;
+		uint32_t d0_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_2 {
+union reg_sensor_phy_8l_d0_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_RX_ERR                 : 1;
-		uint32_t D0_PRBS9_TEST_DONE              : 1;
-		uint32_t D0_PRBS9_TEST_PASS              : 1;
-		uint32_t D0_SKEW_CALIB_DONE              : 1;
-		uint32_t D0_SKEW_CALIB_FAIL              : 1;
-		uint32_t D0_DATALP_STATE                 : 4;
-		uint32_t D0_DATALP_LPREQ2ERR             : 1;
-		uint32_t D0_DATALP_DATAESC2ERR           : 1;
-		uint32_t D0_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D0_DATALP_HSTEST2ERR            : 1;
-		uint32_t D0_DATALP_ESCULP2ERR            : 1;
-		uint32_t D0_DATALP_HS2ERR                : 1;
-		uint32_t D0_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D0_PRBS9_ERR_CNT                : 16;
+		uint32_t d0_prbs9_rx_err                 : 1;
+		uint32_t d0_prbs9_test_done              : 1;
+		uint32_t d0_prbs9_test_pass              : 1;
+		uint32_t d0_skew_calib_done              : 1;
+		uint32_t d0_skew_calib_fail              : 1;
+		uint32_t d0_datalp_state                 : 4;
+		uint32_t d0_datalp_lpreq2err             : 1;
+		uint32_t d0_datalp_dataesc2err           : 1;
+		uint32_t d0_datalp_rsttri2err            : 1;
+		uint32_t d0_datalp_hstest2err            : 1;
+		uint32_t d0_datalp_esculp2err            : 1;
+		uint32_t d0_datalp_hs2err                : 1;
+		uint32_t d0_data_exist_1st_byte          : 1;
+		uint32_t d0_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_3 {
+union reg_sensor_phy_8l_d0_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d0_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_4 {
+union reg_sensor_phy_8l_d0_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d0_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_5 {
+union reg_sensor_phy_8l_d0_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d0_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_6 {
+union reg_sensor_phy_8l_d0_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d0_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_7 {
+union reg_sensor_phy_8l_d0_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d0_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_8 {
+union reg_sensor_phy_8l_d0_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d0_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_9 {
+union reg_sensor_phy_8l_d0_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d0_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_A {
+union reg_sensor_phy_8l_d0_a {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d0_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D0_B {
+union reg_sensor_phy_8l_d0_b {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_OPTION                 : 1;
+		uint32_t d0_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D0_CALIB_THRESHOLD              : 8;
-		uint32_t D0_CALIB_GP_COUNT               : 9;
+		uint32_t d0_calib_threshold              : 8;
+		uint32_t d0_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_0 {
+union reg_sensor_phy_8l_d1_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_EN                     : 1;
-		uint32_t D1_PRBS9_CLR_ERR                : 1;
-		uint32_t D1_PRBS9_SOURCE                 : 1;
-		uint32_t D1_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d1_prbs9_en                     : 1;
+		uint32_t d1_prbs9_clr_err                : 1;
+		uint32_t d1_prbs9_source                 : 1;
+		uint32_t d1_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D1_CALIB_MAX                    : 8;
-		uint32_t D1_CALIB_STEP                   : 8;
-		uint32_t D1_CALIB_PATTERN                : 8;
+		uint32_t d1_calib_max                    : 8;
+		uint32_t d1_calib_step                   : 8;
+		uint32_t d1_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_1 {
+union reg_sensor_phy_8l_d1_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_EN                     : 1;
-		uint32_t D1_CALIB_SOURCE                 : 1;
-		uint32_t D1_CALIB_MODE                   : 1;
-		uint32_t D1_CALIB_IGNORE                 : 1;
-		uint32_t D1_CALIB_SETTLE                 : 3;
-		uint32_t D1_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D1_CALIB_SET_PHASE              : 8;
-		uint32_t D1_CALIB_CYCLE                  : 16;
+		uint32_t d1_calib_en                     : 1;
+		uint32_t d1_calib_source                 : 1;
+		uint32_t d1_calib_mode                   : 1;
+		uint32_t d1_calib_ignore                 : 1;
+		uint32_t d1_calib_settle                 : 3;
+		uint32_t d1_calib_phase_no_shift         : 1;
+		uint32_t d1_calib_set_phase              : 8;
+		uint32_t d1_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_2 {
+union reg_sensor_phy_8l_d1_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_RX_ERR                 : 1;
-		uint32_t D1_PRBS9_TEST_DONE              : 1;
-		uint32_t D1_PRBS9_TEST_PASS              : 1;
-		uint32_t D1_SKEW_CALIB_DONE              : 1;
-		uint32_t D1_SKEW_CALIB_FAIL              : 1;
-		uint32_t D1_DATALP_STATE                 : 4;
-		uint32_t D1_DATALP_LPREQ2ERR             : 1;
-		uint32_t D1_DATALP_DATAESC2ERR           : 1;
-		uint32_t D1_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D1_DATALP_HSTEST2ERR            : 1;
-		uint32_t D1_DATALP_ESCULP2ERR            : 1;
-		uint32_t D1_DATALP_HS2ERR                : 1;
-		uint32_t D1_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D1_PRBS9_ERR_CNT                : 16;
+		uint32_t d1_prbs9_rx_err                 : 1;
+		uint32_t d1_prbs9_test_done              : 1;
+		uint32_t d1_prbs9_test_pass              : 1;
+		uint32_t d1_skew_calib_done              : 1;
+		uint32_t d1_skew_calib_fail              : 1;
+		uint32_t d1_datalp_state                 : 4;
+		uint32_t d1_datalp_lpreq2err             : 1;
+		uint32_t d1_datalp_dataesc2err           : 1;
+		uint32_t d1_datalp_rsttri2err            : 1;
+		uint32_t d1_datalp_hstest2err            : 1;
+		uint32_t d1_datalp_esculp2err            : 1;
+		uint32_t d1_datalp_hs2err                : 1;
+		uint32_t d1_data_exist_1st_byte          : 1;
+		uint32_t d1_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_3 {
+union reg_sensor_phy_8l_d1_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d1_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_4 {
+union reg_sensor_phy_8l_d1_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d1_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_5 {
+union reg_sensor_phy_8l_d1_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d1_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_6 {
+union reg_sensor_phy_8l_d1_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d1_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_7 {
+union reg_sensor_phy_8l_d1_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d1_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_8 {
+union reg_sensor_phy_8l_d1_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d1_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_9 {
+union reg_sensor_phy_8l_d1_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d1_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_A {
+union reg_sensor_phy_8l_d1_a {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d1_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D1_B {
+union reg_sensor_phy_8l_d1_b {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_OPTION                 : 1;
+		uint32_t d1_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D1_CALIB_THRESHOLD              : 8;
-		uint32_t D1_CALIB_GP_COUNT               : 9;
+		uint32_t d1_calib_threshold              : 8;
+		uint32_t d1_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_0 {
+union reg_sensor_phy_8l_d2_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_PRBS9_EN                     : 1;
-		uint32_t D2_PRBS9_CLR_ERR                : 1;
-		uint32_t D2_PRBS9_SOURCE                 : 1;
-		uint32_t D2_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d2_prbs9_en                     : 1;
+		uint32_t d2_prbs9_clr_err                : 1;
+		uint32_t d2_prbs9_source                 : 1;
+		uint32_t d2_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D2_CALIB_MAX                    : 8;
-		uint32_t D2_CALIB_STEP                   : 8;
-		uint32_t D2_CALIB_PATTERN                : 8;
+		uint32_t d2_calib_max                    : 8;
+		uint32_t d2_calib_step                   : 8;
+		uint32_t d2_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_1 {
+union reg_sensor_phy_8l_d2_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_CALIB_EN                     : 1;
-		uint32_t D2_CALIB_SOURCE                 : 1;
-		uint32_t D2_CALIB_MODE                   : 1;
-		uint32_t D2_CALIB_IGNORE                 : 1;
-		uint32_t D2_CALIB_SETTLE                 : 3;
-		uint32_t D2_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D2_CALIB_SET_PHASE              : 8;
-		uint32_t D2_CALIB_CYCLE                  : 16;
+		uint32_t d2_calib_en                     : 1;
+		uint32_t d2_calib_source                 : 1;
+		uint32_t d2_calib_mode                   : 1;
+		uint32_t d2_calib_ignore                 : 1;
+		uint32_t d2_calib_settle                 : 3;
+		uint32_t d2_calib_phase_no_shift         : 1;
+		uint32_t d2_calib_set_phase              : 8;
+		uint32_t d2_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_2 {
+union reg_sensor_phy_8l_d2_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_PRBS9_RX_ERR                 : 1;
-		uint32_t D2_PRBS9_TEST_DONE              : 1;
-		uint32_t D2_PRBS9_TEST_PASS              : 1;
-		uint32_t D2_SKEW_CALIB_DONE              : 1;
-		uint32_t D2_SKEW_CALIB_FAIL              : 1;
-		uint32_t D2_DATALP_STATE                 : 4;
-		uint32_t D2_DATALP_LPREQ2ERR             : 1;
-		uint32_t D2_DATALP_DATAESC2ERR           : 1;
-		uint32_t D2_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D2_DATALP_HSTEST2ERR            : 1;
-		uint32_t D2_DATALP_ESCULP2ERR            : 1;
-		uint32_t D2_DATALP_HS2ERR                : 1;
-		uint32_t D2_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D2_PRBS9_ERR_CNT                : 16;
+		uint32_t d2_prbs9_rx_err                 : 1;
+		uint32_t d2_prbs9_test_done              : 1;
+		uint32_t d2_prbs9_test_pass              : 1;
+		uint32_t d2_skew_calib_done              : 1;
+		uint32_t d2_skew_calib_fail              : 1;
+		uint32_t d2_datalp_state                 : 4;
+		uint32_t d2_datalp_lpreq2err             : 1;
+		uint32_t d2_datalp_dataesc2err           : 1;
+		uint32_t d2_datalp_rsttri2err            : 1;
+		uint32_t d2_datalp_hstest2err            : 1;
+		uint32_t d2_datalp_esculp2err            : 1;
+		uint32_t d2_datalp_hs2err                : 1;
+		uint32_t d2_data_exist_1st_byte          : 1;
+		uint32_t d2_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_3 {
+union reg_sensor_phy_8l_d2_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d2_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_4 {
+union reg_sensor_phy_8l_d2_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d2_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_5 {
+union reg_sensor_phy_8l_d2_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d2_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_6 {
+union reg_sensor_phy_8l_d2_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d2_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_7 {
+union reg_sensor_phy_8l_d2_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d2_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_8 {
+union reg_sensor_phy_8l_d2_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d2_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_9 {
+union reg_sensor_phy_8l_d2_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d2_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_A {
+union reg_sensor_phy_8l_d2_a {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d2_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D2_B {
+union reg_sensor_phy_8l_d2_b {
 	uint32_t raw;
 	struct {
-		uint32_t D2_CALIB_OPTION                 : 1;
+		uint32_t d2_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D2_CALIB_THRESHOLD              : 8;
-		uint32_t D2_CALIB_GP_COUNT               : 9;
+		uint32_t d2_calib_threshold              : 8;
+		uint32_t d2_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_0 {
+union reg_sensor_phy_8l_d3_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_PRBS9_EN                     : 1;
-		uint32_t D3_PRBS9_CLR_ERR                : 1;
-		uint32_t D3_PRBS9_SOURCE                 : 1;
-		uint32_t D3_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d3_prbs9_en                     : 1;
+		uint32_t d3_prbs9_clr_err                : 1;
+		uint32_t d3_prbs9_source                 : 1;
+		uint32_t d3_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D3_CALIB_MAX                    : 8;
-		uint32_t D3_CALIB_STEP                   : 8;
-		uint32_t D3_CALIB_PATTERN                : 8;
+		uint32_t d3_calib_max                    : 8;
+		uint32_t d3_calib_step                   : 8;
+		uint32_t d3_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_1 {
+union reg_sensor_phy_8l_d3_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_CALIB_EN                     : 1;
-		uint32_t D3_CALIB_SOURCE                 : 1;
-		uint32_t D3_CALIB_MODE                   : 1;
-		uint32_t D3_CALIB_IGNORE                 : 1;
-		uint32_t D3_CALIB_SETTLE                 : 3;
-		uint32_t D3_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D3_CALIB_SET_PHASE              : 8;
-		uint32_t D3_CALIB_CYCLE                  : 16;
+		uint32_t d3_calib_en                     : 1;
+		uint32_t d3_calib_source                 : 1;
+		uint32_t d3_calib_mode                   : 1;
+		uint32_t d3_calib_ignore                 : 1;
+		uint32_t d3_calib_settle                 : 3;
+		uint32_t d3_calib_phase_no_shift         : 1;
+		uint32_t d3_calib_set_phase              : 8;
+		uint32_t d3_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_2 {
+union reg_sensor_phy_8l_d3_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_PRBS9_RX_ERR                 : 1;
-		uint32_t D3_PRBS9_TEST_DONE              : 1;
-		uint32_t D3_PRBS9_TEST_PASS              : 1;
-		uint32_t D3_SKEW_CALIB_DONE              : 1;
-		uint32_t D3_SKEW_CALIB_FAIL              : 1;
-		uint32_t D3_DATALP_STATE                 : 4;
-		uint32_t D3_DATALP_LPREQ2ERR             : 1;
-		uint32_t D3_DATALP_DATAESC2ERR           : 1;
-		uint32_t D3_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D3_DATALP_HSTEST2ERR            : 1;
-		uint32_t D3_DATALP_ESCULP2ERR            : 1;
-		uint32_t D3_DATALP_HS2ERR                : 1;
-		uint32_t D3_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D3_PRBS9_ERR_CNT                : 16;
+		uint32_t d3_prbs9_rx_err                 : 1;
+		uint32_t d3_prbs9_test_done              : 1;
+		uint32_t d3_prbs9_test_pass              : 1;
+		uint32_t d3_skew_calib_done              : 1;
+		uint32_t d3_skew_calib_fail              : 1;
+		uint32_t d3_datalp_state                 : 4;
+		uint32_t d3_datalp_lpreq2err             : 1;
+		uint32_t d3_datalp_dataesc2err           : 1;
+		uint32_t d3_datalp_rsttri2err            : 1;
+		uint32_t d3_datalp_hstest2err            : 1;
+		uint32_t d3_datalp_esculp2err            : 1;
+		uint32_t d3_datalp_hs2err                : 1;
+		uint32_t d3_data_exist_1st_byte          : 1;
+		uint32_t d3_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_3 {
+union reg_sensor_phy_8l_d3_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d3_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_4 {
+union reg_sensor_phy_8l_d3_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d3_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_5 {
+union reg_sensor_phy_8l_d3_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d3_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_6 {
+union reg_sensor_phy_8l_d3_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d3_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_7 {
+union reg_sensor_phy_8l_d3_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d3_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_8 {
+union reg_sensor_phy_8l_d3_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d3_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_9 {
+union reg_sensor_phy_8l_d3_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d3_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_A {
+union reg_sensor_phy_8l_d3_a {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d3_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D3_B {
+union reg_sensor_phy_8l_d3_b {
 	uint32_t raw;
 	struct {
-		uint32_t D3_CALIB_OPTION                 : 1;
+		uint32_t d3_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D3_CALIB_THRESHOLD              : 8;
-		uint32_t D3_CALIB_GP_COUNT               : 9;
+		uint32_t d3_calib_threshold              : 8;
+		uint32_t d3_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_0 {
+union reg_sensor_phy_8l_d4_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_PRBS9_EN                     : 1;
-		uint32_t D4_PRBS9_CLR_ERR                : 1;
-		uint32_t D4_PRBS9_SOURCE                 : 1;
-		uint32_t D4_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d4_prbs9_en                     : 1;
+		uint32_t d4_prbs9_clr_err                : 1;
+		uint32_t d4_prbs9_source                 : 1;
+		uint32_t d4_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D4_CALIB_MAX                    : 8;
-		uint32_t D4_CALIB_STEP                   : 8;
-		uint32_t D4_CALIB_PATTERN                : 8;
+		uint32_t d4_calib_max                    : 8;
+		uint32_t d4_calib_step                   : 8;
+		uint32_t d4_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_1 {
+union reg_sensor_phy_8l_d4_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_CALIB_EN                     : 1;
-		uint32_t D4_CALIB_SOURCE                 : 1;
-		uint32_t D4_CALIB_MODE                   : 1;
-		uint32_t D4_CALIB_IGNORE                 : 1;
-		uint32_t D4_CALIB_SETTLE                 : 3;
-		uint32_t D4_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D4_CALIB_SET_PHASE              : 8;
-		uint32_t D4_CALIB_CYCLE                  : 16;
+		uint32_t d4_calib_en                     : 1;
+		uint32_t d4_calib_source                 : 1;
+		uint32_t d4_calib_mode                   : 1;
+		uint32_t d4_calib_ignore                 : 1;
+		uint32_t d4_calib_settle                 : 3;
+		uint32_t d4_calib_phase_no_shift         : 1;
+		uint32_t d4_calib_set_phase              : 8;
+		uint32_t d4_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_2 {
+union reg_sensor_phy_8l_d4_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_PRBS9_RX_ERR                 : 1;
-		uint32_t D4_PRBS9_TEST_DONE              : 1;
-		uint32_t D4_PRBS9_TEST_PASS              : 1;
-		uint32_t D4_SKEW_CALIB_DONE              : 1;
-		uint32_t D4_SKEW_CALIB_FAIL              : 1;
-		uint32_t D4_DATALP_STATE                 : 4;
-		uint32_t D4_DATALP_LPREQ2ERR             : 1;
-		uint32_t D4_DATALP_DATAESC2ERR           : 1;
-		uint32_t D4_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D4_DATALP_HSTEST2ERR            : 1;
-		uint32_t D4_DATALP_ESCULP2ERR            : 1;
-		uint32_t D4_DATALP_HS2ERR                : 1;
-		uint32_t D4_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D4_PRBS9_ERR_CNT                : 16;
+		uint32_t d4_prbs9_rx_err                 : 1;
+		uint32_t d4_prbs9_test_done              : 1;
+		uint32_t d4_prbs9_test_pass              : 1;
+		uint32_t d4_skew_calib_done              : 1;
+		uint32_t d4_skew_calib_fail              : 1;
+		uint32_t d4_datalp_state                 : 4;
+		uint32_t d4_datalp_lpreq2err             : 1;
+		uint32_t d4_datalp_dataesc2err           : 1;
+		uint32_t d4_datalp_rsttri2err            : 1;
+		uint32_t d4_datalp_hstest2err            : 1;
+		uint32_t d4_datalp_esculp2err            : 1;
+		uint32_t d4_datalp_hs2err                : 1;
+		uint32_t d4_data_exist_1st_byte          : 1;
+		uint32_t d4_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_3 {
+union reg_sensor_phy_8l_d4_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d4_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_4 {
+union reg_sensor_phy_8l_d4_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d4_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_5 {
+union reg_sensor_phy_8l_d4_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d4_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_6 {
+union reg_sensor_phy_8l_d4_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d4_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_7 {
+union reg_sensor_phy_8l_d4_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d4_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_8 {
+union reg_sensor_phy_8l_d4_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d4_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_9 {
+union reg_sensor_phy_8l_d4_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d4_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_A {
+union reg_sensor_phy_8l_d4_a {
 	uint32_t raw;
 	struct {
-		uint32_t D4_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d4_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D4_B {
+union reg_sensor_phy_8l_d4_b {
 	uint32_t raw;
 	struct {
-		uint32_t D4_CALIB_OPTION                 : 1;
+		uint32_t d4_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D4_CALIB_THRESHOLD              : 8;
-		uint32_t D4_CALIB_GP_COUNT               : 9;
+		uint32_t d4_calib_threshold              : 8;
+		uint32_t d4_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_0 {
+union reg_sensor_phy_8l_d5_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_PRBS9_EN                     : 1;
-		uint32_t D5_PRBS9_CLR_ERR                : 1;
-		uint32_t D5_PRBS9_SOURCE                 : 1;
-		uint32_t D5_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d5_prbs9_en                     : 1;
+		uint32_t d5_prbs9_clr_err                : 1;
+		uint32_t d5_prbs9_source                 : 1;
+		uint32_t d5_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D5_CALIB_MAX                    : 8;
-		uint32_t D5_CALIB_STEP                   : 8;
-		uint32_t D5_CALIB_PATTERN                : 8;
+		uint32_t d5_calib_max                    : 8;
+		uint32_t d5_calib_step                   : 8;
+		uint32_t d5_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_1 {
+union reg_sensor_phy_8l_d5_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_CALIB_EN                     : 1;
-		uint32_t D5_CALIB_SOURCE                 : 1;
-		uint32_t D5_CALIB_MODE                   : 1;
-		uint32_t D5_CALIB_IGNORE                 : 1;
-		uint32_t D5_CALIB_SETTLE                 : 3;
-		uint32_t D5_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D5_CALIB_SET_PHASE              : 8;
-		uint32_t D5_CALIB_CYCLE                  : 16;
+		uint32_t d5_calib_en                     : 1;
+		uint32_t d5_calib_source                 : 1;
+		uint32_t d5_calib_mode                   : 1;
+		uint32_t d5_calib_ignore                 : 1;
+		uint32_t d5_calib_settle                 : 3;
+		uint32_t d5_calib_phase_no_shift         : 1;
+		uint32_t d5_calib_set_phase              : 8;
+		uint32_t d5_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_2 {
+union reg_sensor_phy_8l_d5_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_PRBS9_RX_ERR                 : 1;
-		uint32_t D5_PRBS9_TEST_DONE              : 1;
-		uint32_t D5_PRBS9_TEST_PASS              : 1;
-		uint32_t D5_SKEW_CALIB_DONE              : 1;
-		uint32_t D5_SKEW_CALIB_FAIL              : 1;
-		uint32_t D5_DATALP_STATE                 : 4;
-		uint32_t D5_DATALP_LPREQ2ERR             : 1;
-		uint32_t D5_DATALP_DATAESC2ERR           : 1;
-		uint32_t D5_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D5_DATALP_HSTEST2ERR            : 1;
-		uint32_t D5_DATALP_ESCULP2ERR            : 1;
-		uint32_t D5_DATALP_HS2ERR                : 1;
-		uint32_t D5_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D5_PRBS9_ERR_CNT                : 16;
+		uint32_t d5_prbs9_rx_err                 : 1;
+		uint32_t d5_prbs9_test_done              : 1;
+		uint32_t d5_prbs9_test_pass              : 1;
+		uint32_t d5_skew_calib_done              : 1;
+		uint32_t d5_skew_calib_fail              : 1;
+		uint32_t d5_datalp_state                 : 4;
+		uint32_t d5_datalp_lpreq2err             : 1;
+		uint32_t d5_datalp_dataesc2err           : 1;
+		uint32_t d5_datalp_rsttri2err            : 1;
+		uint32_t d5_datalp_hstest2err            : 1;
+		uint32_t d5_datalp_esculp2err            : 1;
+		uint32_t d5_datalp_hs2err                : 1;
+		uint32_t d5_data_exist_1st_byte          : 1;
+		uint32_t d5_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_3 {
+union reg_sensor_phy_8l_d5_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d5_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_4 {
+union reg_sensor_phy_8l_d5_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d5_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_5 {
+union reg_sensor_phy_8l_d5_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d5_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_6 {
+union reg_sensor_phy_8l_d5_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d5_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_7 {
+union reg_sensor_phy_8l_d5_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d5_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_8 {
+union reg_sensor_phy_8l_d5_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d5_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_9 {
+union reg_sensor_phy_8l_d5_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d5_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_A {
+union reg_sensor_phy_8l_d5_a {
 	uint32_t raw;
 	struct {
-		uint32_t D5_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d5_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D5_B {
+union reg_sensor_phy_8l_d5_b {
 	uint32_t raw;
 	struct {
-		uint32_t D5_CALIB_OPTION                 : 1;
+		uint32_t d5_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D5_CALIB_THRESHOLD              : 8;
-		uint32_t D5_CALIB_GP_COUNT               : 9;
+		uint32_t d5_calib_threshold              : 8;
+		uint32_t d5_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_0 {
+union reg_sensor_phy_8l_d6_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_PRBS9_EN                     : 1;
-		uint32_t D6_PRBS9_CLR_ERR                : 1;
-		uint32_t D6_PRBS9_SOURCE                 : 1;
-		uint32_t D6_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d6_prbs9_en                     : 1;
+		uint32_t d6_prbs9_clr_err                : 1;
+		uint32_t d6_prbs9_source                 : 1;
+		uint32_t d6_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D6_CALIB_MAX                    : 8;
-		uint32_t D6_CALIB_STEP                   : 8;
-		uint32_t D6_CALIB_PATTERN                : 8;
+		uint32_t d6_calib_max                    : 8;
+		uint32_t d6_calib_step                   : 8;
+		uint32_t d6_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_1 {
+union reg_sensor_phy_8l_d6_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_CALIB_EN                     : 1;
-		uint32_t D6_CALIB_SOURCE                 : 1;
-		uint32_t D6_CALIB_MODE                   : 1;
-		uint32_t D6_CALIB_IGNORE                 : 1;
-		uint32_t D6_CALIB_SETTLE                 : 3;
-		uint32_t D6_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D6_CALIB_SET_PHASE              : 8;
-		uint32_t D6_CALIB_CYCLE                  : 16;
+		uint32_t d6_calib_en                     : 1;
+		uint32_t d6_calib_source                 : 1;
+		uint32_t d6_calib_mode                   : 1;
+		uint32_t d6_calib_ignore                 : 1;
+		uint32_t d6_calib_settle                 : 3;
+		uint32_t d6_calib_phase_no_shift         : 1;
+		uint32_t d6_calib_set_phase              : 8;
+		uint32_t d6_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_2 {
+union reg_sensor_phy_8l_d6_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_PRBS9_RX_ERR                 : 1;
-		uint32_t D6_PRBS9_TEST_DONE              : 1;
-		uint32_t D6_PRBS9_TEST_PASS              : 1;
-		uint32_t D6_SKEW_CALIB_DONE              : 1;
-		uint32_t D6_SKEW_CALIB_FAIL              : 1;
-		uint32_t D6_DATALP_STATE                 : 4;
-		uint32_t D6_DATALP_LPREQ2ERR             : 1;
-		uint32_t D6_DATALP_DATAESC2ERR           : 1;
-		uint32_t D6_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D6_DATALP_HSTEST2ERR            : 1;
-		uint32_t D6_DATALP_ESCULP2ERR            : 1;
-		uint32_t D6_DATALP_HS2ERR                : 1;
-		uint32_t D6_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D6_PRBS9_ERR_CNT                : 16;
+		uint32_t d6_prbs9_rx_err                 : 1;
+		uint32_t d6_prbs9_test_done              : 1;
+		uint32_t d6_prbs9_test_pass              : 1;
+		uint32_t d6_skew_calib_done              : 1;
+		uint32_t d6_skew_calib_fail              : 1;
+		uint32_t d6_datalp_state                 : 4;
+		uint32_t d6_datalp_lpreq2err             : 1;
+		uint32_t d6_datalp_dataesc2err           : 1;
+		uint32_t d6_datalp_rsttri2err            : 1;
+		uint32_t d6_datalp_hstest2err            : 1;
+		uint32_t d6_datalp_esculp2err            : 1;
+		uint32_t d6_datalp_hs2err                : 1;
+		uint32_t d6_data_exist_1st_byte          : 1;
+		uint32_t d6_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_3 {
+union reg_sensor_phy_8l_d6_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d6_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_4 {
+union reg_sensor_phy_8l_d6_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d6_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_5 {
+union reg_sensor_phy_8l_d6_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d6_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_6 {
+union reg_sensor_phy_8l_d6_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d6_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_7 {
+union reg_sensor_phy_8l_d6_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d6_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_8 {
+union reg_sensor_phy_8l_d6_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d6_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_9 {
+union reg_sensor_phy_8l_d6_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d6_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_A {
+union reg_sensor_phy_8l_d6_a {
 	uint32_t raw;
 	struct {
-		uint32_t D6_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d6_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D6_B {
+union reg_sensor_phy_8l_d6_b {
 	uint32_t raw;
 	struct {
-		uint32_t D6_CALIB_OPTION                 : 1;
+		uint32_t d6_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D6_CALIB_THRESHOLD              : 8;
-		uint32_t D6_CALIB_GP_COUNT               : 9;
+		uint32_t d6_calib_threshold              : 8;
+		uint32_t d6_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_0 {
+union reg_sensor_phy_8l_d7_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_PRBS9_EN                     : 1;
-		uint32_t D7_PRBS9_CLR_ERR                : 1;
-		uint32_t D7_PRBS9_SOURCE                 : 1;
-		uint32_t D7_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d7_prbs9_en                     : 1;
+		uint32_t d7_prbs9_clr_err                : 1;
+		uint32_t d7_prbs9_source                 : 1;
+		uint32_t d7_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D7_CALIB_MAX                    : 8;
-		uint32_t D7_CALIB_STEP                   : 8;
-		uint32_t D7_CALIB_PATTERN                : 8;
+		uint32_t d7_calib_max                    : 8;
+		uint32_t d7_calib_step                   : 8;
+		uint32_t d7_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_1 {
+union reg_sensor_phy_8l_d7_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_CALIB_EN                     : 1;
-		uint32_t D7_CALIB_SOURCE                 : 1;
-		uint32_t D7_CALIB_MODE                   : 1;
-		uint32_t D7_CALIB_IGNORE                 : 1;
-		uint32_t D7_CALIB_SETTLE                 : 3;
-		uint32_t D7_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D7_CALIB_SET_PHASE              : 8;
-		uint32_t D7_CALIB_CYCLE                  : 16;
+		uint32_t d7_calib_en                     : 1;
+		uint32_t d7_calib_source                 : 1;
+		uint32_t d7_calib_mode                   : 1;
+		uint32_t d7_calib_ignore                 : 1;
+		uint32_t d7_calib_settle                 : 3;
+		uint32_t d7_calib_phase_no_shift         : 1;
+		uint32_t d7_calib_set_phase              : 8;
+		uint32_t d7_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_2 {
+union reg_sensor_phy_8l_d7_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_PRBS9_RX_ERR                 : 1;
-		uint32_t D7_PRBS9_TEST_DONE              : 1;
-		uint32_t D7_PRBS9_TEST_PASS              : 1;
-		uint32_t D7_SKEW_CALIB_DONE              : 1;
-		uint32_t D7_SKEW_CALIB_FAIL              : 1;
-		uint32_t D7_DATALP_STATE                 : 4;
-		uint32_t D7_DATALP_LPREQ2ERR             : 1;
-		uint32_t D7_DATALP_DATAESC2ERR           : 1;
-		uint32_t D7_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D7_DATALP_HSTEST2ERR            : 1;
-		uint32_t D7_DATALP_ESCULP2ERR            : 1;
-		uint32_t D7_DATALP_HS2ERR                : 1;
-		uint32_t D7_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D7_PRBS9_ERR_CNT                : 16;
+		uint32_t d7_prbs9_rx_err                 : 1;
+		uint32_t d7_prbs9_test_done              : 1;
+		uint32_t d7_prbs9_test_pass              : 1;
+		uint32_t d7_skew_calib_done              : 1;
+		uint32_t d7_skew_calib_fail              : 1;
+		uint32_t d7_datalp_state                 : 4;
+		uint32_t d7_datalp_lpreq2err             : 1;
+		uint32_t d7_datalp_dataesc2err           : 1;
+		uint32_t d7_datalp_rsttri2err            : 1;
+		uint32_t d7_datalp_hstest2err            : 1;
+		uint32_t d7_datalp_esculp2err            : 1;
+		uint32_t d7_datalp_hs2err                : 1;
+		uint32_t d7_data_exist_1st_byte          : 1;
+		uint32_t d7_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_3 {
+union reg_sensor_phy_8l_d7_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d7_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_4 {
+union reg_sensor_phy_8l_d7_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d7_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_5 {
+union reg_sensor_phy_8l_d7_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d7_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_6 {
+union reg_sensor_phy_8l_d7_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d7_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_7 {
+union reg_sensor_phy_8l_d7_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d7_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_8 {
+union reg_sensor_phy_8l_d7_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d7_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_9 {
+union reg_sensor_phy_8l_d7_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d7_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_A {
+union reg_sensor_phy_8l_d7_a {
 	uint32_t raw;
 	struct {
-		uint32_t D7_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d7_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_8L_D7_B {
+union reg_sensor_phy_8l_d7_b {
 	uint32_t raw;
 	struct {
-		uint32_t D7_CALIB_OPTION                 : 1;
+		uint32_t d7_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D7_CALIB_THRESHOLD              : 8;
-		uint32_t D7_CALIB_GP_COUNT               : 9;
+		uint32_t d7_calib_threshold              : 8;
+		uint32_t d7_calib_gp_count               : 9;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_PHY_4L_00 {
+union reg_sensor_phy_4l_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MODE                     : 2;
+		uint32_t sensor_mode                     : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_04 {
+union reg_sensor_phy_4l_04 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_D0_SEL                 : 3;
+		uint32_t csi_lane_d0_sel                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSI_LANE_D1_SEL                 : 3;
+		uint32_t csi_lane_d1_sel                 : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t CSI_LANE_D2_SEL                 : 3;
+		uint32_t csi_lane_d2_sel                 : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t CSI_LANE_D3_SEL                 : 3;
+		uint32_t csi_lane_d3_sel                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_08 {
+union reg_sensor_phy_4l_08 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_CK_SEL                 : 3;
+		uint32_t csi_lane_ck_sel                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSI_LANE_CK_PNSWAP              : 1;
+		uint32_t csi_lane_ck_pnswap              : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t CSI_LANE_D0_PNSWAP              : 1;
-		uint32_t CSI_LANE_D1_PNSWAP              : 1;
-		uint32_t CSI_LANE_D2_PNSWAP              : 1;
-		uint32_t CSI_LANE_D3_PNSWAP              : 1;
+		uint32_t csi_lane_d0_pnswap              : 1;
+		uint32_t csi_lane_d1_pnswap              : 1;
+		uint32_t csi_lane_d2_pnswap              : 1;
+		uint32_t csi_lane_d3_pnswap              : 1;
 		uint32_t _rsv_12                         : 4;
-		uint32_t CSI_CK_PHASE                    : 8;
+		uint32_t csi_ck_phase                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_0C {
+union reg_sensor_phy_4l_0c {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_LANE_EN                  : 4;
+		uint32_t deskew_lane_en                  : 4;
 		uint32_t _rsv_4                          : 12;
-		uint32_t PRBS9_TEST_PERIOD               : 16;
+		uint32_t prbs9_test_period               : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_10 {
+union reg_sensor_phy_4l_10 {
 	uint32_t raw;
 	struct {
-		uint32_t T_HS_SETTLE                     : 8;
-		uint32_t T_ALL_ZERO                      : 8;
-		uint32_t AUTO_IGNORE                     : 1;
-		uint32_t AUTO_SYNC                       : 1;
+		uint32_t t_hs_settle                     : 8;
+		uint32_t t_all_zero                      : 8;
+		uint32_t auto_ignore                     : 1;
+		uint32_t auto_sync                       : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_20 {
+union reg_sensor_phy_4l_20 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_INV_EN                    : 1;
+		uint32_t slvds_inv_en                    : 1;
 		uint32_t _rsv_1                          : 1;
-		uint32_t SLVDS_BIT_MODE                  : 2;
-		uint32_t SLVDS_LANE_EN                   : 4;
+		uint32_t slvds_bit_mode                  : 2;
+		uint32_t slvds_lane_en                   : 4;
 		uint32_t _rsv_8                          : 4;
-		uint32_t SLVDS_FORCE_RESYNC              : 1;
-		uint32_t SLVDS_RESYNC                    : 1;
+		uint32_t slvds_force_resync              : 1;
+		uint32_t slvds_resync                    : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_SAV_1ST                   : 12;
+		uint32_t slvds_sav_1st                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_24 {
+union reg_sensor_phy_4l_24 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_SAV_2ND                   : 12;
+		uint32_t slvds_sav_2nd                   : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_SAV_3RD                   : 12;
+		uint32_t slvds_sav_3rd                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_28 {
+union reg_sensor_phy_4l_28 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_D0_SYNC_STATE             : 2;
+		uint32_t slvds_d0_sync_state             : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t SLVDS_D1_SYNC_STATE             : 2;
+		uint32_t slvds_d1_sync_state             : 2;
 		uint32_t _rsv_6                          : 2;
-		uint32_t SLVDS_D2_SYNC_STATE             : 2;
+		uint32_t slvds_d2_sync_state             : 2;
 		uint32_t _rsv_10                         : 2;
-		uint32_t SLVDS_D3_SYNC_STATE             : 2;
+		uint32_t slvds_d3_sync_state             : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_30 {
+union reg_sensor_phy_4l_30 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_LANE_EN                  : 4;
+		uint32_t slvsec_lane_en                  : 4;
 		uint32_t _rsv_4                          : 4;
-		uint32_t SLVSEC_SKEW_CNT_EN              : 1;
-		uint32_t SLVSEC_TRAIN_SEQ_CHK_EN         : 1;
+		uint32_t slvsec_skew_cnt_en              : 1;
+		uint32_t slvsec_train_seq_chk_en         : 1;
 		uint32_t _rsv_10                         : 6;
-		uint32_t SLVSEC_SKEW_CONS                : 5;
-		uint32_t SLVSEC_FORCE_RESYNC             : 1;
-		uint32_t SLVSEC_RESYNC                   : 1;
+		uint32_t slvsec_skew_cons                : 5;
+		uint32_t slvsec_force_resync             : 1;
+		uint32_t slvsec_resync                   : 1;
 		uint32_t _rsv_23                         : 1;
-		uint32_t SLVSEC_UNSTABLE_SKEW_CNT        : 8;
+		uint32_t slvsec_unstable_skew_cnt        : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_34 {
+union reg_sensor_phy_4l_34 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_SYNC_SYMBOL              : 9;
+		uint32_t slvsec_sync_symbol              : 9;
 		uint32_t _rsv_9                          : 1;
-		uint32_t SLVSEC_STANDBY_SYMBOL           : 9;
+		uint32_t slvsec_standby_symbol           : 9;
 		uint32_t _rsv_19                         : 1;
-		uint32_t SLVSEC_DESKEW_SYMBOL            : 9;
+		uint32_t slvsec_deskew_symbol            : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_38 {
+union reg_sensor_phy_4l_38 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PRBS9_TEST_PERIOD        : 16;
+		uint32_t slvsec_prbs9_test_period        : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_3C {
+union reg_sensor_phy_4l_3c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_CLR             : 16;
+		uint32_t slvsec_phy_intr_clr             : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_40 {
+union reg_sensor_phy_4l_40 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_MASK            : 16;
+		uint32_t slvsec_phy_intr_mask            : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_44 {
+union reg_sensor_phy_4l_44 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_STATUS          : 16;
+		uint32_t slvsec_phy_intr_status          : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_48 {
+union reg_sensor_phy_4l_48 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D0_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D0_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d0_test_pat_en           : 1;
+		uint32_t slvsec_d0_clr_test_pat_err      : 1;
+		uint32_t slvsec_d0_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_4C {
+union reg_sensor_phy_4l_4c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D0_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d0_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d0_test_pat_err          : 1;
+		uint32_t slvsec_d0_test_pat_pass         : 1;
+		uint32_t slvsec_d0_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D0_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D0_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D0_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D0_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D0_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d0_start_code_err        : 1;
+		uint32_t slvsec_d0_end_code_err          : 1;
+		uint32_t slvsec_d0_deskew_code_err       : 1;
+		uint32_t slvsec_d0_standby_code_err      : 1;
+		uint32_t slvsec_d0_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_50 {
+union reg_sensor_phy_4l_50 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D1_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D1_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d1_test_pat_en           : 1;
+		uint32_t slvsec_d1_clr_test_pat_err      : 1;
+		uint32_t slvsec_d1_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_54 {
+union reg_sensor_phy_4l_54 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D1_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d1_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d1_test_pat_err          : 1;
+		uint32_t slvsec_d1_test_pat_pass         : 1;
+		uint32_t slvsec_d1_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D1_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D1_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D1_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D1_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D1_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d1_start_code_err        : 1;
+		uint32_t slvsec_d1_end_code_err          : 1;
+		uint32_t slvsec_d1_deskew_code_err       : 1;
+		uint32_t slvsec_d1_standby_code_err      : 1;
+		uint32_t slvsec_d1_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_58 {
+union reg_sensor_phy_4l_58 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D2_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D2_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D2_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d2_test_pat_en           : 1;
+		uint32_t slvsec_d2_clr_test_pat_err      : 1;
+		uint32_t slvsec_d2_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_5C {
+union reg_sensor_phy_4l_5c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D2_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D2_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D2_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D2_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d2_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d2_test_pat_err          : 1;
+		uint32_t slvsec_d2_test_pat_pass         : 1;
+		uint32_t slvsec_d2_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D2_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D2_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D2_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D2_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D2_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d2_start_code_err        : 1;
+		uint32_t slvsec_d2_end_code_err          : 1;
+		uint32_t slvsec_d2_deskew_code_err       : 1;
+		uint32_t slvsec_d2_standby_code_err      : 1;
+		uint32_t slvsec_d2_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_60 {
+union reg_sensor_phy_4l_60 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D3_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D3_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D3_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d3_test_pat_en           : 1;
+		uint32_t slvsec_d3_clr_test_pat_err      : 1;
+		uint32_t slvsec_d3_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_64 {
+union reg_sensor_phy_4l_64 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D3_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D3_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D3_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D3_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d3_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d3_test_pat_err          : 1;
+		uint32_t slvsec_d3_test_pat_pass         : 1;
+		uint32_t slvsec_d3_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D3_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D3_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D3_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D3_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D3_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d3_start_code_err        : 1;
+		uint32_t slvsec_d3_end_code_err          : 1;
+		uint32_t slvsec_d3_deskew_code_err       : 1;
+		uint32_t slvsec_d3_standby_code_err      : 1;
+		uint32_t slvsec_d3_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_DBG_90 {
+union reg_sensor_phy_4l_dbg_90 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_HS_STATE                     : 1;
-		uint32_t CK_ULPS_STATE                   : 1;
-		uint32_t CK_STOPSTATE                    : 1;
-		uint32_t CK_ERR_STATE                    : 1;
-		uint32_t DESKEW_STATE                    : 2;
+		uint32_t ck_hs_state                     : 1;
+		uint32_t ck_ulps_state                   : 1;
+		uint32_t ck_stopstate                    : 1;
+		uint32_t ck_err_state                    : 1;
+		uint32_t deskew_state                    : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_DBG_94 {
+union reg_sensor_phy_4l_dbg_94 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_DATAHS_STATE                 : 3;
+		uint32_t d0_datahs_state                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t D1_DATAHS_STATE                 : 3;
+		uint32_t d1_datahs_state                 : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t D2_DATAHS_STATE                 : 3;
+		uint32_t d2_datahs_state                 : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t D3_DATAHS_STATE                 : 3;
+		uint32_t d3_datahs_state                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_STATUS_98 {
+union reg_sensor_phy_4l_status_98 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_CLR                : 8;
-		uint32_t D0_LP_STATUS_CLR                : 8;
-		uint32_t D1_LP_STATUS_CLR                : 8;
-		uint32_t D2_LP_STATUS_CLR                : 8;
+		uint32_t ck_lp_status_clr                : 8;
+		uint32_t d0_lp_status_clr                : 8;
+		uint32_t d1_lp_status_clr                : 8;
+		uint32_t d2_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_STATUS_9C {
+union reg_sensor_phy_4l_status_9c {
 	uint32_t raw;
 	struct {
-		uint32_t D3_LP_STATUS_CLR                : 8;
+		uint32_t d3_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_STATUS_A4 {
+union reg_sensor_phy_4l_status_a4 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_OUT                : 8;
-		uint32_t D0_LP_STATUS_OUT                : 8;
-		uint32_t D1_LP_STATUS_OUT                : 8;
-		uint32_t D2_LP_STATUS_OUT                : 8;
+		uint32_t ck_lp_status_out                : 8;
+		uint32_t d0_lp_status_out                : 8;
+		uint32_t d1_lp_status_out                : 8;
+		uint32_t d2_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_STATUS_A8 {
+union reg_sensor_phy_4l_status_a8 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_LP_STATUS_OUT                : 8;
+		uint32_t d3_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_0 {
+union reg_sensor_phy_4l_d0_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_EN                     : 1;
-		uint32_t D0_PRBS9_CLR_ERR                : 1;
-		uint32_t D0_PRBS9_SOURCE                 : 1;
-		uint32_t D0_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d0_prbs9_en                     : 1;
+		uint32_t d0_prbs9_clr_err                : 1;
+		uint32_t d0_prbs9_source                 : 1;
+		uint32_t d0_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D0_CALIB_MAX                    : 8;
-		uint32_t D0_CALIB_STEP                   : 8;
-		uint32_t D0_CALIB_PATTERN                : 8;
+		uint32_t d0_calib_max                    : 8;
+		uint32_t d0_calib_step                   : 8;
+		uint32_t d0_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_1 {
+union reg_sensor_phy_4l_d0_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_EN                     : 1;
-		uint32_t D0_CALIB_SOURCE                 : 1;
-		uint32_t D0_CALIB_MODE                   : 1;
-		uint32_t D0_CALIB_IGNORE                 : 1;
-		uint32_t D0_CALIB_SETTLE                 : 3;
-		uint32_t D0_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D0_CALIB_SET_PHASE              : 8;
-		uint32_t D0_CALIB_CYCLE                  : 16;
+		uint32_t d0_calib_en                     : 1;
+		uint32_t d0_calib_source                 : 1;
+		uint32_t d0_calib_mode                   : 1;
+		uint32_t d0_calib_ignore                 : 1;
+		uint32_t d0_calib_settle                 : 3;
+		uint32_t d0_calib_phase_no_shift         : 1;
+		uint32_t d0_calib_set_phase              : 8;
+		uint32_t d0_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_2 {
+union reg_sensor_phy_4l_d0_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_RX_ERR                 : 1;
-		uint32_t D0_PRBS9_TEST_DONE              : 1;
-		uint32_t D0_PRBS9_TEST_PASS              : 1;
-		uint32_t D0_SKEW_CALIB_DONE              : 1;
-		uint32_t D0_SKEW_CALIB_FAIL              : 1;
-		uint32_t D0_DATALP_STATE                 : 4;
-		uint32_t D0_DATALP_LPREQ2ERR             : 1;
-		uint32_t D0_DATALP_DATAESC2ERR           : 1;
-		uint32_t D0_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D0_DATALP_HSTEST2ERR            : 1;
-		uint32_t D0_DATALP_ESCULP2ERR            : 1;
-		uint32_t D0_DATALP_HS2ERR                : 1;
-		uint32_t D0_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D0_PRBS9_ERR_CNT                : 16;
+		uint32_t d0_prbs9_rx_err                 : 1;
+		uint32_t d0_prbs9_test_done              : 1;
+		uint32_t d0_prbs9_test_pass              : 1;
+		uint32_t d0_skew_calib_done              : 1;
+		uint32_t d0_skew_calib_fail              : 1;
+		uint32_t d0_datalp_state                 : 4;
+		uint32_t d0_datalp_lpreq2err             : 1;
+		uint32_t d0_datalp_dataesc2err           : 1;
+		uint32_t d0_datalp_rsttri2err            : 1;
+		uint32_t d0_datalp_hstest2err            : 1;
+		uint32_t d0_datalp_esculp2err            : 1;
+		uint32_t d0_datalp_hs2err                : 1;
+		uint32_t d0_data_exist_1st_byte          : 1;
+		uint32_t d0_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_3 {
+union reg_sensor_phy_4l_d0_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d0_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_4 {
+union reg_sensor_phy_4l_d0_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d0_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_5 {
+union reg_sensor_phy_4l_d0_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d0_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_6 {
+union reg_sensor_phy_4l_d0_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d0_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_7 {
+union reg_sensor_phy_4l_d0_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d0_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_8 {
+union reg_sensor_phy_4l_d0_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d0_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_9 {
+union reg_sensor_phy_4l_d0_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d0_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_A {
+union reg_sensor_phy_4l_d0_a {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d0_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D0_B {
+union reg_sensor_phy_4l_d0_b {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_OPTION                 : 1;
+		uint32_t d0_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D0_CALIB_THRESHOLD              : 8;
-		uint32_t D0_CALIB_GP_COUNT               : 9;
+		uint32_t d0_calib_threshold              : 8;
+		uint32_t d0_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_0 {
+union reg_sensor_phy_4l_d1_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_EN                     : 1;
-		uint32_t D1_PRBS9_CLR_ERR                : 1;
-		uint32_t D1_PRBS9_SOURCE                 : 1;
-		uint32_t D1_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d1_prbs9_en                     : 1;
+		uint32_t d1_prbs9_clr_err                : 1;
+		uint32_t d1_prbs9_source                 : 1;
+		uint32_t d1_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D1_CALIB_MAX                    : 8;
-		uint32_t D1_CALIB_STEP                   : 8;
-		uint32_t D1_CALIB_PATTERN                : 8;
+		uint32_t d1_calib_max                    : 8;
+		uint32_t d1_calib_step                   : 8;
+		uint32_t d1_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_1 {
+union reg_sensor_phy_4l_d1_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_EN                     : 1;
-		uint32_t D1_CALIB_SOURCE                 : 1;
-		uint32_t D1_CALIB_MODE                   : 1;
-		uint32_t D1_CALIB_IGNORE                 : 1;
-		uint32_t D1_CALIB_SETTLE                 : 3;
-		uint32_t D1_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D1_CALIB_SET_PHASE              : 8;
-		uint32_t D1_CALIB_CYCLE                  : 16;
+		uint32_t d1_calib_en                     : 1;
+		uint32_t d1_calib_source                 : 1;
+		uint32_t d1_calib_mode                   : 1;
+		uint32_t d1_calib_ignore                 : 1;
+		uint32_t d1_calib_settle                 : 3;
+		uint32_t d1_calib_phase_no_shift         : 1;
+		uint32_t d1_calib_set_phase              : 8;
+		uint32_t d1_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_2 {
+union reg_sensor_phy_4l_d1_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_RX_ERR                 : 1;
-		uint32_t D1_PRBS9_TEST_DONE              : 1;
-		uint32_t D1_PRBS9_TEST_PASS              : 1;
-		uint32_t D1_SKEW_CALIB_DONE              : 1;
-		uint32_t D1_SKEW_CALIB_FAIL              : 1;
-		uint32_t D1_DATALP_STATE                 : 4;
-		uint32_t D1_DATALP_LPREQ2ERR             : 1;
-		uint32_t D1_DATALP_DATAESC2ERR           : 1;
-		uint32_t D1_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D1_DATALP_HSTEST2ERR            : 1;
-		uint32_t D1_DATALP_ESCULP2ERR            : 1;
-		uint32_t D1_DATALP_HS2ERR                : 1;
-		uint32_t D1_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D1_PRBS9_ERR_CNT                : 16;
+		uint32_t d1_prbs9_rx_err                 : 1;
+		uint32_t d1_prbs9_test_done              : 1;
+		uint32_t d1_prbs9_test_pass              : 1;
+		uint32_t d1_skew_calib_done              : 1;
+		uint32_t d1_skew_calib_fail              : 1;
+		uint32_t d1_datalp_state                 : 4;
+		uint32_t d1_datalp_lpreq2err             : 1;
+		uint32_t d1_datalp_dataesc2err           : 1;
+		uint32_t d1_datalp_rsttri2err            : 1;
+		uint32_t d1_datalp_hstest2err            : 1;
+		uint32_t d1_datalp_esculp2err            : 1;
+		uint32_t d1_datalp_hs2err                : 1;
+		uint32_t d1_data_exist_1st_byte          : 1;
+		uint32_t d1_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_3 {
+union reg_sensor_phy_4l_d1_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d1_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_4 {
+union reg_sensor_phy_4l_d1_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d1_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_5 {
+union reg_sensor_phy_4l_d1_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d1_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_6 {
+union reg_sensor_phy_4l_d1_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d1_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_7 {
+union reg_sensor_phy_4l_d1_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d1_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_8 {
+union reg_sensor_phy_4l_d1_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d1_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_9 {
+union reg_sensor_phy_4l_d1_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d1_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_A {
+union reg_sensor_phy_4l_d1_a {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d1_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D1_B {
+union reg_sensor_phy_4l_d1_b {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_OPTION                 : 1;
+		uint32_t d1_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D1_CALIB_THRESHOLD              : 8;
-		uint32_t D1_CALIB_GP_COUNT               : 9;
+		uint32_t d1_calib_threshold              : 8;
+		uint32_t d1_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_0 {
+union reg_sensor_phy_4l_d2_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_PRBS9_EN                     : 1;
-		uint32_t D2_PRBS9_CLR_ERR                : 1;
-		uint32_t D2_PRBS9_SOURCE                 : 1;
-		uint32_t D2_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d2_prbs9_en                     : 1;
+		uint32_t d2_prbs9_clr_err                : 1;
+		uint32_t d2_prbs9_source                 : 1;
+		uint32_t d2_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D2_CALIB_MAX                    : 8;
-		uint32_t D2_CALIB_STEP                   : 8;
-		uint32_t D2_CALIB_PATTERN                : 8;
+		uint32_t d2_calib_max                    : 8;
+		uint32_t d2_calib_step                   : 8;
+		uint32_t d2_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_1 {
+union reg_sensor_phy_4l_d2_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_CALIB_EN                     : 1;
-		uint32_t D2_CALIB_SOURCE                 : 1;
-		uint32_t D2_CALIB_MODE                   : 1;
-		uint32_t D2_CALIB_IGNORE                 : 1;
-		uint32_t D2_CALIB_SETTLE                 : 3;
-		uint32_t D2_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D2_CALIB_SET_PHASE              : 8;
-		uint32_t D2_CALIB_CYCLE                  : 16;
+		uint32_t d2_calib_en                     : 1;
+		uint32_t d2_calib_source                 : 1;
+		uint32_t d2_calib_mode                   : 1;
+		uint32_t d2_calib_ignore                 : 1;
+		uint32_t d2_calib_settle                 : 3;
+		uint32_t d2_calib_phase_no_shift         : 1;
+		uint32_t d2_calib_set_phase              : 8;
+		uint32_t d2_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_2 {
+union reg_sensor_phy_4l_d2_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_PRBS9_RX_ERR                 : 1;
-		uint32_t D2_PRBS9_TEST_DONE              : 1;
-		uint32_t D2_PRBS9_TEST_PASS              : 1;
-		uint32_t D2_SKEW_CALIB_DONE              : 1;
-		uint32_t D2_SKEW_CALIB_FAIL              : 1;
-		uint32_t D2_DATALP_STATE                 : 4;
-		uint32_t D2_DATALP_LPREQ2ERR             : 1;
-		uint32_t D2_DATALP_DATAESC2ERR           : 1;
-		uint32_t D2_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D2_DATALP_HSTEST2ERR            : 1;
-		uint32_t D2_DATALP_ESCULP2ERR            : 1;
-		uint32_t D2_DATALP_HS2ERR                : 1;
-		uint32_t D2_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D2_PRBS9_ERR_CNT                : 16;
+		uint32_t d2_prbs9_rx_err                 : 1;
+		uint32_t d2_prbs9_test_done              : 1;
+		uint32_t d2_prbs9_test_pass              : 1;
+		uint32_t d2_skew_calib_done              : 1;
+		uint32_t d2_skew_calib_fail              : 1;
+		uint32_t d2_datalp_state                 : 4;
+		uint32_t d2_datalp_lpreq2err             : 1;
+		uint32_t d2_datalp_dataesc2err           : 1;
+		uint32_t d2_datalp_rsttri2err            : 1;
+		uint32_t d2_datalp_hstest2err            : 1;
+		uint32_t d2_datalp_esculp2err            : 1;
+		uint32_t d2_datalp_hs2err                : 1;
+		uint32_t d2_data_exist_1st_byte          : 1;
+		uint32_t d2_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_3 {
+union reg_sensor_phy_4l_d2_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d2_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_4 {
+union reg_sensor_phy_4l_d2_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d2_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_5 {
+union reg_sensor_phy_4l_d2_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d2_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_6 {
+union reg_sensor_phy_4l_d2_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d2_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_7 {
+union reg_sensor_phy_4l_d2_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d2_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_8 {
+union reg_sensor_phy_4l_d2_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d2_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_9 {
+union reg_sensor_phy_4l_d2_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d2_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_A {
+union reg_sensor_phy_4l_d2_a {
 	uint32_t raw;
 	struct {
-		uint32_t D2_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d2_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D2_B {
+union reg_sensor_phy_4l_d2_b {
 	uint32_t raw;
 	struct {
-		uint32_t D2_CALIB_OPTION                 : 1;
+		uint32_t d2_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D2_CALIB_THRESHOLD              : 8;
-		uint32_t D2_CALIB_GP_COUNT               : 9;
+		uint32_t d2_calib_threshold              : 8;
+		uint32_t d2_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_0 {
+union reg_sensor_phy_4l_d3_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_PRBS9_EN                     : 1;
-		uint32_t D3_PRBS9_CLR_ERR                : 1;
-		uint32_t D3_PRBS9_SOURCE                 : 1;
-		uint32_t D3_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d3_prbs9_en                     : 1;
+		uint32_t d3_prbs9_clr_err                : 1;
+		uint32_t d3_prbs9_source                 : 1;
+		uint32_t d3_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D3_CALIB_MAX                    : 8;
-		uint32_t D3_CALIB_STEP                   : 8;
-		uint32_t D3_CALIB_PATTERN                : 8;
+		uint32_t d3_calib_max                    : 8;
+		uint32_t d3_calib_step                   : 8;
+		uint32_t d3_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_1 {
+union reg_sensor_phy_4l_d3_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_CALIB_EN                     : 1;
-		uint32_t D3_CALIB_SOURCE                 : 1;
-		uint32_t D3_CALIB_MODE                   : 1;
-		uint32_t D3_CALIB_IGNORE                 : 1;
-		uint32_t D3_CALIB_SETTLE                 : 3;
-		uint32_t D3_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D3_CALIB_SET_PHASE              : 8;
-		uint32_t D3_CALIB_CYCLE                  : 16;
+		uint32_t d3_calib_en                     : 1;
+		uint32_t d3_calib_source                 : 1;
+		uint32_t d3_calib_mode                   : 1;
+		uint32_t d3_calib_ignore                 : 1;
+		uint32_t d3_calib_settle                 : 3;
+		uint32_t d3_calib_phase_no_shift         : 1;
+		uint32_t d3_calib_set_phase              : 8;
+		uint32_t d3_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_2 {
+union reg_sensor_phy_4l_d3_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_PRBS9_RX_ERR                 : 1;
-		uint32_t D3_PRBS9_TEST_DONE              : 1;
-		uint32_t D3_PRBS9_TEST_PASS              : 1;
-		uint32_t D3_SKEW_CALIB_DONE              : 1;
-		uint32_t D3_SKEW_CALIB_FAIL              : 1;
-		uint32_t D3_DATALP_STATE                 : 4;
-		uint32_t D3_DATALP_LPREQ2ERR             : 1;
-		uint32_t D3_DATALP_DATAESC2ERR           : 1;
-		uint32_t D3_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D3_DATALP_HSTEST2ERR            : 1;
-		uint32_t D3_DATALP_ESCULP2ERR            : 1;
-		uint32_t D3_DATALP_HS2ERR                : 1;
-		uint32_t D3_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D3_PRBS9_ERR_CNT                : 16;
+		uint32_t d3_prbs9_rx_err                 : 1;
+		uint32_t d3_prbs9_test_done              : 1;
+		uint32_t d3_prbs9_test_pass              : 1;
+		uint32_t d3_skew_calib_done              : 1;
+		uint32_t d3_skew_calib_fail              : 1;
+		uint32_t d3_datalp_state                 : 4;
+		uint32_t d3_datalp_lpreq2err             : 1;
+		uint32_t d3_datalp_dataesc2err           : 1;
+		uint32_t d3_datalp_rsttri2err            : 1;
+		uint32_t d3_datalp_hstest2err            : 1;
+		uint32_t d3_datalp_esculp2err            : 1;
+		uint32_t d3_datalp_hs2err                : 1;
+		uint32_t d3_data_exist_1st_byte          : 1;
+		uint32_t d3_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_3 {
+union reg_sensor_phy_4l_d3_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d3_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_4 {
+union reg_sensor_phy_4l_d3_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d3_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_5 {
+union reg_sensor_phy_4l_d3_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d3_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_6 {
+union reg_sensor_phy_4l_d3_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d3_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_7 {
+union reg_sensor_phy_4l_d3_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d3_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_8 {
+union reg_sensor_phy_4l_d3_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d3_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_9 {
+union reg_sensor_phy_4l_d3_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d3_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_A {
+union reg_sensor_phy_4l_d3_a {
 	uint32_t raw;
 	struct {
-		uint32_t D3_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d3_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_4L_D3_B {
+union reg_sensor_phy_4l_d3_b {
 	uint32_t raw;
 	struct {
-		uint32_t D3_CALIB_OPTION                 : 1;
+		uint32_t d3_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D3_CALIB_THRESHOLD              : 8;
-		uint32_t D3_CALIB_GP_COUNT               : 9;
+		uint32_t d3_calib_threshold              : 8;
+		uint32_t d3_calib_gp_count               : 9;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_PHY_2L_00 {
+union reg_sensor_phy_2l_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MODE                     : 2;
+		uint32_t sensor_mode                     : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_04 {
+union reg_sensor_phy_2l_04 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_D0_SEL                 : 2;
+		uint32_t csi_lane_d0_sel                 : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t CSI_LANE_D1_SEL                 : 2;
+		uint32_t csi_lane_d1_sel                 : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_08 {
+union reg_sensor_phy_2l_08 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_CK_SEL                 : 2;
+		uint32_t csi_lane_ck_sel                 : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t CSI_LANE_CK_PNSWAP              : 1;
+		uint32_t csi_lane_ck_pnswap              : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t CSI_LANE_D0_PNSWAP              : 1;
-		uint32_t CSI_LANE_D1_PNSWAP              : 1;
+		uint32_t csi_lane_d0_pnswap              : 1;
+		uint32_t csi_lane_d1_pnswap              : 1;
 		uint32_t _rsv_10                         : 6;
-		uint32_t CSI_CK_PHASE                    : 8;
+		uint32_t csi_ck_phase                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_0C {
+union reg_sensor_phy_2l_0c {
 	uint32_t raw;
 	struct {
-		uint32_t DESKEW_LANE_EN                  : 2;
+		uint32_t deskew_lane_en                  : 2;
 		uint32_t _rsv_2                          : 14;
-		uint32_t PRBS9_TEST_PERIOD               : 16;
+		uint32_t prbs9_test_period               : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_10 {
+union reg_sensor_phy_2l_10 {
 	uint32_t raw;
 	struct {
-		uint32_t T_HS_SETTLE                     : 8;
-		uint32_t T_ALL_ZERO                      : 8;
-		uint32_t AUTO_IGNORE                     : 1;
-		uint32_t AUTO_SYNC                       : 1;
+		uint32_t t_hs_settle                     : 8;
+		uint32_t t_all_zero                      : 8;
+		uint32_t auto_ignore                     : 1;
+		uint32_t auto_sync                       : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_20 {
+union reg_sensor_phy_2l_20 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_INV_EN                    : 1;
+		uint32_t slvds_inv_en                    : 1;
 		uint32_t _rsv_1                          : 1;
-		uint32_t SLVDS_BIT_MODE                  : 2;
-		uint32_t SLVDS_LANE_EN                   : 2;
+		uint32_t slvds_bit_mode                  : 2;
+		uint32_t slvds_lane_en                   : 2;
 		uint32_t _rsv_6                          : 6;
-		uint32_t SLVDS_FORCE_RESYNC              : 1;
-		uint32_t SLVDS_RESYNC                    : 1;
+		uint32_t slvds_force_resync              : 1;
+		uint32_t slvds_resync                    : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_SAV_1ST                   : 12;
+		uint32_t slvds_sav_1st                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_24 {
+union reg_sensor_phy_2l_24 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_SAV_2ND                   : 12;
+		uint32_t slvds_sav_2nd                   : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_SAV_3RD                   : 12;
+		uint32_t slvds_sav_3rd                   : 12;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_28 {
+union reg_sensor_phy_2l_28 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_D0_SYNC_STATE             : 2;
+		uint32_t slvds_d0_sync_state             : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t SLVDS_D1_SYNC_STATE             : 2;
+		uint32_t slvds_d1_sync_state             : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_30 {
+union reg_sensor_phy_2l_30 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_LANE_EN                  : 2;
+		uint32_t slvsec_lane_en                  : 2;
 		uint32_t _rsv_2                          : 6;
-		uint32_t SLVSEC_SKEW_CNT_EN              : 1;
-		uint32_t SLVSEC_TRAIN_SEQ_CHK_EN         : 1;
+		uint32_t slvsec_skew_cnt_en              : 1;
+		uint32_t slvsec_train_seq_chk_en         : 1;
 		uint32_t _rsv_10                         : 6;
-		uint32_t SLVSEC_SKEW_CONS                : 5;
-		uint32_t SLVSEC_FORCE_RESYNC             : 1;
-		uint32_t SLVSEC_RESYNC                   : 1;
+		uint32_t slvsec_skew_cons                : 5;
+		uint32_t slvsec_force_resync             : 1;
+		uint32_t slvsec_resync                   : 1;
 		uint32_t _rsv_23                         : 1;
-		uint32_t SLVSEC_UNSTABLE_SKEW_CNT        : 8;
+		uint32_t slvsec_unstable_skew_cnt        : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_34 {
+union reg_sensor_phy_2l_34 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_SYNC_SYMBOL              : 9;
+		uint32_t slvsec_sync_symbol              : 9;
 		uint32_t _rsv_9                          : 1;
-		uint32_t SLVSEC_STANDBY_SYMBOL           : 9;
+		uint32_t slvsec_standby_symbol           : 9;
 		uint32_t _rsv_19                         : 1;
-		uint32_t SLVSEC_DESKEW_SYMBOL            : 9;
+		uint32_t slvsec_deskew_symbol            : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_38 {
+union reg_sensor_phy_2l_38 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PRBS9_TEST_PERIOD        : 16;
+		uint32_t slvsec_prbs9_test_period        : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_3C {
+union reg_sensor_phy_2l_3c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_CLR             : 16;
+		uint32_t slvsec_phy_intr_clr             : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_40 {
+union reg_sensor_phy_2l_40 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_MASK            : 16;
+		uint32_t slvsec_phy_intr_mask            : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_44 {
+union reg_sensor_phy_2l_44 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_PHY_INTR_STATUS          : 16;
+		uint32_t slvsec_phy_intr_status          : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_48 {
+union reg_sensor_phy_2l_48 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D0_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D0_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d0_test_pat_en           : 1;
+		uint32_t slvsec_d0_clr_test_pat_err      : 1;
+		uint32_t slvsec_d0_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_4C {
+union reg_sensor_phy_2l_4c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D0_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D0_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D0_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d0_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d0_test_pat_err          : 1;
+		uint32_t slvsec_d0_test_pat_pass         : 1;
+		uint32_t slvsec_d0_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D0_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D0_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D0_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D0_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D0_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d0_start_code_err        : 1;
+		uint32_t slvsec_d0_end_code_err          : 1;
+		uint32_t slvsec_d0_deskew_code_err       : 1;
+		uint32_t slvsec_d0_standby_code_err      : 1;
+		uint32_t slvsec_d0_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_50 {
+union reg_sensor_phy_2l_50 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_EN           : 1;
-		uint32_t SLVSEC_D1_CLR_TEST_PAT_ERR      : 1;
-		uint32_t SLVSEC_D1_TEST_STOP_WHEN_DONE   : 1;
+		uint32_t slvsec_d1_test_pat_en           : 1;
+		uint32_t slvsec_d1_clr_test_pat_err      : 1;
+		uint32_t slvsec_d1_test_stop_when_done   : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_54 {
+union reg_sensor_phy_2l_54 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVSEC_D1_TEST_PAT_ERR_CNT      : 16;
-		uint32_t SLVSEC_D1_TEST_PAT_ERR          : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_PASS         : 1;
-		uint32_t SLVSEC_D1_TEST_PAT_DONE         : 1;
+		uint32_t slvsec_d1_test_pat_err_cnt      : 16;
+		uint32_t slvsec_d1_test_pat_err          : 1;
+		uint32_t slvsec_d1_test_pat_pass         : 1;
+		uint32_t slvsec_d1_test_pat_done         : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t SLVSEC_D1_START_CODE_ERR        : 1;
-		uint32_t SLVSEC_D1_END_CODE_ERR          : 1;
-		uint32_t SLVSEC_D1_DESKEW_CODE_ERR       : 1;
-		uint32_t SLVSEC_D1_STANDBY_CODE_ERR      : 1;
-		uint32_t SLVSEC_D1_SYNC_CODE_ERR         : 1;
+		uint32_t slvsec_d1_start_code_err        : 1;
+		uint32_t slvsec_d1_end_code_err          : 1;
+		uint32_t slvsec_d1_deskew_code_err       : 1;
+		uint32_t slvsec_d1_standby_code_err      : 1;
+		uint32_t slvsec_d1_sync_code_err         : 1;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_DBG_90 {
+union reg_sensor_phy_2l_dbg_90 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_HS_STATE                     : 1;
-		uint32_t CK_ULPS_STATE                   : 1;
-		uint32_t CK_STOPSTATE                    : 1;
-		uint32_t CK_ERR_STATE                    : 1;
-		uint32_t DESKEW_STATE                    : 2;
+		uint32_t ck_hs_state                     : 1;
+		uint32_t ck_ulps_state                   : 1;
+		uint32_t ck_stopstate                    : 1;
+		uint32_t ck_err_state                    : 1;
+		uint32_t deskew_state                    : 2;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_DBG_94 {
+union reg_sensor_phy_2l_dbg_94 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_DATAHS_STATE                 : 3;
+		uint32_t d0_datahs_state                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t D1_DATAHS_STATE                 : 3;
+		uint32_t d1_datahs_state                 : 3;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_STATUS_98 {
+union reg_sensor_phy_2l_status_98 {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_CLR                : 8;
-		uint32_t D0_LP_STATUS_CLR                : 8;
-		uint32_t D1_LP_STATUS_CLR                : 8;
+		uint32_t ck_lp_status_clr                : 8;
+		uint32_t d0_lp_status_clr                : 8;
+		uint32_t d1_lp_status_clr                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_STATUS_9C {
+union reg_sensor_phy_2l_status_9c {
 	uint32_t raw;
 	struct {
-		uint32_t CK_LP_STATUS_OUT                : 8;
-		uint32_t D0_LP_STATUS_OUT                : 8;
-		uint32_t D1_LP_STATUS_OUT                : 8;
+		uint32_t ck_lp_status_out                : 8;
+		uint32_t d0_lp_status_out                : 8;
+		uint32_t d1_lp_status_out                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_0 {
+union reg_sensor_phy_2l_d0_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_EN                     : 1;
-		uint32_t D0_PRBS9_CLR_ERR                : 1;
-		uint32_t D0_PRBS9_SOURCE                 : 1;
-		uint32_t D0_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d0_prbs9_en                     : 1;
+		uint32_t d0_prbs9_clr_err                : 1;
+		uint32_t d0_prbs9_source                 : 1;
+		uint32_t d0_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D0_CALIB_MAX                    : 8;
-		uint32_t D0_CALIB_STEP                   : 8;
-		uint32_t D0_CALIB_PATTERN                : 8;
+		uint32_t d0_calib_max                    : 8;
+		uint32_t d0_calib_step                   : 8;
+		uint32_t d0_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_1 {
+union reg_sensor_phy_2l_d0_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_EN                     : 1;
-		uint32_t D0_CALIB_SOURCE                 : 1;
-		uint32_t D0_CALIB_MODE                   : 1;
-		uint32_t D0_CALIB_IGNORE                 : 1;
-		uint32_t D0_CALIB_SETTLE                 : 3;
-		uint32_t D0_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D0_CALIB_SET_PHASE              : 8;
-		uint32_t D0_CALIB_CYCLE                  : 16;
+		uint32_t d0_calib_en                     : 1;
+		uint32_t d0_calib_source                 : 1;
+		uint32_t d0_calib_mode                   : 1;
+		uint32_t d0_calib_ignore                 : 1;
+		uint32_t d0_calib_settle                 : 3;
+		uint32_t d0_calib_phase_no_shift         : 1;
+		uint32_t d0_calib_set_phase              : 8;
+		uint32_t d0_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_2 {
+union reg_sensor_phy_2l_d0_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_PRBS9_RX_ERR                 : 1;
-		uint32_t D0_PRBS9_TEST_DONE              : 1;
-		uint32_t D0_PRBS9_TEST_PASS              : 1;
-		uint32_t D0_SKEW_CALIB_DONE              : 1;
-		uint32_t D0_SKEW_CALIB_FAIL              : 1;
-		uint32_t D0_DATALP_STATE                 : 4;
-		uint32_t D0_DATALP_LPREQ2ERR             : 1;
-		uint32_t D0_DATALP_DATAESC2ERR           : 1;
-		uint32_t D0_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D0_DATALP_HSTEST2ERR            : 1;
-		uint32_t D0_DATALP_ESCULP2ERR            : 1;
-		uint32_t D0_DATALP_HS2ERR                : 1;
-		uint32_t D0_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D0_PRBS9_ERR_CNT                : 16;
+		uint32_t d0_prbs9_rx_err                 : 1;
+		uint32_t d0_prbs9_test_done              : 1;
+		uint32_t d0_prbs9_test_pass              : 1;
+		uint32_t d0_skew_calib_done              : 1;
+		uint32_t d0_skew_calib_fail              : 1;
+		uint32_t d0_datalp_state                 : 4;
+		uint32_t d0_datalp_lpreq2err             : 1;
+		uint32_t d0_datalp_dataesc2err           : 1;
+		uint32_t d0_datalp_rsttri2err            : 1;
+		uint32_t d0_datalp_hstest2err            : 1;
+		uint32_t d0_datalp_esculp2err            : 1;
+		uint32_t d0_datalp_hs2err                : 1;
+		uint32_t d0_data_exist_1st_byte          : 1;
+		uint32_t d0_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_3 {
+union reg_sensor_phy_2l_d0_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d0_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_4 {
+union reg_sensor_phy_2l_d0_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d0_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_5 {
+union reg_sensor_phy_2l_d0_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d0_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_6 {
+union reg_sensor_phy_2l_d0_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d0_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_7 {
+union reg_sensor_phy_2l_d0_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d0_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_8 {
+union reg_sensor_phy_2l_d0_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d0_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_9 {
+union reg_sensor_phy_2l_d0_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d0_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_A {
+union reg_sensor_phy_2l_d0_a {
 	uint32_t raw;
 	struct {
-		uint32_t D0_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d0_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D0_B {
+union reg_sensor_phy_2l_d0_b {
 	uint32_t raw;
 	struct {
-		uint32_t D0_CALIB_OPTION                 : 1;
+		uint32_t d0_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D0_CALIB_THRESHOLD              : 8;
-		uint32_t D0_CALIB_GP_COUNT               : 9;
+		uint32_t d0_calib_threshold              : 8;
+		uint32_t d0_calib_gp_count               : 9;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_0 {
+union reg_sensor_phy_2l_d1_0 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_EN                     : 1;
-		uint32_t D1_PRBS9_CLR_ERR                : 1;
-		uint32_t D1_PRBS9_SOURCE                 : 1;
-		uint32_t D1_PRBS9_STOP_WHEN_DONE         : 1;
+		uint32_t d1_prbs9_en                     : 1;
+		uint32_t d1_prbs9_clr_err                : 1;
+		uint32_t d1_prbs9_source                 : 1;
+		uint32_t d1_prbs9_stop_when_done         : 1;
 		uint32_t _rsv_4                          : 4;
-		uint32_t D1_CALIB_MAX                    : 8;
-		uint32_t D1_CALIB_STEP                   : 8;
-		uint32_t D1_CALIB_PATTERN                : 8;
+		uint32_t d1_calib_max                    : 8;
+		uint32_t d1_calib_step                   : 8;
+		uint32_t d1_calib_pattern                : 8;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_1 {
+union reg_sensor_phy_2l_d1_1 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_EN                     : 1;
-		uint32_t D1_CALIB_SOURCE                 : 1;
-		uint32_t D1_CALIB_MODE                   : 1;
-		uint32_t D1_CALIB_IGNORE                 : 1;
-		uint32_t D1_CALIB_SETTLE                 : 3;
-		uint32_t D1_CALIB_PHASE_NO_SHIFT         : 1;
-		uint32_t D1_CALIB_SET_PHASE              : 8;
-		uint32_t D1_CALIB_CYCLE                  : 16;
+		uint32_t d1_calib_en                     : 1;
+		uint32_t d1_calib_source                 : 1;
+		uint32_t d1_calib_mode                   : 1;
+		uint32_t d1_calib_ignore                 : 1;
+		uint32_t d1_calib_settle                 : 3;
+		uint32_t d1_calib_phase_no_shift         : 1;
+		uint32_t d1_calib_set_phase              : 8;
+		uint32_t d1_calib_cycle                  : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_2 {
+union reg_sensor_phy_2l_d1_2 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_PRBS9_RX_ERR                 : 1;
-		uint32_t D1_PRBS9_TEST_DONE              : 1;
-		uint32_t D1_PRBS9_TEST_PASS              : 1;
-		uint32_t D1_SKEW_CALIB_DONE              : 1;
-		uint32_t D1_SKEW_CALIB_FAIL              : 1;
-		uint32_t D1_DATALP_STATE                 : 4;
-		uint32_t D1_DATALP_LPREQ2ERR             : 1;
-		uint32_t D1_DATALP_DATAESC2ERR           : 1;
-		uint32_t D1_DATALP_RSTTRI2ERR            : 1;
-		uint32_t D1_DATALP_HSTEST2ERR            : 1;
-		uint32_t D1_DATALP_ESCULP2ERR            : 1;
-		uint32_t D1_DATALP_HS2ERR                : 1;
-		uint32_t D1_DATA_EXIST_1ST_BYTE          : 1;
-		uint32_t D1_PRBS9_ERR_CNT                : 16;
+		uint32_t d1_prbs9_rx_err                 : 1;
+		uint32_t d1_prbs9_test_done              : 1;
+		uint32_t d1_prbs9_test_pass              : 1;
+		uint32_t d1_skew_calib_done              : 1;
+		uint32_t d1_skew_calib_fail              : 1;
+		uint32_t d1_datalp_state                 : 4;
+		uint32_t d1_datalp_lpreq2err             : 1;
+		uint32_t d1_datalp_dataesc2err           : 1;
+		uint32_t d1_datalp_rsttri2err            : 1;
+		uint32_t d1_datalp_hstest2err            : 1;
+		uint32_t d1_datalp_esculp2err            : 1;
+		uint32_t d1_datalp_hs2err                : 1;
+		uint32_t d1_data_exist_1st_byte          : 1;
+		uint32_t d1_prbs9_err_cnt                : 16;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_3 {
+union reg_sensor_phy_2l_d1_3 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_0          : 32;
+		uint32_t d1_skew_calib_result_0          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_4 {
+union reg_sensor_phy_2l_d1_4 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_1          : 32;
+		uint32_t d1_skew_calib_result_1          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_5 {
+union reg_sensor_phy_2l_d1_5 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_2          : 32;
+		uint32_t d1_skew_calib_result_2          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_6 {
+union reg_sensor_phy_2l_d1_6 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_3          : 32;
+		uint32_t d1_skew_calib_result_3          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_7 {
+union reg_sensor_phy_2l_d1_7 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_4          : 32;
+		uint32_t d1_skew_calib_result_4          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_8 {
+union reg_sensor_phy_2l_d1_8 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_5          : 32;
+		uint32_t d1_skew_calib_result_5          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_9 {
+union reg_sensor_phy_2l_d1_9 {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_6          : 32;
+		uint32_t d1_skew_calib_result_6          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_A {
+union reg_sensor_phy_2l_d1_a {
 	uint32_t raw;
 	struct {
-		uint32_t D1_SKEW_CALIB_RESULT_7          : 32;
+		uint32_t d1_skew_calib_result_7          : 32;
 	} bits;
 };
 
-union REG_SENSOR_PHY_2L_D1_B {
+union reg_sensor_phy_2l_d1_b {
 	uint32_t raw;
 	struct {
-		uint32_t D1_CALIB_OPTION                 : 1;
+		uint32_t d1_calib_option                 : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t D1_CALIB_THRESHOLD              : 8;
-		uint32_t D1_CALIB_GP_COUNT               : 9;
+		uint32_t d1_calib_threshold              : 8;
+		uint32_t d1_calib_gp_count               : 9;
 	} bits;
 };
 

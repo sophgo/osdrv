@@ -5,7 +5,6 @@
 	extern "C" {
 #endif
 
-#include <linux/cvi_vip.h>
 #include <base_ctx.h>
 #include <ldc_cb.h>
 
@@ -15,11 +14,12 @@ struct sc_cfg_cb {
 	u8  snr_num;
 	u8  is_tile;
 	u8  is_left_tile;
-	struct cvi_line l_in;
-	struct cvi_line l_out;
-	struct cvi_line r_in;
-	struct cvi_line r_out;
+	struct vip_line l_in;
+	struct vip_line l_out;
+	struct vip_line r_in;
+	struct vip_line r_out;
 	struct mlv_i_s m_lv_i;
+	struct timespec64 ts;
 };
 
 struct sc_err_handle_cb {
@@ -46,9 +46,9 @@ struct vpss_grp_mlv_info {
 	struct mlv_i_s m_lv_i;
 };
 
-struct cvi_window {
-	struct cvi_rect rect_out; /*outside rectangle*/
-	struct cvi_rect rect_in; /*inside rectangle*/
+struct vpss_window {
+	struct vip_rect rect_out; /*outside rectangle*/
+	struct vip_rect rect_in; /*inside rectangle*/
 	__u32 top_width;
 	__u32 bottom_width;
 	__u32 left_width;
@@ -62,9 +62,9 @@ struct stitch_chn_cfg {
 	__u32 pixelformat;
 	__u32 bytesperline[2];
 	__u64 addr[3];
-	struct cvi_vpss_frmsize src_size;
-	struct cvi_rect rect_crop;
-	struct cvi_window window;
+	struct vip_frmsize src_size;
+	struct vip_rect rect_crop;
+	struct vpss_window window;
 };
 
 struct stitch_dst_cfg {
@@ -72,7 +72,7 @@ struct stitch_dst_cfg {
 	__u32 pixelformat;
 	__u32 bytesperline[2];
 	__u64 addr[3];
-	struct cvi_vpss_frmsize dst_size;
+	struct vip_frmsize dst_size;
 };
 
 typedef void (*stitch_job_cb)(void *data);
@@ -81,11 +81,11 @@ struct vpss_stitch_cfg {
 	__u8 num;
 	struct stitch_dst_cfg dst_cfg;
 	struct stitch_chn_cfg *chn_cfg;
-	stitch_job_cb pfnJobCB;
+	stitch_job_cb job_cb;
 	void *data;
 };
 
-enum VPSS_CB_CMD {
+enum vpss_cb_cmd {
 	VPSS_CB_VI_ONLINE_TRIGGER,
 	VPSS_CB_SET_VIVPSSMODE,
 	VPSS_CB_GET_RGN_HDLS,

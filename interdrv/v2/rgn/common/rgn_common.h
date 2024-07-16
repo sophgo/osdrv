@@ -21,7 +21,7 @@
 #define CEIL(x, y) (((x) + ((1 << (y)))) >> (y))   // for alignment
 
 
-extern u32 rgn_log_lv;
+extern unsigned int rgn_log_lv;
 
 #define RGN_ERR        1   /* error conditions                     */
 #define RGN_WARN       2   /* warning conditions                   */
@@ -51,7 +51,7 @@ extern u32 rgn_log_lv;
 #define RGN_COLOR_DARK		0x8000
 #define RGN_COLOR_BRIGHT	0xffff
 
-enum RGN_OP {
+enum rgn_op {
 	RGN_OP_UPDATE = 0,
 	RGN_OP_INSERT,
 	RGN_OP_REMOVE,

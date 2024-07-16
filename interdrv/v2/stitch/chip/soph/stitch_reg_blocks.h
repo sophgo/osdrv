@@ -1,7 +1,7 @@
 /*
  * Copyright (C) Cvitek Co., Ltd. 2019-2021. All rights reserved.
  *
- * File Name:stitch_reg_blocks.h
+ * File name:stitch_reg_blocks.h
  * Description:HW register description
  */
 
@@ -26,7 +26,7 @@ struct REG_STITCHING_BLENDING_T {
 	union REG_STITCHING_BLENDING_7          REG_7;
 	union REG_STITCHING_BLENDING_8          REG_8;
 	union REG_STITCHING_BLENDING_9          REG_9;
-	uint32_t                                _resv_0x28[2];
+	unsigned int                                _resv_0x28[2];
 	union REG_STITCHING_BLENDING_10         REG_10;
 	union REG_STITCHING_BLENDING_11         REG_11;
 	union REG_STITCHING_BLENDING_12         REG_12;

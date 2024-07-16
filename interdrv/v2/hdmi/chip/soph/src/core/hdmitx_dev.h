@@ -69,22 +69,22 @@ typedef struct {
 	int bypass;
 
 	/** Enable Feature 1.1 */
-	int mEnable11Feature;
+	int menable11_feature;
 
 	/** Check Ri every 128th frame */
-	int mRiCheck;
+	int mricheck;
 
 	/** I2C fast mode */
-	int mI2cFastMode;
+	int mi2c_fastmode;
 
 	/** Enhanced link verification */
-	int mEnhancedLinkVerification;
+	int menhanced_link_verification;
 
 	/** Number of supported devices
 	 * (depending on instantiated KSV MEM RAM – Revocation Memory to support
 	 * HDCP repeaters)
 	 */
-	u8 maxDevices;
+	u8 max_devices;
 
 	/** KSV List buffer
 	 * Shall be dimensioned to accommodate 5[bytes] x No. of supported devices
@@ -95,19 +95,19 @@ typedef struct {
 	 * Plus 20 bytes to calculate the SHA-1 (VH0-VH4)
 	 * Total is (30[bytes] + 5[bytes] x Number of supported devices)
 	 */
-	u8 *mKsvListBuffer;
+	u8 *mksvList_buffer;
 
 	/** aksv total of 14 chars**/
-	u8 *mAksv;
+	u8 *maksv;
 
 	/** Keys list
 	 * 40 Keys of 14 characters each
 	 * stored in segments of 8 bits (2 chars)
 	 * **/
-	u8 *mKeys;
+	u8 *mkeys;
 
-	u8 *mSwEncKey;
-} hdcpParams_t;
+	u8 *msw_enckey;
+} hdcp_params_t;
 
 typedef struct {
     u32 scl_high_ns;
@@ -128,7 +128,7 @@ typedef struct hdmi_tx_dev{
 	/** SYNOPSYS DATA */
 	struct hdmi_tx_ctrl	snps_hdmi_ctrl;
 
-	hdcpParams_t hdcp;
+	hdcp_params_t hdcp;
 
 	struct hdmitx_dev* dev_hdmi;
 

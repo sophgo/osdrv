@@ -489,43 +489,55 @@ RetCode ProductVpuDecCheckOpenParam(DecOpenParam* param)
     Uint32      coreIdx;
     VpuAttr*    pAttr;
 
-    if (param == 0)
+    if (param == 0) {
+        VLOG(ERR, "param ptr is null\n");
         return RETCODE_INVALID_PARAM;
+    }
 
-    if (param->coreIdx > MAX_NUM_VPU_CORE)
+    if (param->coreIdx > MAX_NUM_VPU_CORE) {
+        VLOG(ERR, "invalid core_id:%d\n", param->coreIdx);
         return RETCODE_INVALID_PARAM;
+    }
 
     coreIdx   = param->coreIdx;
     productId = s_ProductIds[coreIdx];
     pAttr     = &g_VpuCoreAttributes[coreIdx];
 
-    if (param->bitstreamBuffer % 8)
+    if (param->bitstreamBuffer % 8) {
+        VLOG(ERR, "Invalid bitstream addr:0x%x\n", param->bitstreamBuffer);
         return RETCODE_INVALID_PARAM;
+    }
 
     if (param->bitstreamMode == BS_MODE_INTERRUPT) {
-        if (param->bitstreamBufferSize % 1024 || param->bitstreamBufferSize < 1024)
+        if (param->bitstreamBufferSize % 1024 || param->bitstreamBufferSize < 1024) {
+            VLOG(ERR, "Invalid buffer size %d\n", param->bitstreamBufferSize);
             return RETCODE_INVALID_PARAM;
+        }
     }
 
     if (PRODUCT_ID_W_SERIES(productId)) {
     }
 
     // Check bitstream mode
-    if ((pAttr->supportBitstreamMode&(1<<param->bitstreamMode)) == 0)
+    if ((pAttr->supportBitstreamMode&(1<<param->bitstreamMode)) == 0) {
+        VLOG(ERR, "Invalid bitstream mode [0x%x, 0x%x]\n", pAttr->supportBitstreamMode, param->bitstreamMode);
         return RETCODE_INVALID_PARAM;
+    }
 
-    if ((pAttr->supportDecoders&(1<<param->bitstreamFormat)) == 0)
+    if ((pAttr->supportDecoders&(1<<param->bitstreamFormat)) == 0) {
+        VLOG(ERR, "Invalid bitstream format [0x%x, 0x%x]\n", pAttr->supportDecoders, param->bitstreamFormat);
         return RETCODE_INVALID_PARAM;
+    }
 
     /* check framebuffer endian */
     if ((pAttr->supportEndianMask&(1<<param->frameEndian)) == 0) {
-        APIDPRINT("%s:%d Invalid frame endian(%d)\n", __FUNCTION__, __LINE__, (Int32)param->frameEndian);
+        VLOG(ERR, "Invalid frame endian(%d)\n", (Int32)param->frameEndian);
         return RETCODE_INVALID_PARAM;
     }
 
     /* check streambuffer endian */
     if ((pAttr->supportEndianMask&(1<<param->streamEndian)) == 0) {
-        APIDPRINT("%s:%d Invalid stream endian(%d)\n", __FUNCTION__, __LINE__, (Int32)param->streamEndian);
+        VLOG(ERR, "Invalid stream endian(%d)\n", (Int32)param->streamEndian);
         return RETCODE_INVALID_PARAM;
     }
 
@@ -536,8 +548,10 @@ RetCode ProductVpuDecCheckOpenParam(DecOpenParam* param)
         switch (productId) {
         case PRODUCT_ID_960:
         case PRODUCT_ID_980:
-            if (param->wtlMode != FF_FRAME && param->wtlMode != FF_FIELD )
+            if (param->wtlMode != FF_FRAME && param->wtlMode != FF_FIELD ) {
+                VLOG(ERR, "Invalid wtlMode(%d)\n", param->wtlMode);
                 return RETCODE_INVALID_PARAM;
+            }
             break;
         default:
             break;
@@ -551,7 +565,7 @@ RetCode ProductVpuDecCheckOpenParam(DecOpenParam* param)
 
         if (productId == PRODUCT_ID_960 || productId == PRODUCT_ID_980) {
             if (param->tiled2LinearMode != FF_FRAME && param->tiled2LinearMode != FF_FIELD ) {
-                APIDPRINT("%s:%d Invalid Tiled2LinearMode(%d)\n", __FUNCTION__, __LINE__, (Int32)param->tiled2LinearMode);
+                VLOG(ERR, "Invalid Tiled2LinearMode(%d)\n", (Int32)param->tiled2LinearMode);
                 return RETCODE_INVALID_PARAM;
             }
         }
@@ -563,12 +577,20 @@ RetCode ProductVpuDecCheckOpenParam(DecOpenParam* param)
             return RETCODE_INVALID_PARAM;
     }
     else {
-        if (param->mp4DeblkEnable || param->mp4Class)
+        if (param->mp4DeblkEnable || param->mp4Class) {
+            VLOG(ERR, "Invalid mp4DeblkEnable(%d)\n", (Int32)param->mp4DeblkEnable);
             return RETCODE_INVALID_PARAM;
-        if (param->avcExtension)
+        }
+
+        if (param->avcExtension) {
+            VLOG(ERR, "Invalid avcExtension(%d)\n", (Int32)param->avcExtension);
             return RETCODE_INVALID_PARAM;
-        if (param->tiled2LinearMode != FF_NONE)
+        }
+
+        if (param->tiled2LinearMode != FF_NONE) {
+            VLOG(ERR, "Invalid Tiled2LinearMode(%d)\n", (Int32)param->tiled2LinearMode);
             return RETCODE_INVALID_PARAM;
+        }
     }
 
     return RETCODE_SUCCESS;

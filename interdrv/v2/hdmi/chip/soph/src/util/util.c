@@ -1,8 +1,8 @@
 #include "util.h"
 
-u16 concat_bits(u8 bHi, u8 oHi, u8 nHi, u8 bLo, u8 oLo, u8 nLo)
+u16 concat_bits(u8 bhi, u8 ohi, u8 nhi, u8 blo, u8 olo, u8 nlo)
 {
-	return (bit_field(bHi, oHi, nHi) << nLo) | bit_field(bLo, oLo, nLo);
+	return (bit_field(bhi, ohi, nhi) << nlo) | bit_field(blo, olo, nlo);
 }
 
 u16 byte_to_word(const u8 hi, const u8 lo)

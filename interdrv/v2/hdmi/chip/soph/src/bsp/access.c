@@ -2,7 +2,7 @@
 #include "core/hdmitx_dev.h"
 #include "util/util.h"
 
-static uintptr_t  hdmi_reg_base;
+static uintptr_t hdmi_reg_base;
 
 void hdmi_set_reg_base(void* base)
 {
@@ -37,5 +37,3 @@ void dev_write_mask(u32 addr, u32 mask, u32 data)
 	temp |= (mask & data << shift);
 	dev_write(addr, temp);
 }
-
-

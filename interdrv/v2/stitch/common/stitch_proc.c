@@ -2,10 +2,8 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 
-#include <linux/cvi_vip.h>
-#include <linux/cvi_common.h>
-#include <linux/cvi_defines.h>
-#include <linux/cvi_comm_stitch.h>
+#include "common.h"
+#include <comm_stitch.h>
 
 #include "stitch_debug.h"
 #include "stitch_proc.h"
@@ -32,7 +30,7 @@ static const char *const str_sclr_csc[] = {"Disable", "2RGB_601_Limit",
 /*************************************************************************
  *	STITCH proc functions
  *************************************************************************/
-static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
+static void _pix_fmt_to_string(enum _pixel_format_e PixFmt, char *str, int len)
 {
 	switch (PixFmt) {
 	case PIXEL_FORMAT_RGB_888:
@@ -281,9 +279,9 @@ static void _dev_state_to_string(enum stitch_dev_state devState, char *str, int 
 	}
 }
 
-static void _update_status_to_string(enum stitch_update_status updateState, char *str, int len)
+static void _update_status_to_string(enum stitch_update_status updatstate, char *str, int len)
 {
-	switch (updateState) {
+	switch (updatstate) {
 	case STITCH_UPDATE_SRC:
 		strncpy(str, "UPDATE SRC", len);
 		break;
@@ -308,17 +306,17 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	char str1[32];
 	char str2[32];
 	char str3[32];
-	struct cvi_stitch_ctx *pStitchCtx = stitch_get_ctx();
-	struct cvi_stitch_dev *dev = (struct cvi_stitch_dev *)m->private;
-	// u32 duration;
-	// u32 cost_time, max_cost_time, hw_cost_time, hw_max_cost_time, duration;
+	struct __stitch_ctx *pStitchCtx = stitch_get_ctx();
+	struct stitch_dev *dev = (struct stitch_dev *)m->private;
+	// unsigned int duration;
+	// unsigned int cost_time, max_cost_time, hw_cost_time, hw_max_cost_time, duration;
 	// struct timespec64 time;
 
 	// Module Param
 	seq_printf(m, "\nModule: [STITCH], Build Time[%s]\n", UTS_VERSION);
 	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------\n");
 	seq_printf(m, "%20s\n", "Num. of Inputs");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		seq_printf(m, "%20d\n", pStitchCtx->src_num);
 	} else {
 		seq_printf(m, "%15s\n", "unknown");
@@ -330,21 +328,21 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	//  seq_puts(m, "\n-------------------------------STITCH SRC ATTR------------------------------\n");
 	seq_puts(m, "\n--------------------------------------STITCH SRC Image ATTR-------------------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s\n", "ID(Max: N)", "MaxW", "MaxH", "PixFmt");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		_pix_fmt_to_string(pStitchCtx->src_attr.fmt_in, str1, sizeof(str1));
 		for (i = 0; i < pStitchCtx->src_num; i++) {
 			seq_printf(m, "%20d%20d%20d%20s\n",
 					i,
-					pStitchCtx->src_attr.size[i].u32Width,
-					pStitchCtx->src_attr.size[i].u32Height,
+					pStitchCtx->src_attr.size[i].width,
+					pStitchCtx->src_attr.size[i].height,
 					str1);
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------STITCH SRC OVLP ATTR------------------------\n");
 	seq_printf(m, "%20s%20s%20s\n", "ID(Max: N-1)", "ovlp_lx", "ovlp_rx");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		for (i = 0; i < pStitchCtx->src_num - 1; i++) {
 			seq_printf(m, "%20d%20d%20d\n",
 					i,
@@ -355,7 +353,7 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 
 	seq_puts(m, "\n-------------------------------STITCH SRC BD ATTR------------------------\n");
 	seq_printf(m, "%20s%20s%20ss\n", "ID(Max: N)", "ovlp_lx", "ovlp_rx");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		for (i = 0; i < pStitchCtx->src_num; i++) {
 			seq_printf(m, "%20d%20d%20d\n",
 					i,
@@ -368,11 +366,11 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n--------------------------------------STITCH WGT ATTR-------------------------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s\n", "ID(Max: N-1)", "MaxW", "MaxH", "PhyAddrWgt(Alpha)",
 			"PhyAddrWgt(Beta)");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		for (i = 0; i < pStitchCtx->src_num - 1; i++) {
 			seq_printf(m, "%20d%20d%20d%20lld%20lld\n", i,
-					   pStitchCtx->wgt_attr.size_wgt[i].u32Width,
-					   pStitchCtx->wgt_attr.size_wgt[i].u32Height,
+					   pStitchCtx->wgt_attr.size_wgt[i].width,
+					   pStitchCtx->wgt_attr.size_wgt[i].height,
 					   pStitchCtx->wgt_attr.phy_addr_wgt[i][0],
 					   pStitchCtx->wgt_attr.phy_addr_wgt[i][1]);
 		}
@@ -381,19 +379,19 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	// STITCH CHN ATTR
 	seq_puts(m, "\n-------------------------------STITCH CHN ATTR------------------------------\n");
 	seq_printf(m, "%20s%20s%20s\n", "MaxW", "MaxH", "PixFmt");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		_pix_fmt_to_string(pStitchCtx->chn_attr.fmt_out, str1, sizeof(str1));
 		seq_printf(m, "%20d%20d%20s\n",
-					pStitchCtx->chn_attr.size.u32Width,
-					pStitchCtx->chn_attr.size.u32Height,
+					pStitchCtx->chn_attr.size.width,
+					pStitchCtx->chn_attr.size.height,
 					str1);
 	}
 
 	// STITCH OP ATTR
 	seq_puts(m, "\n-------------------------------STITCH OP ATTR------------------------------\n");
 	seq_printf(m, "%20s%20s\n", "dataSrc", "wgtMode");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		memset(str2, 0, sizeof(str2));
 		_data_src_to_string(pStitchCtx->op_attr.data_src, str1, sizeof(str1));
@@ -403,7 +401,7 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 
 	seq_puts(m, "\n-------------------------------STITCH Update STATUS-----------------------\n");
 	seq_printf(m, "%20s%20s\n", "ParamUpdate", "UpdateStatus");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		_update_status_to_string(pStitchCtx->update_status, str1, sizeof(str1));
 		seq_printf(m, "%20s%20s\n",
@@ -412,16 +410,16 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	}
 
 	seq_puts(m, "\n-----------------------------------STITCH VB STATUS---------------------------\n");
-	seq_printf(m, "%20s%20s\n", "Attached VBPool ID", "u32VBSize");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	seq_printf(m, "%20s%20s\n", "Attached VBPool ID", "vb_size");
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		memset(str1, 0, sizeof(str2));
-		if (pStitchCtx->VbPool == -1) {
+		if (pStitchCtx->vb_pool == -1) {
 			strncpy(str1, "N", sizeof(str1));
 			strncpy(str2, "N", sizeof(str2));
 		} else {
-			snprintf(str1, sizeof(str1), "%d", pStitchCtx->VbPool);
-			snprintf(str2, sizeof(str2), "%d", pStitchCtx->u32VBSize);
+			snprintf(str1, sizeof(str1), "%d", pStitchCtx->vb_pool);
+			snprintf(str2, sizeof(str2), "%d", pStitchCtx->vb_size);
 		}
 		seq_printf(m, "%20s%20s\n",
 				   str1,
@@ -429,37 +427,36 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	}
 
 	seq_puts(m, "\n---------------------------------STITCH HW STATUS---------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s\n", "HdlState", "JobStatus", "DevState", "Evt");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	seq_printf(m, "%20s%20s%20s\n", "HdlState", "JobStatus", "DevState");
+	if (pStitchCtx && pStitchCtx->is_created) {
 		memset(str1, 0, sizeof(str1));
 		memset(str2, 0, sizeof(str2));
 		memset(str3, 0, sizeof(str3));
-		_hdl_state_to_string(atomic_read(&pStitchCtx->enHdlState), str1, sizeof(str1));
-		_job_status_to_string(atomic_read(&pStitchCtx->job.enJobState), str2, sizeof(str2));
+		_hdl_state_to_string(atomic_read(&pStitchCtx->hdl_state), str1, sizeof(str1));
+		_job_status_to_string(atomic_read(&pStitchCtx->job.job_state), str2, sizeof(str2));
 		_dev_state_to_string(atomic_read(&dev->state), str3, sizeof(str3));
-		seq_printf(m, "%20s%20s%20s%20s\n",
+		seq_printf(m, "%20s%20s%20s\n",
 				   str1,
 				   str2,
-				   str3,
-				   (pStitchCtx->evt) ? "Y" : "N");
+				   str3);
 	}
 
 	seq_puts(m, "\n--------------------------------------------STITCH WORK STATUS--------------------------------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s\n",
 			   "RecvCnt", "LostCnt", "DoneCnt", "FailRecvCnt", "bStart");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		seq_printf(m, "%20d%20d%20d%20d%20s\n",
 				   pStitchCtx->work_status.recv_cnt,
 				   pStitchCtx->work_status.lost_cnt,
 				   pStitchCtx->work_status.done_cnt,
 				   pStitchCtx->work_status.fail_recv_cnt,
-				   (pStitchCtx->isStarted) ? "Y" : "N");
+				   (pStitchCtx->is_started) ? "Y" : "N");
 	}
 
 	seq_puts(m, "\n-------------------------------STITCH RUN TIME STATUS-------------------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s\n", "CostTime(us)", "MaxCostTime(us)",
 			   "HwCostTime(us)", "HwMaxCostTime(us)");
-	if (pStitchCtx && pStitchCtx->isCreated) {
+	if (pStitchCtx && pStitchCtx->is_created) {
 		seq_printf(m, "%20u%20u%20u%20u\n",
 				   pStitchCtx->work_status.cost_time,
 				   pStitchCtx->work_status.max_cost_time,
@@ -519,21 +516,21 @@ static const struct file_operations stitch_proc_fops = {
 };
 #endif
 
-int stitch_proc_init(struct cvi_stitch_dev *dev)
+int stitch_proc_init(struct stitch_dev *dev)
 {
 	struct proc_dir_entry *entry;
 
 	entry = proc_create_data(STITCH_PROC_NAME, 0644, NULL,
 							 &stitch_proc_fops, dev);
 	if (!entry) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "stitch proc creation failed\n");
+		TRACE_STITCH(DBG_ERR, "stitch proc creation failed\n");
 		return -ENOMEM;
 	}
 
 	return 0;
 }
 
-int stitch_proc_remove(struct cvi_stitch_dev *dev)
+int stitch_proc_remove(struct stitch_dev *dev)
 {
 	remove_proc_entry(STITCH_PROC_NAME, NULL);
 	return 0;

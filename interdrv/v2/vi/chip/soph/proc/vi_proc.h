@@ -7,7 +7,7 @@
 
 #include <vi_defines.h>
 
-int vi_proc_init(struct cvi_vi_dev *_vdev, void *shm);
+int vi_proc_init(struct sop_vi_dev *_vdev, void *shm);
 int vi_proc_remove(void);
 
 #ifdef __cplusplus

@@ -16,13 +16,13 @@
 
 /** I2C clock configuration
  *
- * @param sfrClock external clock supplied to controller
+ * @param sfr_clock external clock supplied to controller
  * @param value of standard speed low time counter (refer to HDMITXCTRL databook)
  * @param value of standard speed high time counter (refer to HDMITXCTRL databook)
  * @param value of fast speed low time counter (refer to HDMITXCTRL databook)
  * @param value of fast speed high time counter (refer to HDMITXCTRL databook)
  */
-void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfrClock, u16 ss_low_ckl, u16 ss_high_ckl, u16 fs_low_ckl, u16 fs_high_ckl);
+void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfr_clock, u16 ss_low_ckl, u16 ss_high_ckl, u16 fs_low_ckl, u16 fs_high_ckl);
 
 void i2cddc_clk_set_divs(hdmi_tx_dev_t * dev);
 
@@ -31,7 +31,6 @@ void i2cddc_clk_set_divs(hdmi_tx_dev_t * dev);
  * @param fast mode selection, 0 standard - 1 fast
  */
 void i2cddc_fast_mode(hdmi_tx_dev_t * dev, u8 fast);
-
 
 /** Enable disable interrupts.
  *
@@ -49,7 +48,7 @@ void i2cddc_mask_interrupts(hdmi_tx_dev_t * dev, u8 mask);
  * @param value pointer to data read
  * @returns 0 if ok and error in other cases
  */
-int ddc_read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u8 len, u8 * data);
+int ddc_read(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 segment, u8 pointer, u8 addr, u8 len, u8 * data);
 
 /** Write from extended addresses, E-DDC.
  *
@@ -59,7 +58,7 @@ int ddc_read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u
  * @param data pointer to data write
  * @returns 0 if ok and error in other cases
  */
-int ddc_write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 len, u8 * data);
+int ddc_write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 len, u8 * data);
 
 /** Activate I2C bus clear function.
  *
@@ -67,8 +66,7 @@ int ddc_write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 len, u8 * data);
  */
 int i2c_bus_clear(hdmi_tx_dev_t * dev);
 
-
 int i2c_reset(hdmi_tx_dev_t * dev);
 
 
-#endif				/* I2CM_H_ */
+#endif /* I2CM_H_ */

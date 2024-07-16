@@ -2,11 +2,13 @@
 #include <linux/ioctl.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <base_ctx.h>
+#include <linux/version.h>
+#include <linux/hdmi_uapi.h>
+
 #include "hdmi_debug.h"
 #include "core/hdmi_core.h"
 #include "hdmi_ioctl.h"
-#include <linux/version.h>
-#include <linux/hdmi_uapi.h>
 
 long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -78,19 +80,22 @@ long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		case CVI_HDMI_GET_SINK_CAPABILITY:
 		{
-			CVI_HDMI_SINK_CAPABILITY* sink_cap = (CVI_HDMI_SINK_CAPABILITY*)kdata;
+			hdmi_sink_capability* sink_cap = (hdmi_sink_capability*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_sink_capability);
 			ret = sink_capability(sink_cap);
 			break;
 		}
 		case CVI_HDMI_SET_ATTR:
 		{
-			CVI_HDMI_ATTR* attr = (CVI_HDMI_ATTR*)kdata;
+			hdmi_attr* attr = (hdmi_attr*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_attr);
 			ret = hdmitx_set_attr(attr);
 			break;
 		}
 		case CVI_HDMI_GET_ATTR:
 		{
-			CVI_HDMI_ATTR* attr = (CVI_HDMI_ATTR*)kdata;
+			hdmi_attr* attr = (hdmi_attr*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_attr);
 			ret = hdmitx_get_attr(attr);
 			break;
 		}
@@ -101,7 +106,8 @@ long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		case CVI_HDMI_FORCE_GET_EDID:
 		{
-			CVI_HDMI_EDID* edid_raw = (CVI_HDMI_EDID*)kdata;
+			hdmi_edid* edid_raw = (hdmi_edid*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_edid);
 			ret = hdmitx_force_get_edid(edid_raw, NULL);
 			break;
 		}
@@ -117,13 +123,15 @@ long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		case CVI_HDMI_SET_INFOFRAME:
 		{
-			CVI_HDMI_INFOFRAME* info_frame = (CVI_HDMI_INFOFRAME*)kdata;
+			hdmi_infoframe* info_frame = (hdmi_infoframe*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_infoframe);
 			ret = hdmitx_set_infoframe(info_frame);
 			break;
 		}
 		case CVI_HDMI_GET_INFOFRAME:
 		{
-			CVI_HDMI_INFOFRAME* info_frame = (CVI_HDMI_INFOFRAME*)kdata;
+			hdmi_infoframe* info_frame = (hdmi_infoframe*)kdata;
+			CHECK_IOCTL_CMD(cmd, hdmi_infoframe);
 			ret = hdmitx_get_infoframe(info_frame);
 			break;
 		}

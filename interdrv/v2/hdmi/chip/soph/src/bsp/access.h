@@ -18,7 +18,7 @@ struct device_access {
 	int (*disable) (void);
 
 	void (*write) (u32 addr, u32 data);
-	u32  (*read)  (u32 addr);
+	u32  (*read) (u32 addr);
 };
 
 
@@ -28,4 +28,4 @@ void dev_write(u32 addr, u32 data);
 void dev_write_mask(u32 addr, u32 mask, u32 data);
 void hdmi_set_reg_base(void* base);
 
-#endif				/* ACCESS_H_ */
+#endif /* ACCESS_H_ */

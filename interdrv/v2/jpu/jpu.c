@@ -40,7 +40,7 @@
 #include <linux/cma.h>
 #include <linux/of.h>
 #include "ion.h"
-
+#include <linux/compat.h>
 
 #if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
 #include <linux/sched/signal.h>
@@ -769,6 +769,16 @@ static int jpu_mmap(struct file *fp, struct vm_area_struct *vm)
 	return jpu_map_to_physical_memory(fp, vm);
 }
 
+#ifdef CONFIG_COMPAT
+static long jpu_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 const struct file_operations jpu_fops = {
 	.owner = THIS_MODULE,
 	.open = jpu_open,
@@ -778,6 +788,9 @@ const struct file_operations jpu_fops = {
 	.release = jpu_release,
 	.fasync = jpu_fasync,
 	.mmap = jpu_mmap,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = jpu_compat_ptr_ioctl,
+#endif
 };
 
 static int jpu_register_clk(struct platform_device *pdev)

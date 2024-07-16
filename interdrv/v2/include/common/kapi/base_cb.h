@@ -30,22 +30,22 @@
 #define CB_GENERATE_STRING(STRING) (#STRING),
 #define CB_GENERATE_ENUM(ENUM) E_MODULE_##ENUM,
 
-enum ENUM_MODULES_ID CB_FOREACH_MOD(CB_GENERATE_ENUM);
+enum enum_modules_id CB_FOREACH_MOD(CB_GENERATE_ENUM);
 
 struct base_m_cb_info {
-	enum ENUM_MODULES_ID module_id;
+	enum enum_modules_id module_id;
 	void *dev;
-	int (*cb)(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg);
+	int (*cb)(void *dev, enum enum_modules_id caller, u32 cmd, void *arg);
 };
 
 struct base_exe_m_cb {
-	enum ENUM_MODULES_ID caller;
-	enum ENUM_MODULES_ID callee;
+	enum enum_modules_id caller;
+	enum enum_modules_id callee;
 	u32  cmd_id;
 	void *data;
 };
 
-int base_rm_module_cb(enum ENUM_MODULES_ID module_id);
+int base_rm_module_cb(enum enum_modules_id module_id);
 int base_reg_module_cb(struct base_m_cb_info *cb_info);
 int base_exe_module_cb(struct base_exe_m_cb *exe_cb);
 

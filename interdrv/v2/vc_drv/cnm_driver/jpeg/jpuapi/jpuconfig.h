@@ -15,7 +15,7 @@
 #include "../config.h"
 
 #define MAX_NUM_JPU_CORE                4
-#define MAX_JPEG_NUM_INSTANCE           128
+#define MAX_JPEG_NUM_INSTANCE           512
 #define MAX_NUM_REGISTER_SET            4 //fixed value(do not modified)
 #define MAX_INST_HANDLE_SIZE            48
 
@@ -32,7 +32,7 @@
 #define MAX_FRAME_JPU 					4 // the number of frame buffers for JPEG
 
 
-#define MAX_FRAME                       (19*MAX_JPEG_NUM_INSTANCE)
+#define MAX_FRAME                       (8)
 
 #define STREAM_FILL_SIZE                0x10000
 #define STREAM_END_SIZE                 0

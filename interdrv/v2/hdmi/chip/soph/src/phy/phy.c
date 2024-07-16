@@ -511,7 +511,7 @@ struct phy_config * phy316_get_configs_pr(u32 mpixelclock, pixel_repetition_t pi
 	return NULL;
 }
 
-int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_repetition_t pixel)
+int phy316_configure(hdmi_tx_dev_t *dev, u32 pclk, color_depth_t color, pixel_repetition_t pixel)
 {
 	int i   = 0;
 	int res = 0;
@@ -520,22 +520,22 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_re
 	struct phy_config * config = NULL;
 
 	if(pixel){
-		config = phy316_get_configs_pr(pClk, pixel);
+		config = phy316_get_configs_pr(pclk, pixel);
 	} else {
-		config = phy316_get_configs(pClk);
+		config = phy316_get_configs(pclk);
 	}
 
 	if (config == NULL) {
 		pr_err("Configuration for clk %x color depth %d"
-				  " pixel repetition %d not found\n", pClk, color, pixel);
-		return CVI_ERR_HDMI_PHY_NOT_CONFIG;
+				  " pixel repetition %d not found\n", pclk, color, pixel);
+		return HDMI_ERR_PHY_NOT_CONFIG;
 	}
 
 	/*
 	 * Some monitors may experience SCDC read/write failures, yet display normally.
 	 * Therefore, in this case, we only provide an error message but not return.
 	 */
-	if(pClk > 340000) {
+	if(pclk > 340000) {
 		dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x1);
 		res = scrambling(dev, TRUE);
 		if (res != 0)
@@ -617,5 +617,5 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pClk, color_depth_t color, pixel_re
 
 	pr_debug("PHY PLL not locked\n");
 
-	return CVI_ERR_HDMI_PHY_PLL_NOT_LOCK;
+	return HDMI_ERR_PHY_PLL_NOT_LOCK;
 }

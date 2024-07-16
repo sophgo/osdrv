@@ -1,4 +1,4 @@
-#ifdef ENV_CVITEST
+#ifdef ENVTEST
 #include <common.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 #include <linux/dma-map-ops.h>
 #endif
-#endif  // ENV_CVITEST
+#endif  // ENVTEST
 
 #include "vi_sys.h"
 #include "ldc_reg.h"
@@ -99,7 +99,7 @@ void ldc_reset(int top_id)
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void ldc_intr_ctrl(u8 intr_mask, int top_id)
+void ldc_intr_ctrl(unsigned char intr_mask, int top_id)
 {
 	_reg_write(reg_base[top_id] + REG_LDC_IRQEN, intr_mask);
 }
@@ -111,7 +111,7 @@ void ldc_intr_ctrl(u8 intr_mask, int top_id)
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void ldc_intr_clr(u8 intr_mask, int top_id)
+void ldc_intr_clr(unsigned char intr_mask, int top_id)
 {
 	_reg_write(reg_base[top_id] + REG_LDC_IRQCLR, intr_mask);
 }
@@ -123,7 +123,7 @@ void ldc_intr_clr(u8 intr_mask, int top_id)
  *
  * @return: The interrupt's status. 1 if active.
  */
-u8 ldc_intr_status(int top_id)
+unsigned char ldc_intr_status(int top_id)
 {
 	return _reg_read(reg_base[top_id] + REG_LDC_IRQSTAT);
 }
@@ -135,7 +135,7 @@ u8 ldc_intr_status(int top_id)
  *      0: ldc_interrupt
  *      1: cmdq interrupt
  */
-void ldc_intr_sel(u8 sel, int top_id)
+void ldc_intr_sel(unsigned char sel, int top_id)
 {
 	_reg_write(reg_base[top_id] + REG_LDC_INT_SEL, sel);
 }
@@ -184,7 +184,7 @@ bool ldc_check_param(const struct ldc_cfg *cfg)
  */
 void ldc_engine(const struct ldc_cfg *cfg, int top_id)
 {
-	u8 ras_mode = (cfg->dst_mode == LDC_DST_FLAT) ? 0 : 1;
+	unsigned char ras_mode = (cfg->dst_mode == LDC_DST_FLAT) ? 0 : 1;
 
 	_reg_write(reg_base[top_id] + REG_LDC_DATA_FORMAT, cfg->pix_fmt);
 	_reg_write(reg_base[top_id] + REG_LDC_RAS_MODE, ras_mode);
@@ -227,12 +227,12 @@ void ldc_engine(const struct ldc_cfg *cfg, int top_id)
  * @param cnt: the number of settings
  * @param cmdq_addr: memory-address to put cmdq
  */
-void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, u8 cnt)
+void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, unsigned char cnt)
 {
-	u8 ras_mode;
-	u8 cmd_idx = 0, i;
+	unsigned char ras_mode;
+	unsigned char cmd_idx = 0, i;
 	union cmdq_set *cmd_start = (union cmdq_set *)cmdq_addr;
-	u64 ldc_apb_base = top_id ? REG_LDC1_BASE_FOR_CMDQ : REG_LDC0_BASE_FOR_CMDQ;
+	unsigned long long ldc_apb_base = top_id ? REG_LDC1_BASE_FOR_CMDQ : REG_LDC0_BASE_FOR_CMDQ;
 
 	//memset(cmd_start, 0, sizeof(union cmdq_set) * LDC_CMDQ_MAX_REG_CNT * cnt);
 	for (i = 0; i < cnt; ++i) {
@@ -279,7 +279,7 @@ void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, u
 
 #if 0
 		s// wait end-inter(1)
-		u32 flag_num = 1;   // 0: sc_str_flag, sc_stp_flag
+		unsigned int flag_num = 1;   // 0: sc_str_flag, sc_stp_flag
 		cmdq_set_wait(&cmd_start[cmd_idx++], /*is_timer*/false, flag_num, 0);
 
 		// clear intr
@@ -297,29 +297,29 @@ void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, u
 	__dma_map_area((void *)cmdq_addr
 		, sizeof(union cmdq_set) * LDC_CMDQ_MAX_REG_CNT * cnt, DMA_TO_DEVICE);
 #endif
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "cmdq buf addr:%#lx\n", (uintptr_t)virt_to_phys((void *)cmdq_addr));
+	TRACE_LDC(DBG_DEBUG, "cmdq buf addr:%#lx\n", (uintptr_t)virt_to_phys((void *)cmdq_addr));
 
 	cmdq_intr_ctrl(reg_base[top_id] + REG_LDC_CMDQ_BASE, 0x02);
 	cmdq_engine(reg_base[top_id] + REG_LDC_CMDQ_BASE, (uintptr_t)virt_to_phys((void *)cmdq_addr), (ldc_apb_base) >> 22,
 			true, false, cmd_idx);
 }
 
-u8 ldc_cmdq_intr_status(u8 top_id)
+unsigned char ldc_cmdq_intr_status(unsigned char top_id)
 {
 	return cmdq_intr_status(reg_base[top_id] + REG_LDC_CMDQ_BASE);
 }
 
-void ldc_cmdq_intr_clr(u8 top_id, u8 intr_status)
+void ldc_cmdq_intr_clr(unsigned char top_id, unsigned char intr_status)
 {
 	cmdq_intr_clr(reg_base[top_id] + REG_LDC_CMDQ_BASE, intr_status);
 }
 
-void ldc_cmdq_sw_restart(u8 top_id)
+void ldc_cmdq_sw_restart(unsigned char top_id)
 {
 	cmdq_sw_restart(reg_base[top_id] + REG_LDC_CMDQ_BASE);
 }
 
-bool ldc_cmdq_is_sw_restart(u8 top_id)
+bool ldc_cmdq_is_sw_restart(unsigned char top_id)
 {
 	return cmdq_is_sw_restart(reg_base[top_id] + REG_LDC_CMDQ_BASE);
 }
@@ -337,66 +337,66 @@ bool ldc_is_finish(int top_id)
 
 void ldc_dump_register(int top_id)
 {
-	u32 val;
+	unsigned int val;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_FORMAT=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DATA_FORMAT));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_RAS_MODE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_MODE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_RAS_XSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_XSIZE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_RAS_YSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_YSIZE));
+	TRACE_LDC(DBG_DEBUG, "LDC_FORMAT=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DATA_FORMAT));
+	TRACE_LDC(DBG_DEBUG, "LDC_RAS_MODE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_MODE));
+	TRACE_LDC(DBG_DEBUG, "LDC_RAS_XSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_XSIZE));
+	TRACE_LDC(DBG_DEBUG, "LDC_RAS_YSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_RAS_YSIZE));
 
 	val = _reg_read(reg_base[top_id] + REG_LDC_MAP_BASE);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_MAP_BASE=0x%08x\n", val);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
+	TRACE_LDC(DBG_DEBUG, "LDC_MAP_BASE=0x%08x\n", val);
+	TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_MAP_BYPASS=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_MAP_BYPASS));
+	TRACE_LDC(DBG_DEBUG, "LDC_MAP_BYPASS=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_MAP_BYPASS));
 
 	val = _reg_read(reg_base[top_id] + REG_LDC_SRC_BASE_Y);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_BASE_Y=0x%08x\n", val);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_BASE_Y=0x%08x\n", val);
+	TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
 	val = _reg_read(reg_base[top_id] + REG_LDC_SRC_BASE_C);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_BASE_C=0x%08x\n", val);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_BASE_C=0x%08x\n", val);
+	TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_XSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XSIZE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_YSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_YSIZE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_XSTR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XSTART));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_XEND=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XEND));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_SRC_BG=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_BG));
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_XSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XSIZE));
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_YSIZE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_YSIZE));
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_XSTR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XSTART));
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_XEND=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_XEND));
+	TRACE_LDC(DBG_DEBUG, "LDC_SRC_BG=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_SRC_BG));
 
 	val = _reg_read(reg_base[top_id] + REG_LDC_DST_BASE_Y);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_DST_BASE_Y=0x%08x\n", val);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
+	TRACE_LDC(DBG_DEBUG, "LDC_DST_BASE_Y=0x%08x\n", val);
+	TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
 	val = _reg_read(reg_base[top_id] + REG_LDC_DST_BASE_C);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_DST_BASE_C=0x%08x\n", val);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
+	TRACE_LDC(DBG_DEBUG, "LDC_DST_BASE_C=0x%08x\n", val);
+	TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_DST_MODE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_MODE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_IRQEN=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQEN));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_START=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_START));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_IRQSTAT=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQSTAT));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_IRQCLR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQCLR));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_LDC_DIR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DIR));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_CMDQ_IRQ_EN=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_INT_SEL));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_FORCE_IN_RANGE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_FORCE_IN_RANGE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_OUT_RANGE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_OUT_RANGE_DST_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_DST_X));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_OUT_RANGE_DST_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_DST_Y));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_OUT_RANGE_SRC_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_SRC_X));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_OUT_RANGE_SRC_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_SRC_Y));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_DST_TI_CNT_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_TI_CNT_X));
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "LDC_DST_TI_CNT_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_TI_CNT_Y));
+	TRACE_LDC(DBG_DEBUG, "LDC_DST_MODE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_MODE));
+	TRACE_LDC(DBG_DEBUG, "LDC_IRQEN=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQEN));
+	TRACE_LDC(DBG_DEBUG, "LDC_START=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_START));
+	TRACE_LDC(DBG_DEBUG, "LDC_IRQSTAT=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQSTAT));
+	TRACE_LDC(DBG_DEBUG, "LDC_IRQCLR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQCLR));
+	TRACE_LDC(DBG_DEBUG, "LDC_LDC_DIR=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DIR));
+	TRACE_LDC(DBG_DEBUG, "LDC_CMDQ_IRQ_EN=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_INT_SEL));
+	TRACE_LDC(DBG_DEBUG, "LDC_FORCE_IN_RANGE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_FORCE_IN_RANGE));
+	TRACE_LDC(DBG_DEBUG, "LDC_OUT_RANGE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE));
+	TRACE_LDC(DBG_DEBUG, "LDC_OUT_RANGE_DST_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_DST_X));
+	TRACE_LDC(DBG_DEBUG, "LDC_OUT_RANGE_DST_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_DST_Y));
+	TRACE_LDC(DBG_DEBUG, "LDC_OUT_RANGE_SRC_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_SRC_X));
+	TRACE_LDC(DBG_DEBUG, "LDC_OUT_RANGE_SRC_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_OUT_RANGE_SRC_Y));
+	TRACE_LDC(DBG_DEBUG, "LDC_DST_TI_CNT_X=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_TI_CNT_X));
+	TRACE_LDC(DBG_DEBUG, "LDC_DST_TI_CNT_Y=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_TI_CNT_Y));
 }
 
-void ldc_dump_cmdq(u64 cmdq_addr, u32 num_cmd)
+void ldc_dump_cmdq(unsigned long long cmdq_addr, unsigned int num_cmd)
 {
-	u32 i;
+	unsigned int i;
 	union cmdq_set *cmd_start = (union cmdq_set *)cmdq_addr;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "cmdq vir addr=0x%08llx, num=%d\n", cmdq_addr, num_cmd);
+	TRACE_LDC(DBG_DEBUG, "cmdq vir addr=0x%08llx, num=%d\n", cmdq_addr, num_cmd);
 	for (i = 0; i < num_cmd; i++) {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "[%02d] [0x%08x]=0x%08x\n",
+		TRACE_LDC(DBG_DEBUG, "[%02d] [0x%08x]=0x%08x\n",
 			i, cmd_start[i].reg.addr << 2,
 			cmd_start[i].reg.data);
 	}

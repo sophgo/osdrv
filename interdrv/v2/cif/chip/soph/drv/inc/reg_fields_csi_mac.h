@@ -13,1231 +13,1231 @@ extern "C" {
 #endif
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_MAC_00 {
+union reg_sensor_mac_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_MODE                 : 3;
-		uint32_t BT_DEMUX_ENABLE                 : 1;
-		uint32_t CSI_CTRL_ENABLE                 : 1;
-		uint32_t CSI_VS_INV                      : 1;
-		uint32_t CSI_HS_INV                      : 1;
+		uint32_t sensor_mac_mode                 : 3;
+		uint32_t bt_demux_enable                 : 1;
+		uint32_t csi_ctrl_enable                 : 1;
+		uint32_t csi_vs_inv                      : 1;
+		uint32_t csi_hs_inv                      : 1;
 		uint32_t _rsv_7                          : 1;
-		uint32_t SUBLVDS_CTRL_ENABLE             : 1;
-		uint32_t SUBLVDS_VS_INV                  : 1;
-		uint32_t SUBLVDS_HS_INV                  : 1;
-		uint32_t SUBLVDS_HDR_INV                 : 1;
-		uint32_t SLVSEC_CTRL_ENABLE              : 1;
-		uint32_t SLVSEC_VS_INV                   : 1;
-		uint32_t SLVSEC_HS_INV                   : 1;
+		uint32_t sublvds_ctrl_enable             : 1;
+		uint32_t sublvds_vs_inv                  : 1;
+		uint32_t sublvds_hs_inv                  : 1;
+		uint32_t sublvds_hdr_inv                 : 1;
+		uint32_t slvsec_ctrl_enable              : 1;
+		uint32_t slvsec_vs_inv                   : 1;
+		uint32_t slvsec_hs_inv                   : 1;
 		uint32_t _rsv_15                         : 1;
-		uint32_t MASK_UP                         : 1;
-		uint32_t SHRD_SEL                        : 1;
-		uint32_t SW_UP                           : 1;
+		uint32_t mask_up                         : 1;
+		uint32_t shrd_sel                        : 1;
+		uint32_t sw_up                           : 1;
 		uint32_t _rsv_19                         : 5;
-		uint32_t DBG_SEL                         : 8;
+		uint32_t dbg_sel                         : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_10 {
+union reg_sensor_mac_10 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_IP_EN                       : 1;
-		uint32_t TTL_SENSOR_BIT                  : 2;
+		uint32_t ttl_ip_en                       : 1;
+		uint32_t ttl_sensor_bit                  : 2;
 		uint32_t _rsv_3                          : 1;
-		uint32_t TTL_BT_FMT_OUT                  : 2;
+		uint32_t ttl_bt_fmt_out                  : 2;
 		uint32_t _rsv_6                          : 2;
-		uint32_t TTL_FMT_IN                      : 4;
-		uint32_t TTL_BT_DATA_SEQ                 : 2;
-		uint32_t TTL_VS_INV                      : 1;
-		uint32_t TTL_HS_INV                      : 1;
+		uint32_t ttl_fmt_in                      : 4;
+		uint32_t ttl_bt_data_seq                 : 2;
+		uint32_t ttl_vs_inv                      : 1;
+		uint32_t ttl_hs_inv                      : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_14 {
+union reg_sensor_mac_14 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_VS_BP                       : 12;
+		uint32_t ttl_vs_bp                       : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_HS_BP                       : 12;
+		uint32_t ttl_hs_bp                       : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_18 {
+union reg_sensor_mac_18 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_IMG_WD                      : 12;
+		uint32_t ttl_img_wd                      : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_IMG_HT                      : 12;
+		uint32_t ttl_img_ht                      : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_1C {
+union reg_sensor_mac_1c {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_SYNC_0                      : 16;
-		uint32_t TTL_SYNC_1                      : 16;
+		uint32_t ttl_sync_0                      : 16;
+		uint32_t ttl_sync_1                      : 16;
 	} bits;
 };
 
-union REG_SENSOR_MAC_20 {
+union reg_sensor_mac_20 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_SYNC_2                      : 16;
+		uint32_t ttl_sync_2                      : 16;
 	} bits;
 };
 
-union REG_SENSOR_MAC_24 {
+union reg_sensor_mac_24 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_SAV_VLD                     : 16;
-		uint32_t TTL_SAV_BLK                     : 16;
+		uint32_t ttl_sav_vld                     : 16;
+		uint32_t ttl_sav_blk                     : 16;
 	} bits;
 };
 
-union REG_SENSOR_MAC_28 {
+union reg_sensor_mac_28 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_EAV_VLD                     : 16;
-		uint32_t TTL_EAV_BLK                     : 16;
+		uint32_t ttl_eav_vld                     : 16;
+		uint32_t ttl_eav_blk                     : 16;
 	} bits;
 };
 
-union REG_SENSOR_MAC_30 {
+union reg_sensor_mac_30 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_SEL                          : 3;
-		uint32_t VI_FROM                         : 1;
-		uint32_t VI_CLK_INV                      : 1;
-		uint32_t VI_V_SEL_VS                     : 1;
-		uint32_t VI_VS_DBG                       : 1;
+		uint32_t vi_sel                          : 3;
+		uint32_t vi_from                         : 1;
+		uint32_t vi_clk_inv                      : 1;
+		uint32_t vi_v_sel_vs                     : 1;
+		uint32_t vi_vs_dbg                       : 1;
 		uint32_t _rsv_7                          : 1;
-		uint32_t PAD_VI0_CLK_INV                 : 1;
-		uint32_t PAD_VI1_CLK_INV                 : 1;
-		uint32_t PAD_VI2_CLK_INV                 : 1;
+		uint32_t pad_vi0_clk_inv                 : 1;
+		uint32_t pad_vi1_clk_inv                 : 1;
+		uint32_t pad_vi2_clk_inv                 : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_34 {
+union reg_sensor_mac_34 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_VS_DLY                       : 5;
+		uint32_t vi_vs_dly                       : 5;
 		uint32_t _rsv_5                          : 1;
-		uint32_t VI_VS_DLY_EN                    : 1;
+		uint32_t vi_vs_dly_en                    : 1;
 		uint32_t _rsv_7                          : 1;
-		uint32_t VI_HS_DLY                       : 5;
+		uint32_t vi_hs_dly                       : 5;
 		uint32_t _rsv_13                         : 1;
-		uint32_t VI_HS_DLY_EN                    : 1;
+		uint32_t vi_hs_dly_en                    : 1;
 		uint32_t _rsv_15                         : 1;
-		uint32_t VI_VDE_DLY                      : 5;
+		uint32_t vi_vde_dly                      : 5;
 		uint32_t _rsv_21                         : 1;
-		uint32_t VI_VDE_DLY_EN                   : 1;
+		uint32_t vi_vde_dly_en                   : 1;
 		uint32_t _rsv_23                         : 1;
-		uint32_t VI_HDE_DLY                      : 5;
+		uint32_t vi_hde_dly                      : 5;
 		uint32_t _rsv_29                         : 1;
-		uint32_t VI_HDE_DLY_EN                   : 1;
+		uint32_t vi_hde_dly_en                   : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_40 {
+union reg_sensor_mac_40 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_HDR_EN               : 1;
-		uint32_t SENSOR_MAC_HDR_VSINV            : 1;
-		uint32_t SENSOR_MAC_HDR_HSINV            : 1;
-		uint32_t SENSOR_MAC_HDR_DEINV            : 1;
-		uint32_t SENSOR_MAC_HDR_HDR0INV          : 1;
-		uint32_t SENSOR_MAC_HDR_HDR1INV          : 1;
-		uint32_t SENSOR_MAC_HDR_BLCINV           : 1;
+		uint32_t sensor_mac_hdr_en               : 1;
+		uint32_t sensor_mac_hdr_vsinv            : 1;
+		uint32_t sensor_mac_hdr_hsinv            : 1;
+		uint32_t sensor_mac_hdr_deinv            : 1;
+		uint32_t sensor_mac_hdr_hdr0inv          : 1;
+		uint32_t sensor_mac_hdr_hdr1inv          : 1;
+		uint32_t sensor_mac_hdr_blcinv           : 1;
 		uint32_t _rsv_7                          : 1;
-		uint32_t SENSOR_MAC_HDR_MODE             : 1;
+		uint32_t sensor_mac_hdr_mode             : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_44 {
+union reg_sensor_mac_44 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_HDR_SHIFT            : 13;
+		uint32_t sensor_mac_hdr_shift            : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_HDR_VSIZE            : 13;
+		uint32_t sensor_mac_hdr_vsize            : 13;
 	} bits;
 };
 
-union REG_SENSOR_MAC_48 {
+union reg_sensor_mac_48 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_INFO_LINE_NUM        : 13;
+		uint32_t sensor_mac_info_line_num        : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_RM_INFO_LINE         : 1;
+		uint32_t sensor_mac_rm_info_line         : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_4C {
+union reg_sensor_mac_4c {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_HDR_LINE_CNT         : 14;
+		uint32_t sensor_mac_hdr_line_cnt         : 14;
 	} bits;
 };
 
-union REG_SENSOR_MAC_50 {
+union reg_sensor_mac_50 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_BLC0_EN              : 1;
-		uint32_t SENSOR_MAC_BLC1_EN              : 1;
+		uint32_t sensor_mac_blc0_en              : 1;
+		uint32_t sensor_mac_blc1_en              : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_54 {
+union reg_sensor_mac_54 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_BLC0_START           : 13;
+		uint32_t sensor_mac_blc0_start           : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_BLC0_SIZE            : 13;
+		uint32_t sensor_mac_blc0_size            : 13;
 	} bits;
 };
 
-union REG_SENSOR_MAC_58 {
+union reg_sensor_mac_58 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_BLC1_START           : 13;
+		uint32_t sensor_mac_blc1_start           : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_BLC1_SIZE            : 13;
+		uint32_t sensor_mac_blc1_size            : 13;
 	} bits;
 };
 
-union REG_SENSOR_MAC_60 {
+union reg_sensor_mac_60 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_VS_SEL                       : 6;
+		uint32_t vi_vs_sel                       : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t VI_HS_SEL                       : 6;
+		uint32_t vi_hs_sel                       : 6;
 		uint32_t _rsv_14                         : 2;
-		uint32_t VI_VDE_SEL                      : 6;
+		uint32_t vi_vde_sel                      : 6;
 		uint32_t _rsv_22                         : 2;
-		uint32_t VI_HDE_SEL                      : 6;
+		uint32_t vi_hde_sel                      : 6;
 	} bits;
 };
 
-union REG_SENSOR_MAC_64 {
+union reg_sensor_mac_64 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_D0_SEL                       : 6;
+		uint32_t vi_d0_sel                       : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t VI_D1_SEL                       : 6;
+		uint32_t vi_d1_sel                       : 6;
 		uint32_t _rsv_14                         : 2;
-		uint32_t VI_D2_SEL                       : 6;
+		uint32_t vi_d2_sel                       : 6;
 		uint32_t _rsv_22                         : 2;
-		uint32_t VI_D3_SEL                       : 6;
+		uint32_t vi_d3_sel                       : 6;
 	} bits;
 };
 
-union REG_SENSOR_MAC_68 {
+union reg_sensor_mac_68 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_D4_SEL                       : 6;
+		uint32_t vi_d4_sel                       : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t VI_D5_SEL                       : 6;
+		uint32_t vi_d5_sel                       : 6;
 		uint32_t _rsv_14                         : 2;
-		uint32_t VI_D6_SEL                       : 6;
+		uint32_t vi_d6_sel                       : 6;
 		uint32_t _rsv_22                         : 2;
-		uint32_t VI_D7_SEL                       : 6;
+		uint32_t vi_d7_sel                       : 6;
 	} bits;
 };
 
-union REG_SENSOR_MAC_6C {
+union reg_sensor_mac_6c {
 	uint32_t raw;
 	struct {
-		uint32_t VI_D8_SEL                       : 6;
+		uint32_t vi_d8_sel                       : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t VI_D9_SEL                       : 6;
+		uint32_t vi_d9_sel                       : 6;
 		uint32_t _rsv_14                         : 2;
-		uint32_t VI_D10_SEL                      : 6;
+		uint32_t vi_d10_sel                      : 6;
 		uint32_t _rsv_22                         : 2;
-		uint32_t VI_D11_SEL                      : 6;
+		uint32_t vi_d11_sel                      : 6;
 	} bits;
 };
 
-union REG_SENSOR_MAC_70 {
+union reg_sensor_mac_70 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_D12_SEL                      : 6;
+		uint32_t vi_d12_sel                      : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t VI_D13_SEL                      : 6;
+		uint32_t vi_d13_sel                      : 6;
 		uint32_t _rsv_14                         : 2;
-		uint32_t VI_D14_SEL                      : 6;
+		uint32_t vi_d14_sel                      : 6;
 		uint32_t _rsv_22                         : 2;
-		uint32_t VI_D15_SEL                      : 6;
+		uint32_t vi_d15_sel                      : 6;
 	} bits;
 };
 
-union REG_SENSOR_MAC_74 {
+union reg_sensor_mac_74 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_BT_D0_SEL                    : 3;
+		uint32_t vi_bt_d0_sel                    : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t VI_BT_D1_SEL                    : 3;
+		uint32_t vi_bt_d1_sel                    : 3;
 		uint32_t _rsv_7                          : 1;
-		uint32_t VI_BT_D2_SEL                    : 3;
+		uint32_t vi_bt_d2_sel                    : 3;
 		uint32_t _rsv_11                         : 1;
-		uint32_t VI_BT_D3_SEL                    : 3;
+		uint32_t vi_bt_d3_sel                    : 3;
 		uint32_t _rsv_15                         : 1;
-		uint32_t VI_BT_D4_SEL                    : 3;
+		uint32_t vi_bt_d4_sel                    : 3;
 		uint32_t _rsv_19                         : 1;
-		uint32_t VI_BT_D5_SEL                    : 3;
+		uint32_t vi_bt_d5_sel                    : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t VI_BT_D6_SEL                    : 3;
+		uint32_t vi_bt_d6_sel                    : 3;
 		uint32_t _rsv_27                         : 1;
-		uint32_t VI_BT_D7_SEL                    : 3;
+		uint32_t vi_bt_d7_sel                    : 3;
 	} bits;
 };
 
-union REG_SENSOR_MAC_80 {
+union reg_sensor_mac_80 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_CLR_SYNC_LOST_1T             : 1;
-		uint32_t BT_IP_EN                        : 1;
-		uint32_t BT_DDR_MODE                     : 1;
-		uint32_t BT_HS_GATE_BY_VDE               : 1;
-		uint32_t BT_VS_INV                       : 1;
-		uint32_t BT_HS_INV                       : 1;
-		uint32_t BT_VS_AS_VDE                    : 1;
-		uint32_t BT_HS_AS_HDE                    : 1;
-		uint32_t BT_SW_EN_CLK                    : 7;
+		uint32_t bt_clr_sync_lost_1t             : 1;
+		uint32_t bt_ip_en                        : 1;
+		uint32_t bt_ddr_mode                     : 1;
+		uint32_t bt_hs_gate_by_vde               : 1;
+		uint32_t bt_vs_inv                       : 1;
+		uint32_t bt_hs_inv                       : 1;
+		uint32_t bt_vs_as_vde                    : 1;
+		uint32_t bt_hs_as_hde                    : 1;
+		uint32_t bt_sw_en_clk                    : 7;
 		uint32_t _rsv_15                         : 1;
-		uint32_t BT_DEMUX_CH                     : 2;
+		uint32_t bt_demux_ch                     : 2;
 		uint32_t _rsv_18                         : 2;
-		uint32_t BT_FMT_SEL                      : 3;
+		uint32_t bt_fmt_sel                      : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t BT_SYNC_LOST                    : 1;
+		uint32_t bt_sync_lost                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_84 {
+union reg_sensor_mac_84 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_V_CTRL_DLY                   : 5;
+		uint32_t bt_v_ctrl_dly                   : 5;
 		uint32_t _rsv_5                          : 3;
-		uint32_t BT_H_CTRL_DLY                   : 5;
+		uint32_t bt_h_ctrl_dly                   : 5;
 	} bits;
 };
 
-union REG_SENSOR_MAC_88 {
+union reg_sensor_mac_88 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_IMG_WD_M1                    : 12;
+		uint32_t bt_img_wd_m1                    : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t BT_IMG_HT_M1                    : 12;
+		uint32_t bt_img_ht_m1                    : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_8C {
+union reg_sensor_mac_8c {
 	uint32_t raw;
 	struct {
-		uint32_t BT_VS_BP_M1                     : 12;
+		uint32_t bt_vs_bp_m1                     : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t BT_HS_BP_M1                     : 12;
+		uint32_t bt_hs_bp_m1                     : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_90 {
+union reg_sensor_mac_90 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_VS_FP_M1                     : 8;
-		uint32_t BT_HS_FP_M1                     : 8;
+		uint32_t bt_vs_fp_m1                     : 8;
+		uint32_t bt_hs_fp_m1                     : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_94 {
+union reg_sensor_mac_94 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SYNC_0                       : 8;
-		uint32_t BT_SYNC_1                       : 8;
-		uint32_t BT_SYNC_2                       : 8;
+		uint32_t bt_sync_0                       : 8;
+		uint32_t bt_sync_1                       : 8;
+		uint32_t bt_sync_2                       : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_98 {
+union reg_sensor_mac_98 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_0                    : 8;
-		uint32_t BT_SAV_BLK_0                    : 8;
-		uint32_t BT_EAV_VLD_0                    : 8;
-		uint32_t BT_EAV_BLK_0                    : 8;
+		uint32_t bt_sav_vld_0                    : 8;
+		uint32_t bt_sav_blk_0                    : 8;
+		uint32_t bt_eav_vld_0                    : 8;
+		uint32_t bt_eav_blk_0                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_9C {
+union reg_sensor_mac_9c {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_1                    : 8;
-		uint32_t BT_SAV_BLK_1                    : 8;
-		uint32_t BT_EAV_VLD_1                    : 8;
-		uint32_t BT_EAV_BLK_1                    : 8;
+		uint32_t bt_sav_vld_1                    : 8;
+		uint32_t bt_sav_blk_1                    : 8;
+		uint32_t bt_eav_vld_1                    : 8;
+		uint32_t bt_eav_blk_1                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_A0 {
+union reg_sensor_mac_a0 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_2                    : 8;
-		uint32_t BT_SAV_BLK_2                    : 8;
-		uint32_t BT_EAV_VLD_2                    : 8;
-		uint32_t BT_EAV_BLK_2                    : 8;
+		uint32_t bt_sav_vld_2                    : 8;
+		uint32_t bt_sav_blk_2                    : 8;
+		uint32_t bt_eav_vld_2                    : 8;
+		uint32_t bt_eav_blk_2                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_A4 {
+union reg_sensor_mac_a4 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_3                    : 8;
-		uint32_t BT_SAV_BLK_3                    : 8;
-		uint32_t BT_EAV_VLD_3                    : 8;
-		uint32_t BT_EAV_BLK_3                    : 8;
+		uint32_t bt_sav_vld_3                    : 8;
+		uint32_t bt_sav_blk_3                    : 8;
+		uint32_t bt_eav_vld_3                    : 8;
+		uint32_t bt_eav_blk_3                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_A8 {
+union reg_sensor_mac_a8 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_YC_INV                       : 4;
+		uint32_t bt_yc_inv                       : 4;
 	} bits;
 };
 
-union REG_SENSOR_MAC_B0 {
+union reg_sensor_mac_b0 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_CROP_START_X         : 13;
+		uint32_t sensor_mac_crop_start_x         : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_CROP_END_X           : 13;
+		uint32_t sensor_mac_crop_end_x           : 13;
 		uint32_t _rsv_29                         : 2;
-		uint32_t SENSOR_MAC_CROP_EN              : 1;
+		uint32_t sensor_mac_crop_en              : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_B4 {
+union reg_sensor_mac_b4 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_CROP_START_Y         : 13;
+		uint32_t sensor_mac_crop_start_y         : 13;
 		uint32_t _rsv_13                         : 3;
-		uint32_t SENSOR_MAC_CROP_END_Y           : 13;
+		uint32_t sensor_mac_crop_end_y           : 13;
 	} bits;
 };
 
-union REG_SENSOR_MAC_B8 {
+union reg_sensor_mac_b8 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_SWAPUV_EN            : 1;
-		uint32_t SENSOR_MAC_SWAPYC_EN            : 1;
+		uint32_t sensor_mac_swapuv_en            : 1;
+		uint32_t sensor_mac_swapyc_en            : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_BC {
+union reg_sensor_mac_bc {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_DBG_HTOTAL_MAX       : 16;
-		uint32_t SENSOR_MAC_DBG_EN               : 1;
+		uint32_t sensor_mac_dbg_htotal_max       : 16;
+		uint32_t sensor_mac_dbg_en               : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_C0 {
+union reg_sensor_mac_c0 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_DBG_VTOTAL_MAX       : 32;
+		uint32_t sensor_mac_dbg_vtotal_max       : 32;
 	} bits;
 };
 
-union REG_SENSOR_MAC_C4 {
+union reg_sensor_mac_c4 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_DBG_HTOTAL           : 16;
+		uint32_t sensor_mac_dbg_htotal           : 16;
 	} bits;
 };
 
-union REG_SENSOR_MAC_C8 {
+union reg_sensor_mac_c8 {
 	uint32_t raw;
 	struct {
-		uint32_t SENSOR_MAC_DBG_VTOTAL           : 32;
+		uint32_t sensor_mac_dbg_vtotal           : 32;
 	} bits;
 };
 
-union REG_SENSOR_MAC_D0 {
+union reg_sensor_mac_d0 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_ENABLE             : 1;
+		uint32_t ttl_as_slvds_enable             : 1;
 		uint32_t _rsv_1                          : 7;
-		uint32_t TTL_AS_SLVDS_BIT_MODE           : 2;
-		uint32_t TTL_AS_SLVDS_DATA_REVERSE       : 1;
+		uint32_t ttl_as_slvds_bit_mode           : 2;
+		uint32_t ttl_as_slvds_data_reverse       : 1;
 		uint32_t _rsv_11                         : 1;
-		uint32_t TTL_AS_SLVDS_HDR_MODE           : 1;
-		uint32_t TTL_AS_SLVDS_HDR_PATTERN        : 1;
+		uint32_t ttl_as_slvds_hdr_mode           : 1;
+		uint32_t ttl_as_slvds_hdr_pattern        : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t TTL_AS_SLVDS_VFPORCH            : 10;
+		uint32_t ttl_as_slvds_vfporch            : 10;
 	} bits;
 };
 
-union REG_SENSOR_MAC_D4 {
+union reg_sensor_mac_d4 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_SYNC_1ST           : 12;
+		uint32_t ttl_as_slvds_sync_1st           : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_SYNC_2ND           : 12;
+		uint32_t ttl_as_slvds_sync_2nd           : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_D8 {
+union reg_sensor_mac_d8 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_SYNC_3RD           : 12;
+		uint32_t ttl_as_slvds_sync_3rd           : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_NORM_BK_SAV        : 12;
+		uint32_t ttl_as_slvds_norm_bk_sav        : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_DC {
+union reg_sensor_mac_dc {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_NORM_BK_EAV        : 12;
+		uint32_t ttl_as_slvds_norm_bk_eav        : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_NORM_SAV           : 12;
+		uint32_t ttl_as_slvds_norm_sav           : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_E0 {
+union reg_sensor_mac_e0 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_NORM_EAV           : 12;
+		uint32_t ttl_as_slvds_norm_eav           : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N0_BK_SAV          : 12;
+		uint32_t ttl_as_slvds_n0_bk_sav          : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_E4 {
+union reg_sensor_mac_e4 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N0_BK_EAV          : 12;
+		uint32_t ttl_as_slvds_n0_bk_eav          : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N1_BK_SAV          : 12;
+		uint32_t ttl_as_slvds_n1_bk_sav          : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_E8 {
+union reg_sensor_mac_e8 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N1_BK_EAV          : 12;
+		uint32_t ttl_as_slvds_n1_bk_eav          : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N0_LEF_SAV         : 12;
+		uint32_t ttl_as_slvds_n0_lef_sav         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_EC {
+union reg_sensor_mac_ec {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N0_LEF_EAV         : 12;
+		uint32_t ttl_as_slvds_n0_lef_eav         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N0_SEF_SAV         : 12;
+		uint32_t ttl_as_slvds_n0_sef_sav         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_F0 {
+union reg_sensor_mac_f0 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N0_SEF_EAV         : 12;
+		uint32_t ttl_as_slvds_n0_sef_eav         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N1_LEF_SAV         : 12;
+		uint32_t ttl_as_slvds_n1_lef_sav         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_F4 {
+union reg_sensor_mac_f4 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N1_LEF_EAV         : 12;
+		uint32_t ttl_as_slvds_n1_lef_eav         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N1_SEF_SAV         : 12;
+		uint32_t ttl_as_slvds_n1_sef_sav         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_F8 {
+union reg_sensor_mac_f8 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N1_SEF_EAV         : 12;
+		uint32_t ttl_as_slvds_n1_sef_eav         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_FC {
+union reg_sensor_mac_fc {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_VS_GEN_SYNC_CODE   : 12;
-		uint32_t TTL_AS_SLVDS_VS_GEN_BY_SYNC_CODE: 1;
+		uint32_t ttl_as_slvds_vs_gen_sync_code   : 12;
+		uint32_t ttl_as_slvds_vs_gen_by_sync_code: 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_100 {
+union reg_sensor_mac_100 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N0_LSEF_SAV        : 12;
+		uint32_t ttl_as_slvds_n0_lsef_sav        : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N0_LSEF_EAV        : 12;
+		uint32_t ttl_as_slvds_n0_lsef_eav        : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_104 {
+union reg_sensor_mac_104 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_N1_LSEF_SAV        : 12;
+		uint32_t ttl_as_slvds_n1_lsef_sav        : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_SLVDS_N1_LSEF_EAV        : 12;
+		uint32_t ttl_as_slvds_n1_lsef_eav        : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_108 {
+union reg_sensor_mac_108 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_SLVDS_HDR_P2_HSIZE       : 14;
+		uint32_t ttl_as_slvds_hdr_p2_hsize       : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t TTL_AS_SLVDS_HDR_P2_HBLANK      : 14;
+		uint32_t ttl_as_slvds_hdr_p2_hblank      : 14;
 	} bits;
 };
 
-union REG_SENSOR_MAC_110 {
+union reg_sensor_mac_110 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_MODE               : 1;
-		uint32_t TTL_AS_HISPI_USE_HSIZE          : 1;
+		uint32_t ttl_as_hispi_mode               : 1;
+		uint32_t ttl_as_hispi_use_hsize          : 1;
 		uint32_t _rsv_2                          : 2;
-		uint32_t TTL_AS_HISPI_HDR_PSP_MODE       : 1;
+		uint32_t ttl_as_hispi_hdr_psp_mode       : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_114 {
+union reg_sensor_mac_114 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_NORM_SOF           : 12;
+		uint32_t ttl_as_hispi_norm_sof           : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_HISPI_NORM_EOF           : 12;
+		uint32_t ttl_as_hispi_norm_eof           : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_118 {
+union reg_sensor_mac_118 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_HDR_T1_SOF         : 12;
+		uint32_t ttl_as_hispi_hdr_t1_sof         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_HISPI_HDR_T1_EOF         : 12;
+		uint32_t ttl_as_hispi_hdr_t1_eof         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_11C {
+union reg_sensor_mac_11c {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_HDR_T1_SOL         : 12;
+		uint32_t ttl_as_hispi_hdr_t1_sol         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_HISPI_HDR_T1_EOL         : 12;
+		uint32_t ttl_as_hispi_hdr_t1_eol         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_120 {
+union reg_sensor_mac_120 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_HDR_T2_SOF         : 12;
+		uint32_t ttl_as_hispi_hdr_t2_sof         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_HISPI_HDR_T2_EOF         : 12;
+		uint32_t ttl_as_hispi_hdr_t2_eof         : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_124 {
+union reg_sensor_mac_124 {
 	uint32_t raw;
 	struct {
-		uint32_t TTL_AS_HISPI_HDR_T2_SOL         : 12;
+		uint32_t ttl_as_hispi_hdr_t2_sol         : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t TTL_AS_HISPI_HDR_T2_EOL         : 12;
+		uint32_t ttl_as_hispi_hdr_t2_eol         : 12;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SUBLVDS_CTRL_TOP_00 {
+union reg_sublvds_ctrl_top_00 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_ENABLE                    : 8;
-		uint32_t SLVDS_BIT_MODE                  : 2;
-		uint32_t SLVDS_DATA_REVERSE              : 1;
+		uint32_t slvds_enable                    : 8;
+		uint32_t slvds_bit_mode                  : 2;
+		uint32_t slvds_data_reverse              : 1;
 		uint32_t _rsv_11                         : 1;
-		uint32_t SLVDS_HDR_MODE                  : 1;
-		uint32_t SLVDS_HDR_PATTERN               : 1;
+		uint32_t slvds_hdr_mode                  : 1;
+		uint32_t slvds_hdr_pattern               : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_VFPORCH                   : 10;
+		uint32_t slvds_vfporch                   : 10;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_04 {
+union reg_sublvds_ctrl_top_04 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_SYNC_1ST                  : 12;
+		uint32_t slvds_sync_1st                  : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_SYNC_2ND                  : 12;
+		uint32_t slvds_sync_2nd                  : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_08 {
+union reg_sublvds_ctrl_top_08 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_SYNC_3RD                  : 12;
+		uint32_t slvds_sync_3rd                  : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_NORM_BK_SAV               : 12;
+		uint32_t slvds_norm_bk_sav               : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_0C {
+union reg_sublvds_ctrl_top_0c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_NORM_BK_EAV               : 12;
+		uint32_t slvds_norm_bk_eav               : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_NORM_SAV                  : 12;
+		uint32_t slvds_norm_sav                  : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_10 {
+union reg_sublvds_ctrl_top_10 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_NORM_EAV                  : 12;
+		uint32_t slvds_norm_eav                  : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N0_BK_SAV                 : 12;
+		uint32_t slvds_n0_bk_sav                 : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_14 {
+union reg_sublvds_ctrl_top_14 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N0_BK_EAV                 : 12;
+		uint32_t slvds_n0_bk_eav                 : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N1_BK_SAV                 : 12;
+		uint32_t slvds_n1_bk_sav                 : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_18 {
+union reg_sublvds_ctrl_top_18 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N1_BK_EAV                 : 12;
+		uint32_t slvds_n1_bk_eav                 : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N0_LEF_SAV                : 12;
+		uint32_t slvds_n0_lef_sav                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_1C {
+union reg_sublvds_ctrl_top_1c {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N0_LEF_EAV                : 12;
+		uint32_t slvds_n0_lef_eav                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N0_SEF_SAV                : 12;
+		uint32_t slvds_n0_sef_sav                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_20 {
+union reg_sublvds_ctrl_top_20 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N0_SEF_EAV                : 12;
+		uint32_t slvds_n0_sef_eav                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N1_LEF_SAV                : 12;
+		uint32_t slvds_n1_lef_sav                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_24 {
+union reg_sublvds_ctrl_top_24 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N1_LEF_EAV                : 12;
+		uint32_t slvds_n1_lef_eav                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N1_SEF_SAV                : 12;
+		uint32_t slvds_n1_sef_sav                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_28 {
+union reg_sublvds_ctrl_top_28 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N1_SEF_EAV                : 12;
+		uint32_t slvds_n1_sef_eav                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_2C {
+union reg_sublvds_ctrl_top_2c {
 	uint32_t raw;
 	struct {
-		uint32_t VS_GEN_SYNC_CODE                : 12;
-		uint32_t VS_GEN_BY_SYNC_CODE             : 1;
+		uint32_t vs_gen_sync_code                : 12;
+		uint32_t vs_gen_by_sync_code             : 1;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_30 {
+union reg_sublvds_ctrl_top_30 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_LANE_MODE                 : 3;
+		uint32_t slvds_lane_mode                 : 3;
 		uint32_t _rsv_3                          : 1;
-		uint32_t SLVDS_SYNC_SOURCE               : 8;
-		uint32_t SLVDS_FIFO_CLR                  : 1;
+		uint32_t slvds_sync_source               : 8;
+		uint32_t slvds_fifo_clr                  : 1;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_40 {
+union reg_sublvds_ctrl_top_40 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_FIFO_FULL                 : 1;
+		uint32_t slvds_fifo_full                 : 1;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_50 {
+union reg_sublvds_ctrl_top_50 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N0_LSEF_SAV               : 12;
+		uint32_t slvds_n0_lsef_sav               : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N0_LSEF_EAV               : 12;
+		uint32_t slvds_n0_lsef_eav               : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_54 {
+union reg_sublvds_ctrl_top_54 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_N1_LSEF_SAV               : 12;
+		uint32_t slvds_n1_lsef_sav               : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t SLVDS_N1_LSEF_EAV               : 12;
+		uint32_t slvds_n1_lsef_eav               : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_58 {
+union reg_sublvds_ctrl_top_58 {
 	uint32_t raw;
 	struct {
-		uint32_t SLVDS_HDR_P2_HSIZE              : 14;
+		uint32_t slvds_hdr_p2_hsize              : 14;
 		uint32_t _rsv_14                         : 2;
-		uint32_t SLVDS_HDR_P2_HBLANK             : 14;
+		uint32_t slvds_hdr_p2_hblank             : 14;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_60 {
+union reg_sublvds_ctrl_top_60 {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_MODE                      : 1;
-		uint32_t HISPI_USE_HSIZE                 : 1;
+		uint32_t hispi_mode                      : 1;
+		uint32_t hispi_use_hsize                 : 1;
 		uint32_t _rsv_2                          : 2;
-		uint32_t HISPI_HDR_PSP_MODE              : 1;
+		uint32_t hispi_hdr_psp_mode              : 1;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_64 {
+union reg_sublvds_ctrl_top_64 {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_NORM_SOF                  : 12;
+		uint32_t hispi_norm_sof                  : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t HISPI_NORM_EOF                  : 12;
+		uint32_t hispi_norm_eof                  : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_68 {
+union reg_sublvds_ctrl_top_68 {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_HDR_T1_SOF                : 12;
+		uint32_t hispi_hdr_t1_sof                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t HISPI_HDR_T1_EOF                : 12;
+		uint32_t hispi_hdr_t1_eof                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_6C {
+union reg_sublvds_ctrl_top_6c {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_HDR_T1_SOL                : 12;
+		uint32_t hispi_hdr_t1_sol                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t HISPI_HDR_T1_EOL                : 12;
+		uint32_t hispi_hdr_t1_eol                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_70 {
+union reg_sublvds_ctrl_top_70 {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_HDR_T2_SOF                : 12;
+		uint32_t hispi_hdr_t2_sof                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t HISPI_HDR_T2_EOF                : 12;
+		uint32_t hispi_hdr_t2_eof                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_74 {
+union reg_sublvds_ctrl_top_74 {
 	uint32_t raw;
 	struct {
-		uint32_t HISPI_HDR_T2_SOL                : 12;
+		uint32_t hispi_hdr_t2_sol                : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t HISPI_HDR_T2_EOL                : 12;
+		uint32_t hispi_hdr_t2_eol                : 12;
 	} bits;
 };
 
-union REG_SUBLVDS_CTRL_TOP_80 {
+union reg_sublvds_ctrl_top_80 {
 	uint32_t raw;
 	struct {
-		uint32_t DBG_SEL                         : 8;
+		uint32_t dbg_sel                         : 8;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_CSI_CTRL_TOP_00 {
+union reg_csi_ctrl_top_00 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_LANE_MODE                   : 3;
-		uint32_t CSI_IGNORE_ECC                  : 1;
-		uint32_t CSI_VC_CHECK                    : 1;
+		uint32_t csi_lane_mode                   : 3;
+		uint32_t csi_ignore_ecc                  : 1;
+		uint32_t csi_vc_check                    : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t CSI_VC_SET                      : 4;
-		uint32_t CSI_LINE_START_SENT             : 1;
-		uint32_t CSI_FORMAT_FRC                  : 1;
+		uint32_t csi_vc_set                      : 4;
+		uint32_t csi_line_start_sent             : 1;
+		uint32_t csi_format_frc                  : 1;
 		uint32_t _rsv_14                         : 2;
-		uint32_t CSI_FORMAT_SET                  : 8;
+		uint32_t csi_format_set                  : 8;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_04 {
+union reg_csi_ctrl_top_04 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_INTR_MASK                   : 8;
-		uint32_t CSI_INTR_CLR                    : 8;
-		uint32_t CSI_HDR_EN                      : 1;
-		uint32_t CSI_HDR_MODE                    : 1;
-		uint32_t CSI_ID_RM_ELSE                  : 1;
-		uint32_t CSI_ID_RM_OB                    : 1;
+		uint32_t csi_intr_mask                   : 8;
+		uint32_t csi_intr_clr                    : 8;
+		uint32_t csi_hdr_en                      : 1;
+		uint32_t csi_hdr_mode                    : 1;
+		uint32_t csi_id_rm_else                  : 1;
+		uint32_t csi_id_rm_ob                    : 1;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_08 {
+union reg_csi_ctrl_top_08 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N0_OB_LEF                   : 16;
-		uint32_t CSI_N0_OB_SEF                   : 16;
+		uint32_t csi_n0_ob_lef                   : 16;
+		uint32_t csi_n0_ob_sef                   : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_0C {
+union reg_csi_ctrl_top_0c {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N0_LEF                      : 16;
-		uint32_t CSI_N1_OB_LEF                   : 16;
+		uint32_t csi_n0_lef                      : 16;
+		uint32_t csi_n1_ob_lef                   : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_10 {
+union reg_csi_ctrl_top_10 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N1_OB_SEF                   : 16;
-		uint32_t CSI_N1_LEF                      : 16;
+		uint32_t csi_n1_ob_sef                   : 16;
+		uint32_t csi_n1_lef                      : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_14 {
+union reg_csi_ctrl_top_14 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_BLC_DT                      : 6;
+		uint32_t csi_blc_dt                      : 6;
 		uint32_t _rsv_6                          : 2;
-		uint32_t CSI_BLC_EN                      : 1;
+		uint32_t csi_blc_en                      : 1;
 		uint32_t _rsv_9                          : 3;
-		uint32_t CSI_BLC_FORMAT_SET              : 3;
+		uint32_t csi_blc_format_set              : 3;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_18 {
+union reg_csi_ctrl_top_18 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_VC_MAP_CH00                 : 4;
-		uint32_t CSI_VC_MAP_CH01                 : 4;
-		uint32_t CSI_VC_MAP_CH10                 : 4;
-		uint32_t CSI_VC_MAP_CH11                 : 4;
+		uint32_t csi_vc_map_ch00                 : 4;
+		uint32_t csi_vc_map_ch01                 : 4;
+		uint32_t csi_vc_map_ch10                 : 4;
+		uint32_t csi_vc_map_ch11                 : 4;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_1C {
+union reg_csi_ctrl_top_1c {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N0_SEF                      : 16;
-		uint32_t CSI_N1_SEF                      : 16;
+		uint32_t csi_n0_sef                      : 16;
+		uint32_t csi_n1_sef                      : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_20 {
+union reg_csi_ctrl_top_20 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N0_SEF2                     : 16;
-		uint32_t CSI_N1_SEF2                     : 16;
+		uint32_t csi_n0_sef2                     : 16;
+		uint32_t csi_n1_sef2                     : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_24 {
+union reg_csi_ctrl_top_24 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_N0_OB_SEF2                  : 16;
-		uint32_t CSI_N1_OB_SEF2                  : 16;
+		uint32_t csi_n0_ob_sef2                  : 16;
+		uint32_t csi_n1_ob_sef2                  : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_30 {
+union reg_csi_ctrl_top_30 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_ECC_PH_DBG                  : 32;
+		uint32_t csi_ecc_ph_dbg                  : 32;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_34 {
+union reg_csi_ctrl_top_34 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_ECC_CLR_PH_DBG              : 1;
+		uint32_t csi_ecc_clr_ph_dbg              : 1;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_40 {
+union reg_csi_ctrl_top_40 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_ECC_NO_ERROR                : 1;
-		uint32_t CSI_ECC_CORRECTED_ERROR         : 1;
-		uint32_t CSI_ECC_ERROR                   : 1;
+		uint32_t csi_ecc_no_error                : 1;
+		uint32_t csi_ecc_corrected_error         : 1;
+		uint32_t csi_ecc_error                   : 1;
 		uint32_t _rsv_3                          : 1;
-		uint32_t CSI_CRC_ERROR                   : 1;
-		uint32_t CSI_WC_ERROR                    : 1;
+		uint32_t csi_crc_error                   : 1;
+		uint32_t csi_wc_error                    : 1;
 		uint32_t _rsv_6                          : 2;
-		uint32_t CSI_FIFO_FULL                   : 1;
+		uint32_t csi_fifo_full                   : 1;
 		uint32_t _rsv_9                          : 7;
-		uint32_t CSI_DECODE_FORMAT               : 6;
+		uint32_t csi_decode_format               : 6;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_48 {
+union reg_csi_ctrl_top_48 {
 	uint32_t raw;
 	struct {
-		uint32_t SHORT_PKT_RSV1                  : 16;
-		uint32_t SHORT_PKT_RSV2                  : 16;
+		uint32_t short_pkt_rsv1                  : 16;
+		uint32_t short_pkt_rsv2                  : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_4C {
+union reg_csi_ctrl_top_4c {
 	uint32_t raw;
 	struct {
-		uint32_t SHORT_PKT_RSV3                  : 16;
-		uint32_t SHORT_PKT_RSV4                  : 16;
+		uint32_t short_pkt_rsv3                  : 16;
+		uint32_t short_pkt_rsv4                  : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_50 {
+union reg_csi_ctrl_top_50 {
 	uint32_t raw;
 	struct {
-		uint32_t GENERIC_SHORT_PKT1              : 16;
-		uint32_t GENERIC_SHORT_PKT2              : 16;
+		uint32_t generic_short_pkt1              : 16;
+		uint32_t generic_short_pkt2              : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_54 {
+union reg_csi_ctrl_top_54 {
 	uint32_t raw;
 	struct {
-		uint32_t GENERIC_SHORT_PKT3              : 16;
-		uint32_t GENERIC_SHORT_PKT4              : 16;
+		uint32_t generic_short_pkt3              : 16;
+		uint32_t generic_short_pkt4              : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_58 {
+union reg_csi_ctrl_top_58 {
 	uint32_t raw;
 	struct {
-		uint32_t GENERIC_SHORT_PKT5              : 16;
-		uint32_t GENERIC_SHORT_PKT6              : 16;
+		uint32_t generic_short_pkt5              : 16;
+		uint32_t generic_short_pkt6              : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_5C {
+union reg_csi_ctrl_top_5c {
 	uint32_t raw;
 	struct {
-		uint32_t GENERIC_SHORT_PKT7              : 16;
-		uint32_t GENERIC_SHORT_PKT8              : 16;
+		uint32_t generic_short_pkt7              : 16;
+		uint32_t generic_short_pkt8              : 16;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_60 {
+union reg_csi_ctrl_top_60 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_INTR_STATUS                 : 8;
+		uint32_t csi_intr_status                 : 8;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_64 {
+union reg_csi_ctrl_top_64 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_DBG_SEL                     : 8;
+		uint32_t csi_dbg_sel                     : 8;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_70 {
+union reg_csi_ctrl_top_70 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_VS_GEN_MODE                 : 2;
+		uint32_t csi_vs_gen_mode                 : 2;
 		uint32_t _rsv_2                          : 2;
-		uint32_t CSI_VS_GEN_BY_VCSET             : 1;
+		uint32_t csi_vs_gen_by_vcset             : 1;
 		uint32_t _rsv_5                          : 3;
-		uint32_t CSI_VS_DELAY_SEL                : 2;
-		uint32_t CSI_HS_DELAY_SEL                : 2;
+		uint32_t csi_vs_delay_sel                : 2;
+		uint32_t csi_hs_delay_sel                : 2;
 	} bits;
 };
 
-union REG_CSI_CTRL_TOP_74 {
+union reg_csi_ctrl_top_74 {
 	uint32_t raw;
 	struct {
-		uint32_t CSI_HDR_DT_MODE                 : 1;
+		uint32_t csi_hdr_dt_mode                 : 1;
 		uint32_t _rsv_1                          : 3;
-		uint32_t CSI_HDR_DT_FORMAT               : 6;
+		uint32_t csi_hdr_dt_format               : 6;
 		uint32_t _rsv_10                         : 2;
-		uint32_t CSI_HDR_DT_LEF                  : 6;
+		uint32_t csi_hdr_dt_lef                  : 6;
 		uint32_t _rsv_18                         : 2;
-		uint32_t CSI_HDR_DT_SEF                  : 6;
+		uint32_t csi_hdr_dt_sef                  : 6;
 	} bits;
 };
 
 /******************************************/
-/*           Module Definition            */
+/*           module definition            */
 /******************************************/
-union REG_SENSOR_MAC_VI_00 {
+union reg_sensor_mac_vi_00 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_DEMUX_ENABLE                 : 1;
+		uint32_t bt_demux_enable                 : 1;
 		uint32_t _rsv_1                          : 9;
-		uint32_t PAD_CLK_INV                     : 1;
+		uint32_t pad_clk_inv                     : 1;
 		uint32_t _rsv_11                         : 13;
-		uint32_t DBG_SEL                         : 8;
+		uint32_t dbg_sel                         : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_10 {
+union reg_sensor_mac_vi_10 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_BT_D0_SEL                    : 5;
+		uint32_t vi_bt_d0_sel                    : 5;
 		uint32_t _rsv_5                          : 3;
-		uint32_t VI_BT_D1_SEL                    : 5;
+		uint32_t vi_bt_d1_sel                    : 5;
 		uint32_t _rsv_13                         : 3;
-		uint32_t VI_BT_D2_SEL                    : 5;
+		uint32_t vi_bt_d2_sel                    : 5;
 		uint32_t _rsv_21                         : 3;
-		uint32_t VI_BT_D3_SEL                    : 5;
+		uint32_t vi_bt_d3_sel                    : 5;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_14 {
+union reg_sensor_mac_vi_14 {
 	uint32_t raw;
 	struct {
-		uint32_t VI_BT_D4_SEL                    : 5;
+		uint32_t vi_bt_d4_sel                    : 5;
 		uint32_t _rsv_5                          : 3;
-		uint32_t VI_BT_D5_SEL                    : 5;
+		uint32_t vi_bt_d5_sel                    : 5;
 		uint32_t _rsv_13                         : 3;
-		uint32_t VI_BT_D6_SEL                    : 5;
+		uint32_t vi_bt_d6_sel                    : 5;
 		uint32_t _rsv_21                         : 3;
-		uint32_t VI_BT_D7_SEL                    : 5;
+		uint32_t vi_bt_d7_sel                    : 5;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_20 {
+union reg_sensor_mac_vi_20 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_CLR_SYNC_LOST_1T             : 1;
-		uint32_t BT_IP_EN                        : 1;
-		uint32_t BT_DDR_MODE                     : 1;
-		uint32_t BT_HS_GATE_BY_VDE               : 1;
-		uint32_t BT_VS_INV                       : 1;
-		uint32_t BT_HS_INV                       : 1;
-		uint32_t BT_VS_AS_VDE                    : 1;
-		uint32_t BT_HS_AS_HDE                    : 1;
-		uint32_t BT_SW_EN_CLK                    : 7;
+		uint32_t bt_clr_sync_lost_1t             : 1;
+		uint32_t bt_ip_en                        : 1;
+		uint32_t bt_ddr_mode                     : 1;
+		uint32_t bt_hs_gate_by_vde               : 1;
+		uint32_t bt_vs_inv                       : 1;
+		uint32_t bt_hs_inv                       : 1;
+		uint32_t bt_vs_as_vde                    : 1;
+		uint32_t bt_hs_as_hde                    : 1;
+		uint32_t bt_sw_en_clk                    : 7;
 		uint32_t _rsv_15                         : 1;
-		uint32_t BT_DEMUX_CH                     : 2;
+		uint32_t bt_demux_ch                     : 2;
 		uint32_t _rsv_18                         : 2;
-		uint32_t BT_FMT_SEL                      : 3;
+		uint32_t bt_fmt_sel                      : 3;
 		uint32_t _rsv_23                         : 1;
-		uint32_t BT_SYNC_LOST                    : 1;
+		uint32_t bt_sync_lost                    : 1;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_24 {
+union reg_sensor_mac_vi_24 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_V_CTRL_DLY                   : 5;
+		uint32_t bt_v_ctrl_dly                   : 5;
 		uint32_t _rsv_5                          : 3;
-		uint32_t BT_H_CTRL_DLY                   : 5;
+		uint32_t bt_h_ctrl_dly                   : 5;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_28 {
+union reg_sensor_mac_vi_28 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_IMG_WD_M1                    : 12;
+		uint32_t bt_img_wd_m1                    : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t BT_IMG_HT_M1                    : 12;
+		uint32_t bt_img_ht_m1                    : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_2C {
+union reg_sensor_mac_vi_2c {
 	uint32_t raw;
 	struct {
-		uint32_t BT_VS_BP_M1                     : 12;
+		uint32_t bt_vs_bp_m1                     : 12;
 		uint32_t _rsv_12                         : 4;
-		uint32_t BT_HS_BP_M1                     : 12;
+		uint32_t bt_hs_bp_m1                     : 12;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_30 {
+union reg_sensor_mac_vi_30 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_VS_FP_M1                     : 8;
-		uint32_t BT_HS_FP_M1                     : 8;
+		uint32_t bt_vs_fp_m1                     : 8;
+		uint32_t bt_hs_fp_m1                     : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_34 {
+union reg_sensor_mac_vi_34 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SYNC_0                       : 8;
-		uint32_t BT_SYNC_1                       : 8;
-		uint32_t BT_SYNC_2                       : 8;
+		uint32_t bt_sync_0                       : 8;
+		uint32_t bt_sync_1                       : 8;
+		uint32_t bt_sync_2                       : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_38 {
+union reg_sensor_mac_vi_38 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_0                    : 8;
-		uint32_t BT_SAV_BLK_0                    : 8;
-		uint32_t BT_EAV_VLD_0                    : 8;
-		uint32_t BT_EAV_BLK_0                    : 8;
+		uint32_t bt_sav_vld_0                    : 8;
+		uint32_t bt_sav_blk_0                    : 8;
+		uint32_t bt_eav_vld_0                    : 8;
+		uint32_t bt_eav_blk_0                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_3C {
+union reg_sensor_mac_vi_3c {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_1                    : 8;
-		uint32_t BT_SAV_BLK_1                    : 8;
-		uint32_t BT_EAV_VLD_1                    : 8;
-		uint32_t BT_EAV_BLK_1                    : 8;
+		uint32_t bt_sav_vld_1                    : 8;
+		uint32_t bt_sav_blk_1                    : 8;
+		uint32_t bt_eav_vld_1                    : 8;
+		uint32_t bt_eav_blk_1                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_40 {
+union reg_sensor_mac_vi_40 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_2                    : 8;
-		uint32_t BT_SAV_BLK_2                    : 8;
-		uint32_t BT_EAV_VLD_2                    : 8;
-		uint32_t BT_EAV_BLK_2                    : 8;
+		uint32_t bt_sav_vld_2                    : 8;
+		uint32_t bt_sav_blk_2                    : 8;
+		uint32_t bt_eav_vld_2                    : 8;
+		uint32_t bt_eav_blk_2                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_44 {
+union reg_sensor_mac_vi_44 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_SAV_VLD_3                    : 8;
-		uint32_t BT_SAV_BLK_3                    : 8;
-		uint32_t BT_EAV_VLD_3                    : 8;
-		uint32_t BT_EAV_BLK_3                    : 8;
+		uint32_t bt_sav_vld_3                    : 8;
+		uint32_t bt_sav_blk_3                    : 8;
+		uint32_t bt_eav_vld_3                    : 8;
+		uint32_t bt_eav_blk_3                    : 8;
 	} bits;
 };
 
-union REG_SENSOR_MAC_VI_48 {
+union reg_sensor_mac_vi_48 {
 	uint32_t raw;
 	struct {
-		uint32_t BT_YC_INV                       : 4;
+		uint32_t bt_yc_inv                       : 4;
 	} bits;
 };
 

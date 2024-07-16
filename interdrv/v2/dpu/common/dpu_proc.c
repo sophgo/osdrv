@@ -3,10 +3,10 @@
 #include <linux/uaccess.h>
 
 #include "dpu_debug.h"
-#include <linux/cvi_comm_dpu.h>
+#include <linux/comm_dpu.h>
 #include "../chip/soph/dpu.h"
-#include <linux/cvi_common.h>
-#include <linux/cvi_defines.h>
+#include <linux/common.h>
+#include <linux/defines.h>
 #include "dpu_proc.h"
 
 
@@ -19,9 +19,9 @@ static int proc_dpu_mode;
 /*************************************************************************
  *	DPU proc functions
  *************************************************************************/
-static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
+static void _pix_fmt_to_string(enum _pixel_format_e pixfmt, char *str, int len)
 {
-	switch (PixFmt) {
+	switch (pixfmt) {
 	case PIXEL_FORMAT_RGB_888:
 		strncpy(str, "RGB_888", len);
 		break;
@@ -154,9 +154,9 @@ static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
 	}
 }
 
-static void _mask_mode_to_string(DPU_MASK_MODE_E enMaskMode, char *str, int len)
+static void _mask_mode_to_string(dpu_mask_mode_e mask_mode, char *str, int len)
 {
-	switch (enMaskMode) {
+	switch (mask_mode) {
 	case DPU_MASK_MODE_DEFAULT:
 		strncpy(str, "7x7", len);
 		break;
@@ -178,9 +178,9 @@ static void _mask_mode_to_string(DPU_MASK_MODE_E enMaskMode, char *str, int len)
 	}
 }
 
-static void _dcc_dir_to_string(DPU_DCC_DIR_E enDccDir, char *str, int len)
+static void _dcc_dir_to_string(dpu_dcc_dir_e dcc_dir, char *str, int len)
 {
-	switch (enDccDir) {
+	switch (dcc_dir) {
 	case DPU_DCC_DIR_DEFAULT:
 		strncpy(str, "A12", len);
 		break;
@@ -199,9 +199,9 @@ static void _dcc_dir_to_string(DPU_DCC_DIR_E enDccDir, char *str, int len)
 	}
 }
 
-static void _depth_unit_to_string(DPU_DEPTH_UNIT_E enDpuDepthUnit, char *str, int len)
+static void _depth_unit_to_string(dpu_depth_unit_e dpu_depth_unit, char *str, int len)
 {
-	switch (enDpuDepthUnit) {
+	switch (dpu_depth_unit) {
 	case DPU_DEPTH_UNIT_DEFAULT:
 		strncpy(str, "MM", len);
 		break;
@@ -223,9 +223,9 @@ static void _depth_unit_to_string(DPU_DEPTH_UNIT_E enDpuDepthUnit, char *str, in
 	}
 }
 
-static void _dpu_mode_to_string(DPU_MODE_E enDpuMode, char *str, int len)
+static void _dpu_mode_to_string(dpu_mode_e dpu_mode, char *str, int len)
 {
-	switch (enDpuMode) {
+	switch (dpu_mode) {
 	case DPU_MODE_DEFAULT:
 		strncpy(str, "SGBM_MUX0", len);
 		break;
@@ -259,9 +259,9 @@ static void _dpu_mode_to_string(DPU_MODE_E enDpuMode, char *str, int len)
 	}
 }
 
-static void _disp_range_to_string(DPU_DISP_RANGE_E enDispRange, char *str, int len)
+static void _disp_range_to_string(dpu_disp_range_e disp_range, char *str, int len)
 {
-	switch (enDispRange) {
+	switch (disp_range) {
 	case DPU_DISP_RANGE_DEFAULT:
 		strncpy(str, "16", len);
 		break;
@@ -299,16 +299,16 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i, j;
 	char c[50];
-	char cmaskMode[50];
-	char cdpuMode[50];
-	char cdccDir[50];
-	char cdispRange[50];
-	char cdepthUnit[50];
+	char cmaskmode[50];
+	char cdpumode[50];
+	char cdccdir[50];
+	char cdisprange[50];
+	char cdepthunit[50];
 	char is_started[10] ;
 	char is_created[10] ;
-	//struct cvi_dpu_dev *bdev = m->private;
-	struct cvi_dpu_dev *dev = dpu_get_dev();
-	struct cvi_dpu_ctx **pDpuCtx = dpu_get_shdw_ctx();
+	//struct dpu_dev_s *bdev = m->private;
+	struct dpu_dev_s *dev = dpu_get_dev();
+	struct dpu_ctx_s **p_dpu_ctx = dpu_get_shdw_ctx();
 
 	// Module Param
 	seq_printf(m, "\nModule: [DPU], Build Time[%s]\n", UTS_VERSION);
@@ -317,22 +317,22 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 	//
 	// DPU GRP ATTR
 	seq_puts(m, "\n-------------------------------DPU GRP ATTR1------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s%20s%20s%20s\n", "GrpID", "bStart", "bCreate", \
+	seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s%20s%20s%20s\n", "grp_id", "bStart", "bCreate", \
 				"DevID","SrcFRate", "DstFRate", "LeftWidth","LeftHeight","RightWidth","RightHeight");
 
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-		if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
-			// seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s%20s%20s%20s\n", "GrpID", "bStart", "bCreate",
+		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
+			// seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s%20s%20s%20s\n", "grp_id", "bStart", "bCreate",
 			// 	"DevID","SrcFRate", "DstFRate", "LeftWidth","LeftHeight","RightWidth","RightHeight");
 			memset(c, 0, sizeof(c));
-			_pix_fmt_to_string(pDpuCtx[i]->enPixelFormat, c, sizeof(c));
+			_pix_fmt_to_string(p_dpu_ctx[i]->pixel_format, c, sizeof(c));
 
-			if(pDpuCtx[i]->isStarted)
+			if(p_dpu_ctx[i]->isstarted)
 				strncpy(is_started, "Y", sizeof(is_started));
 			else
 				strncpy(is_started, "N", sizeof(is_started));;
 
-			if(pDpuCtx[i]->isCreated)
+			if(p_dpu_ctx[i]->iscreated)
 				strncpy(is_created, "Y", sizeof(is_created));
 			else
 				strncpy(is_created, "N", sizeof(is_created));
@@ -341,71 +341,71 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 				i,
 				is_started,
 				is_created,
-				pDpuCtx[i]->u8DpuDev,
-				pDpuCtx[i]->stGrpAttr.stFrameRate.s32SrcFrameRate,
-				pDpuCtx[i]->stGrpAttr.stFrameRate.s32DstFrameRate,
-				pDpuCtx[i]->stGrpAttr.stLeftImageSize.u32Width,
-				pDpuCtx[i]->stGrpAttr.stLeftImageSize.u32Height,
-				pDpuCtx[i]->stGrpAttr.stRightImageSize.u32Width,
-				pDpuCtx[i]->stGrpAttr.stRightImageSize.u32Height
+				p_dpu_ctx[i]->dpu_dev_id,
+				p_dpu_ctx[i]->grp_attr.frame_rate.src_frame_rate,
+				p_dpu_ctx[i]->grp_attr.frame_rate.dst_frame_rate,
+				p_dpu_ctx[i]->grp_attr.left_image_size.width,
+				p_dpu_ctx[i]->grp_attr.left_image_size.height,
+				p_dpu_ctx[i]->grp_attr.right_image_size.width,
+				p_dpu_ctx[i]->grp_attr.right_image_size.height
 				);
 		}
 	}
 
 	// DPU GRP ATTR
 	seq_puts(m, "\n-------------------------------DPU GRP ATTR2------------------------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%10s%15s%20s%10s%10s%10s%10s%10s%15s%15s%15s%15s%15s%15s\n", "GrpID",
+	seq_printf(m, "%10s%10s%10s%10s%10s%15s%20s%10s%10s%10s%10s%10s%15s%15s%15s%15s%15s%15s\n", "grp_id",
 				"MaskMode", "DpuMode","DispRange","DccDir  ","DepthUnit","DispStartPos","Rshift1","Rshift2",
-				"CaP1","CaP2","UniqRatio","DispShift","CensusShift","FxBaseline","FgsMaxCount","FgsMaxT","bIsBtcostOut");
+				"CaP1","CaP2","UniqRatio","DispShift","CensusShift","FxBaseline","FgsMaxCount","FgsMaxT","isbtcostout");
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-		if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
-			// seq_printf(m, "%10s%10s%10s%10s%10s%15s%10s%10s%10s%10s%10s%10s%15s%15s%15s%15s%15s%15s\n", "GrpID",
+		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
+			// seq_printf(m, "%10s%10s%10s%10s%10s%15s%10s%10s%10s%10s%10s%10s%15s%15s%15s%15s%15s%15s\n", "grp_id",
 			// 	"MaskMode", "DpuMode","DispRange","DccDir  ","DepthUnit","DispStartPos","Rshift1","Rshift2",
-			// 	"CaP1","CaP2","UniqRatio","DispShift","CensusShift","FxBaseline","FgsMaxCount","FgsMaxT","bIsBtcostOut");
-			memset(cmaskMode, 0, sizeof(cmaskMode));
-			memset(cdpuMode, 0, sizeof(cdpuMode));
-			memset(cdccDir, 0, sizeof(cdccDir));
-			memset(cdispRange, 0, sizeof(cdispRange));
-			memset(cdepthUnit, 0, sizeof(cdepthUnit));
+			// 	"CaP1","CaP2","UniqRatio","DispShift","CensusShift","FxBaseline","FgsMaxCount","FgsMaxT","isbtcostout");
+			memset(cmaskmode, 0, sizeof(cmaskmode));
+			memset(cdpumode, 0, sizeof(cdpumode));
+			memset(cdccdir, 0, sizeof(cdccdir));
+			memset(cdisprange, 0, sizeof(cdisprange));
+			memset(cdepthunit, 0, sizeof(cdepthunit));
 
-			_mask_mode_to_string(pDpuCtx[i]->stGrpAttr.enMaskMode, cmaskMode, sizeof(cmaskMode));
-			_dpu_mode_to_string(pDpuCtx[i]->stGrpAttr.enDpuMode, cdpuMode, sizeof(cdpuMode));
-			_dcc_dir_to_string(pDpuCtx[i]->stGrpAttr.enDccDir,cdccDir,sizeof(cdccDir));
-			_depth_unit_to_string(pDpuCtx[i]->stGrpAttr.enDpuDepthUnit,cdepthUnit,sizeof(cdepthUnit));
-			_disp_range_to_string(pDpuCtx[i]->stGrpAttr.enDispRange,cdispRange,sizeof(cdispRange));
+			_mask_mode_to_string(p_dpu_ctx[i]->grp_attr.mask_mode, cmaskmode, sizeof(cmaskmode));
+			_dpu_mode_to_string(p_dpu_ctx[i]->grp_attr.dpu_mode, cdpumode, sizeof(cdpumode));
+			_dcc_dir_to_string(p_dpu_ctx[i]->grp_attr.dcc_dir,cdccdir,sizeof(cdccdir));
+			_depth_unit_to_string(p_dpu_ctx[i]->grp_attr.dpu_depth_unit,cdepthunit,sizeof(cdepthunit));
+			_disp_range_to_string(p_dpu_ctx[i]->grp_attr.disp_range,cdisprange,sizeof(cdisprange));
 			seq_printf(m, "%10d%10s%10s%10s%10s%15s%20d%10d%10d%10d%10d%10d%15d%15d%15d%15d%15d%15d\n",
 				i,
-				cmaskMode,
-				cdpuMode,
-				cdispRange,
-				cdccDir,
-				cdepthUnit,
-				pDpuCtx[i]->stGrpAttr.u16DispStartPos,
-				pDpuCtx[i]->stGrpAttr.u32Rshift1,
-				pDpuCtx[i]->stGrpAttr.u32Rshift2,
-				pDpuCtx[i]->stGrpAttr.u32CaP1,
-				pDpuCtx[i]->stGrpAttr.u32CaP2,
-				pDpuCtx[i]->stGrpAttr.u32UniqRatio,
-				pDpuCtx[i]->stGrpAttr.u32DispShift,
-				pDpuCtx[i]->stGrpAttr.u32CensusShift,
-				pDpuCtx[i]->stGrpAttr.u32FxBaseline,
-				pDpuCtx[i]->stGrpAttr.u32FgsMaxCount,
-				pDpuCtx[i]->stGrpAttr.u32FgsMaxT,
-				pDpuCtx[i]->stGrpAttr.bIsBtcostOut);
+				cmaskmode,
+				cdpumode,
+				cdisprange,
+				cdccdir,
+				cdepthunit,
+				p_dpu_ctx[i]->grp_attr.dispstartpos,
+				p_dpu_ctx[i]->grp_attr.rshift1,
+				p_dpu_ctx[i]->grp_attr.rshift2,
+				p_dpu_ctx[i]->grp_attr.cap1,
+				p_dpu_ctx[i]->grp_attr.cap2,
+				p_dpu_ctx[i]->grp_attr.uniqratio,
+				p_dpu_ctx[i]->grp_attr.dispshift,
+				p_dpu_ctx[i]->grp_attr.censusshift,
+				p_dpu_ctx[i]->grp_attr.fxbaseline,
+				p_dpu_ctx[i]->grp_attr.fgsmaxcount,
+				p_dpu_ctx[i]->grp_attr.fgsmaxt,
+				p_dpu_ctx[i]->grp_attr.isbtcostout);
 		}
 	}
 
 	//DPU CHN ATTR
 	seq_puts(m, "\n-------------------------------DPU CHN ATTR------------------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s\n",
-							"GrpID", "ChnID", "Enable", "Width", "Height");
+							"grp_id", "ChnID", "Enable", "Width", "Height");
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-		if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
-			for (j = 0; j < pDpuCtx[i]->chnNum; ++j) {
+		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
+			for (j = 0; j < p_dpu_ctx[i]->chn_num; ++j) {
 				char *is_enabled ="Y";
 				// seq_printf(m, "%20s%20s%20s%20s%20s\n",
-				// 			"GrpID", "ChnID", "Enable", "Width", "Height");
-				if(pDpuCtx[i]->stChnCfgs[i].isEnabled)
+				// 			"grp_id", "ChnID", "Enable", "Width", "Height");
+				if(p_dpu_ctx[i]->chn_cfgs[i].isenabled)
 					is_enabled = "Y";
 				else
 					is_enabled = "N";
@@ -414,8 +414,8 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 					i,
 					j,
 					is_enabled,
-					pDpuCtx[i]->stChnCfgs[j].stChnAttr.stImgSize.u32Width,
-					pDpuCtx[i]->stChnCfgs[j].stChnAttr.stImgSize.u32Height);
+					p_dpu_ctx[i]->chn_cfgs[j].chn_attr.img_size.width,
+					p_dpu_ctx[i]->chn_cfgs[j].chn_attr.img_size.height);
 			}
 		}
 	}
@@ -423,80 +423,80 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 	//DPU INPUT JOB QUEUE STATUS
 	//seq_puts(m, "\n-------------------------------DPU INPUT JOB QUEUE STATUS------------------------------\n");
 	// seq_printf(m, "%20s%20s%20s\n",
-	// 	"GrpID", "BusyNum", "FreeNum");
+	// 	"grp_id", "busy_num", "free_num");
 	// for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-	// 	if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
+	// 	if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
 	// 			seq_printf(m, "%20s%20s%20s\n",
-	// 						"GrpID", "BusyNum", "FreeNum");
+	// 						"grp_id", "busy_num", "free_num");
 	// 			seq_printf(m, "%20d%20d%20d\n",
 	// 				i,
-	// 				pDpuCtx[i]->stInputJobStatus.BusyNum,
-	// 				pDpuCtx[i]->stInputJobStatus.FreeNum);
+	// 				p_dpu_ctx[i]->input_job_status.busy_num,
+	// 				p_dpu_ctx[i]->input_job_status.free_num);
 	// 	}
 	// }
 
 	//DPU WORKING JOB QUEUE STATUS
 	//seq_puts(m, "\n-------------------------------DPU WORKING JOB QUEUE STATUS------------------------------\n");
 	// seq_printf(m, "%20s%20s%20s\n",
-	// 	"GrpID", "BusyNum", "FreeNum");
+	// 	"grp_id", "busy_num", "free_num");
 	// for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-	// 	if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
+	// 	if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
 	// 			seq_printf(m, "%20s%20s%20s\n",
-	// 						"GrpID", "BusyNum", "FreeNum");
+	// 						"grp_id", "busy_num", "free_num");
 	// 			seq_printf(m, "%20d%20d%20d\n",
 	// 				i,
-	// 				pDpuCtx[i]->stWorkingJobStatus.BusyNum,
-	// 				pDpuCtx[i]->stWorkingJobStatus.FreeNum);
+	// 				p_dpu_ctx[i]->working_job_status.busy_num,
+	// 				p_dpu_ctx[i]->working_job_status.free_num);
 	// 	}
 	// }
 
 	//DPU OUTPUT JOB QUEUE STATUS
 	//seq_puts(m, "\n-------------------------------DPU OUTPUT JOB QUEUE STATUS------------------------------\n");
 	// seq_printf(m, "%20s%20s%20s\n",
-	// 	"GrpID", "BusyNum", "FreeNum");
+	// 	"grp_id", "busy_num", "free_num");
 	// for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-	// 	if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
+	// 	if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
 	// 			seq_printf(m, "%20s%20s%20s\n",
-	// 						"GrpID", "BusyNum", "FreeNum");
+	// 						"grp_id", "busy_num", "free_num");
 	// 			seq_printf(m, "%20d%20d%20d\n",
 	// 				i,
-	// 				pDpuCtx[i]->stOutputJobStatus.BusyNum,
-	// 				pDpuCtx[i]->stOutputJobStatus.FreeNum);
+	// 				p_dpu_ctx[i]->output_job_status.busy_num,
+	// 				p_dpu_ctx[i]->output_job_status.free_num);
 	// 	}
 	// }
 
 	// DPU GRP WORK STATUS
 	seq_puts(m, "\n-------------------------------DPU GRP WORK STATUS-----------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s\n",
-						"GrpID", "FrameNumPerSec", "StartCnt", "FailCnt", "DoneCnt",
-						"CurTaskCostTm(us)","MaxTaskCostTm(us)");
+						"grp_id", "FrameNumPerSec", "start_cnt", "FailCnt", "DoneCnt",
+						"cur_task_cost_tm(us)","max_task_cost_tm(us)");
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
-		if (pDpuCtx[i] && pDpuCtx[i]->isCreated) {
+		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
 			// seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s\n",
-			// 			"GrpID", "FrameNumPerSec", "StartCnt", "FailCnt", "DoneCnt",
-			// 			"CurTaskCostTm(us)","MaxTaskCostTm(us)");
+			// 			"grp_id", "FrameNumPerSec", "start_cnt", "FailCnt", "DoneCnt",
+			// 			"cur_task_cost_tm(us)","max_task_cost_tm(us)");
 			seq_printf(m, "%20d%20d%20d%20d%20d%20d%20d\n",
 				i,
-				pDpuCtx[i]->stGrpWorkStatus.FrameRate,
-				pDpuCtx[i]->stGrpWorkStatus.StartCnt,
-				pDpuCtx[i]->stGrpWorkStatus.StartFailCnt,
-				pDpuCtx[i]->stGrpWorkStatus.SendPicCnt,
-				pDpuCtx[i]->stGrpWorkStatus.CurTaskCostTm,
-				pDpuCtx[i]->stGrpWorkStatus.MaxTaskCostTm);
+				p_dpu_ctx[i]->grp_work_wtatus.frame_rate,
+				p_dpu_ctx[i]->grp_work_wtatus.start_cnt,
+				p_dpu_ctx[i]->grp_work_wtatus.start_fail_cnt,
+				p_dpu_ctx[i]->grp_work_wtatus.send_pic_cnt,
+				p_dpu_ctx[i]->grp_work_wtatus.cur_task_cost_tm,
+				p_dpu_ctx[i]->grp_work_wtatus.max_task_cost_tm);
 		}
 	}
 
 	// DPU Run Time STATUS
 	seq_puts(m, "\n-------------------------------DPU RUN TIME STATUS-----------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s%20s\n",
-		"DevID", "CntPerSec","MaxCntPerSec","TotalIntCnt", "HwCostTm(us)", "HwMaxCostTm(us)");
+		"DevID", "cnt_per_sec","max_cnt_per_sec","total_int_cnt", "Hwcost_tm(us)", "HwMaxcost_tm(us)");
 			seq_printf(m, "%20d%20d%20d%20d%20d%20d\n",
 				0,
-				dev->stRunTimeInfo.CntPerSec,
-				dev->stRunTimeInfo.MaxCntPerSec,
-				dev->stRunTimeInfo.TotalIntCnt,
-				dev->stRunTimeInfo.CostTm,
-				dev->stRunTimeInfo.MCostTm
+				dev->run_time_info.cnt_per_sec,
+				dev->run_time_info.max_cnt_per_sec,
+				dev->run_time_info.total_int_cnt,
+				dev->run_time_info.cost_tm,
+				dev->run_time_info.max_cost_tm
 			);
 	return 0;
 }
@@ -555,21 +555,21 @@ static const struct file_operations dpu_proc_fops = {
 #endif
 
 
-int dpu_proc_init(struct cvi_dpu_dev *dev)
+int dpu_proc_init(struct dpu_dev_s *dev)
 {
 	struct proc_dir_entry *entry;
 
 	entry = proc_create_data(DPU_PROC_NAME, 0644, NULL,
 				 &dpu_proc_fops, dev);
 	if (!entry) {
-		CVI_TRACE_DPU(CVI_DBG_ERR, "dpu proc creation failed\n");
+		TRACE_DPU(DBG_ERR, "dpu proc creation failed\n");
 		return -ENOMEM;
 	}
 
 	return 0;
 }
 
-int dpu_proc_remove(struct cvi_dpu_dev *dev)
+int dpu_proc_remove(struct dpu_dev_s *dev)
 {
 	remove_proc_entry(DPU_PROC_NAME, NULL);
 	return 0;

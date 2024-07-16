@@ -5,68 +5,68 @@
 #include "util/util.h"
 
 typedef struct {
-	u8 mFormat;
+	u8 mformat;
 
-	u8 mMaxChannels;
+	u8 m_max_channels;
 
-	u8 mSampleRates;
+	u8 m_sample_rates;
 
-	u8 mByte3;
-} shortAudioDesc_t;
-
-typedef struct {
-	int 	mNative;
-
-	unsigned mCode;
-
-	unsigned mLimitedToYcc420;
-
-	unsigned mYcc420;
-
-} shortVideoDesc_t;
+	u8 mbyte3;
+} short_audio_desc_t;
 
 typedef struct {
-	u8 mMinVerticalRate;
+	int mnative;
 
-	u8 mMaxVerticalRate;
+	unsigned m_code;
 
-	u8 mMinHorizontalRate;
+	unsigned m_limited_to_ycc420;
 
-	u8 mMaxHorizontalRate;
+	unsigned m_ycc420;
 
-	u8 mMaxPixelClock;
+} short_video_desc_t;
 
-	int mValid;
-} monitorRangeLimits_t;
+typedef struct {
+	u8 mmin_vertical_rate;
 
-void monitor_range_limits_reset(hdmi_tx_dev_t *dev, monitorRangeLimits_t * mrl);
+	u8 mmax_vertical_rate;
 
-int svd_parse(hdmi_tx_dev_t *dev, shortVideoDesc_t * svd, u8 data);
+	u8 mmin_horizontal_rate;
 
-void sad_reset(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+	u8 mmax_horizontal_rate;
 
-int sad_parse(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad, u8 * data);
+	u8 mmax_pixel_clock;
 
-//u8 sad_GetSampleRates(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+	int mvalid;
+} monitor_range_limits_t;
 
-int sad_support32k(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+void monitor_range_limits_reset(hdmi_tx_dev_t *dev, monitor_range_limits_t * mrl);
 
-int sad_support44k1(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int svd_parse(hdmi_tx_dev_t *dev, short_video_desc_t * svd, u8 data);
 
-int sad_support48k(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+void sad_reset(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support88k2(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_parse(hdmi_tx_dev_t *dev, short_audio_desc_t * sad, u8 * data);
 
-int sad_support96k(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+//u8 sad_GetSampleRates(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support176k4(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_support32k(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support192k(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_support44k1(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support16bit(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_support48k(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support20bit(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_support88k2(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
-int sad_support24bit(hdmi_tx_dev_t *dev, shortAudioDesc_t * sad);
+int sad_support96k(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
+
+int sad_support176k4(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
+
+int sad_support192k(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
+
+int sad_support16bit(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
+
+int sad_support20bit(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
+
+int sad_support24bit(hdmi_tx_dev_t *dev, short_audio_desc_t * sad);
 
 #endif	/* _DESC_H_ */

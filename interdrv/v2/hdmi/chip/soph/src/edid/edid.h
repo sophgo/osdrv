@@ -11,24 +11,24 @@ typedef enum {
 	EDID_ERROR = 0, EDID_IDLE, EDID_READING, EDID_DONE
 } edid_status_t;
 
-#define EDID_LENGTH 128
-#define DDC_ADDR 0x50
+#define EDID_LENGTH		128
+#define DDC_ADDR		0x50
 
-#define CEA_EXT	    0x02
-#define VTB_EXT	    0x10
-#define DI_EXT	    0x40
-#define LS_EXT	    0x50
-#define MI_EXT	    0x60
+#define CEA_EXT			0x02
+#define VTB_EXT			0x10
+#define DI_EXT			0x40
+#define LS_EXT			0x50
+#define MI_EXT			0x60
 
-#define EDID_DETAIL_EST_TIMINGS 0xf7
-#define EDID_DETAIL_CVT_3BYTE 0xf8
-#define EDID_DETAIL_COLOR_MGMT_DATA 0xf9
-#define EDID_DETAIL_STD_MODES 0xfa
-#define EDID_DETAIL_MONITOR_CPDATA 0xfb
-#define EDID_DETAIL_MONITOR_NAME 0xfc
-#define EDID_DETAIL_MONITOR_RANGE 0xfd
-#define EDID_DETAIL_MONITOR_STRING 0xfe
-#define EDID_DETAIL_MONITOR_SERIAL 0xff
+#define EDID_DETAIL_EST_TIMINGS		0xf7
+#define EDID_DETAIL_CVT_3BYTE		0xf8
+#define EDID_DETAIL_COLOR_MGMT_DATA	0xf9
+#define EDID_DETAIL_STD_MODES		0xfa
+#define EDID_DETAIL_MONITOR_CPDATA	0xfb
+#define EDID_DETAIL_MONITOR_NAME	0xfc
+#define EDID_DETAIL_MONITOR_RANGE	0xfd
+#define EDID_DETAIL_MONITOR_STRING	0xfe
+#define EDID_DETAIL_MONITOR_SERIAL	0xff
 
 struct est_timings {
 	u8 t1;
@@ -137,51 +137,51 @@ struct detailed_timing {
 
 typedef struct {
 	/** VIC code */
-	u32 mCode;
+	u32 m_code;
 
 	/** Identifies modes that ONLY can be displayed in YCC 4:2:0 */
-	u8 mLimitedToYcc420;
+	u8 m_limited_to_ycc420;
 
 	/** Identifies modes that can also be displayed in YCC 4:2:0 */
-	u8 mYcc420;
+	u8 m_ycc420;
 
-	u16 mPixelRepetitionInput;
+	u16 m_pixel_repetition_input;
 
 	/** In units of 1MHz */
-	u32 mPixelClock;
+	u32 m_pixel_clock;
 
 	/** 1 for interlaced, 0 progressive */
-	u8 mInterlaced;
+	u8 m_interlaced;
 
-	u16 mHActive;
+	u16 m_hactive;
 
-	u16 mHBlanking;
+	u16 m_hblanking;
 
-	u16 mHBorder;
+	u16 m_hborder;
 
-	u16 mHImageSize;
+	u16 m_himage_size;
 
-	u16 mHSyncOffset;
+	u16 m_hsync_offset;
 
-	u16 mHSyncPulseWidth;
-
-	/** 0 for Active low, 1 active high */
-	u8 mHSyncPolarity;
-
-	u16 mVActive;
-
-	u16 mVBlanking;
-
-	u16 mVBorder;
-
-	u16 mVImageSize;
-
-	u16 mVSyncOffset;
-
-	u16 mVSyncPulseWidth;
+	u16 m_hsync_pulse_width;
 
 	/** 0 for Active low, 1 active high */
-	u8 mVSyncPolarity;
+	u8 m_hsync_polarity;
+
+	u16 m_vactive;
+
+	u16 m_vblanking;
+
+	u16 m_vborder;
+
+	u16 m_vimage_size;
+
+	u16 m_vsync_offset;
+
+	u16 m_vsync_pulse_width;
+
+	/** 0 for Active low, 1 active high */
+	u8 m_vsync_polarity;
 
 } dtd_t;
 
@@ -243,56 +243,56 @@ typedef struct {
 	/**
 	 * Array to hold all the parsed Detailed Timing Descriptors.
 	 */
-	dtd_t edid_mDtd[32];
+	dtd_t edid_mdtd[32];
 
-	unsigned int edid_mDtdIndex;
+	unsigned int edid_mdtd_index;
 	/**
 	 * array to hold all the parsed Short Video Descriptors.
 	 */
-	shortVideoDesc_t edid_mSvd[128];  //TODO: too big for stack
+	short_video_desc_t edid_msvd[128];  //TODO: too big for stack
 
-	shortVideoDesc_t tmpSvd;
+	short_video_desc_t tmp_svd;
 
-	unsigned int edid_mSvdIndex;
+	unsigned int edid_msvd_index;
 	/**
 	 * array to hold all the parsed Short Audio Descriptors.
 	 */
-	shortAudioDesc_t edid_mSad[128]; //TODO: too big for stack
+	short_audio_desc_t edid_msad[128]; //TODO: too big for stack
 
-	unsigned int edid_mSadIndex;
+	unsigned int edid_msad_index;
 #if 1
 	/**
 	 * A string to hold the Monitor Name parsed from EDID.
 	 */
-	char edid_mMonitorName[13];
+	char edid_mmonitor_name[13];
 
-	int edid_mYcc444Support;
+	int edid_mycc444_support;
 
-	int edid_mYcc422Support;
+	int edid_mycc422_support;
 
-	int edid_mYcc420Support;
+	int edid_mycc420_support;
 
-	int edid_mBasicAudioSupport;
+	int edid_mbasic_audio_support;
 
-	int edid_mUnderscanSupport;
+	int edid_munder_scan_support;
 #endif
 	/**
 	 *  If Sink is HDMI 2.0
 	 */
-	int edid_m20Sink;
+	int edid_m20_sink;
 
-	hdmivsdb_t edid_mHdmivsdb;
+	hdmivsdb_t edid_mhdmivsdb;
 
-	hdmiforumvsdb_t edid_mHdmiForumvsdb;
+	hdmiforumvsdb_t edid_mhdmi_forumvsdb;
 
-	monitorRangeLimits_t edid_mMonitorRangeLimits;
+	monitor_range_limits_t edid_mmonitor_range_limits;
 
-	videoCapabilityDataBlock_t edid_mVideoCapabilityDataBlock;
+	video_capability_datablock_t edid_mvideo_capability_datablock;
 
-	colorimetryDataBlock_t edid_mColorimetryDataBlock;
+	colorimetry_datablock_t edid_mcolorimetry_datablock;
 
-	speakerAllocationDataBlock_t edid_mSpeakerAllocationDataBlock;
-} edidCeaExt_t;
+	speaker_allocation_datablock_t edid_mspeaker_allocation_datablock;
+} edid_cea_ext_t;
 
 /**
  * Parses the Detailed Timing Descriptor.
@@ -309,7 +309,7 @@ int dtd_parse(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 data[18]);
  * @param refreshRate the specified vertical refresh rate.
  * @return TRUE if success
  */
-int dtd_fill(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 code, u32 refreshRate);
+int dtd_fill(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 code, u32 refresh_rate);
 
 /**
  * @param dtd Pointer to the current DTD parameters
@@ -322,7 +322,7 @@ u32 dtd_get_refresh_rate(dtd_t *dtd);
  * @param tempDtd Pointer to the temp DTD parameters
  * @return The refresh rate if DTD parameters are correct and 0 if not
  */
-void dtd_change_horiz_for_ycc420(hdmi_tx_dev_t *dev, dtd_t * tempDtd);
+void dtd_change_horiz_for_ycc420(hdmi_tx_dev_t *dev, dtd_t * temp_dtd);
 
 dtd_t * find_dtd(u16 width, u16 height, u32 pclk);
 

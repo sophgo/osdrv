@@ -1,5 +1,6 @@
-#ifndef __VI_CORE_H__
-#define __VI_CORE_H__
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#ifndef __VO_CORE_H__
+#define __VO_CORE_H__
 
 #ifdef __cplusplus
 	extern "C" {
@@ -23,6 +24,7 @@
 #include <linux/spinlock.h>
 #include <linux/streamline_annotate.h>
 #include <linux/version.h>
+#include <linux/delay.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 #include <uapi/linux/sched/types.h>
 #endif
@@ -35,4 +37,4 @@
 }
 #endif
 
-#endif /* __VI_CORE_H__ */
+#endif /* __VO_CORE_H__ */

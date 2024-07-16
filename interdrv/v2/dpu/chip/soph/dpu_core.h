@@ -10,7 +10,7 @@
 #include <linux/types.h>
 #include <linux/timex.h>
 
-#include <linux/cvi_comm_dpu.h>
+#include <linux/comm_dpu.h>
 #include "dpu.h"
 
 #define DPU_SGBM_LD1_BASE_ADDR                 (0x680ba000)

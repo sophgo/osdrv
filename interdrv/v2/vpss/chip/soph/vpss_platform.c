@@ -99,12 +99,12 @@ u8 _gop_get_bpp(enum sclr_gop_format fmt)
 		(fmt == SCL_GOP_FMT_256LUT) ? 1 : 2;
 }
 
-int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_cfg,
+int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct rgn_cfg *rgn_cfg,
 	const struct sclr_size *size)
 {
 	struct sclr_gop_cfg *gop_cfg = sclr_gop_get_cfg(inst, layer);
 	struct sclr_gop_odec_cfg *odec_cfg = &gop_cfg->odec_cfg;
-	struct cvi_rgn_lut_cfg *rgn_lut_cfg = (struct cvi_rgn_lut_cfg *)&rgn_cfg->rgn_lut_cfg;
+	struct rgn_lut_cfg *rgn_lut_cfg = (struct rgn_lut_cfg *)&rgn_cfg->rgn_lut_cfg;
 	struct sclr_gop_ow_cfg *ow_cfg;
 	u8 bpp, ow_idx;
 
@@ -124,8 +124,8 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_c
 		ow_cfg = &gop_cfg->ow_cfg[ow_idx];
 		gop_cfg->gop_ctrl.raw |= BIT(ow_idx);
 
-		if (rgn_cfg->param[ow_idx].fmt > CVI_RGN_FMT_MAX) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "RGN FMT Error\n");
+		if (rgn_cfg->param[ow_idx].fmt > RGN_FMT_MAX) {
+			TRACE_VPSS(DBG_ERR, "RGN FMT Error\n");
 		} else {
 			ow_cfg->fmt = (enum sclr_gop_format)rgn_cfg->param[ow_idx].fmt;
 		}
@@ -149,11 +149,11 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_c
 		//odec_cfg->odec_ctrl.b.odec_wdt_en = true;
 		odec_cfg->odec_ctrl.b.odec_attached_idx = ow_idx;
 #if 0
-		CVI_TRACE_VPSS(CVI_DBG_INFO, "inst(%d) gop(%d) fmt(%d) rect(%d %d %d %d) addr(0x%llx) pitch(%d).\n",
+		TRACE_VPSS(DBG_INFO, "inst(%d) gop(%d) fmt(%d) rect(%d %d %d %d) addr(0x%llx) pitch(%d).\n",
 				inst, layer, ow_cfg->fmt,
 				ow_cfg->start.x, ow_cfg->start.y, ow_cfg->img_size.w, ow_cfg->img_size.h,
 				ow_cfg->addr, ow_cfg->pitch);
-		CVI_TRACE_VPSS(CVI_DBG_INFO, "odec:enable(%d) attached_ow(%d) size(%d).\n",
+		TRACE_VPSS(DBG_INFO, "odec:enable(%d) attached_ow(%d) size(%d).\n",
 				odec_cfg->odec_ctrl.b.odec_en, odec_cfg->odec_ctrl.b.odec_attached_idx,
 				rgn_cfg->odec.bso_sz);
 #endif
@@ -164,8 +164,8 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_c
 			ow_cfg = &gop_cfg->ow_cfg[ow_idx];
 			gop_cfg->gop_ctrl.raw |= BIT(ow_idx);
 
-			if (rgn_cfg->param[ow_idx].fmt > CVI_RGN_FMT_MAX) {
-				CVI_TRACE_VPSS(CVI_DBG_ERR, "RGN FMT Error\n");
+			if (rgn_cfg->param[ow_idx].fmt > RGN_FMT_MAX) {
+				TRACE_VPSS(DBG_ERR, "RGN FMT Error\n");
 			} else {
 				bpp = _gop_get_bpp((enum sclr_gop_format)rgn_cfg->param[ow_idx].fmt);
 				ow_cfg->fmt = (enum sclr_gop_format)rgn_cfg->param[ow_idx].fmt;
@@ -210,8 +210,8 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_c
 			ow_cfg->mem_size.h = ow_cfg->img_size.h;
 
 #if 0
-			CVI_TRACE_VPSS(CVI_DBG_INFO, "inst(%d) gop(%d) fmt(%d)\n", inst, layer, ow_cfg->fmt);
-			CVI_TRACE_VPSS(CVI_DBG_INFO, "rect(%d %d %d %d) addr(0x%llx) pitch(%d).\n",
+			TRACE_VPSS(DBG_INFO, "inst(%d) gop(%d) fmt(%d)\n", inst, layer, ow_cfg->fmt);
+			TRACE_VPSS(DBG_INFO, "rect(%d %d %d %d) addr(0x%llx) pitch(%d).\n",
 				ow_cfg->start.x, ow_cfg->start.y, ow_cfg->img_size.w, ow_cfg->img_size.h,
 				ow_cfg->addr, ow_cfg->pitch);
 #endif
@@ -227,7 +227,7 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct cvi_rgn_cfg *rgn_c
 	return 0;
 }
 
-static int _sc_ext_set_fbd(u8 dev_idx, const struct cvi_vpss_grp_cfg *grp_cfg){
+static int _sc_ext_set_fbd(u8 dev_idx, const struct vpss_hal_grp_cfg *grp_cfg){
 	struct sclr_fbd_cfg fbd_cfg;
 	int height;
 	memset(&fbd_cfg, 0, sizeof(struct sclr_fbd_cfg));
@@ -258,7 +258,7 @@ static int _sc_ext_set_fbd(u8 dev_idx, const struct cvi_vpss_grp_cfg *grp_cfg){
 	return 0;
 }
 
-static int _sc_ext_set_quant(u8 dev_idx, const struct cvi_sc_quant_param *param)
+static int _sc_ext_set_quant(u8 dev_idx, const struct sc_quant_param *param)
 {
 	struct sclr_odma_cfg *odma_cfg = sclr_odma_get_cfg(dev_idx);
 
@@ -283,7 +283,7 @@ static int _sc_ext_set_quant(u8 dev_idx, const struct cvi_sc_quant_param *param)
 			     ? SCL_CSC_NONE : SCL_CSC_601_LIMIT_RGB2YUV;
 
 		//if (idev->is_online_from_isp) {
-		//	CVI_TRACE_VPSS(CVI_DBG_ERR, "quant for yuv not work in online.\n");
+		//	TRACE_VPSS(DBG_ERR, "quant for yuv not work in online.\n");
 		//	return -EINVAL;
 		//}
 		sclr_img_set_cfg(dev_idx, img_cfg);
@@ -292,7 +292,7 @@ static int _sc_ext_set_quant(u8 dev_idx, const struct cvi_sc_quant_param *param)
 	return 0;
 }
 
-static int _sc_ext_set_convertto(u8 dev_idx, const struct cvi_convertto_param *param)
+static int _sc_ext_set_convertto(u8 dev_idx, const struct convertto_param *param)
 {
 	struct sclr_odma_cfg *odma_cfg = sclr_odma_get_cfg(dev_idx);
 
@@ -301,7 +301,7 @@ static int _sc_ext_set_convertto(u8 dev_idx, const struct cvi_convertto_param *p
 
 	if ((odma_cfg->fmt != SCL_FMT_RGB_PLANAR) &&
 		(odma_cfg->fmt != SCL_FMT_BF16)){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "convertto only support rgb planar + bf16.\n");
+		TRACE_VPSS(DBG_ERR, "convertto only support rgb planar + bf16.\n");
 		return -1;
 	}
 	memcpy(odma_cfg->csc_cfg.convert_to_cfg.a_frac, param->a_frac, sizeof(param->a_frac));
@@ -315,7 +315,7 @@ static int _sc_ext_set_convertto(u8 dev_idx, const struct cvi_convertto_param *p
 	return 0;
 }
 
-static void _sc_ext_set_border(u8 dev_idx, const struct cvi_sc_border_param *param)
+static void _sc_ext_set_border(u8 dev_idx, const struct sc_border_param *param)
 {
 	struct sclr_border_cfg cfg;
 	struct sclr_odma_cfg *odma_cfg;
@@ -338,7 +338,7 @@ static void _sc_ext_set_border(u8 dev_idx, const struct cvi_sc_border_param *par
 	sclr_border_set_cfg(dev_idx, &cfg);
 }
 
-static void _sc_ext_set_border_vpp(u8 dev_idx, const struct cvi_sc_border_vpp_param *param)
+static void _sc_ext_set_border_vpp(u8 dev_idx, const struct sc_border_vpp_param *param)
 {
 	int i;
 	struct sclr_border_vpp_cfg border_cfg;
@@ -362,7 +362,7 @@ static void _sc_ext_set_border_vpp(u8 dev_idx, const struct cvi_sc_border_vpp_pa
 }
 
 
-static void _sc_ext_set_coverex(u8 dev_idx, const struct cvi_rgn_coverex_cfg *cfg)
+static void _sc_ext_set_coverex(u8 dev_idx, const struct rgn_coverex_cfg *cfg)
 {
 	int i;
 	struct sclr_cover_cfg sc_cover_cfg;
@@ -386,12 +386,12 @@ static void _sc_ext_set_coverex(u8 dev_idx, const struct cvi_rgn_coverex_cfg *cf
 	}
 }
 
-static void _sc_ext_set_mask(u8 dev_idx, const struct cvi_rgn_mosaic_cfg *cfg)
+static void _sc_ext_set_mask(u8 dev_idx, const struct rgn_mosaic_cfg *cfg)
 {
 	struct sclr_privacy_cfg mask_cfg = {0};
 	//struct sclr_img_cfg *img_cfg;
-	//struct cvi_vip_dev *bdev = container_of(sdev, struct cvi_vip_dev, sc_vdev[dev_idx]);
-	//struct cvi_img_vdev *idev = &bdev->img_vdev[sdev->img_src];
+	//struct vip_dev *bdev = container_of(sdev, struct vip_dev, sc_vdev[dev_idx]);
+	//struct img_vdev *idev = &bdev->img_vdev[sdev->img_src];
 
 	if (cfg->enable) {
 		mask_cfg.cfg.raw = 0;
@@ -421,7 +421,7 @@ static void _sc_ext_set_mask(u8 dev_idx, const struct cvi_rgn_mosaic_cfg *cfg)
 	sclr_pri_set_cfg(dev_idx, &mask_cfg);
 }
 
-static void _sc_ext_set_y_ratio(u8 dev_idx, u32 YRatio, enum sclr_csc csc_type)
+static void _sc_ext_set_y_ratio(u8 dev_idx, u32 y_ratio, enum sclr_csc csc_type)
 {
 	int i;
 	struct sclr_csc_matrix csc_matrix;
@@ -429,19 +429,19 @@ static void _sc_ext_set_y_ratio(u8 dev_idx, u32 YRatio, enum sclr_csc csc_type)
 
 	csc_matrix = *def_matrix;
 	for (i = 0; i < 3; i++)
-		csc_matrix.coef[0][i] = (def_matrix->coef[0][i] * YRatio) / YRATIO_SCALE;
+		csc_matrix.coef[0][i] = (def_matrix->coef[0][i] * y_ratio) / YRATIO_SCALE;
 
 	sclr_set_csc(dev_idx, &csc_matrix);
 }
 
-bool cvi_img_left_tile_cfg(u8 dev_idx, u16 online_l_width)
+bool img_left_tile_cfg(u8 dev_idx, u16 online_l_width)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
 	struct sclr_fbd_cfg fbd_cfg = *sclr_fbd_get_cfg(dev_idx);
 	struct sclr_core_cfg *sc = sclr_get_cfg(dev_idx);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on left.\n", dev_idx);
+	TRACE_VPSS(DBG_DEBUG, "img-%d: tile on left.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
 	if (online_l_width)
@@ -461,12 +461,12 @@ bool cvi_img_left_tile_cfg(u8 dev_idx, u16 online_l_width)
 		fbd_cfg.comp_base_c += (fbd_cfg.crop.y >> 2) * ALIGN(ALIGN(((sc->sc.tile.in_mem.w + 1) >> 1), 16) << 2, 32);
 		sclr_set_fbd(dev_idx, &fbd_cfg, false);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d start_x(%d) width(%d).\n", dev_idx, mem.start_x, mem.width);
+	TRACE_VPSS(DBG_DEBUG, "img-%d start_x(%d) width(%d).\n", dev_idx, mem.start_x, mem.width);
 #endif
 	return sclr_left_tile(dev_idx, mem.width);
 }
 
-bool cvi_img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end)
+bool img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
@@ -475,7 +475,7 @@ bool cvi_img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end)
 	u32 sc_offset;
 	u16 src_width = sc_cfg->sc.tile.in_mem.w;
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on right.\n", dev_idx);
+	TRACE_VPSS(DBG_DEBUG, "img-%d: tile on right.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
 	if (online_r_start && online_r_end) {
@@ -499,18 +499,18 @@ bool cvi_img_right_tile_cfg(u8 dev_idx, u16 online_r_start, u16 online_r_end)
 		fbd_cfg.comp_base_c += (fbd_cfg.crop.y >> 2) * ALIGN(ALIGN(((sc_cfg->sc.tile.in_mem.w + 1) >> 1), 16) << 2, 32);
 		sclr_set_fbd(dev_idx, &fbd_cfg, false);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d start_x(%d) width(%d).\n", dev_idx, mem.start_x, mem.width);
+	TRACE_VPSS(DBG_DEBUG, "img-%d start_x(%d) width(%d).\n", dev_idx, mem.start_x, mem.width);
 #endif
 	return sclr_right_tile(dev_idx, sc_offset);
 }
 
-bool cvi_img_top_tile_cfg(u8 dev_idx, u8 is_left)
+bool img_top_tile_cfg(u8 dev_idx, u8 is_left)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
 	struct sclr_fbd_cfg fbd_cfg = *sclr_fbd_get_cfg(dev_idx);
 	struct sclr_core_cfg *sc = sclr_get_cfg(dev_idx);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on top.\n", dev_idx);
+	TRACE_VPSS(DBG_DEBUG, "img-%d: tile on top.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
 	mem.height = (sc->sc.v_tile.in_mem.h >> 1) + TILE_GUARD_PIXEL;
@@ -527,12 +527,12 @@ bool cvi_img_top_tile_cfg(u8 dev_idx, u8 is_left)
 		fbd_cfg.comp_base_c += (fbd_cfg.crop.y >> 2) * ALIGN(ALIGN(((sc->sc.v_tile.in_mem.w + 1) >> 1), 16) << 2, 32);
 		sclr_set_fbd(dev_idx, &fbd_cfg, false);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d start_y(%d) height(%d).\n", dev_idx, mem.start_y, mem.height);
+	TRACE_VPSS(DBG_DEBUG, "img-%d start_y(%d) height(%d).\n", dev_idx, mem.start_y, mem.height);
 #endif
 	return sclr_top_tile(dev_idx, mem.height, is_left);
 }
 
-bool cvi_img_down_tile_cfg(u8 dev_idx, u8 is_right)
+bool img_down_tile_cfg(u8 dev_idx, u8 is_right)
 {
 	struct sclr_img_cfg *cfg = sclr_img_get_cfg(dev_idx);
 	struct sclr_mem mem = cfg->mem;
@@ -540,7 +540,7 @@ bool cvi_img_down_tile_cfg(u8 dev_idx, u8 is_right)
 	struct sclr_core_cfg *sc = sclr_get_cfg(dev_idx);
 	u32 sc_offset;
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d: tile on down.\n", dev_idx);
+	TRACE_VPSS(DBG_DEBUG, "img-%d: tile on down.\n", dev_idx);
 
 #ifdef TILE_ON_IMG
 	sc_offset = (sc->sc.v_tile.in_mem.h >> 1) - TILE_GUARD_PIXEL;
@@ -559,7 +559,7 @@ bool cvi_img_down_tile_cfg(u8 dev_idx, u8 is_right)
 		fbd_cfg.comp_base_c += (fbd_cfg.crop.y >> 2) * ALIGN(ALIGN(((sc->sc.v_tile.in_mem.w + 1) >> 1), 16) << 2, 32);
 		sclr_set_fbd(dev_idx, &fbd_cfg, false);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img-%d start_y(%d) height(%d).\n", dev_idx, mem.start_y, mem.height);
+	TRACE_VPSS(DBG_DEBUG, "img-%d start_y(%d) height(%d).\n", dev_idx, mem.start_y, mem.height);
 #endif
 	return sclr_down_tile(dev_idx, sc_offset, is_right);
 }
@@ -599,18 +599,18 @@ enum sclr_csc get_sc_csc(u32 pixelformat)
 	return csc_type;
 }
 
-int cvi_vpss_stitch(u8 dev_idx, struct vpss_cmdq_buf *cmdq_buf, struct vpss_stitch_cfg *cfg)
+int vpss_stitch_platform(u8 dev_idx, struct vpss_cmdq_buf *cmdq_buf, struct vpss_stitch_cfg *cfg)
 {
 	int i;
 	u8 stitch_num = cfg->num;
 	struct sclr_ctrl_cfg *ctrl_cfg = NULL;
 	union sclr_intr mask;
-	struct cvi_window *window;
+	struct vpss_window *window;
 
 	ctrl_cfg = (struct sclr_ctrl_cfg *)vzalloc(sizeof(struct sclr_ctrl_cfg) * stitch_num);
 	if (!ctrl_cfg) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "vzalloc fail.\n");
-		return CVI_ERR_VPSS_NOMEM;
+		TRACE_VPSS(DBG_ERR, "vzalloc fail.\n");
+		return ERR_VPSS_NOMEM;
 	}
 
 	for (i = 0; i < stitch_num; i++) {
@@ -622,15 +622,15 @@ int cvi_vpss_stitch(u8 dev_idx, struct vpss_cmdq_buf *cmdq_buf, struct vpss_stit
 			(window->rect_in.left + window->rect_in.width)) ||
 			((window->rect_out.top + window->rect_out.height) <
 			(window->rect_in.top + window->rect_in.height))) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "inside rectangle invalid.\n");
+			TRACE_VPSS(DBG_ERR, "inside rectangle invalid.\n");
 			vfree(ctrl_cfg);
-			return CVI_ERR_VPSS_ILLEGAL_PARAM;
+			return ERR_VPSS_ILLEGAL_PARAM;
 		}
 		if (((window->top_width + window->bottom_width) >= window->rect_out.height) ||
 			((window->left_width + window->right_width) >= window->rect_out.width)) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "border width invalid.\n");
+			TRACE_VPSS(DBG_ERR, "border width invalid.\n");
 			vfree(ctrl_cfg);
-			return CVI_ERR_VPSS_ILLEGAL_PARAM;
+			return ERR_VPSS_ILLEGAL_PARAM;
 		}
 
 		ctrl_cfg[i].img_inst = dev_idx;
@@ -755,29 +755,29 @@ int cvi_vpss_stitch(u8 dev_idx, struct vpss_cmdq_buf *cmdq_buf, struct vpss_stit
 	return 0;
 }
 
-void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
+void sc_update(u8 dev_idx, const struct vpss_hal_chn_cfg *chn_cfg)
 {
 	enum sclr_format fmt;
 	struct sclr_odma_cfg *odma_cfg;
 	struct sclr_core_cfg *core_cfg;
 	struct sclr_cir_cfg cir_cfg;
-	const struct cvi_rgn_cfg *rgn_cfg;
+	const struct rgn_cfg *rgn_cfg;
 	u8 i, ow_idx;
 	bool cir_bypass = true, gop_bypass = true;
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "-- sc%d --\n", dev_idx);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "update sc(%d) buf 0x%llx-0x%llx-0x%llx\n",
+	TRACE_VPSS(DBG_DEBUG, "-- sc%d --\n", dev_idx);
+	TRACE_VPSS(DBG_DEBUG, "update sc(%d) buf 0x%llx-0x%llx-0x%llx\n",
 		dev_idx, chn_cfg->addr[0], chn_cfg->addr[1], chn_cfg->addr[2]);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d * %4d)%10s(%4d)\n", "src size",
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d * %4d)%10s(%4d)\n", "src size",
 		chn_cfg->src_size.width, chn_cfg->src_size.height,
 		"sc coef", chn_cfg->sc_coef);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d %4d %4d %4d)\n", "crop rect",
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d %4d %4d %4d)\n", "crop rect",
 		chn_cfg->crop.left, chn_cfg->crop.top,
 		chn_cfg->crop.width, chn_cfg->crop.height);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d %4d %4d %4d)\n", "dst_rect",
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d %4d %4d %4d)\n", "dst_rect",
 		chn_cfg->dst_rect.left, chn_cfg->dst_rect.top,
 		chn_cfg->dst_rect.width, chn_cfg->dst_rect.height);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d)%10s(%4d)\n", "pitch_y", chn_cfg->bytesperline[0],
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d)%10s(%4d)\n", "pitch_y", chn_cfg->bytesperline[0],
 		"pitch_c", chn_cfg->bytesperline[1]);
 
 	/*core config*/
@@ -841,10 +841,10 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 		sclr_set_csc(dev_idx, (struct sclr_csc_matrix *)&chn_cfg->csc_cfg);
 
 	/*y rotio*/
-	if ((odma_cfg->csc_cfg.mode == SCL_OUT_CSC) && (chn_cfg->YRatio != YRATIO_SCALE))
-		_sc_ext_set_y_ratio(dev_idx, chn_cfg->YRatio, odma_cfg->csc_cfg.csc_type);
+	if ((odma_cfg->csc_cfg.mode == SCL_OUT_CSC) && (chn_cfg->y_ratio != YRATIO_SCALE))
+		_sc_ext_set_y_ratio(dev_idx, chn_cfg->y_ratio, odma_cfg->csc_cfg.csc_type);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d)%10s(%4d)%10s(%4d)\n", "fmt",
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d)%10s(%4d)%10s(%4d)\n", "fmt",
 		odma_cfg->fmt, "csc mode", odma_cfg->csc_cfg.mode,
 		"csc_type", odma_cfg->csc_cfg.csc_type);
 
@@ -869,7 +869,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 
 	/*border*/
 	_sc_ext_set_border(dev_idx, &chn_cfg->border_cfg);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%10s(%4d)%10s(%4d %4d)%10s(%4d %4d %4d)\n",
+	TRACE_VPSS(DBG_DEBUG, "%10s(%4d)%10s(%4d %4d)%10s(%4d %4d %4d)\n",
 		"border enable", chn_cfg->border_cfg.enable,
 		"offset", chn_cfg->border_cfg.offset_x, chn_cfg->border_cfg.offset_y,
 		"bgcolor", chn_cfg->border_cfg.bg_color[0], chn_cfg->border_cfg.bg_color[1],
@@ -880,7 +880,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 
 	/*convertto*/
 	_sc_ext_set_convertto(dev_idx, &chn_cfg->convert_to_cfg);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%15s(%4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)\n",
+	TRACE_VPSS(DBG_DEBUG, "%15s(%4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)\n",
 		"convert enable", chn_cfg->convert_to_cfg.enable,
 		"a_frac", chn_cfg->convert_to_cfg.a_frac[0], chn_cfg->convert_to_cfg.a_frac[1],
 		chn_cfg->convert_to_cfg.a_frac[2],
@@ -889,7 +889,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 
 	/*quant*/
 	_sc_ext_set_quant(dev_idx, &chn_cfg->quant_cfg);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%15s(%4d)%10s(%4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)\n",
+	TRACE_VPSS(DBG_DEBUG, "%15s(%4d)%10s(%4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)%10s(%4d %4d %4d)\n",
 		"quant enable", chn_cfg->quant_cfg.enable,
 		"rounding", chn_cfg->quant_cfg.rounding,
 		"factor", chn_cfg->quant_cfg.sc_frac[0], chn_cfg->quant_cfg.sc_frac[1], chn_cfg->quant_cfg.sc_frac[2],
@@ -906,7 +906,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 	for (i = 0; i < RGN_MAX_LAYER_VPSS; ++i) {
 		rgn_cfg = &chn_cfg->rgn_cfg[i];
 		_sc_ext_set_rgn_cfg(dev_idx, i, rgn_cfg, &sclr_get_cfg(dev_idx)->sc.dst);
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop%d:%10s(%4d)%10s(%4d)%10s(%4d)%10s(%4d)%10s(0x%08x)\n", i,
+		TRACE_VPSS(DBG_DEBUG, "gop%d:%10s(%4d)%10s(%4d)%10s(%4d)%10s(%4d)%10s(0x%08x)\n", i,
 			"rgn number", rgn_cfg->num_of_rgn,
 			"hscale_x2", rgn_cfg->hscale_x2,
 			"vscale_x2", rgn_cfg->vscale_x2,
@@ -914,13 +914,13 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 			"colorkey", rgn_cfg->colorkey);
 		if (rgn_cfg->odec.enable) {
 			gop_bypass = false;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop%d odec:%10s(%4d)%10s(%4d)%10s(%4d)\n", i,
+			TRACE_VPSS(DBG_DEBUG, "gop%d odec:%10s(%4d)%10s(%4d)%10s(%4d)\n", i,
 				       "enable", rgn_cfg->odec.enable,
 				       "attached_ow", rgn_cfg->odec.attached_ow,
 				       "bso_sz", rgn_cfg->odec.bso_sz);
 
 			ow_idx = rgn_cfg->odec.attached_ow;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG,
+			TRACE_VPSS(DBG_DEBUG,
 				"ow%d:%11s(%4d)%10s(%4d %4d %4d %4d)%10s(%6d)%10s(0x%llx)\n", ow_idx,
 				"fmt", rgn_cfg->param[ow_idx].fmt,
 				"rect", rgn_cfg->param[ow_idx].rect.left, rgn_cfg->param[ow_idx].rect.top,
@@ -930,7 +930,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 		} else {
 			for (ow_idx = 0; ow_idx < rgn_cfg->num_of_rgn; ++ow_idx){
 				gop_bypass = false;
-				CVI_TRACE_VPSS(CVI_DBG_DEBUG,
+				TRACE_VPSS(DBG_DEBUG,
 					"ow%d:%11s(%4d)%10s(%4d %4d %4d %4d)%10s(%4d)%10s(0x%llx)\n", ow_idx,
 					"fmt", rgn_cfg->param[ow_idx].fmt,
 					"rect", rgn_cfg->param[ow_idx].rect.left,
@@ -946,7 +946,7 @@ void cvi_sc_update(u8 dev_idx, const struct cvi_vpss_chn_cfg *chn_cfg)
 	sclr_set_cfg(dev_idx, false, gop_bypass, cir_bypass, false);
 }
 
-void cvi_img_update(u8 dev_idx, bool isMaster, const struct cvi_vpss_grp_cfg *grp_cfg)
+void img_update(u8 dev_idx, bool is_master, const struct vpss_hal_grp_cfg *grp_cfg)
 {
 	struct sclr_img_cfg *cfg;
 	enum sclr_format fmt;
@@ -955,11 +955,11 @@ void cvi_img_update(u8 dev_idx, bool isMaster, const struct cvi_vpss_grp_cfg *gr
 	cfg = sclr_img_get_cfg(dev_idx);
 
 	if (grp_cfg->online_from_isp) {
-		cfg->src = isMaster ? SCL_INPUT_ISP : SCL_INPUT_SHARE;
+		cfg->src = is_master ? SCL_INPUT_ISP : SCL_INPUT_SHARE;
 		cfg->fmt = SCL_FMT_YUV422;
 		cfg->csc = SCL_CSC_601_LIMIT_YUV2RGB;
 	} else {
-		cfg->src = isMaster ? SCL_INPUT_MEM : SCL_INPUT_SHARE; //todo:dwa-vpss online
+		cfg->src = is_master ? SCL_INPUT_MEM : SCL_INPUT_SHARE; //todo:dwa-vpss online
 		cfg->fmt = fmt;
 		if (grp_cfg->pixelformat == PIXEL_FORMAT_YUV_PLANAR_444 || grp_cfg->pixelformat == PIXEL_FORMAT_YUV_444)
 			cfg->csc = SCL_CSC_601_LIMIT_YUV2RGB;
@@ -985,11 +985,13 @@ void cvi_img_update(u8 dev_idx, bool isMaster, const struct cvi_vpss_grp_cfg *gr
 	cfg->mem.height  = grp_cfg->crop.height;
 	cfg->dup2fancy_enable = grp_cfg->upsample;
 
-	if (!isMaster) {
+	if (!is_master) {
 		cfg->fmt = SCL_FMT_RGB_PLANAR;
 		cfg->csc = SCL_CSC_NONE;
-		cfg->mem.pitch_y = cfg->mem.width;
-		cfg->mem.pitch_c = cfg->mem.width;
+		cfg->mem.pitch_y = ALIGN(cfg->mem.width, IMG_IN_PITCH_ALIGN);
+		cfg->mem.pitch_c = ALIGN(cfg->mem.width, IMG_IN_PITCH_ALIGN);
+		cfg->mem.start_x = 0;
+		cfg->mem.start_y = 0;
 	} else if (grp_cfg->fbd_enable) {
 		cfg->src = SCL_INPUT_ISP;
 		cfg->fmt = SCL_FMT_YUV420;
@@ -1005,10 +1007,10 @@ void cvi_img_update(u8 dev_idx, bool isMaster, const struct cvi_vpss_grp_cfg *gr
 
 	_sc_ext_set_fbd(dev_idx, grp_cfg);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "update img(%d) online_from_isp=%d, fmt=%d, csc=%d, fbd_enable=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "update img(%d) online_from_isp=%d, fmt=%d, csc=%d, fbd_enable=%d\n",
 		dev_idx, grp_cfg->online_from_isp, cfg->fmt, cfg->csc, grp_cfg->fbd_enable);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG,
+	TRACE_VPSS(DBG_DEBUG,
 		"input: w(%d) h(%d) x(%d) y(%d) pitch_y(%d) pitch_c(%d) addr(0x%llx-0x%llx-0x%llx-0x%llx).\n",
 		cfg->mem.width, cfg->mem.height, cfg->mem.start_x, cfg->mem.start_y, cfg->mem.pitch_y,
 		cfg->mem.pitch_c, cfg->mem.addr0, cfg->mem.addr1, cfg->mem.addr2, grp_cfg->addr[3]);
@@ -1020,13 +1022,13 @@ void cvi_img_update(u8 dev_idx, bool isMaster, const struct cvi_vpss_grp_cfg *gr
 		sclr_img_set_csc(dev_idx, (struct sclr_csc_matrix *)&grp_cfg->csc_cfg);
 }
 
-void cvi_top_update(u8 dev_idx, bool isShare, bool fbd_enable)
+void top_update(u8 dev_idx, bool is_share, bool fbd_enable)
 {
-	sclr_top_set_src_share(dev_idx, isShare);
+	sclr_top_set_src_share(dev_idx, is_share);
 	sclr_top_set_cfg(dev_idx, true, fbd_enable);
 }
 
-void cvi_img_start(u8 dev_idx, u8 chn_num)
+void img_start(u8 dev_idx, u8 chn_num)
 {
 	int i;
 
@@ -1036,12 +1038,12 @@ void cvi_img_start(u8 dev_idx, u8 chn_num)
 	sclr_img_start(dev_idx);
 }
 
-void cvi_img_reset(u8 dev_idx)
+void img_reset(u8 dev_idx)
 {
 	sclr_vpss_sw_top_reset(dev_idx);
 }
 
-void cvi_vpss_stauts(u8 dev_idx)
+void vpss_stauts(u8 dev_idx)
 {
 	sclr_dump_top_register(dev_idx);
 	sclr_dump_img_in_register(dev_idx);
@@ -1049,7 +1051,7 @@ void cvi_vpss_stauts(u8 dev_idx)
 	sclr_dump_odma_register(dev_idx);
 }
 
-void cvi_vpss_error_stauts(u8 dev_idx)
+void vpss_error_stauts(u8 dev_idx)
 {
 	sclr_dump_register(dev_idx);
 }

@@ -40,21 +40,13 @@ static long cviaudio_device_core_ioctl(struct file *filp, u_int cmd, u_long arg)
 
 
 #ifdef CONFIG_COMPAT
-static long compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long cviaudio_compat_device_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	if (!file->f_op->unlocked_ioctl)
 		return -ENOIOCTLCMD;
 
 	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-}
 
-static long compat_device_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (!file->f_op->unlocked_ioctl)
-		return -ENOIOCTLCMD;
-
-	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-}
 #endif
 
 
@@ -85,7 +77,7 @@ const struct file_operations cviaudio_device_fops = {
 	.open = cviaudio_device_core_open,
 	.unlocked_ioctl = cviaudio_device_core_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = compat_device_ptr_ioctl,
+	.compat_ioctl = cviaudio_compat_device_ptr_ioctl,
 #endif
 	.release = cviaudio_device_core_release,
 	.mmap = cviaudio_device_core_mmap,

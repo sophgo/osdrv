@@ -2,8 +2,8 @@
 #define _LDC_COMMON_H_
 
 #include "linux/ldc_uapi.h"
-#include "linux/cvi_comm_video.h"
-#include "linux/cvi_comm_vb.h"
+#include "linux/comm_video.h"
+#include "linux/comm_vb.h"
 #include "base_ctx.h"
 
 #define VIP_ALIGNMENT 0x40
@@ -53,7 +53,7 @@
 #define B_IDX 2
 
 /***************** ldc callback param *************************/
-typedef void (*ldc_cb)(void *, VB_BLK);
+typedef void (*ldc_cb)(void *, vb_blk);
 typedef void (*ldc_tsk_cb)(void *data, int top_id);// tsk callback
 
 enum ldc_usage {
@@ -81,25 +81,25 @@ enum ldc_task_state {
 };
 
 struct ldc_task {
-	struct list_head node;// add to cvi_ldc_job task_list
+	struct list_head node;// add to ldc_job task_list
 	struct gdc_task_attr attr;
-	uint64_t mesh_id_addr;
-	uint32_t bgcolor;
-	uint32_t bdcolor;
+	unsigned long long mesh_id_addr;
+	unsigned int bgcolor;
+	unsigned int bdcolor;
 	enum ldc_task_type type;
-	ROTATION_E enRotation;
+	rotation_e rotation;
 	atomic_t state;//ldc_task_state
-	ldc_tsk_cb pfnTskCB;
+	ldc_tsk_cb fn_tsk_cb;
 	int tsk_id;
 	struct semaphore sem;
-	//int8_t coreid;
+	//char coreid;
 };
 
 struct ldc_data {
-	uint32_t bytesperline[VIP_MAX_PLANES];
-	uint32_t sizeimage[VIP_MAX_PLANES];
-	uint16_t w;
-	uint16_t h;
+	unsigned int bytesperline[VIP_MAX_PLANES];
+	unsigned int sizeimage[VIP_MAX_PLANES];
+	unsigned short w;
+	unsigned short h;
 };
 
 enum ldc_job_state {
@@ -114,13 +114,13 @@ enum ldc_job_state {
 
 struct ldc_job {
 	struct ldc_data cap_data, out_data;
-	atomic_t enJobState; //ldc_job_state
-	struct list_head node;//add to cvi_ldc_vdev job_list
+	atomic_t job_state; //ldc_job_state
+	struct list_head node;//add to ldc_vdev job_list
 	struct list_head task_list;
 	atomic_t task_num;
-	GDC_IDENTITY_ATTR_S identity;
+	gdc_identity_attr_s identity;
 	bool use_cmdq;
-	int8_t coreid;
+	char coreid;
 	wait_queue_head_t job_done_wq;
 	bool job_done_evt;
 };
@@ -132,77 +132,77 @@ struct ldc_vb_doneq {
 
 struct ldc_vb_done {
 	struct list_head node;//add to struct ldc_vb_doneq doneq
-	VIDEO_FRAME_INFO_S stImgOut;
+	video_frame_info_s img_out;
 	struct ldc_job job;
 };
 
 struct mesh_ldc_cfg {
 	enum ldc_usage usage;
-	const void *pUsageParam;
+	const void *usage_param;
 	struct vb_s *vb_in;
-	PIXEL_FORMAT_E enPixFormat;
-	u64 mesh_addr;
-	u8 sync_io;
-	void *pcbParam;
-	u32 cbParamSize;
-	ROTATION_E enRotation;
+	pixel_format_e pix_format;
+	unsigned long long mesh_addr;
+	unsigned char sync_io;
+	void *cb_param;
+	unsigned int cb_param_size;
+	rotation_e rotation;
 };
 
 /********************** proc status for ldc ***********************/
 struct ldc_proc_tsk_status {
-	uint32_t u32Success;   //total doing success num
-	uint32_t u32Fail;      //total doing fail num
-	uint32_t u32Cancel;    //total doing u32Cancel num
-	uint32_t u32BeginNum;   //total commit num
-	uint32_t u32ProcingNum; //total hw start ProcingNum num
-	uint32_t u32waitNum;    //waiting num
+	unsigned int success;   //total doing success num
+	unsigned int fail;      //total doing fail num
+	unsigned int cancel;    //total doing cancel num
+	unsigned int begin_num;   //total commit num
+	unsigned int procing_num; //total hw start ProcingNum num
+	unsigned int wait_num;    //waiting num
 };
 
 struct ldc_proc_tsk_info {
-	uint32_t u32InSize;
-	uint32_t u32OutSize;
+	unsigned int in_size;
+	unsigned int out_size;
 	enum ldc_task_type type;
 	enum ldc_task_state state;
-	u8 top_id;
-	uint32_t u32HwTime; // HW cost time
-	uint64_t u64HwStartTime; // us
+	unsigned char top_id;
+	unsigned int hw_time; // HW cost time
+	unsigned long long hw_start_time; // us
 };
 
 struct ldc_proc_job_status {
-	uint32_t u32Success;    //total doing success num
-	uint32_t u32Fail;       //total doing fail num
-	uint32_t u32Cancel;     //total doing cancel num
-	uint32_t u32BeginNum;   //total commit num
-	uint32_t u32ProcingNum; //total hw start ProcingNum num
-	uint32_t u32waitNum;    //job_list waiting num
+	unsigned int success;    //total doing success num
+	unsigned int fail;       //total doing fail num
+	unsigned int cancel;     //total doing cancel num
+	unsigned int begin_num;   //total commit num
+	unsigned int procing_num; //total hw start ProcingNum num
+	unsigned int wait_num;    //job_list waiting num
 };
 
 struct ldc_proc_job_info {
-	int64_t hHandle;
-	GDC_IDENTITY_ATTR_S identity;
-	uint32_t u32TaskNum; // number of tasks per job
+	long long handle;
+	gdc_identity_attr_s identity;
+	unsigned int task_num; // number of tasks per job
 	struct ldc_proc_tsk_info tsk_info[LDC_JOB_MAX_TSK_NUM];
-	enum ldc_job_state eState; // job state
-	uint32_t u32CostTime; // From job submitted to job done
-	uint32_t u32HwTime; // HW cost time
-	uint32_t u32BusyTime; // From job submitted to job commit to driver
-	uint64_t u64SubmitTime; // us
+	enum ldc_job_state state; // job state
+	unsigned int cost_time; // From job submitted to job done
+	unsigned int hw_time; // HW cost time
+	unsigned int busy_time; // From job submitted to job commit to driver
+	unsigned long long submit_time; // us
 };
 
 struct ldc_proc_operation_status {
-	uint32_t u32AddTaskSuc;
-	uint32_t u32AddTaskFail;
-	uint32_t u32EndJobSuc;
-	uint32_t u32EndJobFail;
-	uint32_t u32CbCnt;
+	unsigned int add_task_suc;
+	unsigned int add_task_fail;
+	unsigned int end_job_suc;
+	unsigned int end_job_fail;
+	unsigned int cb_cnt;
 };
 
 struct ldc_proc_ctx {
-	struct ldc_proc_job_info stJobInfo[LDC_PROC_JOB_INFO_NUM];
-	uint16_t u16JobIdx; // latest job submitted
-	struct ldc_proc_job_status stJobStatus;
-	struct ldc_proc_tsk_status stTskstatus;
-	struct ldc_proc_operation_status stFishEyeStatus;
+	struct ldc_proc_job_info job_info[LDC_PROC_JOB_INFO_NUM];
+	unsigned short job_idx; // latest job submitted
+	struct ldc_proc_job_status job_status;
+	struct ldc_proc_tsk_status tsk_status;
+	struct ldc_proc_operation_status fisheye_status;
 	spinlock_t lock;
 };
 

@@ -11,6 +11,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/compat.h>
+
 #include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/version.h>
@@ -19,9 +20,10 @@
 #include "vb.h"
 #include "bind.h"
 #include "ion.h"
-#include "cvi_vb_proc.h"
-#include "cvi_log_proc.h"
-#include "cvi_sys_proc.h"
+#include "vb_proc.h"
+#include "log_proc.h"
+#include "sys_proc.h"
+#include "base_debug.h"
 
 #ifndef UNUSED
 #define UNUSED(x) ((void)(x))
@@ -30,6 +32,9 @@
 #define BASE_CLASS_NAME "soph-base"
 #define BASE_DEV_NAME "soph-base"
 
+u32 base_log_lv = DBG_WARN;
+
+static atomic_t open_count = ATOMIC_INIT(0);
 
 struct base_device {
 	//struct device *dev;
@@ -43,31 +48,44 @@ struct base_device {
 static struct proc_dir_entry *proc_dir;
 static struct class *pbase_class;
 
+module_param(base_log_lv, int, 0644);
 
 static int base_open(struct inode *inode, struct file *filp)
 {
 	struct base_device *ndev = container_of(filp->private_data, struct base_device, miscdev);
 	int ret = 0;
+	int i;
 	UNUSED(inode);
 
 	if (!ndev) {
-		pr_err("cannot find base private data\n");
+		TRACE_BASE(DBG_ERR, "cannot find base private data\n");
 		return -ENODEV;
+	}
+	i = atomic_inc_return(&open_count);
+	if (i > 1) {
+		TRACE_BASE(DBG_INFO, "base_open: open %d times\n", i);
+		return 0;
 	}
 
 	filp->private_data = ndev;
-	pr_debug("base open ok\n");
+	TRACE_BASE(DBG_DEBUG, "base open ok\n");
 
 	return ret;
 }
 
 static int base_release(struct inode *inode, struct file *filp)
 {
+	int i;
 	UNUSED(inode);
 
+	i = atomic_dec_return(&open_count);
+	if (i) {
+		TRACE_BASE(DBG_INFO, "base_close: open %d times\n", i);
+		return 0;
+	}
 	vb_release();
 	bind_deinit();
-	pr_debug("base release ok\n");
+	TRACE_BASE(DBG_DEBUG, "base release ok\n");
 
 	return 0;
 }
@@ -86,7 +104,7 @@ static int base_mmap(struct file *filp, struct vm_area_struct *vma)
 	while (vm_size > 0) {
 		if (remap_pfn_range(vma, vm_start, virt_to_pfn(pos), PAGE_SIZE, vma->vm_page_prot))
 			return -EAGAIN;
-		pr_debug("mmap vir(%p) phys(%#llx)\n", pos, (u64)virt_to_phys((void *) pos));
+		TRACE_BASE(DBG_DEBUG, "mmap vir(%p) phys(%#llx)\n", pos, (u64)virt_to_phys((void *) pos));
 		vm_start += PAGE_SIZE;
 		pos += PAGE_SIZE;
 		vm_size -= PAGE_SIZE;
@@ -102,18 +120,21 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case BASE_VB_CMD:
 	{
+		CHECK_IOCTL_CMD(cmd, struct vb_ext_control);
 		ret = vb_ctrl(arg);
 		break;
 	}
 
 	case BASE_SET_BINDCFG:
 	{
+		CHECK_IOCTL_CMD(cmd, struct sys_bind_cfg);
 		ret = bind_set_cfg_user(arg);
 		break;
 	}
 
 	case BASE_GET_BINDCFG:
 	{
+		CHECK_IOCTL_CMD(cmd, struct sys_bind_cfg);
 		ret = bind_get_cfg_user(arg);
 		break;
 	}
@@ -123,6 +144,7 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		struct sys_ion_data stIonDate;
 		void *addr_v = NULL;
 
+		CHECK_IOCTL_CMD(cmd, struct sys_ion_data);
 		if (copy_from_user(&stIonDate, (struct sys_ion_data __user *)arg,
 					sizeof(struct sys_ion_data)))
 			return -EINVAL;
@@ -140,18 +162,20 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case BASE_ION_FREE:
 	{
 		struct sys_ion_data stIonDate;
+		int32_t size;
 
+		CHECK_IOCTL_CMD(cmd, struct sys_ion_data);
 		if (copy_from_user(&stIonDate, (struct sys_ion_data __user *)arg,
 					sizeof(struct sys_ion_data)))
 			return -EINVAL;
 
-		ret = base_ion_free(stIonDate.addr_p);
+		ret = base_ion_free2(stIonDate.addr_p, &size);
 		if (ret < 0) {
-			pr_err("base_ion_free fail\n");
+			TRACE_BASE(DBG_ERR, "base_ion_free fail\n");
 			return -EINVAL;
-		} else {
-			stIonDate.size = ret;
 		}
+		stIonDate.size = size;
+
 		if (copy_to_user((struct sys_ion_data __user *)arg, &stIonDate,
 					sizeof(struct sys_ion_data)))
 			return -EINVAL;
@@ -162,6 +186,7 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct sys_cache_op stCacheOp;
 
+		CHECK_IOCTL_CMD(cmd, struct sys_cache_op);
 		if (copy_from_user(&stCacheOp, (struct sys_cache_op __user *)arg,
 			sizeof(struct sys_cache_op)))
 			return -EINVAL;
@@ -174,6 +199,7 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct sys_cache_op stCacheOp;
 
+		CHECK_IOCTL_CMD(cmd, struct sys_cache_op);
 		if (copy_from_user(&stCacheOp, (struct sys_cache_op __user *)arg,
 			sizeof(struct sys_cache_op)))
 			return -EINVAL;
@@ -183,12 +209,21 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 
 	default:
-		pr_err("Not support functions");
+		TRACE_BASE(DBG_ERR, "Not support functions");
 		return -ENOTTY;
 	}
 	return ret;
 }
 
+#ifdef CONFIG_COMPAT
+static long base_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
 
 static const struct file_operations base_fops = {
 	.owner = THIS_MODULE,
@@ -197,7 +232,7 @@ static const struct file_operations base_fops = {
 	.mmap = base_mmap,
 	.unlocked_ioctl = base_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = base_compat_ptr_ioctl,
 #endif
 };
 
@@ -217,16 +252,16 @@ static int base_probe(struct platform_device *pdev)
 
 	proc_dir = proc_mkdir("soph", NULL);
 	if (vb_proc_init(proc_dir) < 0)
-		pr_err("vb proc init failed\n");
+		TRACE_BASE(DBG_ERR, "vb proc init failed\n");
 
 	if (log_proc_init(proc_dir, ndev->shared_mem) < 0)
-		pr_err("log proc init failed\n");
+		TRACE_BASE(DBG_ERR, "log proc init failed\n");
 
 	if (sys_proc_init(proc_dir, ndev->shared_mem) < 0)
-		pr_err("sys proc init failed\n");
+		TRACE_BASE(DBG_ERR, "sys proc init failed\n");
 
 	if (vb_create_instance()) {
-		pr_err("vb_create_instance failed\n");
+		TRACE_BASE(DBG_ERR, "vb_create_instance failed\n");
 		return -ENOMEM;
 	}
 
@@ -236,12 +271,12 @@ static int base_probe(struct platform_device *pdev)
 
 	ret = misc_register(&ndev->miscdev);
 	if (ret) {
-		dev_err(dev, "cvi_base: failed to register misc device.\n");
+		dev_err(dev, "base: failed to register misc device.\n");
 		return ret;
 	}
 
 	platform_set_drvdata(pdev, ndev);
-	pr_info("base probe done\n");
+	TRACE_BASE(DBG_WARN, "base probe done\n");
 
 	return 0;
 }
@@ -263,12 +298,12 @@ static int base_remove(struct platform_device *pdev)
 
 	misc_deregister(&ndev->miscdev);
 	platform_set_drvdata(pdev, NULL);
-	pr_debug("%s DONE\n", __func__);
+	TRACE_BASE(DBG_DEBUG, "%s DONE\n", __func__);
 
 	return 0;
 }
 
-static const struct of_device_id cvi_base_dt_match[] = { { .compatible = "cvitek,base" }, {} };
+static const struct of_device_id base_dt_match[] = { { .compatible = "cvitek,base" }, {} };
 
 static struct platform_driver base_driver = {
 	.probe = base_probe,
@@ -276,7 +311,7 @@ static struct platform_driver base_driver = {
 	.driver = {
 		.name = BASE_DEV_NAME,
 		.owner = THIS_MODULE,
-		.of_match_table = cvi_base_dt_match,
+		.of_match_table = base_dt_match,
 	},
 };
 
@@ -286,7 +321,7 @@ static int __init base_init(void)
 
 	pbase_class = class_create(THIS_MODULE, BASE_CLASS_NAME);
 	if (IS_ERR(pbase_class)) {
-		pr_err("create class failed\n");
+		TRACE_BASE(DBG_ERR, "create class failed\n");
 		rc = PTR_ERR(pbase_class);
 		goto cleanup;
 	}

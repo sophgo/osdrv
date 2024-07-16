@@ -67,7 +67,7 @@ void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr)
 		wait->intr_end = intr & 0x01;
 		wait->intr_int = (intr >> 1) & 0x01;
 		wait->intr_last = (intr >> 2) & 0x01;
-		wait->action = cmdq_set_wait_TIMER;
+		wait->action = CMDQ_SET_WAIT_TIMER;
 	} else {
 		struct cmdq_set_wait_flags *wait = &(set->wait_flags);
 
@@ -75,7 +75,7 @@ void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr)
 		wait->intr_end = intr & 0x01;
 		wait->intr_int = (intr >> 1) & 0x01;
 		wait->intr_last = (intr >> 2) & 0x01;
-		wait->action = cmdq_set_wait_FLAG;
+		wait->action = CMDQ_SET_WAIT_FLAG;
 	}
 }
 

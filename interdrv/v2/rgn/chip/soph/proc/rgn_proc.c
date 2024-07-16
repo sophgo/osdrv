@@ -4,13 +4,13 @@
 #define RGN_PROC_NAME "soph/rgn"
 
 static const char *const MOD_STRING[] = FOREACH_MOD(GENERATE_STRING);
-extern struct cvi_rgn_ctx rgn_prc_ctx;
+extern struct rgn_ctx rgn_prc_ctx;
 /*************************************************************************
  *	Region proc functions
  *************************************************************************/
-static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
+static void _pix_fmt_to_string(enum _pixel_format_e pix_fmt, char *str, int len)
 {
-	switch (PixFmt) {
+	switch (pix_fmt) {
 	case PIXEL_FORMAT_8BIT_MODE:
 		strncpy(str, "256LUT", len);
 		break;
@@ -31,11 +31,11 @@ static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
 
 static int rgn_proc_show(struct seq_file *m, void *v)
 {
-	struct cvi_rgn_ctx *prgnCtx = &rgn_prc_ctx;
+	struct rgn_ctx *prgn_ctx = &rgn_prc_ctx;
 	int i;
 	char c[32];
 
-	if (!prgnCtx) {
+	if (!prgn_ctx) {
 		seq_puts(m, "rgn_prc_ctx = NULL\n");
 		return -1;
 	}
@@ -48,25 +48,25 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"Cmpr", "MaxNeedIon");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == OVERLAY_RGN && prgnCtx[i].bCreated) {
+		if (prgn_ctx[i].region.type == OVERLAY_RGN && prgn_ctx[i].created) {
 			memset(c, 0, sizeof(c));
-			_pix_fmt_to_string(prgnCtx[i].stRegion.unAttr.stOverlay.enPixelFormat, c, sizeof(c));
+			_pix_fmt_to_string(prgn_ctx[i].region.unattr.overlay.pixel_format, c, sizeof(c));
 
 			seq_printf(m, "%7s%3d%10d%10s%20s%10d%10d%10x%20llx%20lx%10d%10d%7s%12d\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				(prgnCtx[i].bUsed) ? "Y" : "N",
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				(prgn_ctx[i].used) ? "Y" : "N",
 				c,
-				prgnCtx[i].stRegion.unAttr.stOverlay.stSize.u32Width,
-				prgnCtx[i].stRegion.unAttr.stOverlay.stSize.u32Height,
-				prgnCtx[i].stRegion.unAttr.stOverlay.u32BgColor,
-				prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].u64PhyAddr,
-				(uintptr_t)prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].pu8VirtAddr,
-				prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].u32Stride,
-				prgnCtx[i].stRegion.unAttr.stOverlay.u32CanvasNum,
-				prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].bCompressed ? "Y" : "N",
-				prgnCtx[i].u32MaxNeedIon);
+				prgn_ctx[i].region.unattr.overlay.size.width,
+				prgn_ctx[i].region.unattr.overlay.size.height,
+				prgn_ctx[i].region.unattr.overlay.bg_color,
+				prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].phy_addr,
+				(uintptr_t)prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].virt_addr,
+				prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].stride,
+				prgn_ctx[i].region.unattr.overlay.canvas_num,
+				prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].compressed ? "Y" : "N",
+				prgn_ctx[i].max_need_ion);
 		}
 	}
 
@@ -76,18 +76,18 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"Hdl", "Type", "Mod", "Dev", "Chn", "bShow", "X", "Y", "Layer");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == OVERLAY_RGN && prgnCtx[i].bCreated && prgnCtx[i].bUsed) {
+		if (prgn_ctx[i].region.type == OVERLAY_RGN && prgn_ctx[i].created && prgn_ctx[i].used) {
 			seq_printf(m, "%7s%3d%10d%10s%10d%10d%10s%10d%10d%10d\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				MOD_STRING[prgnCtx[i].stChn.enModId],
-				prgnCtx[i].stChn.s32DevId,
-				prgnCtx[i].stChn.s32ChnId,
-				(prgnCtx[i].stChnAttr.bShow) ? "Y" : "N",
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayChn.stPoint.s32X,
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayChn.stPoint.s32Y,
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayChn.u32Layer);
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				MOD_STRING[prgn_ctx[i].chn.mod_id],
+				prgn_ctx[i].chn.dev_id,
+				prgn_ctx[i].chn.chn_id,
+				(prgn_ctx[i].chn_attr.show) ? "Y" : "N",
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_chn.point.x,
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_chn.point.y,
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_chn.layer);
 		}
 	}
 
@@ -95,9 +95,9 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n------REGION STATUS OF COVER----------------------------------------------\n");
 	seq_printf(m, "%10s%10s%10s\n", "Hdl", "Type", "Used");
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == COVER_RGN && prgnCtx[i].bCreated) {
-			seq_printf(m, "%7s%3d%10d%10s\n", "#", prgnCtx[i].Handle, prgnCtx[i].stRegion.enType,
-				(prgnCtx[i].bUsed) ? "Y" : "N");
+		if (prgn_ctx[i].region.type == COVER_RGN && prgn_ctx[i].created) {
+			seq_printf(m, "%7s%3d%10d%10s\n", "#", prgn_ctx[i].handle, prgn_ctx[i].region.type,
+				(prgn_ctx[i].used) ? "Y" : "N");
 		}
 	}
 
@@ -108,23 +108,23 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"X", "Y", "W", "H", "Color", "Layer", "CoorType");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == COVER_RGN && prgnCtx[i].bCreated && prgnCtx[i].bUsed
-			&& prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.enCoverType == AREA_RECT) {
+		if (prgn_ctx[i].region.type == COVER_RGN && prgn_ctx[i].created && prgn_ctx[i].used
+			&& prgn_ctx[i].chn_attr.unchn_attr.cover_chn.cover_type == AREA_RECT) {
 			seq_printf(m, "%7s%3d%10d%10s%10d%10d%10s\n%10d%10d%10d%10d%10X%10d%10s\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				MOD_STRING[prgnCtx[i].stChn.enModId],
-				prgnCtx[i].stChn.s32DevId,
-				prgnCtx[i].stChn.s32ChnId,
-				(prgnCtx[i].stChnAttr.bShow) ? "Y" : "N",
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.stRect.s32X,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.stRect.s32Y,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.stRect.u32Width,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.stRect.u32Height,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.u32Color,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.u32Layer,
-				(prgnCtx[i].stChnAttr.unChnAttr.stCoverChn.enCoordinate == RGN_ABS_COOR) ?
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				MOD_STRING[prgn_ctx[i].chn.mod_id],
+				prgn_ctx[i].chn.dev_id,
+				prgn_ctx[i].chn.chn_id,
+				(prgn_ctx[i].chn_attr.show) ? "Y" : "N",
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.rect.x,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.rect.y,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.rect.width,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.rect.height,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.color,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_chn.layer,
+				(prgn_ctx[i].chn_attr.unchn_attr.cover_chn.coordinate == RGN_ABS_COOR) ?
 					"ABS" : "RATIO");
 		}
 	}
@@ -133,9 +133,9 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n------REGION STATUS OF COVEREX--------------------------------------------\n");
 	seq_printf(m, "%10s%10s%10s\n", "Hdl", "Type", "Used");
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == COVEREX_RGN && prgnCtx[i].bCreated) {
-			seq_printf(m, "%7s%3d%10d%10s\n", "#", prgnCtx[i].Handle, prgnCtx[i].stRegion.enType,
-				(prgnCtx[i].bUsed) ? "Y" : "N");
+		if (prgn_ctx[i].region.type == COVEREX_RGN && prgn_ctx[i].created) {
+			seq_printf(m, "%7s%3d%10d%10s\n", "#", prgn_ctx[i].handle, prgn_ctx[i].region.type,
+				(prgn_ctx[i].used) ? "Y" : "N");
 		}
 	}
 
@@ -146,22 +146,22 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"X", "Y", "W", "H", "Color", "Layer");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == COVEREX_RGN && prgnCtx[i].bCreated && prgnCtx[i].bUsed
-			&& prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.enCoverType == AREA_RECT) {
+		if (prgn_ctx[i].region.type == COVEREX_RGN && prgn_ctx[i].created && prgn_ctx[i].used
+			&& prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.cover_type == AREA_RECT) {
 			seq_printf(m, "%7s%3d%10d%10s%10d%10d%10s\n%10d%10d%10d%10d%10X%10d\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				MOD_STRING[prgnCtx[i].stChn.enModId],
-				prgnCtx[i].stChn.s32DevId,
-				prgnCtx[i].stChn.s32ChnId,
-				(prgnCtx[i].stChnAttr.bShow) ? "Y" : "N",
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.stRect.s32X,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.stRect.s32Y,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.stRect.u32Width,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.stRect.u32Height,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.u32Color,
-				prgnCtx[i].stChnAttr.unChnAttr.stCoverExChn.u32Layer);
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				MOD_STRING[prgn_ctx[i].chn.mod_id],
+				prgn_ctx[i].chn.dev_id,
+				prgn_ctx[i].chn.chn_id,
+				(prgn_ctx[i].chn_attr.show) ? "Y" : "N",
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.rect.x,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.rect.y,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.rect.width,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.rect.height,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.color,
+				prgn_ctx[i].chn_attr.unchn_attr.cover_ex_chn.layer);
 		}
 	}
 
@@ -171,23 +171,23 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"Hdl", "Type", "Used", "PiFmt", "W", "H", "BgColor", "Phy", "Virt", "Stride", "CnvsNum");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == OVERLAYEX_RGN && prgnCtx[i].bCreated) {
+		if (prgn_ctx[i].region.type == OVERLAYEX_RGN && prgn_ctx[i].created) {
 			memset(c, 0, sizeof(c));
-			_pix_fmt_to_string(prgnCtx[i].stRegion.unAttr.stOverlayEx.enPixelFormat, c, sizeof(c));
+			_pix_fmt_to_string(prgn_ctx[i].region.unattr.overlay_ex.pixel_format, c, sizeof(c));
 
 			seq_printf(m, "%7s%3d%10d%10s%20s%10d%10d%10x%20llx%20lx%10d%10d\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				(prgnCtx[i].bUsed) ? "Y" : "N",
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				(prgn_ctx[i].used) ? "Y" : "N",
 				c,
-				prgnCtx[i].stRegion.unAttr.stOverlayEx.stSize.u32Width,
-				prgnCtx[i].stRegion.unAttr.stOverlayEx.stSize.u32Height,
-				prgnCtx[i].stRegion.unAttr.stOverlayEx.u32BgColor,
-				prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].u64PhyAddr,
-				(uintptr_t)prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].pu8VirtAddr,
-				prgnCtx[i].stCanvasInfo[prgnCtx[i].canvas_idx].u32Stride,
-				prgnCtx[i].stRegion.unAttr.stOverlayEx.u32CanvasNum);
+				prgn_ctx[i].region.unattr.overlay_ex.size.width,
+				prgn_ctx[i].region.unattr.overlay_ex.size.height,
+				prgn_ctx[i].region.unattr.overlay_ex.bg_color,
+				prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].phy_addr,
+				(uintptr_t)prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].virt_addr,
+				prgn_ctx[i].canvas_info[prgn_ctx[i].canvas_idx].stride,
+				prgn_ctx[i].region.unattr.overlay_ex.canvas_num);
 		}
 	}
 
@@ -197,18 +197,18 @@ static int rgn_proc_show(struct seq_file *m, void *v)
 		"Hdl", "Type", "Mod", "Dev", "Chn", "bShow", "X", "Y", "Layer");
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (prgnCtx[i].stRegion.enType == OVERLAYEX_RGN && prgnCtx[i].bCreated && prgnCtx[i].bUsed) {
+		if (prgn_ctx[i].region.type == OVERLAYEX_RGN && prgn_ctx[i].created && prgn_ctx[i].used) {
 			seq_printf(m, "%7s%3d%10d%10s%10d%10d%10s%10d%10d%10d\n",
 				"#",
-				prgnCtx[i].Handle,
-				prgnCtx[i].stRegion.enType,
-				MOD_STRING[prgnCtx[i].stChn.enModId],
-				prgnCtx[i].stChn.s32DevId,
-				prgnCtx[i].stChn.s32ChnId,
-				(prgnCtx[i].stChnAttr.bShow) ? "Y" : "N",
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayExChn.stPoint.s32X,
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayExChn.stPoint.s32Y,
-				prgnCtx[i].stChnAttr.unChnAttr.stOverlayExChn.u32Layer);
+				prgn_ctx[i].handle,
+				prgn_ctx[i].region.type,
+				MOD_STRING[prgn_ctx[i].chn.mod_id],
+				prgn_ctx[i].chn.dev_id,
+				prgn_ctx[i].chn.chn_id,
+				(prgn_ctx[i].chn_attr.show) ? "Y" : "N",
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_ex_chn.point.x,
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_ex_chn.point.y,
+				prgn_ctx[i].chn_attr.unchn_attr.overlay_ex_chn.layer);
 		}
 	}
 
@@ -239,7 +239,7 @@ static const struct file_operations rgn_proc_fops = {
 
 int rgn_proc_init(void)
 {
-	int ret = CVI_SUCCESS;
+	int ret = 0;
 
 	/* create the /proc file */
 	if (proc_create_data(RGN_PROC_NAME, 0644, NULL, &rgn_proc_fops, NULL) == NULL) {
@@ -254,5 +254,5 @@ int rgn_proc_remove(void)
 {
 	remove_proc_entry(RGN_PROC_NAME, NULL);
 
-	return CVI_SUCCESS;
+	return 0;
 }

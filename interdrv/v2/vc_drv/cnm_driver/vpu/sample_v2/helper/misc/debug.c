@@ -312,7 +312,7 @@ void WriteRegVCE(
 #define READ_BIT(val,high,low) ((((high)==31) && ((low) == 0)) ?  (val) : (((val)>>(low)) & (((1<< ((high)-(low)+1))-1))))
 
 
-static void	DisplayVceEncDebugCommon521(int coreIdx, int vcore_idx, int set_mode, int debug0, int debug1, int debug2)
+void DisplayVceEncDebugCommon521(int coreIdx, int vcore_idx, int set_mode, int debug0, int debug1, int debug2)
 {
     int reg_val;
     VLOG(INFO, "---------------Common Debug INFO-----------------\n");
@@ -354,7 +354,7 @@ static void	DisplayVceEncDebugCommon521(int coreIdx, int vcore_idx, int set_mode
     VLOG(INFO,"\t- sub_frame_sync_ypos       :  0x%x\n", READ_BIT(reg_val,13,1));
 }
 
-static void	DisplayVceEncDebugMode(int core_idx, int vcore_idx, int set_mode, int* debug)
+void DisplayVceEncDebugMode(int core_idx, int vcore_idx, int set_mode, int* debug)
 {
     int reg_val;
     int i;
@@ -393,7 +393,7 @@ static void	DisplayVceEncDebugMode(int core_idx, int vcore_idx, int set_mode, in
     }
 }
 
-static void	DisplayVceEncDebugModeAll(int core_idx, int vcore_idx)
+void DisplayVceEncDebugModeAll(int core_idx, int vcore_idx)
 {
     int ii;
     int iMode, iIndex;
@@ -443,7 +443,7 @@ static void	DisplayVceEncDebugModeAll(int core_idx, int vcore_idx)
 #define VCE_BIN_PIC_PARAM          0xB20
 #define VCE_BIN_WDMA_BASE          0xB24
 #define VCE_BIN_WDMA_END           0xB28
-static void	DisplayVceEncReadVCE(int coreIdx, int vcore_idx)
+void DisplayVceEncReadVCE(int coreIdx, int vcore_idx)
 {
     int reg_val;
 
@@ -796,7 +796,10 @@ void print_busy_timeout_status(Uint32 coreIdx, Uint32 product_code, Uint32 pc)
 {
     if (PRODUCT_CODE_W_SERIES(product_code)) {
         vdi_print_vpu_status(coreIdx);
-        vdi_print_vpu_status_enc(coreIdx);
+        if (product_code == 0) //0:enc core; 1,2:dec core
+            vdi_print_vpu_status_enc(coreIdx);
+        else
+            vdi_print_vpu_status_dec(coreIdx);
     } else {
         Uint32 idx;
         for (idx=0; idx<20; idx++) {
@@ -1122,7 +1125,7 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
 {
     int       vce_enc_debug[12] = {0, };
     int       set_mode;
-    int       vcore_num, vcore_idx;
+    int       vcore_num;
     int i;
 
     VLOG(INFO,"-------------------------------------------------------------------------------\n");
@@ -1189,7 +1192,7 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
     set_mode              = 0x0ba0;
     vcore_num            = 1;
 
-
+#if 0
     for (vcore_idx = 0; vcore_idx < vcore_num ; vcore_idx++) {
         VLOG(INFO,"==========================================\n");
         VLOG(INFO,"[+] VCE REG Dump VCORE_IDX : %d\n",vcore_idx);
@@ -1199,6 +1202,7 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
         DisplayVceEncDebugMode          (coreIdx, vcore_idx, set_mode, vce_enc_debug);
         DisplayVceEncDebugModeAll       (coreIdx, vcore_idx);
     }
+#endif
 }
 
 void vdi_print_vpu_status_dec(unsigned long coreIdx)

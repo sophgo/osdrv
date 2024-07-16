@@ -19,7 +19,7 @@ unsigned int rgn_poll(struct file *filp, struct poll_table_struct *wait);
 /*******************************************************
  *  Common interface for core
  ******************************************************/
-int rgn_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg);
+int rgn_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg);
 int rgn_create_instance(struct platform_device *pdev);
 int rgn_destroy_instance(struct platform_device *pdev);
 

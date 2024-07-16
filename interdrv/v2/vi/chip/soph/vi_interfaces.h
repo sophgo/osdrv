@@ -33,11 +33,15 @@ unsigned int vi_poll(struct file *filp, struct poll_table_struct *wait);
 /*******************************************************
  *  Common interface for core
  ******************************************************/
-int vi_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg);
-void vi_irq_handler(struct cvi_vi_dev *vdev);
+int vi_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg);
+void vi_irq_handler(struct sop_vi_dev *vdev);
 int vi_create_instance(struct platform_device *pdev);
 int vi_destroy_instance(struct platform_device *pdev);
+int vi_stop_streaming(struct sop_vi_dev *vdev);
+int vi_start_streaming(struct sop_vi_dev *vdev);
 
+void vi_suspend(struct sop_vi_dev *vdev);
+void vi_resume(struct sop_vi_dev *vdev);
 #ifdef __cplusplus
 }
 #endif

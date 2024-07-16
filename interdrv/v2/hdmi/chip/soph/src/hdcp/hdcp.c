@@ -9,15 +9,15 @@
 #define KSIZE	(1024/8)
 
 /* HDCP Interrupt fields */
-#define INT_KSV_ACCESS    (A_APIINTSTAT_KSVACCESSINT_MASK)
-#define INT_KSV_SHA1      (A_APIINTSTAT_KSVSHA1CALCINT_MASK)
-#define INT_KSV_SHA1_DONE (A_APIINTSTAT_KSVSHA1CALCDONEINT_MASK)
-#define INT_HDCP_FAIL     (A_APIINTSTAT_HDCP_FAILED_MASK)
-#define INT_HDCP_ENGAGED  (A_APIINTSTAT_HDCP_ENGAGED_MASK)
+#define INT_KSV_ACCESS		(A_APIINTSTAT_KSVACCESSINT_MASK)
+#define INT_KSV_SHA1		(A_APIINTSTAT_KSVSHA1CALCINT_MASK)
+#define INT_KSV_SHA1_DONE	(A_APIINTSTAT_KSVSHA1CALCDONEINT_MASK)
+#define INT_HDCP_FAIL		(A_APIINTSTAT_HDCP_FAILED_MASK)
+#define INT_HDCP_ENGAGED	(A_APIINTSTAT_HDCP_ENGAGED_MASK)
 
 void _set_device_mode(hdmi_tx_dev_t *dev, video_mode_t mode)
 {
-	u8 set_mode = (mode == HDMI ? 1 : 0) ;  // 1 - HDMI : 0 - DVI
+	u8 set_mode = (mode == HDMI ? 1 : 0) ; // 1 - HDMI : 0 - DVI
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_HDMIDVI_MASK, set_mode);
 }
 
@@ -447,15 +447,15 @@ int hdcp_initialize(hdmi_tx_dev_t *dev)
 	return 0;
 }
 
-void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp)
+void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp)
 {
 	//_OverrideHDCP2p2Switch(dev, TRUE);
 
 	/* HDCP only */
-	_enable_feature11(dev,(hdcp->mEnable11Feature > 0) ? 1 : 0);
-	_ri_check(dev,(hdcp->mRiCheck > 0) ? 1 : 0);
-	_enable_i2c_fast_mode(dev,	(hdcp->mI2cFastMode > 0) ? 1 : 0);
-	_enhanced_link_verification(dev,(hdcp->mEnhancedLinkVerification > 0) ? 1 : 0);
+	_enable_feature11(dev,(hdcp->menable11_feature > 0) ? 1 : 0);
+	_ri_check(dev,(hdcp->mricheck > 0) ? 1 : 0);
+	_enable_i2c_fast_mode(dev,	(hdcp->mi2c_fastmode > 0) ? 1 : 0);
+	_enhanced_link_verification(dev,(hdcp->menhanced_link_verification > 0) ? 1 : 0);
 
 	/* fixed */
 	_enable_avmute(dev, FALSE);
@@ -497,11 +497,11 @@ void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp)
 					     A_APIINTSTAT_KSVSHA1CALCDONEINT_MASK)) & _hdcp_interrupt_mask_status(dev));
 }
 
-int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video)
+int hdcp_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp, video_params_t *video)
 {
 	video_mode_t mode = dev->snps_hdmi_ctrl.hdmi_on;
-	u8 hsPol = video->mDtd.mHSyncPolarity;
-	u8 vsPol = video->mDtd.mVSyncPolarity;
+	u8 hspol = video->mdtd.m_hsync_polarity;
+	u8 vspol = video->mdtd.m_vsync_polarity;
 	static int hdcp_2p2 = 0;
 
 	if(dev->snps_hdmi_ctrl.hdcp_on == 0){
@@ -510,16 +510,16 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 	}
 
 	// Before configure HDCP we should configure the internal parameters
-	hdcp->maxDevices = 128;
-	hdcp->mI2cFastMode = 0;
-	if(hdcp->mKsvListBuffer == NULL)
-		hdcp->mKsvListBuffer = vmalloc(sizeof(u8) * 670);
-	memcpy(&dev->hdcp, hdcp, sizeof(hdcpParams_t));
+	hdcp->max_devices = 128;
+	hdcp->mi2c_fastmode = 0;
+	if(hdcp->mksvList_buffer == NULL)
+		hdcp->mksvList_buffer = vmalloc(sizeof(u8) * 670);
+	memcpy(&dev->hdcp, hdcp, sizeof(hdcp_params_t));
 
 	//1 - To determine if the controller supports HDCP
 	if(id_product_type(dev) != 0xC1){
 		pr_err("Controller does not supports HDCP");
-		return CVI_ERR_HDMI_HDCP_NOT_SUPORRT;
+		return HDMI_ERR_HDCP_NOT_SUPORRT;
 	}
 
 	//2 - To determine the HDCP version of the transmitter
@@ -541,8 +541,8 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_HDMIDVI_MASK, (mode == HDMI) ? 1 : 0);
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 1);  //setting fc_invidconf.HDCP_keepout = 1
 	//4 - Set the Data enable, Hsync, and VSync polarity
-	_hsync_polarity(dev, (hsPol > 0) ? 1 : 0);
-	_vsync_polarity(dev, (vsPol > 0) ? 1 : 0);
+	_hsync_polarity(dev, (hspol > 0) ? 1 : 0);
+	_vsync_polarity(dev, (vspol > 0) ? 1 : 0);
 	_hdcp_data_enable_polarity(dev, (dev->snps_hdmi_ctrl.data_enable_polarity > 0) ? 1 : 0);
 
 	//5 - If hdcp22_snps read in Step 2 is 0 (Synopsys HDCP 2.2 not supported), skip to Step 9.
@@ -576,12 +576,12 @@ u8 _read_ksv_list(hdmi_tx_dev_t *dev, int *param)
 {
 	int timeout = 1000;
 	u16 bstatus = 0;
-	u16 deviceCount = 0;
+	u16 device_count = 0;
 	int valid = HDCP_IDLE;
 	int size = 0;
 	int i = 0;
 
-	u8 *hdcp_ksv_list_buffer = dev->hdcp.mKsvListBuffer;
+	u8 *hdcp_ksv_list_buffer = dev->hdcp.mksvList_buffer;
 
 	// 1 - Wait for an interrupt to be triggered (a_apiintstat.KSVSha1calcint)
 	// This is called from the INT_KSV_SHA1 irq so nothing is required for this step
@@ -603,21 +603,21 @@ u8 _read_ksv_list(hdmi_tx_dev_t *dev, int *param)
 	// 3 - Read VH', M0, Bstatus, and the KSV FIFO. The data is stored in the revocation memory, as
 	// provided in the "Address Mapping for Maximum Memory Allocation" table in the databook.
 	bstatus = _bstatus_read(dev);
-	deviceCount = bstatus & BSTATUS_DEVICE_COUNT_MASK;
+	device_count = bstatus & BSTATUS_DEVICE_COUNT_MASK;
 
-	if(deviceCount > dev->hdcp.maxDevices) {
+	if(device_count > dev->hdcp.max_devices) {
 		*param = 0;
 		pr_err("depth exceeds KSV List memory");
 		return HDCP_KSV_LIST_ERR_DEPTH_EXCEEDED;
 	}
 
-	size = deviceCount * KSV_LEN + HEADER + SHAMAX;
+	size = device_count * KSV_LEN + HEADER + SHAMAX;
 
 	for (i = 0; i < size; i++){
 		if (i < HEADER) { /* BSTATUS & M0 */
-			hdcp_ksv_list_buffer[(deviceCount * KSV_LEN) + i] = (u8)dev_read(HDCP_BSTATUS + (i * ADDR_JUMP));
+			hdcp_ksv_list_buffer[(device_count * KSV_LEN) + i] = (u8)dev_read(HDCP_BSTATUS + (i * ADDR_JUMP));
 		}
-		else if (i < (HEADER + (deviceCount * KSV_LEN))) { /* KSV list */
+		else if (i < (HEADER + (device_count * KSV_LEN))) { /* KSV list */
 			hdcp_ksv_list_buffer[i - HEADER] = (u8)dev_read(HDCP_BSTATUS + (i * ADDR_JUMP));
 		}
 		else { /* SHA */
@@ -704,14 +704,14 @@ int hdcp_interrupt_clear(hdmi_tx_dev_t *dev, u8 value)
 
 #if 0
 	#ifdef ROMLESS
-	void hdcp_write_dpk_keys(hdmi_tx_dev_t *dev, hdcpParams_t * params)
+	void hdcp_write_dpk_keys(hdmi_tx_dev_t *dev, hdcp_params_t * params)
 	{
 		_wait_mem_access(dev );
-		_write_aksv(dev, params->mAksv);
+		_write_aksv(dev, params->maksv);
 		_wait_mem_access(dev);
 		_enable_encrypt(dev, 1);
-		_write_seed(dev, params->mSwEncKey);
-		_store_encrypt_keys(dev, params->mKeys);
+		_write_seed(dev, params->msw_enckey);
+		_store_encrypt_keys(dev, params->mkeys);
 	}
 	#endif
 #endif
@@ -719,27 +719,27 @@ int hdcp_interrupt_clear(hdmi_tx_dev_t *dev, u8 value)
 void sha_reset(hdmi_tx_dev_t *dev, sha_t * sha)
 {
 	size_t i = 0;
-	sha->mIndex = 0;
-	sha->mComputed = FALSE;
-	sha->mCorrupted = FALSE;
-	for (i = 0; i < sizeof(sha->mLength); i++) {
-		sha->mLength[i] = 0;
+	sha->mindex = 0;
+	sha->mcomputed = FALSE;
+	sha->mcorrupted = FALSE;
+	for (i = 0; i < sizeof(sha->mlength); i++) {
+		sha->mlength[i] = 0;
 	}
-	sha->mDigest[0] = 0x67452301;
-	sha->mDigest[1] = 0xEFCDAB89;
-	sha->mDigest[2] = 0x98BADCFE;
-	sha->mDigest[3] = 0x10325476;
-	sha->mDigest[4] = 0xC3D2E1F0;
+	sha->mdigest[0] = 0x67452301;
+	sha->mdigest[1] = 0xEFCDAB89;
+	sha->mdigest[2] = 0x98BADCFE;
+	sha->mdigest[3] = 0x10325476;
+	sha->mdigest[4] = 0xC3D2E1F0;
 }
 
 int sha_result(hdmi_tx_dev_t *dev, sha_t * sha)
 {
-	if (sha->mCorrupted == TRUE) {
+	if (sha->mcorrupted == TRUE) {
 		return FALSE;
 	}
-	if (sha->mComputed == FALSE) {
+	if (sha->mcomputed == FALSE) {
 		sha_pad_message(dev, sha);
-		sha->mComputed = TRUE;
+		sha->mcomputed = TRUE;
 	}
 	return TRUE;
 }
@@ -753,27 +753,27 @@ void sha_input(hdmi_tx_dev_t *dev, sha_t * sha, const u8 * data, size_t size)
 		pr_err("invalid input data");
 		return;
 	}
-	if (sha->mComputed == TRUE || sha->mCorrupted == TRUE) {
-		sha->mCorrupted = TRUE;
+	if (sha->mcomputed == TRUE || sha->mcorrupted == TRUE) {
+		sha->mcorrupted = TRUE;
 		return;
 	}
-	while (size-- && sha->mCorrupted == FALSE) {
-		sha->mBlock[sha->mIndex++] = *data;
+	while (size-- && sha->mcorrupted == FALSE) {
+		sha->mblock[sha->mindex++] = *data;
 
 		for (i = 0; i < 8; i++) {
 			rc = TRUE;
-			for (j = 0; j < sizeof(sha->mLength); j++) {
-				sha->mLength[j]++;
-				if (sha->mLength[j] != 0) {
+			for (j = 0; j < sizeof(sha->mlength); j++) {
+				sha->mlength[j]++;
+				if (sha->mlength[j] != 0) {
 					rc = FALSE;
 					break;
 				}
 			}
-			sha->mCorrupted = (sha->mCorrupted == TRUE
+			sha->mcorrupted = (sha->mcorrupted == TRUE
 					   || rc == TRUE) ? TRUE : FALSE;
 		}
 		/* if corrupted then message is too long */
-		if (sha->mIndex == 64) {
+		if (sha->mindex == 64) {
 			sha_process_block(dev, sha);
 		}
 		data++;
@@ -784,61 +784,61 @@ void sha_process_block(hdmi_tx_dev_t *dev, sha_t * sha)
 {
 #define shaCircularShift(bits,word) ((((word) << (bits)) & 0xFFFFFFFF) | ((word) >> (32-(bits))))
 
-	const unsigned K[] = {	/* constants defined in SHA-1 */
+	const unsigned kk[] = {	/* constants defined in SHA-1 */
 		0x5A827999, 0x6ED9EBA1, 0x8F1BBCDC, 0xCA62C1D6
 	};
-	unsigned W[80];		/* word sequence */
-	unsigned A, B, C, D, E;	/* word buffers */
+	unsigned ww[80];		/* word sequence */
+	unsigned a, b, c, d, e;	/* word buffers */
 	unsigned temp = 0;
 	int t = 0;
 
 	/* Initialize the first 16 words in the array W */
 	for (t = 0; t < 80; t++) {
 		if (t < 16) {
-			W[t] = ((unsigned)sha->mBlock[t * 4 + 0]) << 24;
-			W[t] |= ((unsigned)sha->mBlock[t * 4 + 1]) << 16;
-			W[t] |= ((unsigned)sha->mBlock[t * 4 + 2]) << 8;
-			W[t] |= ((unsigned)sha->mBlock[t * 4 + 3]) << 0;
+			ww[t] = ((unsigned)sha->mblock[t * 4 + 0]) << 24;
+			ww[t] |= ((unsigned)sha->mblock[t * 4 + 1]) << 16;
+			ww[t] |= ((unsigned)sha->mblock[t * 4 + 2]) << 8;
+			ww[t] |= ((unsigned)sha->mblock[t * 4 + 3]) << 0;
 		} else {
-			W[t] =
+			ww[t] =
 			    shaCircularShift(1,
-					     W[t - 3] ^ W[t - 8] ^ W[t -
-								     14] ^ W[t -
+					     ww[t - 3] ^ ww[t - 8] ^ ww[t -
+								     14] ^ ww[t -
 									     16]);
 		}
 	}
 
-	A = sha->mDigest[0];
-	B = sha->mDigest[1];
-	C = sha->mDigest[2];
-	D = sha->mDigest[3];
-	E = sha->mDigest[4];
+	a = sha->mdigest[0];
+	b = sha->mdigest[1];
+	c = sha->mdigest[2];
+	d = sha->mdigest[3];
+	e = sha->mdigest[4];
 
 	for (t = 0; t < 80; t++) {
-		temp = shaCircularShift(5, A);
+		temp = shaCircularShift(5, a);
 		if (t < 20) {
-			temp += ((B & C) | ((~B) & D)) + E + W[t] + K[0];
+			temp += ((b & c) | ((~b) & d)) + e + ww[t] + kk[0];
 		} else if (t < 40) {
-			temp += (B ^ C ^ D) + E + W[t] + K[1];
+			temp += (b ^ c ^ d) + e + ww[t] + kk[1];
 		} else if (t < 60) {
-			temp += ((B & C) | (B & D) | (C & D)) + E + W[t] + K[2];
+			temp += ((b & c) | (b & d) | (c & d)) + e + ww[t] + kk[2];
 		} else {
-			temp += (B ^ C ^ D) + E + W[t] + K[3];
+			temp += (b ^ c ^ d) + e + ww[t] + kk[3];
 		}
-		E = D;
-		D = C;
-		C = shaCircularShift(30, B);
-		B = A;
-		A = (temp & 0xFFFFFFFF);
+		e = d;
+		d = c;
+		c = shaCircularShift(30, b);
+		b = a;
+		a = (temp & 0xFFFFFFFF);
 	}
 
-	sha->mDigest[0] = (sha->mDigest[0] + A) & 0xFFFFFFFF;
-	sha->mDigest[1] = (sha->mDigest[1] + B) & 0xFFFFFFFF;
-	sha->mDigest[2] = (sha->mDigest[2] + C) & 0xFFFFFFFF;
-	sha->mDigest[3] = (sha->mDigest[3] + D) & 0xFFFFFFFF;
-	sha->mDigest[4] = (sha->mDigest[4] + E) & 0xFFFFFFFF;
+	sha->mdigest[0] = (sha->mdigest[0] + a) & 0xFFFFFFFF;
+	sha->mdigest[1] = (sha->mdigest[1] + b) & 0xFFFFFFFF;
+	sha->mdigest[2] = (sha->mdigest[2] + c) & 0xFFFFFFFF;
+	sha->mdigest[3] = (sha->mdigest[3] + d) & 0xFFFFFFFF;
+	sha->mdigest[4] = (sha->mdigest[4] + e) & 0xFFFFFFFF;
 
-	sha->mIndex = 0;
+	sha->mindex = 0;
 }
 
 void sha_pad_message(hdmi_tx_dev_t *dev, sha_t * sha)
@@ -849,31 +849,31 @@ void sha_pad_message(hdmi_tx_dev_t *dev, sha_t * sha)
 	 *  block, process it, and then continue padding into a second
 	 *  block.
 	 */
-	if (sha->mIndex > 55) {
-		sha->mBlock[sha->mIndex++] = 0x80;
-		while (sha->mIndex < 64) {
-			sha->mBlock[sha->mIndex++] = 0;
+	if (sha->mindex > 55) {
+		sha->mblock[sha->mindex++] = 0x80;
+		while (sha->mindex < 64) {
+			sha->mblock[sha->mindex++] = 0;
 		}
 		sha_process_block(dev, sha);
-		while (sha->mIndex < 56) {
-			sha->mBlock[sha->mIndex++] = 0;
+		while (sha->mindex < 56) {
+			sha->mblock[sha->mindex++] = 0;
 		}
 	} else {
-		sha->mBlock[sha->mIndex++] = 0x80;
-		while (sha->mIndex < 56) {
-			sha->mBlock[sha->mIndex++] = 0;
+		sha->mblock[sha->mindex++] = 0x80;
+		while (sha->mindex < 56) {
+			sha->mblock[sha->mindex++] = 0;
 		}
 	}
 
 	/* Store the message length as the last 8 octets */
-	sha->mBlock[56] = sha->mLength[7];
-	sha->mBlock[57] = sha->mLength[6];
-	sha->mBlock[58] = sha->mLength[5];
-	sha->mBlock[59] = sha->mLength[4];
-	sha->mBlock[60] = sha->mLength[3];
-	sha->mBlock[61] = sha->mLength[2];
-	sha->mBlock[62] = sha->mLength[1];
-	sha->mBlock[63] = sha->mLength[0];
+	sha->mblock[56] = sha->mlength[7];
+	sha->mblock[57] = sha->mlength[6];
+	sha->mblock[58] = sha->mlength[5];
+	sha->mblock[59] = sha->mlength[4];
+	sha->mblock[60] = sha->mlength[3];
+	sha->mblock[61] = sha->mlength[2];
+	sha->mblock[62] = sha->mlength[1];
+	sha->mblock[63] = sha->mlength[0];
 
 	sha_process_block(dev, sha);
 }
@@ -911,22 +911,22 @@ void hdcp_array_cpy(hdmi_tx_dev_t *dev, u8 * dst, const u8 * src, size_t n)
 	}
 }
 
-int hdcp_array_mac(hdmi_tx_dev_t *dev, u8 * r, const u8 * M, const u8 m, size_t n)
+int hdcp_array_mac(hdmi_tx_dev_t *dev, u8 * r, const u8 * mm, const u8 m, size_t n)
 {
 	u16 c = 0;
 	size_t i = 0;
 	for (i = 0; i < n; i++) {
-		u16 p = (M[i] * m) + c + r[i];
+		u16 p = (mm[i] * m) + c + r[i];
 		c = p >> 8;
 		r[i] = (u8) p;
 	}
 	return (u8) c;
 }
 
-int hdcp_array_mul(hdmi_tx_dev_t *dev, u8 * r, const u8 * M, const u8 * m, size_t n)
+int hdcp_array_mul(hdmi_tx_dev_t *dev, u8 * r, const u8 * mm, const u8 * m, size_t n)
 {
 	size_t i = 0;
-	if (r == M || r == m) {
+	if (r == mm || r == m) {
 		pr_err("invalid input data");
 		return FALSE;
 	}
@@ -935,9 +935,9 @@ int hdcp_array_mul(hdmi_tx_dev_t *dev, u8 * r, const u8 * M, const u8 * m, size_
 		if (m[i] == 0) {
 			continue;
 		} else if (m[i] == 1) {
-			hdcp_array_add(dev, &r[i], &r[i], M, n - i);
+			hdcp_array_add(dev, &r[i], &r[i], mm, n - i);
 		} else {
-			hdcp_array_mac(dev, &r[i], M, m[i], n - i);
+			hdcp_array_mac(dev, &r[i], mm, m[i], n - i);
 		}
 	}
 	return TRUE;
@@ -984,15 +984,15 @@ int hdcp_array_tst(hdmi_tx_dev_t *dev, const u8 * a, const u8 b, size_t n)
 	return TRUE;
 }
 
-int hdcp_array_div(hdmi_tx_dev_t *dev, u8 * r, const u8 * D, const u8 * d, size_t n)
+int hdcp_array_div(hdmi_tx_dev_t *dev, u8 * r, const u8 * dd, const u8 * d, size_t n)
 {
 	int i = 0;
-	if (r == D || r == d || (TRUE == !hdcp_array_tst(dev, d, 0, n))) {
+	if (r == dd || r == d || (TRUE == !hdcp_array_tst(dev, d, 0, n))) {
 		pr_err("invalid input data");
 		return FALSE;
 	}
 	hdcp_array_set(dev, &r[n], 0, n);
-	hdcp_array_cpy(dev, r, D, n);
+	hdcp_array_cpy(dev, r, dd, n);
 	for (i = n; i > 0; i--) {
 		r[i - 1 + n] = 0;
 		while (hdcp_array_cmp(dev, &r[i - 1], d, n) >= 0) {
@@ -1003,15 +1003,15 @@ int hdcp_array_div(hdmi_tx_dev_t *dev, u8 * r, const u8 * D, const u8 * d, size_
 	return TRUE;
 }
 
-int hdcp_compute_exp(hdmi_tx_dev_t *dev, u8 * c, const u8 * M, const u8 * e, const u8 * p,
-			  size_t n, size_t nE)
+int hdcp_compute_exp(hdmi_tx_dev_t *dev, u8 * c, const u8 * m, const u8 * e, const u8 * p,
+			  size_t n, size_t ne)
 {
-	int i = 8 * nE - 1;
+	int i = 8 * ne - 1;
 	int rc = TRUE;
 
 	/* LR Binary Method */
 	if ((e[i / 8] & (1 << (i % 8))) != 0) {
-		hdcp_array_cpy(dev, c, M, n);
+		hdcp_array_cpy(dev, c, m, n);
 	} else {
 		hdcp_array_set(dev, c, 0, n);
 		c[0] = 1;
@@ -1019,7 +1019,7 @@ int hdcp_compute_exp(hdmi_tx_dev_t *dev, u8 * c, const u8 * M, const u8 * e, con
 	for (i -= 1; i >= 0; i--) {
 		rc |= hdcp_compute_mul(dev, c, c, c, p, n);
 		if ((e[i / 8] & (1 << (i % 8))) != 0) {
-			rc &= hdcp_compute_mul(dev, c, c, M, p, n);
+			rc &= hdcp_compute_mul(dev, c, c, m, p, n);
 		}
 	}
 	return rc;
@@ -1156,7 +1156,7 @@ int hdcp_verify_ksv(hdmi_tx_dev_t *dev, const u8 * data, size_t size)
 	}
 
 	for (i = 0; i < SHAMAX; i++) {
-		if (data[size - SHAMAX + i] != (u8) (sha.mDigest[i / 4] >> ((i % 4) * 8))) {
+		if (data[size - SHAMAX + i] != (u8) (sha.mdigest[i / 4] >> ((i % 4) * 8))) {
 			pr_err("SHA digest does not match");
 			return FALSE;
 		}
@@ -1175,7 +1175,7 @@ int hdcp_verify_srm(hdmi_tx_dev_t *dev, const u8 * data, size_t size)
 			      &data[size - DSAMAX]);
 }
 
-int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * M, size_t n, const u8 * r, const u8 * s)
+int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * m, size_t n, const u8 * r, const u8 * s)
 {
 	int i = 0;
 	sha_t sha;
@@ -1266,13 +1266,13 @@ int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * M, size_t n, const u8 * r, co
 	hdcp_array_swp(dev, s1, sizeof(s1));
 
 	hdcp_compute_inv(dev, w, s1, q, sizeof(w));
-	sha_input(dev, &sha, M, n);
+	sha_input(dev, &sha, m, n);
 	if (sha_result(dev, &sha) == TRUE) {
 		for (i = 0; i < 5; i++) {
-			z[i * 4 + 0] = sha.mDigest[i] >> 24;
-			z[i * 4 + 1] = sha.mDigest[i] >> 16;
-			z[i * 4 + 2] = sha.mDigest[i] >> 8;
-			z[i * 4 + 3] = sha.mDigest[i] >> 0;
+			z[i * 4 + 0] = sha.mdigest[i] >> 24;
+			z[i * 4 + 1] = sha.mdigest[i] >> 16;
+			z[i * 4 + 2] = sha.mdigest[i] >> 8;
+			z[i * 4 + 3] = sha.mdigest[i] >> 0;
 		}
 		hdcp_array_swp(dev, z, sizeof(z));
 	} else {
@@ -1302,16 +1302,16 @@ int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * M, size_t n, const u8 * r, co
 	return (hdcp_array_cmp(dev, v, r1, sizeof(v)) == 0);
 }
 
-void hdcp_params_reset(hdmi_tx_dev_t *dev, hdcpParams_t * params)
+void hdcp_params_reset(hdmi_tx_dev_t *dev, hdcp_params_t * params)
 {
 	params->bypass = TRUE;
-	params->mEnable11Feature = 0;
-	params->mRiCheck = 1;
-	params->mI2cFastMode = 0;
-	params->mEnhancedLinkVerification = 0;
-	params->maxDevices = 0;
+	params->menable11_feature = 0;
+	params->mricheck = 1;
+	params->mi2c_fastmode = 0;
+	params->menhanced_link_verification = 0;
+	params->max_devices = 0;
 
-	if(params->mKsvListBuffer != NULL)
-		vfree(params->mKsvListBuffer);
-	params->mKsvListBuffer = NULL;
+	if(params->mksvList_buffer != NULL)
+		vfree(params->mksvList_buffer);
+	params->mksvList_buffer = NULL;
 }

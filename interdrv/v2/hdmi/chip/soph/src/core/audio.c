@@ -19,27 +19,27 @@
 #define HBR_AUDIO_SAMPLE_MASK    0x10
 #define AUTO_START_AND_EN_MASK   0x3
 #define MULTI_STREAM_MASK        0x1
-#define INSERT_PCUV_MASK		 0x40
+#define INSERT_PCUV_MASK         0x40
 
 typedef struct audio_n_computation {
 	u32 pixel_clock;
 	u32 n;
-}audio_n_computation_t;
+} audio_n_computation_t;
 
 typedef union iec {
 	u32 frequency;
 	u8 sample_size;
-}iec_t;
+} iec_t;
 
 typedef struct iec_sampling_freq {
 	iec_t iec;
 	u8 value;
-}iec_params_t;
+} iec_params_t;
 
 typedef struct channel_count {
 	unsigned char channel_allocation;
 	unsigned char channel_count;
-}channel_count_t;
+} channel_count_t;
 
 
 iec_params_t iec_original_sampling_freq_values[] = {
@@ -56,7 +56,7 @@ iec_params_t iec_original_sampling_freq_values[] = {
 		{{.frequency = 12000}, 0x2},
 		{{.frequency = 32000}, 0xC},
 		{{.frequency = 16000}, 0x8},
-		{{.frequency = 0},      0x0}
+		{{.frequency = 0}, 0x0}
 };
 
 iec_params_t iec_sampling_freq_values[] = {
@@ -70,7 +70,7 @@ iec_params_t iec_sampling_freq_values[] = {
 		{{.frequency = 192000}, 0xE},
 		{{.frequency = 32000}, 0x3},
 		{{.frequency = 768000}, 0x9},
-		{{.frequency = 0},      0x0}
+		{{.frequency = 0}, 0x0}
 };
 
 iec_params_t iec_word_length[] = {
@@ -141,7 +141,7 @@ static channel_count_t channel_cnt[] = {
 };
 
 audio_n_computation_t n_values_32[] = {
-	{0,      4096},
+	{0, 4096},
 	{25175, 4576},
 	{25200, 4096},
 	{27000, 4096},
@@ -154,7 +154,7 @@ audio_n_computation_t n_values_32[] = {
 };
 
 audio_n_computation_t n_values_44p1[] = {
-	{0,      6272},
+	{0, 6272},
 	{25175, 7007},
 	{25200, 6272},
 	{27000, 6272},
@@ -167,7 +167,7 @@ audio_n_computation_t n_values_44p1[] = {
 };
 
 audio_n_computation_t n_values_48[] = {
-	{0,      6144},
+	{0, 6144},
 	{25175, 6864},
 	{25200, 6144},
 	{27000, 6144},
@@ -220,7 +220,7 @@ void _audio_clock_f(hdmi_tx_dev_t *dev, u8 value)
 	dev_write_mask(AUD_INPUTCLKFS, AUD_INPUTCLKFS_IFSFACTOR_MASK, value);
 }
 
-void audio_ahbdma(hdmi_tx_dev_t *dev, audioParams_t * audio)
+void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	int dma_channel = 0;
 	u32 high_bit;
@@ -232,26 +232,26 @@ void audio_ahbdma(hdmi_tx_dev_t *dev, audioParams_t * audio)
 	extern_axi_to_36bit(high_bit);
 
 	dev_write(IH_AHBDMAAUD_STAT0, 0x0);
-	dev_write_mask(AHB_DMA_CONF0, ENABLE_HLOCK_MASK, 0x1);              //enable_hlock
-	dev_write_mask(AHB_DMA_CONF0, INSERT_PCUV_MASK, 0x1);				//insert PCUV
-	dev_write_mask(AHB_DMA_CONF0, SELECT_BURST_TYPE_MASK, 0x0);    		//Select the desired burst type
-	dev_write_mask(AHB_DMA_CONF0, BURST_EN_MASK, 0x1);   				// select burst_en  burst mode
-	dev_write(AHB_DMA_CONF1, 0xff >> (8 - dma_channel));             // enable dma channels
-	dev_write_mask(AHB_DMA_THRSLD, FIFO_THRESHOLD_MASK, 0x80);    		//Select the FIFO threshold
+	dev_write_mask(AHB_DMA_CONF0, ENABLE_HLOCK_MASK, 0x1);      //enable_hlock
+	dev_write_mask(AHB_DMA_CONF0, INSERT_PCUV_MASK, 0x1);       //insert PCUV
+	dev_write_mask(AHB_DMA_CONF0, SELECT_BURST_TYPE_MASK, 0x0); //Select the desired burst type
+	dev_write_mask(AHB_DMA_CONF0, BURST_EN_MASK, 0x1);          // select burst_en  burst mode
+	dev_write(AHB_DMA_CONF1, 0xff >> (8 - dma_channel));        // enable dma channels
+	dev_write_mask(AHB_DMA_THRSLD, FIFO_THRESHOLD_MASK, 0x80);  //Select the FIFO threshold
 	dev_write(AHB_DMA_STRADDR_SET0,  audio->start_addr);
 	dev_write(AHB_DMA_STRADDR_SET0 + 4, audio->start_addr >> 8);
 	dev_write(AHB_DMA_STRADDR_SET0 + 8, audio->start_addr >> 16);
 	dev_write(AHB_DMA_STRADDR_SET0 + 12, audio->start_addr >> 24);
-    dev_write(AHB_DMA_STPADDR_SET0, audio->stop_addr);       			//final_addr[31:0] bit fields
+	dev_write(AHB_DMA_STPADDR_SET0, audio->stop_addr);          //final_addr[31:0] bit fields
 	dev_write(AHB_DMA_STPADDR_SET0 + 4, audio->stop_addr >> 8);
 	dev_write(AHB_DMA_STPADDR_SET0 + 8, audio->stop_addr >> 16);
 	dev_write(AHB_DMA_STPADDR_SET0 + 12, audio->stop_addr >> 24);
 
 #if 0
-	dev_write(AHB_DMA_CONF2, 0x3);   									// loop config
+	dev_write(AHB_DMA_CONF2, 0x3);  // loop config
 #endif
 
-	dev_write_mask(AHB_DMA_START, AHB_DMA_START_MASK, 0x1);              //Order the AHB DMA to start reading
+	dev_write_mask(AHB_DMA_START, AHB_DMA_START_MASK, 0x1);     //Order the AHB DMA to start reading
 
 }
 /**********************************************
@@ -263,14 +263,14 @@ int audio_Initialize(hdmi_tx_dev_t *dev)
 	return audio_mute(dev,  1);
 }
 
-int audio_configure(hdmi_tx_dev_t *dev, audioParams_t * audio)
+int audio_configure(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	u32 n = 0;
 	u32 cts = 0;
 
 	if((dev == NULL) || (audio == NULL)){
 		pr_err("Improper function arguments");
-		return CVI_ERR_HDMI_AUDIO_ARGS_INVALID;
+		return HDMI_ERR_AUDIO_ARGS_INVALID;
 	}
 
 	if(dev->snps_hdmi_ctrl.audio_on == 0){
@@ -279,26 +279,26 @@ int audio_configure(hdmi_tx_dev_t *dev, audioParams_t * audio)
 		return 0;
 	}
 
-	audio->mInterfaceType = DMA;
-	audio->mCodingType = PCM;
+	audio->minterface_type = DMA;
+	audio->mcoding_type = PCM;
 
-	pr_debug("Audio frequency = %xkHz", audio->mSamplingFrequency);
-	pr_debug("Audio sample size = %d", audio->mSampleSize);
-	pr_debug("Audio FS factor = %d\n", audio->mClockFsFactor);
+	pr_debug("Audio frequency = %xkHz", audio->msampling_frequency);
+	pr_debug("Audio sample size = %d", audio->msample_size);
+	pr_debug("Audio FS factor = %d\n", audio->mclock_fsfactor);
 
 	// Set PCUV info from external source
-	audio->mGpaInsertPucv = 1;
+	audio->mgpa_insert_pucv = 1;
 
 	audio_mute(dev, 1);
 
 	// Configure Frame Composer audio parameters
 	fc_audio_config(dev, audio);
 
-	n = hdmi_compute_n(audio->mSamplingFrequency, dev->snps_hdmi_ctrl.pixel_clock);
+	n = hdmi_compute_n(audio->msampling_frequency, dev->snps_hdmi_ctrl.pixel_clock);
 	dev->snps_hdmi_ctrl.n = n;
 
 	mc_audio_sampler_clock_enable(dev, 0);
-	cts =  hdmi_compute_cts(n, dev->snps_hdmi_ctrl.pixel_clock, audio->mSamplingFrequency);
+	cts = hdmi_compute_cts(n, dev->snps_hdmi_ctrl.pixel_clock, audio->msampling_frequency);
 	dev->snps_hdmi_ctrl.cts = cts;
 
 	_audio_clock_atomic(dev, 1);
@@ -407,42 +407,42 @@ u32 hdmi_compute_cts(u32 n, u32 pixel_clk, u32 sample_rate)
 	cts = tmp;
 
 	pr_debug("%s: fs=%uHz ftdms=%u.%03uMHz N=%d cts=%d\n",
-		__func__, sample_rate,
-		ftdms / 1000, (ftdms) % 1000,
-		n, cts);
+			__func__, sample_rate,
+			ftdms / 1000, (ftdms) % 1000,
+			n, cts);
 
 	return cts;
 }
 
-void audio_reset(hdmi_tx_dev_t *dev, audioParams_t * params)
+void audio_reset(hdmi_tx_dev_t *dev, audio_params_t * params)
 {
-	params->mInterfaceType = DMA;
-	params->mCodingType = PCM;
-	params->mChannelAllocation = 0;
-	params->mSampleSize = 16;
-	params->mSamplingFrequency = 32000;
-	params->mLevelShiftValue = 0;
-	params->mDownMixInhibitFlag = 0;
-	params->mIecCopyright = 1;
-	params->mIecCgmsA = 3;
-	params->mIecPcmMode = 0;
-	params->mIecCategoryCode = 0;
-	params->mIecSourceNumber = 1;
-	params->mIecClockAccuracy = 0;
-	params->mPacketType = AUDIO_SAMPLE;
-	params->mClockFsFactor = 128;
-	params->mDmaBeatIncrement = DMA_UNSPECIFIED_INCREMENT;
-	params->mDmaThreshold = 0;
-	params->mDmaHlock = 0;
-	params->mGpaInsertPucv = 0;
+	params->minterface_type = DMA;
+	params->mcoding_type = PCM;
+	params->mchannel_allocation = 0;
+	params->msample_size = 16;
+	params->msampling_frequency = 32000;
+	params->mLevel_shift_value = 0;
+	params->mdown_mix_inhibit_flag = 0;
+	params->miec_copyright = 1;
+	params->miec_cgms_a = 3;
+	params->miec_pcm_mode = 0;
+	params->miec_category_code = 0;
+	params->miec_source_number = 1;
+	params->miec_clock_accuracy = 0;
+	params->mpacket_type = AUDIO_SAMPLE;
+	params->mclock_fsfactor = 128;
+	params->mdma_beat_increment = DMA_UNSPECIFIED_INCREMENT;
+	params->mdma_threshold = 0;
+	params->mdma_hlock = 0;
+	params->mgpa_insert_pucv = 0;
 }
 
-u8 audio_channel_count(hdmi_tx_dev_t *dev, audioParams_t * params)
+u8 audio_channel_count(hdmi_tx_dev_t *dev, audio_params_t * params)
 {
 	int i = 0;
 
-	for(i = 0; channel_cnt[i].channel_count != 0; i++){
-		if(channel_cnt[i].channel_allocation == params->mChannelAllocation){
+	for (i = 0; channel_cnt[i].channel_count != 0; i++){
+		if (channel_cnt[i].channel_allocation == params->mchannel_allocation){
 			return channel_cnt[i].channel_count;
 		}
 	}
@@ -450,12 +450,13 @@ u8 audio_channel_count(hdmi_tx_dev_t *dev, audioParams_t * params)
 	return 0;
 }
 
-u8 audio_iec_original_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params)
+u8 audio_iec_original_sampling_freq(hdmi_tx_dev_t *dev, audio_params_t * params)
 {
 	int i = 0;
 
 	for(i = 0; iec_original_sampling_freq_values[i].iec.frequency != 0; i++){
-		if(is_equal(params->mSamplingFrequency, iec_original_sampling_freq_values[i].iec.frequency)){
+		if(is_equal(params->msampling_frequency,
+			iec_original_sampling_freq_values[i].iec.frequency)){
 			u8 value = iec_original_sampling_freq_values[i].value;
 			return value;
 		}
@@ -465,12 +466,13 @@ u8 audio_iec_original_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params)
 	return 0x0;
 }
 
-u8 audio_iec_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params)
+u8 audio_iec_sampling_freq(hdmi_tx_dev_t *dev, audio_params_t * params)
 {
 	int i = 0;
 
-	for(i = 0; iec_sampling_freq_values[i].iec.frequency != 0; i++){
-		if(is_equal(params->mSamplingFrequency, iec_sampling_freq_values[i].iec.frequency)){
+	for (i = 0; iec_sampling_freq_values[i].iec.frequency != 0; i++){
+		if (is_equal(params->msampling_frequency,
+			iec_sampling_freq_values[i].iec.frequency)){
 			u8 value = iec_sampling_freq_values[i].value;
 			return value;
 		}
@@ -480,12 +482,12 @@ u8 audio_iec_sampling_freq(hdmi_tx_dev_t *dev, audioParams_t * params)
 	return 0x1;
 }
 
-u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audioParams_t * params)
+u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audio_params_t * params)
 {
 	int i = 0;
 
-	for(i = 0; iec_word_length[i].iec.sample_size != 0; i++){
-		if(params->mSampleSize == iec_word_length[i].iec.sample_size){
+	for (i = 0; iec_word_length[i].iec.sample_size != 0; i++){
+		if (params->msample_size == iec_word_length[i].iec.sample_size){
 			return iec_word_length[i].value;
 		}
 	}
@@ -494,33 +496,39 @@ u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audioParams_t * params)
 	return 0x0;
 }
 
-u8 audio_is_channel_en(hdmi_tx_dev_t *dev, audioParams_t * params, u8 channel)
+u8 audio_is_channel_en(hdmi_tx_dev_t *dev, audio_params_t * params, u8 channel)
 {
 	switch (channel) {
 	case 0:
 	case 1:
 		return 1;
 	case 2:
-		return params->mChannelAllocation & BIT(0);
+		return params->mchannel_allocation & BIT(0);
 	case 3:
-		return (params->mChannelAllocation & BIT(1)) >> 1;
+		return (params->mchannel_allocation & BIT(1)) >> 1;
 	case 4:
-		if (((params->mChannelAllocation > 0x03) && (params->mChannelAllocation < 0x14)) || ((params->mChannelAllocation > 0x17) && (params->mChannelAllocation < 0x20)))
+		if (((params->mchannel_allocation > 0x03) &&
+			(params->mchannel_allocation < 0x14)) ||
+			((params->mchannel_allocation > 0x17) &&
+			(params->mchannel_allocation < 0x20)))
 			return 1;
 		else
 			return 0;
 	case 5:
-		if (((params->mChannelAllocation > 0x07) && (params->mChannelAllocation < 0x14)) || ((params->mChannelAllocation > 0x1C) && (params->mChannelAllocation < 0x20)))
+		if (((params->mchannel_allocation > 0x07) &&
+			(params->mchannel_allocation < 0x14)) ||
+			((params->mchannel_allocation > 0x1C) &&
+			(params->mchannel_allocation < 0x20)))
 			return 1;
 		else
 			return 0;
 	case 6:
-		if ((params->mChannelAllocation > 0x0B) && (params->mChannelAllocation < 0x20))
+		if ((params->mchannel_allocation > 0x0B) && (params->mchannel_allocation < 0x20))
 			return 1;
 		else
 			return 0;
 	case 7:
-		return (params->mChannelAllocation & BIT(4)) >> 4;
+		return (params->mchannel_allocation & BIT(4)) >> 4;
 	default:
 		return 0;
 	}

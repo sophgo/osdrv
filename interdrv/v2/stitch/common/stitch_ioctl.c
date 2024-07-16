@@ -35,17 +35,17 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 	if (!access_ok((void __user *)arg, in_size)) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "access_ok failed\n");
+		TRACE_STITCH(DBG_ERR, "access_ok failed\n");
 	}
 #else
 	if (!access_ok(VERIFY_READ, (void __user *)arg, in_size)) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "access_ok failed\n");
+		TRACE_STITCH(DBG_ERR, "access_ok failed\n");
 	}
 #endif
 
 	ret = copy_from_user(kdata, (void __user *)arg, in_size);
 	if (ret != 0) {
-		CVI_TRACE_STITCH(CVI_DBG_INFO, "copy_from_user failed: ret=%d\n", ret);
+		TRACE_STITCH(DBG_INFO, "copy_from_user failed: ret=%d\n", ret);
 		goto err;
 	}
 
@@ -54,146 +54,162 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		memset(kdata + in_size, 0, ksize - in_size);
 
 	switch (cmd) {
-		case CVI_STITCH_INIT: {
+		case STITCH_INIT: {
 			ret = stitch_init();
 			break;
 		}
-		case CVI_STITCH_DEINIT: {
+		case STITCH_DEINIT: {
 			ret = stitch_deinit();
 			break;
 		}
-		case CVI_STITCH_RST: {
+		case STITCH_RST: {
 			ret = stitch_reset();
 			break;
 		}
-		case CVI_STITCH_SET_SRC_ATTR: {
-			STITCH_SRC_ATTR_S *src_attr = (STITCH_SRC_ATTR_S *)kdata;
+		case STITCH_SET_SRC_ATTR: {
+			stitch_src_attr *src_attr = (stitch_src_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_src_attr);
 
 			ret = stitch_set_src_attr(src_attr);
 			break;
 		}
-		case CVI_STITCH_GET_SRC_ATTR: {
-			STITCH_SRC_ATTR_S *src_attr = (STITCH_SRC_ATTR_S *)kdata;
+		case STITCH_GET_SRC_ATTR: {
+			stitch_src_attr *src_attr = (stitch_src_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_src_attr);
 
 			stitch_get_src_attr(src_attr);
 			break;
 		}
-		case CVI_STITCH_SET_CHN_ATTR: {
-			STITCH_CHN_ATTR_S *chn_attr = (STITCH_CHN_ATTR_S *)kdata;
+		case STITCH_SET_CHN_ATTR: {
+			stitch_chn_attr *chn_attr = (stitch_chn_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_chn_attr);
 
 			ret = stitch_set_chn_attr(chn_attr);
 			break;
 		}
-		case CVI_STITCH_GET_CHN_ATTR: {
-			STITCH_CHN_ATTR_S *chn_attr = (STITCH_CHN_ATTR_S *)kdata;
+		case STITCH_GET_CHN_ATTR: {
+			stitch_chn_attr *chn_attr = (stitch_chn_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_chn_attr);
 
 			ret = stitch_get_chn_attr(chn_attr);
 			break;
 		}
-		case CVI_STITCH_SET_OP_ATTR: {
-			STITCH_OP_ATTR_S *op_attr = (STITCH_OP_ATTR_S *)kdata;
+		case STITCH_SET_OP_ATTR: {
+			stitch_op_attr *op_attr = (stitch_op_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_op_attr);
 
 			ret = stitch_set_op_attr(op_attr);
 			break;
 		}
-		case CVI_STITCH_GET_OP_ATTR: {
-			STITCH_OP_ATTR_S *op_attr = (STITCH_OP_ATTR_S *)kdata;
+		case STITCH_GET_OP_ATTR: {
+			stitch_op_attr *op_attr = (stitch_op_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_op_attr);
 
 			ret = stitch_get_op_attr(op_attr);
 			break;
 		}
-		case CVI_STITCH_SET_WGT_ATTR: {
-			STITCH_WGT_ATTR_S *wgt_attr = (STITCH_WGT_ATTR_S *)kdata;
+		case STITCH_SET_WGT_ATTR: {
+			stitch_bld_wgt_attr *wgt_attr = (stitch_bld_wgt_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_bld_wgt_attr);
 
 			ret = stitch_set_wgt_attr(wgt_attr);
 			break;
 		}
-		case CVI_STITCH_GET_WGT_ATTR: {
-			STITCH_WGT_ATTR_S *wgt_attr = (STITCH_WGT_ATTR_S *)kdata;
+		case STITCH_GET_WGT_ATTR: {
+			stitch_bld_wgt_attr *wgt_attr = (stitch_bld_wgt_attr *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_bld_wgt_attr);
 
 			ret = stitch_get_wgt_attr(wgt_attr);
 			break;
 		}
-		case CVI_STITCH_SET_REGX: {
-			u8 regx = *(u8 *)(kdata);
+		case STITCH_SET_REGX: {
+			unsigned char regx = *(unsigned char *)(kdata);
 
 			ret = stitch_set_reg_x(regx);
 			break;
 		}
-		//case CVI_STITCH_GET_REGX: {
+		//case STITCH_GET_REGX: {
 			//break;
 		//}
-		case CVI_STITCH_DEV_ENABLE: {
+		case STITCH_DEV_ENABLE: {
 			ret = stitch_enable_dev();
 			break;
 		}
-		case CVI_STITCH_DEV_DISABLE: {
+		case STITCH_DEV_DISABLE: {
 			ret = stitch_disable_dev();
 			break;
 		}
-		case CVI_STITCH_SEND_SRC_FRM: {
+		case STITCH_SEND_SRC_FRM: {
 			struct stitch_src_frm_cfg *cfg = (struct stitch_src_frm_cfg *)kdata;
-			VIDEO_FRAME_INFO_S *VideoFrame = &cfg->VideoFrame;
-			s32 MilliSec = cfg->MilliSec;
-			STITCH_SRC_IDX src_idx = cfg->src_id;
+			video_frame_info_s *video_frame = &cfg->video_frame;
+			int milli_sec = cfg->milli_sec;
+			stitch_src_idx src_idx = cfg->src_id;
 
-			ret = stitch_send_frame(src_idx, VideoFrame, MilliSec);
+			ret = stitch_send_frame(src_idx, video_frame, milli_sec);
 			break;
 		}
-		case CVI_STITCH_SEND_CHN_FRM: {
+		case STITCH_SEND_CHN_FRM: {
 			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			VIDEO_FRAME_INFO_S *VideoFrame = &cfg->VideoFrame;
-			s32 MilliSec = cfg->MilliSec;
+			video_frame_info_s *video_frame = &cfg->video_frame;
+			int milli_sec = cfg->milli_sec;
 
-			ret = stitch_send_chn_frame(VideoFrame, MilliSec);
+			ret = stitch_send_chn_frame(video_frame, milli_sec);
 			break;
 		}
-		case CVI_STITCH_GET_CHN_FRM: {
+		case STITCH_GET_CHN_FRM: {
 			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			VIDEO_FRAME_INFO_S *VideoFrame = &cfg->VideoFrame;
-			s32 MilliSec = cfg->MilliSec;
+			video_frame_info_s *video_frame = &cfg->video_frame;
+			int milli_sec = cfg->milli_sec;
 
-			ret = stitch_get_chn_frame(VideoFrame, MilliSec);
+			ret = stitch_get_chn_frame(video_frame, milli_sec);
 			break;
 		}
-		case CVI_STITCH_RLS_CHN_FRM: {
+		case STITCH_RLS_CHN_FRM: {
 			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			const VIDEO_FRAME_INFO_S *VideoFrame = &cfg->VideoFrame;
+			const video_frame_info_s *video_frame = &cfg->video_frame;
 
-			ret = stitch_release_chn_frame(VideoFrame);
+			ret = stitch_release_chn_frame(video_frame);
 			break;
 		}
-		case CVI_STITCH_ATTACH_VB_POOL: {
+		case STITCH_ATTACH_VB_POOL: {
 			struct stitch_vb_pool_cfg *cfg = (struct stitch_vb_pool_cfg *)kdata;
-			VB_POOL VbPool = (VB_POOL)cfg->VbPool;
+			vb_pool pool = (vb_pool)cfg->vb_pool;
 
-			ret = stitch_attach_vb_pool(VbPool);
+			ret = stitch_attach_vb_pool(pool);
 			break;
 		}
-		case CVI_STITCH_DETACH_VB_POOL: {
+		case STITCH_DETACH_VB_POOL: {
 			ret = stitch_detach_vb_pool();
 			break;
 		}
-		case CVI_STITCH_DUMP_REGS: {
+		case STITCH_DUMP_REGS: {
 			ret = stitch_dump_reg_info();
 			break;
 		}
-		case CVI_STITCH_SUSPEND: {
-			struct cvi_stitch_dev *dev
-				= container_of(filp->private_data, struct cvi_stitch_dev, miscdev);
+		case STITCH_SUSPEND: {
+			struct stitch_dev *dev
+				= container_of(filp->private_data, struct stitch_dev, miscdev);
 
 			ret = stitch_suspend(dev->miscdev.this_device);
 			break;
 		}
-		case CVI_STITCH_RESUME: {
-			struct cvi_stitch_dev *dev
-				= container_of(filp->private_data, struct cvi_stitch_dev, miscdev);
+		case STITCH_RESUME: {
+			struct stitch_dev *dev
+				= container_of(filp->private_data, struct stitch_dev, miscdev);
 
 			ret = stitch_resume(dev->miscdev.this_device);
 			break;
 		}
 		default: {
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "unknown cmd(0x%x)\n", cmd);
+			TRACE_STITCH(DBG_DEBUG, "unknown cmd(0x%x)\n", cmd);
 			break;
 		}
 	}

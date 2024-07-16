@@ -35,11 +35,11 @@
 #include "jputypes.h"
 
 #define MAX_JPU_BUFFER_POOL 512
-#define JpuWriteInstReg(INST_IDX, ADDR, DATA) jdi_write_register_ext(pJpgInst->coreIndex, ((unsigned long)(INST_IDX * NPT_REG_SIZE) + ADDR), DATA)
-#define JpuReadInstReg( INST_IDX, ADDR )		    jdi_read_register_ext(pJpgInst->coreIndex, ((unsigned long)INST_IDX*NPT_REG_SIZE)+ADDR ) // system register write 	with instance index
+#define JpuWriteInstReg(CORE, INST_IDX, ADDR, DATA) jdi_write_register_ext(CORE, ((unsigned long)(INST_IDX * NPT_REG_SIZE) + ADDR), DATA)
+#define JpuReadInstReg(CORE, INST_IDX, ADDR )		    jdi_read_register_ext(CORE, ((unsigned long)INST_IDX*NPT_REG_SIZE)+ADDR ) // system register write 	with instance index
 
-#define JpuWriteReg( ADDR, DATA )                   jdi_write_register_ext(pJpgInst->coreIndex, ADDR, DATA ) // system register write
-#define JpuReadReg( ADDR )                          jdi_read_register_ext(pJpgInst->coreIndex, ADDR )           // system register write
+#define JpuWriteReg(CORE, ADDR, DATA )                   jdi_write_register_ext(CORE, ADDR, DATA ) // system register write
+#define JpuReadReg(CORE, ADDR )                          jdi_read_register_ext(CORE, ADDR )           // system register write
 
 #define JpuWriteInstRegExt(CORE, INST_IDX, ADDR, DATA )		jdi_write_register_ext(CORE, ((unsigned long)INST_IDX*NPT_REG_SIZE)+ADDR, DATA ) // system register write 	with instance index
 #define JpuReadInstRegExt(CORE, INST_IDX, ADDR )		    jdi_read_register_ext(CORE, ((unsigned long)INST_IDX*NPT_REG_SIZE)+ADDR ) // system register write 	with instance index
@@ -47,8 +47,8 @@
 #define JpuWriteRegExt(CORE, ADDR, DATA )                   jdi_write_register_ext(CORE, ADDR, DATA ) // system register write
 #define JpuReadRegExt(CORE, ADDR )                          jdi_read_register_ext(CORE, ADDR )           // system register write
 
-#define JpuWriteMem( ADDR, DATA, LEN, ENDIAN )      jdi_write_memory( ADDR, DATA, LEN, ENDIAN ) // system memory write
-#define JpuReadMem( ADDR, DATA, LEN, ENDIAN )       jdi_read_memory( ADDR, DATA, LEN, ENDIAN ) // system memory write
+#define JpuWriteMem(ADDR, DATA, LEN, ENDIAN )               jdi_write_memory(ADDR, DATA, LEN, ENDIAN ) // system memory write
+#define JpuReadMem(ADDR, DATA, LEN, ENDIAN )                jdi_read_memory(ADDR, DATA, LEN, ENDIAN ) // system memory write
 
 typedef Int32 HANDLE;
 
@@ -89,53 +89,47 @@ typedef enum {
 #if defined (__cplusplus)
 extern "C" {
 #endif
-    int jdi_probe(void);
-    /* @brief It returns the number of task using JDI.
-     */
-    int jdi_get_task_num(void);
-    int jdi_init(void);
-    int jdi_release(void);    //this function may be called only at system off.
-    jpu_instance_pool_t *jdi_get_instance_pool(void);
-    int jdi_allocate_dma_memory(jpu_buffer_t *vb);
-    int jdi_invalidate_cache(jpu_buffer_t *vb);
-    int jdi_flush_cache(jpu_buffer_t *vb);
-    void jdi_free_dma_memory(jpu_buffer_t *vb);
-    int jdi_wait_interrupt(unsigned int core_idx, int timeout, unsigned long instIdx);
-    int jdi_hw_reset(void);
-    int jdi_wait_inst_ctrl_busy(int core_idx, int timeout, unsigned int addr_flag_reg, unsigned int flag);
-    int jdi_set_clock_gate(int enable);
-    int jdi_get_clock_gate(void);
-    int jdi_open_instance(unsigned long instIdx);
-    int jdi_close_instance(unsigned long instIdx);
-    int jdi_get_instance_num(void);
-    int jdi_core_request_one_core(int timeout);
-    void jdi_core_hash_table_clear_core(int coreidx);
-    int jdi_core_hash_table_set_core(pid_t pid, int coreidx);
-    int jdi_core_hash_table_get_core(pid_t pid);
-    unsigned long jdi_get_extension_address(int coreidx);
-    void jdi_set_extension_address(int coreidx, unsigned long addr);
-    void jdi_sw_top_reset(int coreidx);
+/* @brief It returns the number of task using JDI.
+ */
+int jdi_get_task_num(void);
+int jdi_init(void);
+int jdi_release(void);    //this function may be called only at system off.
+jpu_instance_pool_t *jdi_get_instance_pool(void);
+int jdi_allocate_dma_memory(jpu_buffer_t *vb);
+int jdi_invalidate_cache(jpu_buffer_t *vb);
+int jdi_flush_cache(jpu_buffer_t *vb);
+void jdi_free_dma_memory(jpu_buffer_t *vb);
+int jdi_wait_interrupt(int core_idx, int timeout, unsigned long instIdx);
+int jdi_hw_reset(int core_idx);
+int jdi_wait_inst_ctrl_busy(int core_idx, int timeout, unsigned int addr_flag_reg, unsigned int flag);
+int jdi_set_clock_gate(int core_idx, int enable);
+int jdi_get_clock_gate(int core_idx);
+int jdi_open_instance(unsigned long instIdx);
+int jdi_close_instance(unsigned long instIdx);
+int jdi_get_instance_num(void);
+unsigned long jdi_get_extension_address(int core_idx);
+void jdi_set_extension_address(int core_idx, unsigned long addr);
+void jdi_sw_top_reset(int core_idx);
 
-    void jdi_write_register(unsigned long addr, unsigned int data);
-    unsigned long jdi_read_register(unsigned long addr);
-    void jdi_write_register_ext(int core_idx, unsigned long addr, unsigned int data);
-    unsigned long jdi_read_register_ext(int core_idx, unsigned long addr);
+void jdi_write_register(int core_idx, unsigned long addr, unsigned int data);
+unsigned long jdi_read_register(int core_idx, unsigned long addr);
+void jdi_write_register_ext(int core_idx, unsigned long addr, unsigned int data);
+unsigned long jdi_read_register_ext(int core_idx, unsigned long addr);
 
-    size_t jdi_write_memory(unsigned long addr, unsigned char *data, size_t len, int endian);
-    size_t jdi_read_memory(unsigned long addr, unsigned char *data, size_t len, int endian);
+size_t jdi_write_memory(unsigned long addr, unsigned char *data, size_t len, int endian);
+size_t jdi_read_memory(unsigned long addr, unsigned char *data, size_t len, int endian);
 
-    int jdi_lock(void);
-    void jdi_unlock(void);
-    void jdi_log(int cmd, int step, int inst);
-    void jdi_delay_us(unsigned int us);
-#if defined(CNM_FPGA_PLATFORM)
-    int jdi_set_clock_freg(int Device, int OutFreqMHz, int InFreqMHz);
-#else
+int jdi_lock(void);
+void jdi_unlock(void);
+void jdi_log(int core_idx, int cmd, int step, int inst);
+void jdi_delay_us(unsigned int us);
+void jdi_release_core(int coreidx);
+int jdi_request_core(int timeout);
+
 #define ACLK_MAX                    300
 #define ACLK_MIN                    16
 #define CCLK_MAX                    300
 #define CCLK_MIN                    16
-#endif
 
 #if defined (__cplusplus)
 }

@@ -1,6 +1,6 @@
 #ifndef _HDMI_DEBUG_H_
 #define _HDMI_DEBUG_H_
-// #include <linux/cvi_comm_hdmi.h>
+#include <linux/comm_hdmi.h>
 #include <linux/debugfs.h>
 
 

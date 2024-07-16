@@ -1,156 +1,152 @@
 #include <vip/vi_drv.h>
 
-/****************************************************************************
- * Global parameters
- ****************************************************************************/
-extern uint8_t g_w_bit[ISP_PRERAW_MAX], g_h_bit[ISP_PRERAW_MAX];
-extern struct lmap_cfg g_lmp_cfg[ISP_PRERAW_MAX];
-
 /*******************************************************************************
  *	Subsys config
  ******************************************************************************/
-void ispblk_splt_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num, bool enable)
+void ispblk_splt_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num, bool enable)
 {
 	uintptr_t ba = ctx->phys_regs[ISP_BLK_ID_SPLT];
-	union REG_ISP_LINE_SPLITER_SEL_CTRL sel_ctrl;
-	union REG_ISP_LINE_SPLITER_DMA_CTRL dma_ctrl;
-	uint32_t width = ctx->isp_pipe_cfg[raw_num].max_width;
-	uint32_t height = ctx->isp_pipe_cfg[raw_num].max_height;
-	uint32_t width_l, width_r;
+	union reg_isp_line_spliter_sel_ctrl sel_ctrl;
+	union reg_isp_line_spliter_dma_ctrl dma_ctrl;
+	u32 width = ctx->isp_pipe_cfg[raw_num].max_width;
+	u32 height = ctx->isp_pipe_cfg[raw_num].max_height;
+	u32 width_l, width_r;
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, ENABLE, LINE_SPLITER_ENABLE, enable);
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, enable, line_spliter_enable, enable);
 
 	if (!enable) {
 		return;
 	}
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_FE0, IMG_IN_W_M1, width - 1);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_FE0, IMG_IN_H_M1, height - 1);
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_fe0, img_in_w_m1, width - 1);
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_fe0, img_in_h_m1, height - 1);
 
 	if (ctx->isp_pipe_cfg[raw_num].is_tile) {
 		width_l = ctx->isp_pipe_cfg[raw_num].csibdg_width;
 		width_r = width - width_l;
 		// left
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_BLD, BLD_W_STR, 0);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_BLD, BLD_W_END, width_l - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_BLD, IMG_WIDTH_B, width_l - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_BLD, IMG_HEIGHT_B, height - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE0, FRAME_WIDTHM1_FE0, width_l - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE0, FRAME_HEIGHTM1_FE0, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_bld, bld_w_str, 0);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_bld, bld_w_end, width_l - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_bld, img_width_b, width_l - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_bld, img_height_b, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe0, frame_widthm1_fe0, width_l - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe0, frame_heightm1_fe0, height - 1);
 		// right
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_FE1, IMG_WIDTH_FE1, width_r - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_FE1, IMG_HEIGHT_FE1, height - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_NBLD, NBLD_W_STR, width_l);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_NBLD, NBLD_W_END, width - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_NBLD, IMG_WIDTH_NB, width_r - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_NBLD, IMG_HEIGHT_NB, height - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE1, FRAME_WIDTHM1_FE1, width_r - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE1, FRAME_HEIGHTM1_FE1, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_fe1, img_width_fe1, width_r - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_fe1, img_height_fe1, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_nbld, nbld_w_str, width_l);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_nbld, nbld_w_end, width - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_nbld, img_width_nb, width_r - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_nbld, img_height_nb, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe1, frame_widthm1_fe1, width_r - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe1, frame_heightm1_fe1, height - 1);
 	} else {
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_BLD, BLD_W_STR, 0);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_WIDTH_BLD, BLD_W_END, width - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_BLD, IMG_WIDTH_B, width - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, IMG_SIZE_BLD, IMG_HEIGHT_B, height - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE0, FRAME_WIDTHM1_FE0, width - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE0, FRAME_HEIGHTM1_FE0, height - 1);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE1, FRAME_WIDTHM1_FE1, 0);
-		ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_SIZE_FE1, FRAME_HEIGHTM1_FE1, 0);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_bld, bld_w_str, 0);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_width_bld, bld_w_end, width - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_bld, img_width_b, width - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, img_size_bld, img_height_b, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe0, frame_widthm1_fe0, width - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe0, frame_heightm1_fe0, height - 1);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe1, frame_widthm1_fe1, 0);
+		ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_size_fe1, frame_heightm1_fe1, 0);
 	}
 
 	sel_ctrl.raw = 0;
 	dma_ctrl.raw = 0;
 	if (ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe) {
-		sel_ctrl.bits.FE0_SEL		 = 0;
-		sel_ctrl.bits.FE1_SEL		 = 0;
-		sel_ctrl.bits.FE0_RDMA_SEL	 = 1;
-		sel_ctrl.bits.FE1_RDMA_SEL	 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		sel_ctrl.bits.fe0_sel		 = 0;
+		sel_ctrl.bits.fe1_sel		 = 0;
+		sel_ctrl.bits.fe0_rdma_sel	 = 1;
+		sel_ctrl.bits.fe1_rdma_sel	 = ctx->isp_pipe_cfg[raw_num].is_tile;
 
-		dma_ctrl.bits.RDMA_L_ENABLE_FE0	 = 1;
-		dma_ctrl.bits.RDMA_S_ENABLE_FE0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-		dma_ctrl.bits.RDMA_L_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
-		dma_ctrl.bits.RDMA_S_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
+		dma_ctrl.bits.rdma_l_enable_fe0	 = 1;
+		dma_ctrl.bits.rdma_s_enable_fe0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+		dma_ctrl.bits.rdma_l_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		dma_ctrl.bits.rdma_s_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
 						   ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 	} else if (ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap) {
-		sel_ctrl.bits.FE0_SEL		 = 0;
-		sel_ctrl.bits.FE1_SEL		 = ctx->isp_pipe_cfg[raw_num].is_tile;
-		sel_ctrl.bits.FE0_RDMA_SEL	 = 1;
-		sel_ctrl.bits.FE1_RDMA_SEL	 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		sel_ctrl.bits.fe0_sel		 = 0;
+		sel_ctrl.bits.fe1_sel		 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		sel_ctrl.bits.fe0_rdma_sel	 = 1;
+		sel_ctrl.bits.fe1_rdma_sel	 = ctx->isp_pipe_cfg[raw_num].is_tile;
 
-		dma_ctrl.bits.FE0_WDMA_L_ENABLE	 = 1;
-		dma_ctrl.bits.FE0_WDMA_S_ENABLE	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-		dma_ctrl.bits.FE1_WDMA_L_ENABLE	 = ctx->isp_pipe_cfg[raw_num].is_tile;
-		dma_ctrl.bits.FE1_WDMA_S_ENABLE	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
+		dma_ctrl.bits.fe0_wdma_l_enable	 = 1;
+		dma_ctrl.bits.fe0_wdma_s_enable	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+		dma_ctrl.bits.fe1_wdma_l_enable	 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		dma_ctrl.bits.fe1_wdma_s_enable	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
 						   ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 
-		dma_ctrl.bits.RDMA_L_ENABLE_FE0	 = 1;
-		dma_ctrl.bits.RDMA_S_ENABLE_FE0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-		dma_ctrl.bits.RDMA_L_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
-		dma_ctrl.bits.RDMA_S_ENABLE_FE1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
+		dma_ctrl.bits.rdma_l_enable_fe0	 = 1;
+		dma_ctrl.bits.rdma_s_enable_fe0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+		dma_ctrl.bits.rdma_l_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		dma_ctrl.bits.rdma_s_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
 						   ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 	} else {
-		sel_ctrl.bits.FE0_SEL		 = 0;
-		sel_ctrl.bits.FE1_SEL		 = ctx->isp_pipe_cfg[raw_num].is_tile;
-		sel_ctrl.bits.FE0_RDMA_SEL	 = 0;
-		sel_ctrl.bits.FE1_RDMA_SEL	 = 0;
+		sel_ctrl.bits.fe0_sel		 = 0;
+		sel_ctrl.bits.fe1_sel		 = ctx->isp_pipe_cfg[raw_num].is_tile;
+		sel_ctrl.bits.fe0_rdma_sel	 = 0;
+		sel_ctrl.bits.fe1_rdma_sel	 = 0;
 	}
-	ISP_WR_REG(ba, REG_ISP_LINE_SPLITER_T, SEL_CTRL, sel_ctrl.raw);
-	ISP_WR_REG(ba, REG_ISP_LINE_SPLITER_T, DMA_CTRL, dma_ctrl.raw);
+	ISP_WR_REG(ba, reg_isp_line_spliter_t, sel_ctrl, sel_ctrl.raw);
+	ISP_WR_REG(ba, reg_isp_line_spliter_t, dma_ctrl, dma_ctrl.raw);
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, YUV_MODE, YUV_FORMAT_FE0,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, yuv_mode, yuv_format_fe0,
 			ctx->isp_pipe_cfg[raw_num].is_yuv_sensor);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, YUV_MODE, YUV_FORMAT_FE1,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, yuv_mode, yuv_format_fe1,
 			ctx->isp_pipe_cfg[raw_num].is_yuv_sensor &&
 			ctx->isp_pipe_cfg[raw_num].is_tile);
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, HDR_CTRL, HDR_FE0,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, hdr_ctrl, hdr_fe0,
 			ctx->isp_pipe_cfg[raw_num].is_hdr_on);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, HDR_CTRL, HDR_FE1,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, hdr_ctrl, hdr_fe1,
 			ctx->isp_pipe_cfg[raw_num].is_hdr_on &&
 			ctx->isp_pipe_cfg[raw_num].is_tile);
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, LESE_ARBITER_CTRL, CH_NUM_FE0,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, lese_arbiter_ctrl, ch_num_fe0,
 			ctx->isp_pipe_cfg[raw_num].is_hdr_on);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, LESE_ARBITER_CTRL, CH_NUM_FE1,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, lese_arbiter_ctrl, ch_num_fe1,
 			ctx->isp_pipe_cfg[raw_num].is_hdr_on &&
 			ctx->isp_pipe_cfg[raw_num].is_tile);
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, VS_SW_CTRL, FE0_VS_SEL,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, vs_sw_ctrl, fe0_vs_sel,
 			ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, VS_SW_CTRL, FE1_VS_SEL,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, vs_sw_ctrl, fe1_vs_sel,
 			ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe &&
 			ctx->isp_pipe_cfg[raw_num].is_tile);
 
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_VLD_CTRL, VS_MODE_FE0,
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_vld_ctrl, vs_mode_fe0,
 			ctx->isp_pipe_cfg[raw_num].is_stagger_vsync);
-	ISP_WR_BITS(ba, REG_ISP_LINE_SPLITER_T, FRAME_VLD_CTRL, VS_MODE_FE1, 0);
+	ISP_WR_BITS(ba, reg_isp_line_spliter_t, frame_vld_ctrl, vs_mode_fe1, 0);
 }
 
-void ispblk_splt_wdma_ctrl_config(struct isp_ctx *ctx, enum ISP_BLK_ID_T blk_id, bool enable)
+void ispblk_splt_wdma_ctrl_config(struct isp_ctx *ctx, enum isp_blk_id_t blk_id, bool enable)
 {
 	uintptr_t wdma = ctx->phys_regs[blk_id];
-	union REG_PRE_WDMA_CTRL wdma_ctrl;
-	enum cvi_isp_raw raw_num = ISP_PRERAW0;
+	union reg_pre_wdma_ctrl wdma_ctrl;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
 
 	if (blk_id == ISP_BLK_ID_SPLT_FE1_WDMA)
 		raw_num = ISP_PRERAW1;
 
-	wdma_ctrl.raw = ISP_RD_REG(wdma, REG_PRE_WDMA_CTRL_T, PRE_WDMA_CTRL);
-	wdma_ctrl.bits.WDMI_EN_LE = enable;
-	wdma_ctrl.bits.WDMI_EN_SE = enable && ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-	ISP_WR_REG(wdma, REG_PRE_WDMA_CTRL_T, PRE_WDMA_CTRL, wdma_ctrl.raw);
+	wdma_ctrl.raw = ISP_RD_REG(wdma, reg_pre_wdma_ctrl_t, pre_wdma_ctrl);
+	wdma_ctrl.bits.wdmi_en_le = enable;
+	wdma_ctrl.bits.wdmi_en_se = enable && ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+	ISP_WR_REG(wdma, reg_pre_wdma_ctrl_t, pre_wdma_ctrl, wdma_ctrl.raw);
 
 	// just ai_isp need write to dram, and always no used compress mode.
-	ISP_WR_BITS(wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_MODE, 0);
-	ISP_WR_BITS(wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_XSTR, 0);
+	ISP_WR_BITS(wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_mode, 0);
+	ISP_WR_BITS(wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_xstr, 0);
+
+	vi_pr(VI_DBG, "splt wdma enable = %d\n", enable);
 }
 
-void ispblk_splt_rdma_ctrl_config(struct isp_ctx *ctx, enum ISP_BLK_ID_T blk_id, bool enable)
+void ispblk_splt_rdma_ctrl_config(struct isp_ctx *ctx, enum isp_blk_id_t blk_id, bool enable)
 {
 	uintptr_t rdma = ctx->phys_regs[blk_id];
-	union REG_RAW_RDMA_CTRL_CONFIG ctrl_config;
-	union REG_RAW_RDMA_CTRL_RDMA_SIZE rdma_size;
-	enum cvi_isp_raw raw_num = ISP_PRERAW0;
-	uint32_t width, height;
+	union reg_raw_rdma_ctrl_config ctrl_config;
+	union reg_raw_rdma_ctrl_rdma_size rdma_size;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	u32 width, height;
 
 	if ((blk_id == ISP_BLK_ID_SPLT_FE1_RDMA_LE) || (blk_id == ISP_BLK_ID_SPLT_FE1_RDMA_SE))
 		raw_num = ISP_PRERAW1;
@@ -159,298 +155,298 @@ void ispblk_splt_rdma_ctrl_config(struct isp_ctx *ctx, enum ISP_BLK_ID_T blk_id,
 	height = ctx->isp_pipe_cfg[raw_num].csibdg_height;
 
 	ctrl_config.raw = 0;
-	ctrl_config.bits.LE_RDMA_EN = enable;
-	// ctrl_config.bits.SE_RDMA_EN = enable; // unused
-	ISP_WR_REG(rdma, REG_RAW_RDMA_CTRL_T, CONFIG, ctrl_config.raw);
+	ctrl_config.bits.le_rdma_en = enable;
+	// ctrl_config.bits.se_rdma_en = enable; // unused
+	ISP_WR_REG(rdma, reg_raw_rdma_ctrl_t, config, ctrl_config.raw);
 
 	rdma_size.raw = 0;
-	rdma_size.bits.RDMI_WIDTHM1 = width - 1;
-	rdma_size.bits.RDMI_HEIGHTM1 = height - 1;
-	ISP_WR_REG(rdma, REG_RAW_RDMA_CTRL_T, RDMA_SIZE, rdma_size.raw);
+	rdma_size.bits.rdmi_widthm1 = width - 1;
+	rdma_size.bits.rdmi_heightm1 = height - 1;
+	ISP_WR_REG(rdma, reg_raw_rdma_ctrl_t, rdma_size, rdma_size.raw);
 
 	if (ctx->isp_pipe_cfg[ISP_PRERAW0].is_raw_replay_fe) {
 		if (ctx->is_dpcm_on) {
-			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 7);
-			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 8191);
+			ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_mode, 7);
+			ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_xstr, 8191);
 		} else {
-			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 0);
-			ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 0);
+			ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_mode, 0);
+			ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_xstr, 0);
 		}
 	} else if (ctx->isp_pipe_cfg[ISP_PRERAW0].raw_ai_isp_ap) {
-		ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 0);
-		ISP_WR_BITS(rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 0);
+		ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_mode, 0);
+		ISP_WR_BITS(rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_xstr, 0);
 	}
 }
 
-void ispblk_preraw_fe_config(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
+void ispblk_preraw_fe_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	int id = fe_find_hwid(raw_num);
 	uintptr_t preraw_fe = ctx->phys_regs[id];
-	uint32_t width = ctx->isp_pipe_cfg[raw_num].crop.w;
-	uint32_t height = ctx->isp_pipe_cfg[raw_num].crop.h;
-	union REG_PRE_RAW_FE_PRE_RAW_CTRL raw_ctrl;
-	union REG_PRE_RAW_FE_PRE_RAW_FRAME_SIZE  frm_size;
-	union REG_PRE_RAW_FE_LE_RGBMAP_GRID_NUMBER  rgbmap_le;
-	union REG_PRE_RAW_FE_SE_RGBMAP_GRID_NUMBER  rgbmap_se;
+	u32 width = ctx->isp_pipe_cfg[raw_num].crop.w;
+	u32 height = ctx->isp_pipe_cfg[raw_num].crop.h;
+	union reg_pre_raw_fe_pre_raw_ctrl raw_ctrl;
+	union reg_pre_raw_fe_pre_raw_frame_size  frm_size;
+	union reg_pre_raw_fe_le_rgbmap_grid_number  rgbmap_le;
+	union reg_pre_raw_fe_se_rgbmap_grid_number  rgbmap_se;
 
 	frm_size.raw = rgbmap_le.raw = rgbmap_se.raw = 0;
 
-	raw_ctrl.raw = ISP_RD_REG(preraw_fe, REG_PRE_RAW_FE_T, PRE_RAW_CTRL);
-	raw_ctrl.bits.BAYER_TYPE_LE = ctx->rgb_color_mode[raw_num];
-	raw_ctrl.bits.BAYER_TYPE_SE = ctx->rgb_color_mode[raw_num];
-	raw_ctrl.bits.POST_BLC_BAYER_TYPE_LE = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	raw_ctrl.bits.POST_BLC_BAYER_TYPE_SE = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	raw_ctrl.bits.RGBIR_EN = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
-	ISP_WR_REG(preraw_fe, REG_PRE_RAW_FE_T, PRE_RAW_CTRL, raw_ctrl.raw);
+	raw_ctrl.raw = ISP_RD_REG(preraw_fe, reg_pre_raw_fe_t, pre_raw_ctrl);
+	raw_ctrl.bits.bayer_type_le = ctx->rgb_color_mode[raw_num];
+	raw_ctrl.bits.bayer_type_se = ctx->rgb_color_mode[raw_num];
+	raw_ctrl.bits.post_blc_bayer_type_le = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	raw_ctrl.bits.post_blc_bayer_type_se = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	raw_ctrl.bits.rgbir_en = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
+	ISP_WR_REG(preraw_fe, reg_pre_raw_fe_t, pre_raw_ctrl, raw_ctrl.raw);
 
-	frm_size.bits.FRAME_WIDTHM1 = width - 1;
-	frm_size.bits.FRAME_HEIGHTM1 = height - 1;
-	ISP_WR_REG(preraw_fe, REG_PRE_RAW_FE_T, PRE_RAW_FRAME_SIZE, frm_size.raw);
+	frm_size.bits.frame_widthm1 = width - 1;
+	frm_size.bits.frame_heightm1 = height - 1;
+	ISP_WR_REG(preraw_fe, reg_pre_raw_fe_t, pre_raw_frame_size, frm_size.raw);
 
-	rgbmap_le.bits.LE_RGBMP_H_GRID_SIZE = g_w_bit[raw_num];
-	rgbmap_le.bits.LE_RGBMP_V_GRID_SIZE = g_h_bit[raw_num];
-	rgbmap_se.bits.SE_RGBMP_H_GRID_SIZE = g_w_bit[raw_num];
-	rgbmap_se.bits.SE_RGBMP_V_GRID_SIZE = g_h_bit[raw_num];
+	rgbmap_le.bits.le_rgbmp_h_grid_size = g_w_bit[raw_num];
+	rgbmap_le.bits.le_rgbmp_v_grid_size = g_h_bit[raw_num];
+	rgbmap_se.bits.se_rgbmp_h_grid_size = g_w_bit[raw_num];
+	rgbmap_se.bits.se_rgbmp_v_grid_size = g_h_bit[raw_num];
 #if 0 //only grid size need to program in lmap/rgbmap hw mode
 	w_grid_num = UPPER(width, g_w_bit[raw_num]) - 1;
 	h_grid_num = UPPER(height, g_h_bit[raw_num]) - 1;
 
-	rgbmap_le.bits.LE_RGBMP_H_GRID_NUMM1 = w_grid_num;
-	rgbmap_le.bits.LE_RGBMP_V_GRID_NUMM1 = h_grid_num;
-	rgbmap_se.bits.SE_RGBMP_H_GRID_NUMM1 = w_grid_num;
-	rgbmap_se.bits.SE_RGBMP_V_GRID_NUMM1 = h_grid_num;
+	rgbmap_le.bits.le_rgbmp_h_grid_numm1 = w_grid_num;
+	rgbmap_le.bits.le_rgbmp_v_grid_numm1 = h_grid_num;
+	rgbmap_se.bits.se_rgbmp_h_grid_numm1 = w_grid_num;
+	rgbmap_se.bits.se_rgbmp_v_grid_numm1 = h_grid_num;
 #endif
-	ISP_WR_REG(preraw_fe, REG_PRE_RAW_FE_T, LE_RGBMAP_GRID_NUMBER, rgbmap_le.raw);
-	ISP_WR_REG(preraw_fe, REG_PRE_RAW_FE_T, SE_RGBMAP_GRID_NUMBER, rgbmap_se.raw);
+	ISP_WR_REG(preraw_fe, reg_pre_raw_fe_t, le_rgbmap_grid_number, rgbmap_le.raw);
+	ISP_WR_REG(preraw_fe, reg_pre_raw_fe_t, se_rgbmap_grid_number, rgbmap_se.raw);
 }
 
 void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 {
 	uintptr_t vi_sel = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_VI_SEL];
-	union REG_PRE_RAW_VI_SEL_1 vi_sel_1;
+	union reg_pre_raw_vi_sel_1 vi_sel_1;
 
 	vi_sel_1.raw = 0;
-	vi_sel_1.bits.FRAME_WIDTHM1 = ctx->img_width - 1;
-	vi_sel_1.bits.FRAME_HEIGHTM1 = ctx->img_height - 1;
-	ISP_WR_REG(vi_sel, REG_PRE_RAW_VI_SEL_T, REG_1, vi_sel_1.raw);
+	vi_sel_1.bits.frame_widthm1 = ctx->img_width - 1;
+	vi_sel_1.bits.frame_heightm1 = ctx->img_height - 1;
+	ISP_WR_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_1, vi_sel_1.raw);
 
 	if (_is_be_post_online(ctx) && ctx->is_dpcm_on) { // dram->be
-		ISP_WR_BITS(vi_sel, REG_PRE_RAW_VI_SEL_T, REG_0, DMA_LD_DPCM_MODE, 7);
-		ISP_WR_BITS(vi_sel, REG_PRE_RAW_VI_SEL_T, REG_0, DPCM_RX_XSTR, 8191);
+		ISP_WR_BITS(vi_sel, reg_pre_raw_vi_sel_t, reg_0, dma_ld_dpcm_mode, 7);
+		ISP_WR_BITS(vi_sel, reg_pre_raw_vi_sel_t, reg_0, dpcm_rx_xstr, 8191);
 	} else {
-		ISP_WR_BITS(vi_sel, REG_PRE_RAW_VI_SEL_T, REG_0, DMA_LD_DPCM_MODE, 0);
-		ISP_WR_BITS(vi_sel, REG_PRE_RAW_VI_SEL_T, REG_0, DPCM_RX_XSTR, 0);
+		ISP_WR_BITS(vi_sel, reg_pre_raw_vi_sel_t, reg_0, dma_ld_dpcm_mode, 0);
+		ISP_WR_BITS(vi_sel, reg_pre_raw_vi_sel_t, reg_0, dpcm_rx_xstr, 0);
 	}
 }
 
-void ispblk_pre_wdma_ctrl_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+void ispblk_pre_wdma_ctrl_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t pre_wdma = ctx->phys_regs[ISP_BLK_ID_PRE_WDMA];
-	union REG_PRE_WDMA_CTRL wdma_ctrl;
+	union reg_pre_wdma_ctrl wdma_ctrl;
 
-	wdma_ctrl.raw = ISP_RD_REG(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_WDMA_CTRL);
-	wdma_ctrl.bits.WDMI_EN_LE = ctx->is_offline_postraw;
-	wdma_ctrl.bits.WDMI_EN_SE = (ctx->is_offline_postraw && ctx->isp_pipe_cfg[raw_num].is_hdr_on);
-	ISP_WR_REG(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_WDMA_CTRL, wdma_ctrl.raw);
+	wdma_ctrl.raw = ISP_RD_REG(pre_wdma, reg_pre_wdma_ctrl_t, pre_wdma_ctrl);
+	wdma_ctrl.bits.wdmi_en_le = ctx->is_offline_postraw;
+	wdma_ctrl.bits.wdmi_en_se = (ctx->is_offline_postraw && ctx->isp_pipe_cfg[raw_num].is_hdr_on);
+	ISP_WR_REG(pre_wdma, reg_pre_wdma_ctrl_t, pre_wdma_ctrl, wdma_ctrl.raw);
 
-	// NOTE: for be->dram, 'PRE_RAW_BE_RDMI_DPCM' naming is misleading
+	// NOTE: for be->dram, 'pre_raw_be_rdmi_dpcm' naming is misleading
 	if (!ctx->isp_pipe_cfg[raw_num].is_raw_replay_be) {
 		if (_is_fe_be_online(ctx) && ctx->is_dpcm_on) { // be->dram
-			ISP_WR_BITS(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_MODE, 7);
+			ISP_WR_BITS(pre_wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_mode, 7);
 			// 1 if dpcm_mode 7; 0 if dpcm_mode 5
-			ISP_WR_BITS(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_WDMA_CTRL, DMA_WR_MSB, 1);
-			ISP_WR_BITS(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_XSTR, 8191);
+			ISP_WR_BITS(pre_wdma, reg_pre_wdma_ctrl_t, pre_wdma_ctrl, dma_wr_msb, 1);
+			ISP_WR_BITS(pre_wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_xstr, 8191);
 		} else {
-			ISP_WR_BITS(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_MODE, 0);
-			ISP_WR_BITS(pre_wdma, REG_PRE_WDMA_CTRL_T, PRE_RAW_BE_RDMI_DPCM, DPCM_XSTR, 0);
+			ISP_WR_BITS(pre_wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_mode, 0);
+			ISP_WR_BITS(pre_wdma, reg_pre_wdma_ctrl_t, pre_raw_be_rdmi_dpcm, dpcm_xstr, 0);
 		}
 	}
 }
 
-void ispblk_preraw_be_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+void ispblk_preraw_be_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t preraw_be = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_BE];
-	union REG_PRE_RAW_BE_TOP_CTRL top_ctrl;
-	union REG_PRE_RAW_BE_IMG_SIZE_LE img_size;
+	union reg_pre_raw_be_top_ctrl top_ctrl;
+	union reg_pre_raw_be_img_size_le img_size;
 
-	top_ctrl.raw = ISP_RD_REG(preraw_be, REG_PRE_RAW_BE_T, TOP_CTRL);
-	top_ctrl.bits.BAYER_TYPE_LE	= ctx->rgb_color_mode[raw_num];
-	top_ctrl.bits.BAYER_TYPE_SE	= ctx->rgb_color_mode[raw_num];
-	top_ctrl.bits.RGBIR_EN		= ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
-	top_ctrl.bits.CH_NUM		= ctx->isp_pipe_cfg[raw_num].is_hdr_on;
-	top_ctrl.bits.POST_RGBIR_BAYER_TYPE_LE	= bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	top_ctrl.bits.POST_RGBIR_BAYER_TYPE_SE	= bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	ISP_WR_REG(preraw_be, REG_PRE_RAW_BE_T, TOP_CTRL, top_ctrl.raw);
+	top_ctrl.raw = ISP_RD_REG(preraw_be, reg_pre_raw_be_t, top_ctrl);
+	top_ctrl.bits.bayer_type_le	= ctx->rgb_color_mode[raw_num];
+	top_ctrl.bits.bayer_type_se	= ctx->rgb_color_mode[raw_num];
+	top_ctrl.bits.rgbir_en		= ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
+	top_ctrl.bits.ch_num		= ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+	top_ctrl.bits.post_rgbir_bayer_type_le	= bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	top_ctrl.bits.post_rgbir_bayer_type_se	= bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	ISP_WR_REG(preraw_be, reg_pre_raw_be_t, top_ctrl, top_ctrl.raw);
 
 	img_size.raw = 0;
-	img_size.bits.FRAME_WIDTHM1 = ctx->img_width - 1;
-	img_size.bits.FRAME_HEIGHTM1 = ctx->img_height - 1;
-	ISP_WR_REG(preraw_be, REG_PRE_RAW_BE_T, IMG_SIZE_LE, img_size.raw);
+	img_size.bits.frame_widthm1 = ctx->img_width - 1;
+	img_size.bits.frame_heightm1 = ctx->img_height - 1;
+	ISP_WR_REG(preraw_be, reg_pre_raw_be_t, img_size_le, img_size.raw);
 
-	ISP_WO_BITS(preraw_be, REG_PRE_RAW_BE_T, UP_PQ_EN, UP_PQ_EN, 1);
-	ISP_WR_BITS(preraw_be, REG_PRE_RAW_BE_T, DEBUG_ENABLE, DEBUG_EN, 1);
+	ISP_WO_BITS(preraw_be, reg_pre_raw_be_t, up_pq_en, up_pq_en, 1);
+	ISP_WR_BITS(preraw_be, reg_pre_raw_be_t, debug_enable, debug_en, 1);
 }
 
-void ispblk_raw_rdma_ctrl_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num,
-					enum ISP_BLK_ID_T blk_id, bool enable)
+void ispblk_raw_rdma_ctrl_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num,
+					enum isp_blk_id_t blk_id, bool enable)
 {
 	uintptr_t raw_rdma = ctx->phys_regs[blk_id];
-	union REG_RAW_RDMA_CTRL_CONFIG ctrl_config;
-	union REG_RAW_RDMA_CTRL_RDMA_SIZE rdma_size;
+	union reg_raw_rdma_ctrl_config ctrl_config;
+	union reg_raw_rdma_ctrl_rdma_size rdma_size;
 
 	ctrl_config.raw = 0;
-	ctrl_config.bits.LE_RDMA_EN = enable;
-	// ctrl_config.bits.SE_RDMA_EN = enable; // unused
-	ISP_WR_REG(raw_rdma, REG_RAW_RDMA_CTRL_T, CONFIG, ctrl_config.raw);
+	ctrl_config.bits.le_rdma_en = enable;
+	// ctrl_config.bits.se_rdma_en = enable; // unused
+	ISP_WR_REG(raw_rdma, reg_raw_rdma_ctrl_t, config, ctrl_config.raw);
 
 	rdma_size.raw = 0;
-	rdma_size.bits.RDMI_WIDTHM1 = ctx->img_width - 1;
-	rdma_size.bits.RDMI_HEIGHTM1 = ctx->img_height - 1;
-	ISP_WR_REG(raw_rdma, REG_RAW_RDMA_CTRL_T, RDMA_SIZE, rdma_size.raw);
+	rdma_size.bits.rdmi_widthm1 = ctx->img_width - 1;
+	rdma_size.bits.rdmi_heightm1 = ctx->img_height - 1;
+	ISP_WR_REG(raw_rdma, reg_raw_rdma_ctrl_t, rdma_size, rdma_size.raw);
 
 	if (!ctx->isp_pipe_cfg[raw_num].is_raw_replay_be) {
 		if (_is_fe_be_online(ctx) && ctx->is_dpcm_on &&
 			!ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //dram->post
-			ISP_WR_BITS(raw_rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 7);
-			ISP_WR_BITS(raw_rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 8191);
+			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_mode, 7);
+			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_xstr, 8191);
 		} else {
-			ISP_WR_BITS(raw_rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_MODE, 0);
-			ISP_WR_BITS(raw_rdma, REG_RAW_RDMA_CTRL_T, DPCM_MODE, DPCM_XSTR, 0);
+			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_mode, 0);
+			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, dpcm_mode, dpcm_xstr, 0);
 		}
 	}
 }
 
-void ispblk_rawtop_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+void ispblk_rawtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t rawtop = ctx->phys_regs[ISP_BLK_ID_RAWTOP];
-	union REG_RAW_TOP_RAW_2 raw_2;
-	union REG_RAW_TOP_RAW_BAYER_TYPE_TOPLEFT raw_bayer_type_topleft;
-	union REG_RAW_TOP_RDMI_ENABLE rdmi_enable;
-	union REG_RAW_TOP_LE_LMAP_GRID_NUMBER   le_lmap_size;
-	union REG_RAW_TOP_SE_LMAP_GRID_NUMBER   se_lmap_size;
+	union reg_raw_top_raw_2 raw_2;
+	union reg_raw_top_raw_bayer_type_topleft raw_bayer_type_topleft;
+	union reg_raw_top_rdmi_enable rdmi_enable;
+	union reg_raw_top_le_lmap_grid_number   le_lmap_size;
+	union reg_raw_top_se_lmap_grid_number   se_lmap_size;
 
 	raw_2.raw = 0;
-	raw_2.bits.IMG_WIDTHM1 = ctx->img_width - 1;
-	raw_2.bits.IMG_HEIGHTM1 = ctx->img_height - 1;
-	ISP_WR_REG(rawtop, REG_RAW_TOP_T, RAW_2, raw_2.raw);
+	raw_2.bits.img_widthm1 = ctx->img_width - 1;
+	raw_2.bits.img_heightm1 = ctx->img_height - 1;
+	ISP_WR_REG(rawtop, reg_raw_top_t, raw_2, raw_2.raw);
 
 	raw_bayer_type_topleft.raw = 0;
-	raw_bayer_type_topleft.bits.BAYER_TYPE_TOPLEFT = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	raw_bayer_type_topleft.bits.RGBIR_ENABLE = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
-	ISP_WR_REG(rawtop, REG_RAW_TOP_T, RAW_BAYER_TYPE_TOPLEFT, raw_bayer_type_topleft.raw);
+	raw_bayer_type_topleft.bits.bayer_type_topleft = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	raw_bayer_type_topleft.bits.rgbir_enable = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
+	ISP_WR_REG(rawtop, reg_raw_top_t, raw_bayer_type_topleft, raw_bayer_type_topleft.raw);
 
-	rdmi_enable.raw = ISP_RD_REG(rawtop, REG_RAW_TOP_T, RDMI_ENABLE);
-	rdmi_enable.bits.CH_NUM		= ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+	rdmi_enable.raw = ISP_RD_REG(rawtop, reg_raw_top_t, rdmi_enable);
+	rdmi_enable.bits.ch_num		= ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 
-	ISP_WR_REG(rawtop, REG_RAW_TOP_T, RDMI_ENABLE, rdmi_enable.raw);
+	ISP_WR_REG(rawtop, reg_raw_top_t, rdmi_enable, rdmi_enable.raw);
 
 	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
-		ISP_WO_BITS(rawtop, REG_RAW_TOP_T, CTRL, LS_CROP_DST_SEL, 1);
-		ISP_WO_BITS(rawtop, REG_RAW_TOP_T, RAW_4, YUV_IN_MODE, 1);
+		ISP_WO_BITS(rawtop, reg_raw_top_t, ctrl, ls_crop_dst_sel, 1);
+		ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 1);
 	} else {
-		ISP_WO_BITS(rawtop, REG_RAW_TOP_T, CTRL, LS_CROP_DST_SEL, 0);
-		ISP_WO_BITS(rawtop, REG_RAW_TOP_T, RAW_4, YUV_IN_MODE, 0);
+		ISP_WO_BITS(rawtop, reg_raw_top_t, ctrl, ls_crop_dst_sel, 0);
+		ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 0);
 	}
 #if 0
 	if (_is_fe_be_online(ctx)) { // fe->be->dram->post single sensor frame_base/slice buffer
 		union REG_RAW_TOP_RDMA_SIZE rdma_size;
 
-		ISP_WR_BITS(rawtop, REG_RAW_TOP_T, RDMI_ENABLE, RDMI_EN, 1);
+		ISP_WR_BITS(rawtop, reg_raw_top_t, rdmi_enable, rdmi_en, 1);
 		rdma_size.raw = 0;
-		rdma_size.bits.RDMI_WIDTHM1 = ctx->img_width - 1;
-		rdma_size.bits.RDMI_HEIGHTM1 = ctx->img_height - 1;
-		ISP_WR_REG(rawtop, REG_RAW_TOP_T, RDMA_SIZE, rdma_size.raw);
+		rdma_size.bits.rdmi_widthm1 = ctx->img_width - 1;
+		rdma_size.bits.rdmi_heightm1 = ctx->img_height - 1;
+		ISP_WR_REG(rawtop, reg_raw_top_t, rdma_size, rdma_size.raw);
 	} else { //fe->dram->be->post (2/3 sensors) or fe->be->post (onthefly)
-		ISP_WR_BITS(rawtop, REG_RAW_TOP_T, RDMI_ENABLE, RDMI_EN, 0);
+		ISP_WR_BITS(rawtop, reg_raw_top_t, rdmi_enable, rdmi_en, 0);
 	}
 #endif
 	if (!ctx->isp_pipe_cfg[raw_num].is_raw_replay_be) {
 		if (_is_fe_be_online(ctx) && ctx->is_dpcm_on) { //dram->post
-			ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_MODE, 7);
-			ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_XSTR, 8191);
+			ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_mode, 7);
+			ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_xstr, 8191);
 		} else {
-			ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_MODE, 0);
-			ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_XSTR, 0);
+			ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_mode, 0);
+			ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_xstr, 0);
 		}
 	}
 
-	le_lmap_size.raw = ISP_RD_REG(rawtop, REG_RAW_TOP_T, LE_LMAP_GRID_NUMBER);
-	le_lmap_size.bits.LE_LMP_H_GRID_SIZE = g_lmp_cfg[raw_num].post_w_bit;
-	le_lmap_size.bits.LE_LMP_V_GRID_SIZE = g_lmp_cfg[raw_num].post_h_bit;
-	ISP_WR_REG(rawtop, REG_RAW_TOP_T, LE_LMAP_GRID_NUMBER, le_lmap_size.raw);
+	le_lmap_size.raw = ISP_RD_REG(rawtop, reg_raw_top_t, le_lmap_grid_number);
+	le_lmap_size.bits.le_lmp_h_grid_size = g_lmp_cfg[raw_num].post_w_bit;
+	le_lmap_size.bits.le_lmp_v_grid_size = g_lmp_cfg[raw_num].post_h_bit;
+	ISP_WR_REG(rawtop, reg_raw_top_t, le_lmap_grid_number, le_lmap_size.raw);
 
 	if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
-		se_lmap_size.raw = ISP_RD_REG(rawtop, REG_RAW_TOP_T, SE_LMAP_GRID_NUMBER);
-		se_lmap_size.bits.SE_LMP_H_GRID_SIZE = g_lmp_cfg[raw_num].post_w_bit;
-		se_lmap_size.bits.SE_LMP_V_GRID_SIZE = g_lmp_cfg[raw_num].post_h_bit;
-		ISP_WR_REG(rawtop, REG_RAW_TOP_T, SE_LMAP_GRID_NUMBER, se_lmap_size.raw);
+		se_lmap_size.raw = ISP_RD_REG(rawtop, reg_raw_top_t, se_lmap_grid_number);
+		se_lmap_size.bits.se_lmp_h_grid_size = g_lmp_cfg[raw_num].post_w_bit;
+		se_lmap_size.bits.se_lmp_v_grid_size = g_lmp_cfg[raw_num].post_h_bit;
+		ISP_WR_REG(rawtop, reg_raw_top_t, se_lmap_grid_number, se_lmap_size.raw);
 	}
 }
 
-void ispblk_rgbtop_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+void ispblk_rgbtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t rgbtop = ctx->phys_regs[ISP_BLK_ID_RGBTOP];
-	union REG_ISP_RGB_TOP_0 reg_0;
-	union REG_ISP_RGB_TOP_9 reg_9;
+	union reg_isp_rgb_top_0 reg_0;
+	union reg_isp_rgb_top_9 reg_9;
 
 	reg_0.raw = reg_9.raw = 0;
 
-	reg_0.raw = ISP_RD_REG(rgbtop, REG_ISP_RGB_TOP_T, REG_0);
-	reg_0.bits.RGBTOP_BAYER_TYPE = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
-	reg_0.bits.RGBTOP_RGBIR_ENABLE = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
-	ISP_WR_REG(rgbtop, REG_ISP_RGB_TOP_T, REG_0, reg_0.raw);
+	reg_0.raw = ISP_RD_REG(rgbtop, reg_isp_rgb_top_t, reg_0);
+	reg_0.bits.rgbtop_bayer_type = bayer_type_mapping(ctx->rgb_color_mode[raw_num]);
+	reg_0.bits.rgbtop_rgbir_enable = ctx->isp_pipe_cfg[raw_num].is_rgbir_sensor;
+	ISP_WR_REG(rgbtop, reg_isp_rgb_top_t, reg_0, reg_0.raw);
 
-	reg_9.bits.RGBTOP_IMGW_M1 = ctx->img_width - 1;
-	reg_9.bits.RGBTOP_IMGH_M1 = ctx->img_height - 1;
-	ISP_WR_REG(rgbtop, REG_ISP_RGB_TOP_T, REG_9, reg_9.raw);
-	ISP_WR_BITS(rgbtop, REG_ISP_RGB_TOP_T, DBG_IP_S_VLD, IP_DBG_EN, 1);
+	reg_9.bits.rgbtop_imgw_m1 = ctx->img_width - 1;
+	reg_9.bits.rgbtop_imgh_m1 = ctx->img_height - 1;
+	ISP_WR_REG(rgbtop, reg_isp_rgb_top_t, reg_9, reg_9.raw);
+	ISP_WR_BITS(rgbtop, reg_isp_rgb_top_t, dbg_ip_s_vld, ip_dbg_en, 1);
 }
 
-void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t yuvtop = ctx->phys_regs[ISP_BLK_ID_YUVTOP];
-	union REG_YUV_TOP_IMGW_M1 imgw_m1;
-	union REG_YUV_TOP_AI_ISP_RDMA_CTRL ai_isp_ctrl;
-	uint32_t width = ctx->img_width;
-	uint32_t height = ctx->img_height;
+	union reg_yuv_top_imgw_m1 imgw_m1;
+	union reg_yuv_top_ai_isp_rdma_ctrl ai_isp_ctrl;
+	u32 width = ctx->img_width;
+	u32 height = ctx->img_height;
 
 	imgw_m1.raw = 0;
 	ai_isp_ctrl.raw = 0;
 
-	ISP_WO_BITS(yuvtop, REG_YUV_TOP_T, YUV_3, YONLY_EN, ctx->isp_pipe_cfg[raw_num].is_yuv_sensor);
+	ISP_WO_BITS(yuvtop, reg_yuv_top_t, yuv_3, yonly_en, ctx->isp_pipe_cfg[raw_num].is_yuv_sensor);
 
-	imgw_m1.bits.YUV_TOP_IMGW_M1 = width - 1;
-	imgw_m1.bits.YUV_TOP_IMGH_M1 = height - 1;
-	ISP_WR_REG(yuvtop, REG_YUV_TOP_T, IMGW_M1, imgw_m1.raw);
+	imgw_m1.bits.yuv_top_imgw_m1 = width - 1;
+	imgw_m1.bits.yuv_top_imgh_m1 = height - 1;
+	ISP_WR_REG(yuvtop, reg_yuv_top_t, imgw_m1, imgw_m1.raw);
 
 	if (ctx->isp_pipe_cfg[raw_num].is_tnr_ai_isp) {
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_IMG_SIZE_Y, AI_ISP_IMG_WIDTH_CROP_0, width - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_IMG_SIZE_Y, AI_ISP_IMG_HEIGHT_CROP_0, height - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_W_CROP_Y, AI_ISP_CROP_W_STR_0, 0);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_W_CROP_Y, AI_ISP_CROP_W_END_0, width - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_H_CROP_Y, AI_ISP_CROP_H_STR_0, 0);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_H_CROP_Y, AI_ISP_CROP_H_END_0, height - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_IMG_SIZE_UV, AI_ISP_IMG_WIDTH_CROP_1, (width >> 1) - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_IMG_SIZE_UV, AI_ISP_IMG_HEIGHT_CROP_1, height - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_W_CROP_UV, AI_ISP_CROP_W_STR_1, 0);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_W_CROP_UV, AI_ISP_CROP_W_END_1, (width >> 1) - 1);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_H_CROP_UV, AI_ISP_CROP_H_STR_1, 0);
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, AI_ISP_H_CROP_UV, AI_ISP_CROP_H_END_1, height - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_img_size_y, ai_isp_img_width_crop_0, width - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_img_size_y, ai_isp_img_height_crop_0, height - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_w_crop_y, ai_isp_crop_w_str_0, 0);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_w_crop_y, ai_isp_crop_w_end_0, width - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_h_crop_y, ai_isp_crop_h_str_0, 0);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_h_crop_y, ai_isp_crop_h_end_0, height - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_img_size_uv, ai_isp_img_width_crop_1, (width >> 1) - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_img_size_uv, ai_isp_img_height_crop_1, height - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_w_crop_uv, ai_isp_crop_w_str_1, 0);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_w_crop_uv, ai_isp_crop_w_end_1, (width >> 1) - 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_h_crop_uv, ai_isp_crop_h_str_1, 0);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, ai_isp_h_crop_uv, ai_isp_crop_h_end_1, height - 1);
 
-		ai_isp_ctrl.bits.AI_ISP_RDMA_ENABLE = ctx->isp_pipe_cfg[raw_num].is_tnr_ai_isp_rdy ? 0x7 : 0x0;
-		ai_isp_ctrl.bits.AI_ISP_CROP_ENABLE = false;
-		ai_isp_ctrl.bits.AI_ISP_ENABLE      = true;
-		ai_isp_ctrl.bits.AI_ISP_MASK        = true;
-		ISP_WR_REG(yuvtop, REG_YUV_TOP_T, AI_ISP_RDMA_CTRL, ai_isp_ctrl.raw);
+		ai_isp_ctrl.bits.ai_isp_rdma_enable = ctx->isp_pipe_cfg[raw_num].is_tnr_ai_isp_rdy ? 0x7 : 0x0;
+		ai_isp_ctrl.bits.ai_isp_crop_enable = false;
+		ai_isp_ctrl.bits.ai_isp_enable      = true;
+		ai_isp_ctrl.bits.ai_isp_mask        = true;
+		ISP_WR_REG(yuvtop, reg_yuv_top_t, ai_isp_rdma_ctrl, ai_isp_ctrl.raw);
 	} else {
-		ISP_WR_REG(yuvtop, REG_YUV_TOP_T, AI_ISP_RDMA_CTRL, 0);
+		ISP_WR_REG(yuvtop, reg_yuv_top_t, ai_isp_rdma_ctrl, 0);
 	}
 
 	if (_is_all_online(ctx) && !ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
 		//bypass_v = 1 -> 422P online to scaler
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, YUV_CTRL, BYPASS_V, 1);
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, yuv_ctrl, bypass_v, 1);
 	} else {
-		ISP_WR_BITS(yuvtop, REG_YUV_TOP_T, YUV_CTRL, BYPASS_V,
+		ISP_WR_BITS(yuvtop, reg_yuv_top_t, yuv_ctrl, bypass_v,
 					!ctx->isp_pipe_cfg[raw_num].is_offline_scaler);
 	}
 }
@@ -458,23 +454,23 @@ void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
 void ispblk_isptop_config(struct isp_ctx *ctx)
 {
 	uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
-	uint8_t pre_fe_trig_by_hw[ISP_PRERAW_MAX] = { 0 };
-	uint8_t pre_be_trig_by_hw = 0;
-	uint8_t post_trig_by_hw = 0;
-	uint8_t first_raw_num = vi_get_first_raw_num(ctx);
-	enum cvi_isp_raw raw_num = ISP_PRERAW0;
+	u8 pre_fe_trig_by_hw[ISP_PRERAW_MAX] = { 0 };
+	u8 pre_be_trig_by_hw = 0;
+	u8 post_trig_by_hw = 0;
+	u8 first_raw_num = vi_get_first_raw_num(ctx);
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
 
-	union REG_ISP_TOP_INT_EVENT0_EN ev0_en;
-	union REG_ISP_TOP_INT_EVENT1_EN ev1_en;
-	union REG_ISP_TOP_INT_EVENT2_EN ev2_en;
-	union REG_ISP_TOP_INT_EVENT0_EN_FE345 ev0_en_fe345;
-	union REG_ISP_TOP_INT_EVENT1_EN_FE345 ev1_en_fe345;
-	union REG_ISP_TOP_INT_EVENT2_EN_FE345 ev2_en_fe345;
-	union REG_ISP_TOP_CTRL_MODE_SEL0 trig_sel0;
-	union REG_ISP_TOP_CTRL_MODE_SEL1 trig_sel1;
-	union REG_ISP_TOP_CTRL_MODE_SEL0_FE345 trig_sel0_fe345;
-	union REG_ISP_TOP_CTRL_MODE_SEL1_FE345 trig_sel1_fe345;
-	union REG_ISP_TOP_SCENARIOS_CTRL scene_ctrl;
+	union reg_isp_top_int_event0_en ev0_en;
+	union reg_isp_top_int_event1_en ev1_en;
+	union reg_isp_top_int_event2_en ev2_en;
+	union reg_isp_top_int_event0_en_fe345 ev0_en_fe345;
+	union reg_isp_top_int_event1_en_fe345 ev1_en_fe345;
+	union reg_isp_top_int_event2_en_fe345 ev2_en_fe345;
+	union reg_isp_top_ctrl_mode_sel0 trig_sel0;
+	union reg_isp_top_ctrl_mode_sel1 trig_sel1;
+	union reg_isp_top_ctrl_mode_sel0_fe345 trig_sel0_fe345;
+	union reg_isp_top_ctrl_mode_sel1_fe345 trig_sel1_fe345;
+	union reg_isp_top_scenarios_ctrl scene_ctrl;
 
 	ev0_en.raw = ev1_en.raw = ev2_en.raw = 0;
 	ev0_en_fe345.raw = ev1_en_fe345.raw = ev2_en_fe345.raw = 0;
@@ -494,17 +490,17 @@ void ispblk_isptop_config(struct isp_ctx *ctx)
 			else
 				pre_fe_trig_by_hw[raw_num] = 0x3;
 		} else { //YUV sensor
-			switch (ctx->isp_pipe_cfg[raw_num].muxMode) {
-			case VI_WORK_MODE_1Multiplex:
+			switch (ctx->isp_pipe_cfg[raw_num].mux_mode) {
+			case VI_WORK_MODE_1MULTIPLEX:
 				pre_fe_trig_by_hw[raw_num] = 0x1;
 				break;
-			case VI_WORK_MODE_2Multiplex:
+			case VI_WORK_MODE_2MULTIPLEX:
 				pre_fe_trig_by_hw[raw_num] = 0x3;
 				break;
-			case VI_WORK_MODE_3Multiplex:
+			case VI_WORK_MODE_3MULTIPLEX:
 				pre_fe_trig_by_hw[raw_num] = 0x7;
 				break;
-			case VI_WORK_MODE_4Multiplex:
+			case VI_WORK_MODE_4MULTIPLEX:
 				pre_fe_trig_by_hw[raw_num] = 0xF;
 				break;
 			default:
@@ -537,175 +533,175 @@ void ispblk_isptop_config(struct isp_ctx *ctx)
 
 	//line_spliter intr ctrl, splt_ai_isp enable, otherwise disable
 	if (ctx->isp_pipe_cfg[first_raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT) {
-		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE0	= 0xF;
-		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE1	= 0xF;
-		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE0		= 0x1;
-		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE1		= 0x1;
+		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe0	= 0xF;
+		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe1	= 0xF;
+		ev2_en.bits.frame_err_line_spliter_enable_fe0		= 0x1;
+		ev2_en.bits.frame_err_line_spliter_enable_fe1		= 0x1;
 	} else {
-		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE0	= 0;
-		ev0_en_fe345.bits.LINE_SPLITER_DMA_DONE_ENABLE_FE1	= 0;
-		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE0		= 0;
-		ev2_en.bits.FRAME_ERR_LINE_SPLITER_ENABLE_FE1		= 0;
+		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe0	= 0;
+		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe1	= 0;
+		ev2_en.bits.frame_err_line_spliter_enable_fe0		= 0;
+		ev2_en.bits.frame_err_line_spliter_enable_fe1		= 0;
 	}
 
 	//pre_fe0
-	ev0_en.bits.FRAME_DONE_ENABLE_FE0	= 0xF;
-	ev2_en.bits.FRAME_START_ENABLE_FE0	= 0xF;
-	trig_sel0.bits.TRIG_STR_SEL_FE0		= pre_fe_trig_by_hw[ISP_PRERAW0];
-	trig_sel0.bits.SHAW_UP_SEL_FE0		= pre_fe_trig_by_hw[ISP_PRERAW0];
-	trig_sel1.bits.PQ_UP_SEL_FE0		= pre_fe_trig_by_hw[ISP_PRERAW0];
+	ev0_en.bits.frame_done_enable_fe0	= 0xF;
+	ev2_en.bits.frame_start_enable_fe0	= 0xF;
+	trig_sel0.bits.trig_str_sel_fe0		= pre_fe_trig_by_hw[ISP_PRERAW0];
+	trig_sel0.bits.shaw_up_sel_fe0		= pre_fe_trig_by_hw[ISP_PRERAW0];
+	trig_sel1.bits.pq_up_sel_fe0		= pre_fe_trig_by_hw[ISP_PRERAW0];
 
 	//pre_fe1
-	ev0_en.bits.FRAME_DONE_ENABLE_FE1	= 0xF;
-	ev2_en.bits.FRAME_START_ENABLE_FE1	= 0xF;
-	trig_sel0.bits.TRIG_STR_SEL_FE1		= pre_fe_trig_by_hw[ISP_PRERAW1];
-	trig_sel0.bits.SHAW_UP_SEL_FE1		= pre_fe_trig_by_hw[ISP_PRERAW1];
-	trig_sel1.bits.PQ_UP_SEL_FE1		= pre_fe_trig_by_hw[ISP_PRERAW1];
+	ev0_en.bits.frame_done_enable_fe1	= 0xF;
+	ev2_en.bits.frame_start_enable_fe1	= 0xF;
+	trig_sel0.bits.trig_str_sel_fe1		= pre_fe_trig_by_hw[ISP_PRERAW1];
+	trig_sel0.bits.shaw_up_sel_fe1		= pre_fe_trig_by_hw[ISP_PRERAW1];
+	trig_sel1.bits.pq_up_sel_fe1		= pre_fe_trig_by_hw[ISP_PRERAW1];
 
 	//pre_fe2
-	ev0_en.bits.FRAME_DONE_ENABLE_FE2	= 0x3;
-	ev2_en.bits.FRAME_START_ENABLE_FE2	= 0x3;
-	trig_sel0.bits.TRIG_STR_SEL_FE2		= pre_fe_trig_by_hw[ISP_PRERAW2];
-	trig_sel0.bits.SHAW_UP_SEL_FE2		= pre_fe_trig_by_hw[ISP_PRERAW2];
-	trig_sel1.bits.PQ_UP_SEL_FE2		= pre_fe_trig_by_hw[ISP_PRERAW2];
+	ev0_en.bits.frame_done_enable_fe2	= 0x3;
+	ev2_en.bits.frame_start_enable_fe2	= 0x3;
+	trig_sel0.bits.trig_str_sel_fe2		= pre_fe_trig_by_hw[ISP_PRERAW2];
+	trig_sel0.bits.shaw_up_sel_fe2		= pre_fe_trig_by_hw[ISP_PRERAW2];
+	trig_sel1.bits.pq_up_sel_fe2		= pre_fe_trig_by_hw[ISP_PRERAW2];
 
 	//pre_fe3
-	ev0_en_fe345.bits.FRAME_DONE_ENABLE_FE3	 = 0x3;
-	ev2_en_fe345.bits.FRAME_START_ENABLE_FE3 = 0x3;
-	trig_sel0_fe345.bits.TRIG_STR_SEL_FE3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
-	trig_sel0_fe345.bits.SHAW_UP_SEL_FE3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
-	trig_sel1_fe345.bits.PQ_UP_SEL_FE3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
+	ev0_en_fe345.bits.frame_done_enable_fe3	 = 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe3 = 0x3;
+	trig_sel0_fe345.bits.trig_str_sel_fe3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
+	trig_sel0_fe345.bits.shaw_up_sel_fe3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
+	trig_sel1_fe345.bits.pq_up_sel_fe3	 = pre_fe_trig_by_hw[ISP_PRERAW3];
 
 	//pre_fe4
-	ev0_en_fe345.bits.FRAME_DONE_ENABLE_FE4	 = 0x3;
-	ev2_en_fe345.bits.FRAME_START_ENABLE_FE4 = 0x3;
-	trig_sel0_fe345.bits.TRIG_STR_SEL_FE4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
-	trig_sel0_fe345.bits.SHAW_UP_SEL_FE4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
-	trig_sel1_fe345.bits.PQ_UP_SEL_FE4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
+	ev0_en_fe345.bits.frame_done_enable_fe4	 = 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe4 = 0x3;
+	trig_sel0_fe345.bits.trig_str_sel_fe4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
+	trig_sel0_fe345.bits.shaw_up_sel_fe4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
+	trig_sel1_fe345.bits.pq_up_sel_fe4	 = pre_fe_trig_by_hw[ISP_PRERAW4];
 
 	//pre_fe5
-	ev0_en_fe345.bits.FRAME_DONE_ENABLE_FE5	 = 0x3;
-	ev2_en_fe345.bits.FRAME_START_ENABLE_FE5 = 0x3;
-	trig_sel0_fe345.bits.TRIG_STR_SEL_FE5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
-	trig_sel0_fe345.bits.SHAW_UP_SEL_FE5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
-	trig_sel1_fe345.bits.PQ_UP_SEL_FE5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
+	ev0_en_fe345.bits.frame_done_enable_fe5	 = 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe5 = 0x3;
+	trig_sel0_fe345.bits.trig_str_sel_fe5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
+	trig_sel0_fe345.bits.shaw_up_sel_fe5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
+	trig_sel1_fe345.bits.pq_up_sel_fe5	 = pre_fe_trig_by_hw[ISP_PRERAW5];
 
 	//pre_be
-	ev0_en.bits.FRAME_DONE_ENABLE_BE	= 0x3;
-	trig_sel0.bits.TRIG_STR_SEL_BE		= pre_be_trig_by_hw;
-	trig_sel0.bits.SHAW_UP_SEL_BE		= pre_be_trig_by_hw;
-	trig_sel1.bits.PQ_UP_SEL_BE		= pre_be_trig_by_hw;
+	ev0_en.bits.frame_done_enable_be	= 0x3;
+	trig_sel0.bits.trig_str_sel_be		= pre_be_trig_by_hw;
+	trig_sel0.bits.shaw_up_sel_be		= pre_be_trig_by_hw;
+	trig_sel1.bits.pq_up_sel_be		= pre_be_trig_by_hw;
 
 	//postraw
-	ev0_en.bits.FRAME_DONE_ENABLE_POST	= 0x1;
-	ev0_en.bits.SHAW_DONE_ENABLE_POST	= 0x1;
-	trig_sel0.bits.TRIG_STR_SEL_RAW		= post_trig_by_hw;
-	trig_sel0.bits.SHAW_UP_SEL_RAW		= post_trig_by_hw;
-	trig_sel1.bits.PQ_UP_SEL_RAW		= post_trig_by_hw;
-	trig_sel0.bits.TRIG_STR_SEL_POST	= post_trig_by_hw;
-	trig_sel0.bits.SHAW_UP_SEL_POST		= post_trig_by_hw;
-	trig_sel1.bits.PQ_UP_SEL_POST		= post_trig_by_hw;
+	ev0_en.bits.frame_done_enable_post	= 0x1;
+	ev0_en.bits.shaw_done_enable_post	= 0x1;
+	trig_sel0.bits.trig_str_sel_raw		= post_trig_by_hw;
+	trig_sel0.bits.shaw_up_sel_raw		= post_trig_by_hw;
+	trig_sel1.bits.pq_up_sel_raw		= post_trig_by_hw;
+	trig_sel0.bits.trig_str_sel_post	= post_trig_by_hw;
+	trig_sel0.bits.shaw_up_sel_post		= post_trig_by_hw;
+	trig_sel1.bits.pq_up_sel_post		= post_trig_by_hw;
 
 	//csibdg_lite
-	ev2_en.bits.INT_BDG0_LITE_ENABLE	= 0x1;
-	ev2_en.bits.INT_BDG1_LITE_ENABLE	= 0x1;
-	ev2_en.bits.CMDQ_INT_ENABLE		= 0x1;
+	ev2_en.bits.int_bdg0_lite_enable	= 0x1;
+	ev2_en.bits.int_bdg1_lite_enable	= 0x1;
+	ev2_en.bits.cmdq_int_enable		= 0x1;
 
 	//err int
-	ev2_en.bits.FRAME_ERR_ENABLE		= 0x1;
-	ev2_en.bits.INT_DMA_ERR_ENABLE		= 0x1;
+	ev2_en.bits.frame_err_enable		= 0x1;
+	ev2_en.bits.int_dma_err_enable		= 0x1;
 
 	//scenario_ctrl mode
 	//single sensor
-	scene_ctrl.raw = ISP_RD_REG(isptopb, REG_ISP_TOP_T, SCENARIOS_CTRL);
-	scene_ctrl.bits.PRE2BE_L_ENABLE		= !ctx->is_offline_be;
-	scene_ctrl.bits.PRE2BE_S_ENABLE		= !ctx->is_offline_be && ctx->is_hdr_on;
-	scene_ctrl.bits.PRE2YUV_422_ENABLE	= 0;
-	//Multi sensors
-	scene_ctrl.bits.BE2RAW_L_ENABLE		= !ctx->is_offline_postraw;
-	scene_ctrl.bits.BE2RAW_S_ENABLE		= !ctx->is_offline_postraw && ctx->is_hdr_on;
-	// Multi sensors or raw replay
-	scene_ctrl.bits.BE_RDMA_L_ENABLE	= ctx->is_offline_be ||
+	scene_ctrl.raw = ISP_RD_REG(isptopb, reg_isp_top_t, scenarios_ctrl);
+	scene_ctrl.bits.pre2be_l_enable		= !ctx->is_offline_be;
+	scene_ctrl.bits.pre2be_s_enable		= !ctx->is_offline_be && ctx->is_hdr_on;
+	scene_ctrl.bits.pre2yuv_422_enable	= 0;
+	//multi sensors
+	scene_ctrl.bits.be2raw_l_enable		= !ctx->is_offline_postraw;
+	scene_ctrl.bits.be2raw_s_enable		= !ctx->is_offline_postraw && ctx->is_hdr_on;
+	// multi sensors or raw replay
+	scene_ctrl.bits.be_rdma_l_enable	= ctx->is_offline_be ||
 						  ctx->isp_pipe_cfg[first_raw_num].is_raw_replay_be;
-	scene_ctrl.bits.BE_RDMA_S_ENABLE	= (ctx->is_offline_be ||
+	scene_ctrl.bits.be_rdma_s_enable	= (ctx->is_offline_be ||
 						  ctx->isp_pipe_cfg[first_raw_num].is_raw_replay_be) &&
 						  ctx->is_hdr_on;
 	// onthefly -> 0 or single sensor
-	scene_ctrl.bits.BE_WDMA_L_ENABLE	= ctx->is_offline_postraw;
-	scene_ctrl.bits.BE_WDMA_S_ENABLE	= ctx->is_offline_postraw && ctx->is_hdr_on;
-	scene_ctrl.bits.AF_RAW0YUV1		= 0; //0 from be/1 from post
-	scene_ctrl.bits.RGBMP_ONLINE_L_ENABLE	= _is_all_online(ctx); //onthefly -> 1
+	scene_ctrl.bits.be_wdma_l_enable	= ctx->is_offline_postraw;
+	scene_ctrl.bits.be_wdma_s_enable	= ctx->is_offline_postraw && ctx->is_hdr_on;
+	scene_ctrl.bits.af_raw0yuv1		= 0; //0 from be/1 from post
+	scene_ctrl.bits.rgbmp_online_l_enable	= _is_all_online(ctx); //onthefly -> 1
 	//single sensor hdr and slice buffer mode on
-	scene_ctrl.bits.RGBMP_ONLINE_S_ENABLE	= 0;
-	scene_ctrl.bits.RAW2YUV_422_ENABLE	= 0;
+	scene_ctrl.bits.rgbmp_online_s_enable	= 0;
+	scene_ctrl.bits.raw2yuv_422_enable	= 0;
 
 #if defined(__CV180X__)
 	scene_ctrl.bits.HDR_ENABLE		= ctx->is_hdr_on;
 #else
-	//In order for linearMode use guideWeight
-	scene_ctrl.bits.HDR_ENABLE		= !_is_all_online(ctx) && ctx->is_hdr_on;
+	//in order for linearmode use guideweight
+	scene_ctrl.bits.hdr_enable		= !_is_all_online(ctx) && ctx->is_hdr_on;
 #endif
-	// to verify IP, turn off HW LUT of rgbgamma, ynr, and cnr.
-	scene_ctrl.bits.HW_AUTO_ENABLE		= 0;
+	// to verify ip, turn off hw lut of rgbgamma, ynr, and cnr.
+	scene_ctrl.bits.hw_auto_enable		= 0;
 	// set the position of the beginning of YUV suggested by HW
-	scene_ctrl.bits.DCI_RGB0YUV1		= 0;
-	scene_ctrl.bits.BE_SRC_SEL		= first_raw_num;
-	scene_ctrl.bits.DST2SC			= !ctx->isp_pipe_cfg[first_raw_num].is_offline_scaler;
+	scene_ctrl.bits.dci_rgb0yuv1		= 0;
+	scene_ctrl.bits.be_src_sel		= first_raw_num;
+	scene_ctrl.bits.dst2sc			= !ctx->isp_pipe_cfg[first_raw_num].is_offline_scaler;
 
 #if defined(__CV186X__)
 	//SW PATCH: To succeed in the next run, these IPs need to be reset.
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x6FF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x0);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST_FE345, 0x7);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST_FE345, 0x0);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x6FF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x0);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst_fe345, 0x7);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst_fe345, 0x0);
 #endif
 
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0_FE345, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1_FE345, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2_FE345, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0_EN, ev0_en.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1_EN, ev1_en.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2_EN, ev2_en.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0_EN_FE345, ev0_en_fe345.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1_EN_FE345, ev1_en_fe345.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2_EN_FE345, ev2_en_fe345.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0, trig_sel0.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL1, trig_sel1.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0_FE345, trig_sel0_fe345.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL1_FE345, trig_sel1_fe345.raw);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SCENARIOS_CTRL, scene_ctrl.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0_fe345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1_fe345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_fe345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0_en, ev0_en.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1_en, ev1_en.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en, ev2_en.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0_en_fe345, ev0_en_fe345.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1_en_fe345, ev1_en_fe345.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en_fe345, ev2_en_fe345.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0, trig_sel0.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel1, trig_sel1.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0_fe345, trig_sel0_fe345.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel1_fe345, trig_sel1_fe345.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, scenarios_ctrl, scene_ctrl.raw);
 
-	ISP_WR_BITS(isptopb, REG_ISP_TOP_T, DUMMY, DBUS_SEL, 4);
-	//ISP_WR_REG(isptopb, REG_ISP_TOP_T, REG_1C, 7);
+	ISP_WR_BITS(isptopb, reg_isp_top_t, dummy, dbus_sel, 4);
+	//ISP_WR_REG(isptopb, reg_isp_top_t, reg_1c, 7);
 }
 
 #ifdef PORTING_TEST
 
-void ispblk_isptop_fpga_config(struct isp_ctx *ctx, uint16_t test_case)
+void ispblk_isptop_fpga_config(struct isp_ctx *ctx, u16 test_case)
 {
 	uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
-	union REG_ISP_TOP_SCENARIOS_CTRL scene_ctrl;
+	union reg_isp_top_scenarios_ctrl scene_ctrl;
 
-	scene_ctrl.raw = ISP_RD_REG(isptopb, REG_ISP_TOP_T, SCENARIOS_CTRL);
+	scene_ctrl.raw = ISP_RD_REG(isptopb, reg_isp_top_t, scenarios_ctrl);
 	// to verify IP, turn off HW LUT of rgbgamma, ynr, and cnr.
 	if (test_case == 0) {
-		scene_ctrl.bits.HW_AUTO_ENABLE		= 0;
-		scene_ctrl.bits.HW_AUTO_ISO		= 0;
+		scene_ctrl.bits.hw_auto_enable		= 0;
+		scene_ctrl.bits.hw_auto_iso		= 0;
 	} else if (test_case == 1) {
-		scene_ctrl.bits.HW_AUTO_ENABLE		= 1;
-		scene_ctrl.bits.HW_AUTO_ISO		= 0;
+		scene_ctrl.bits.hw_auto_enable		= 1;
+		scene_ctrl.bits.hw_auto_iso		= 0;
 	} else if (test_case == 2) { //auto_iso
-		scene_ctrl.bits.HW_AUTO_ENABLE		= 1;
-		scene_ctrl.bits.HW_AUTO_ISO		= 2;
-	} else if (test_case == 0xFF) { //store default config
-		scene_ctrl.bits.HW_AUTO_ENABLE		= 1;
-		scene_ctrl.bits.HW_AUTO_ISO		= 0;
+		scene_ctrl.bits.hw_auto_enable		= 1;
+		scene_ctrl.bits.hw_auto_iso		= 2;
+	} else if (test_case == 0xff) { //store default config
+		scene_ctrl.bits.hw_auto_enable		= 1;
+		scene_ctrl.bits.hw_auto_iso		= 0;
 	}
 
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SCENARIOS_CTRL, scene_ctrl.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, scenarios_ctrl, scene_ctrl.raw);
 }
 
 #endif
@@ -714,55 +710,55 @@ void isp_intr_set_mask(struct isp_ctx *ctx)
 {
 	uintptr_t isp_top = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
 
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT0_EN, 0);
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT1_EN, 0);
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT2_EN, 0);
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT0_EN_FE345, 0);
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT1_EN_FE345, 0);
-	ISP_WR_REG(isp_top, REG_ISP_TOP_T, INT_EVENT2_EN_FE345, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event0_en, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event1_en, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event2_en, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event0_en_fe345, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event1_en_fe345, 0);
+	ISP_WR_REG(isp_top, reg_isp_top_t, int_event2_en_fe345, 0);
 }
 
 void isp_reset(struct isp_ctx *ctx)
 {
 	uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
-	union REG_ISP_TOP_CTRL_MODE_SEL0 mode_sel0;
-	union REG_ISP_TOP_CTRL_MODE_SEL0_FE345 mode_sel0_fe345;
+	union reg_isp_top_ctrl_mode_sel0 mode_sel0;
+	union reg_isp_top_ctrl_mode_sel0_fe345 mode_sel0_fe345;
 
 	// disable interrupt
 	isp_intr_set_mask(ctx);
 
 	// switch back to hw trig.
-	mode_sel0.raw = ISP_RD_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0);
-	mode_sel0.bits.TRIG_STR_SEL_FE0  = 0xF;
-	mode_sel0.bits.TRIG_STR_SEL_FE1  = 0xF;
-	mode_sel0.bits.TRIG_STR_SEL_FE2  = 0x3;
-	mode_sel0.bits.TRIG_STR_SEL_BE   = 0x3;
-	mode_sel0.bits.TRIG_STR_SEL_RAW  = 0x1;
-	mode_sel0.bits.TRIG_STR_SEL_POST = 0x1;
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0, mode_sel0.raw);
+	mode_sel0.raw = ISP_RD_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0);
+	mode_sel0.bits.trig_str_sel_fe0  = 0xf;
+	mode_sel0.bits.trig_str_sel_fe1  = 0xf;
+	mode_sel0.bits.trig_str_sel_fe2  = 0x3;
+	mode_sel0.bits.trig_str_sel_be   = 0x3;
+	mode_sel0.bits.trig_str_sel_raw  = 0x1;
+	mode_sel0.bits.trig_str_sel_post = 0x1;
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0, mode_sel0.raw);
 
-	mode_sel0_fe345.raw = ISP_RD_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0_FE345);
-	mode_sel0_fe345.bits.TRIG_STR_SEL_FE3 = 0x3;
-	mode_sel0_fe345.bits.TRIG_STR_SEL_FE4 = 0x3;
-	mode_sel0_fe345.bits.TRIG_STR_SEL_FE5 = 0x3;
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, CTRL_MODE_SEL0_FE345, mode_sel0_fe345.raw);
+	mode_sel0_fe345.raw = ISP_RD_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0_fe345);
+	mode_sel0_fe345.bits.trig_str_sel_fe3 = 0x3;
+	mode_sel0_fe345.bits.trig_str_sel_fe4 = 0x3;
+	mode_sel0_fe345.bits.trig_str_sel_fe5 = 0x3;
+	ISP_WR_REG(isptopb, reg_isp_top_t, ctrl_mode_sel0_fe345, mode_sel0_fe345.raw);
 
 	// reset
 	//AXI_RST first, then reset other
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x80);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x6FF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST_FE345, 0x7);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x80);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST, 0x0);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, SW_RST_FE345, 0x0);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x80);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x6FF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst_fe345, 0x7);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x80);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, 0x0);
+	ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst_fe345, 0x0);
 
 	// clear intr
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT0_FE345, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT1_FE345, 0xFFFFFFFF);
-	ISP_WR_REG(isptopb, REG_ISP_TOP_T, INT_EVENT2_FE345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event0_fe345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event1_fe345, 0xFFFFFFFF);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_fe345, 0xFFFFFFFF);
 }
 
 /*******************************************************************************
@@ -770,8 +766,8 @@ void isp_reset(struct isp_ctx *ctx)
  ******************************************************************************/
 struct _csibdg_dbg_i ispblk_csibdg_chn_dbg(
 	struct isp_ctx *ctx,
-	enum cvi_isp_raw raw_num,
-	enum cvi_isp_fe_chn_num chn_num)
+	enum sop_isp_raw raw_num,
+	enum sop_isp_fe_chn_num chn_num)
 {
 	int id = -1;
 	uintptr_t ba = 0;
@@ -783,28 +779,28 @@ struct _csibdg_dbg_i ispblk_csibdg_chn_dbg(
 
 		switch (chn_num) {
 		case ISP_FE_CH0:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH0_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH0_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH0_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH0_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch0_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch0_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch0_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch0_debug_3);
 			break;
 		case ISP_FE_CH1:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH1_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH1_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH1_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH1_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch1_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch1_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch1_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch1_debug_3);
 			break;
 		case ISP_FE_CH2:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH2_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH2_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH2_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH2_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch2_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch2_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch2_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch2_debug_3);
 			break;
 		case ISP_FE_CH3:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH3_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH3_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH3_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_LITE_T, CH3_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch3_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch3_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch3_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_lite_t, ch3_debug_3);
 			break;
 		default:
 			break;
@@ -815,28 +811,28 @@ struct _csibdg_dbg_i ispblk_csibdg_chn_dbg(
 
 		switch (chn_num) {
 		case ISP_FE_CH0:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH0_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH0_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH0_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH0_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch0_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch0_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch0_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch0_debug_3);
 			break;
 		case ISP_FE_CH1:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH1_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH1_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH1_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH1_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch1_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch1_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch1_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch1_debug_3);
 			break;
 		case ISP_FE_CH2:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH2_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH2_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH2_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH2_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch2_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch2_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch2_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch2_debug_3);
 			break;
 		case ISP_FE_CH3:
-			data.dbg_0 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH3_DEBUG_0);
-			data.dbg_1 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH3_DEBUG_1);
-			data.dbg_2 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH3_DEBUG_2);
-			data.dbg_3 = ISP_RD_REG(ba, REG_ISP_CSI_BDG_T, CH3_DEBUG_3);
+			data.dbg_0 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch3_debug_0);
+			data.dbg_1 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch3_debug_1);
+			data.dbg_2 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch3_debug_2);
+			data.dbg_3 = ISP_RD_REG(ba, reg_isp_csi_bdg_t, ch3_debug_3);
 			break;
 		default:
 			break;
@@ -847,14 +843,14 @@ struct _csibdg_dbg_i ispblk_csibdg_chn_dbg(
 	return data;
 }
 
-struct _fe_dbg_i ispblk_fe_dbg_info(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
+struct _fe_dbg_i ispblk_fe_dbg_info(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	int id = fe_find_hwid(raw_num);
 	uintptr_t preraw_fe = ctx->phys_regs[id];
 	struct _fe_dbg_i data;
 
-	data.fe_idle_sts = ISP_RD_REG(preraw_fe, REG_PRE_RAW_FE_T, PRE_RAW_DEBUG_STATE);
-	data.fe_done_sts = ISP_RD_REG(preraw_fe, REG_PRE_RAW_FE_T, FE_IDLE_INFO);
+	data.fe_idle_sts = ISP_RD_REG(preraw_fe, reg_pre_raw_fe_t, pre_raw_debug_state);
+	data.fe_done_sts = ISP_RD_REG(preraw_fe, reg_pre_raw_fe_t, fe_idle_info);
 
 	return data;
 }
@@ -864,8 +860,8 @@ struct _be_dbg_i ispblk_be_dbg_info(struct isp_ctx *ctx)
 	uintptr_t preraw_be = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_BE];
 	struct _be_dbg_i data;
 
-	data.be_done_sts = ISP_RD_REG(preraw_be, REG_PRE_RAW_BE_T, BE_INFO);
-	data.be_dma_idle_sts = ISP_RD_REG(preraw_be, REG_PRE_RAW_BE_T, BE_DMA_IDLE_INFO);
+	data.be_done_sts = ISP_RD_REG(preraw_be, reg_pre_raw_be_t, be_info);
+	data.be_dma_idle_sts = ISP_RD_REG(preraw_be, reg_pre_raw_be_t, be_dma_idle_info);
 
 	return data;
 }
@@ -875,8 +871,8 @@ struct _post_dbg_i ispblk_post_dbg_info(struct isp_ctx *ctx)
 	uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
 	struct _post_dbg_i data;
 
-	data.top_sts_0 = ISP_RD_REG(isptopb, REG_ISP_TOP_T, BLK_IDLE);
-	data.top_sts_1 = ISP_RD_REG(isptopb, REG_ISP_TOP_T, BLK_IDLE_1);
+	data.top_sts_0 = ISP_RD_REG(isptopb, reg_isp_top_t, blk_idle);
+	data.top_sts_1 = ISP_RD_REG(isptopb, reg_isp_top_t, blk_idle_1);
 
 	return data;
 }
@@ -891,22 +887,22 @@ struct _dma_dbg_i ispblk_dma_dbg_info(struct isp_ctx *ctx)
 	uintptr_t rdma_com_1 = ctx->phys_regs[ISP_BLK_ID_RDMA_CORE1];
 	struct _dma_dbg_i data;
 
-	data.wdma_0_err_sts = ISP_RD_REG(wdma_com_0, REG_WDMA_CORE_T, NORM_STATUS0);
-	data.wdma_0_idle = ISP_RD_REG(wdma_com_0, REG_WDMA_CORE_T, NORM_STATUS1);
+	data.wdma_0_err_sts = ISP_RD_REG(wdma_com_0, reg_wdma_core_t, norm_status0);
+	data.wdma_0_idle = ISP_RD_REG(wdma_com_0, reg_wdma_core_t, norm_status1);
 
-	data.wdma_1_err_sts = ISP_RD_REG(wdma_com_1, REG_WDMA_CORE_T, NORM_STATUS0);
-	data.wdma_1_idle = ISP_RD_REG(wdma_com_1, REG_WDMA_CORE_T, NORM_STATUS1);
+	data.wdma_1_err_sts = ISP_RD_REG(wdma_com_1, reg_wdma_core_t, norm_status0);
+	data.wdma_1_idle = ISP_RD_REG(wdma_com_1, reg_wdma_core_t, norm_status1);
 
-	data.wdma_2_err_sts = ISP_RD_REG(wdma_com_2, REG_WDMA_CORE_T, NORM_STATUS0);
-	data.wdma_2_idle = ISP_RD_REG(wdma_com_2, REG_WDMA_CORE_T, NORM_STATUS1);
+	data.wdma_2_err_sts = ISP_RD_REG(wdma_com_2, reg_wdma_core_t, norm_status0);
+	data.wdma_2_idle = ISP_RD_REG(wdma_com_2, reg_wdma_core_t, norm_status1);
 
-	data.wdma_3_err_sts = ISP_RD_REG(wdma_com_3, REG_WDMA_CORE_T, NORM_STATUS0);
-	data.wdma_3_idle = ISP_RD_REG(wdma_com_3, REG_WDMA_CORE_T, NORM_STATUS1);
+	data.wdma_3_err_sts = ISP_RD_REG(wdma_com_3, reg_wdma_core_t, norm_status0);
+	data.wdma_3_idle = ISP_RD_REG(wdma_com_3, reg_wdma_core_t, norm_status1);
 
-	data.rdma_0_err_sts = ISP_RD_REG(rdma_com_0, REG_RDMA_CORE_T, NORM_STATUS0);
-	data.rdma_0_idle = ISP_RD_REG(rdma_com_0, REG_RDMA_CORE_T, NORM_STATUS1);
+	data.rdma_0_err_sts = ISP_RD_REG(rdma_com_0, reg_rdma_core_t, norm_status0);
+	data.rdma_0_idle = ISP_RD_REG(rdma_com_0, reg_rdma_core_t, norm_status1);
 
-	data.rdma_1_err_sts = ISP_RD_REG(rdma_com_1, REG_RDMA_CORE_T, NORM_STATUS0);
-	data.rdma_1_idle = ISP_RD_REG(rdma_com_1, REG_RDMA_CORE_T, NORM_STATUS1);
+	data.rdma_1_err_sts = ISP_RD_REG(rdma_com_1, reg_rdma_core_t, norm_status0);
+	data.rdma_1_idle = ISP_RD_REG(rdma_com_1, reg_rdma_core_t, norm_status1);
 	return data;
 }

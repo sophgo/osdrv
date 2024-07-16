@@ -5,7 +5,8 @@
 	extern "C" {
 #endif
 
-#include <linux/cvi_comm_vb.h>
+#include <linux/comm_sys.h>
+#include <linux/comm_vb.h>
 #include <base_ctx.h>
 
 #define DEFAULT_MESH_PADDR	0x80000000
@@ -17,33 +18,33 @@
 	((fmt == PIXEL_FORMAT_YUV_PLANAR_420) || (fmt == PIXEL_FORMAT_YUV_PLANAR_444) ||		   \
 	 (fmt == PIXEL_FORMAT_RGB_888_PLANAR) || PIXEL_FORMAT_BGR_888_PLANAR || (fmt == PIXEL_FORMAT_YUV_400))
 
-enum GDC_USAGE {
+enum gdc_usage {
 	GDC_USAGE_ROTATION,
 	GDC_USAGE_FISHEYE,
 	GDC_USAGE_LDC,
 	GDC_USAGE_MAX
 };
 
-typedef CVI_VOID (*gdc_cb)(CVI_VOID *, VB_BLK);
+typedef void (*gdc_cb)(void *, vb_blk);
 
 struct mesh_gdc_cfg {
-	enum GDC_USAGE usage;
-	const CVI_VOID *pUsageParam;
+	enum gdc_usage usage;
+	const void *usage_param;
 	struct vb_s *vb_in;
-	PIXEL_FORMAT_E enPixFormat;
-	CVI_U64 mesh_addr;
-	CVI_BOOL sync_io;
-	CVI_VOID *pcbParam;
-	CVI_U32 cbParamSize;
-	ROTATION_E enRotation;
+	pixel_format_e pix_format;
+	unsigned long long mesh_addr;
+	unsigned char sync_io;
+	void *cb_param;
+	unsigned int cb_param_size;
+	rotation_e rotation;
 };
 
 struct ldc_op_done_cfg {
-	CVI_VOID *pParam;
-	VB_BLK blk;
+	void *param;
+	vb_blk blk;
 };
 
-enum LDC_CB_CMD {
+enum ldc_cb_cmd {
 	LDC_CB_MESH_GDC_OP,
 	LDC_CB_VPSS_SBM_DONE,
 	LDC_CB_GDC_OP_DONE = 100,	/* Skip VI/VPSS/VO self cmd */

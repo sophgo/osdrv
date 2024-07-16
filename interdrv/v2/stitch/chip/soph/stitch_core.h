@@ -9,7 +9,7 @@
 
 #include <linux/iommu.h>
 
-#include <linux/cvi_defines.h>
+#include <linux/defines.h>
 #include <linux/stitch_uapi.h>
 
 #include "stitch_ctx.h"
@@ -25,19 +25,20 @@ enum stitch_dev_state {
 	STITCH_DEV_STATE_END,
 };
 
-struct cvi_stitch_dev {
+struct stitch_dev {
 	struct miscdevice miscdev;
 	atomic_t state;//stitch_dev_state
 	unsigned int irq_num;
 	struct clk *clk_src;
 	struct clk *clk_apb;
 	struct clk *clk_stitch;
-	u32 clk_sys_freq;
+	unsigned int clk_sys_freq;
 	spinlock_t lock;
-	struct cvi_stitch_job *job;
+	struct stitch_job *job;
 };
 
-struct cvi_stitch_dev * stitch_get_dev(void);
+atomic_t * stitch_get_open_count(void);
+struct stitch_dev * stitch_get_dev(void);
 void stitch_enable_dev_clk(bool en);
 int stitch_suspend(struct device *dev);
 int stitch_resume(struct device *dev);

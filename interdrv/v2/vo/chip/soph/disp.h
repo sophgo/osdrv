@@ -1,9 +1,8 @@
-#ifndef _CVI_DISP_H_
-#define _CVI_DISP_H_
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#ifndef _DISP_H_
+#define _DISP_H_
 
-#include <base_ctx.h>
-#include <base_cb.h>
-#include <vpss_cb.h>
+#include "vo_disp.h"
 
 #define DISP_MAX_INST 2
 #define DISP_MAX_GOP_INST 3
@@ -26,7 +25,6 @@
 	((x == DISP_FMT_RGB_PACKED) || (x == DISP_FMT_BGR_PACKED) || \
 	 (x == DISP_FMT_YVYU) || (x == DISP_FMT_YUYV) || \
 	 (x == DISP_FMT_VYUY) || (x == DISP_FMT_UYVY))
-
 
 struct disp_point {
 	u16 x;
@@ -52,9 +50,9 @@ enum disp_drop_mode {
 };
 
 enum disp_hw_mcu_format {
-	I80_HW_FORMAT_RGB565 = 0,
-	I80_HW_FORMAT_RGB888,
-	I80_HW_FORMAT_MAX,
+	HW_MCU_FORMAT_RGB565 = 0,
+	HW_MCU_FORMAT_RGB888,
+	HW_MCU_FORMAT_MAX,
 };
 
 enum disp_format {
@@ -74,12 +72,6 @@ enum disp_format {
 	DISP_FMT_VYUY,
 	DISP_FMT_UYVY,
 	DISP_FMT_MAX
-};
-
-enum disp_gop {
-	DISP_GOP_DISP0,
-	DISP_GOP_DISP1,
-	DISP_GOP_MAX,
 };
 
 enum disp_csc {
@@ -323,14 +315,6 @@ enum disp_pat_color {
 	PAT_COLOR_MAX
 };
 
-enum disp_flip_mode {
-	DISP_FLIP_NO,
-	DISP_FLIP_HFLIP,
-	DISP_FLIP_VFLIP,
-	DISP_FLIP_HVFLIP,
-	DISP_FLIP_MAX
-};
-
 union disp_vo_mux_sel {
 	struct {
 		u32 vo_sel_type	: 4;
@@ -372,7 +356,6 @@ enum disp_quant_rounding {
 	DISP_QUANT_ROUNDING_MAX,
 };
 
-
 struct disp_csc_cfg {
 	enum disp_out_mode mode;
 	union {
@@ -412,7 +395,7 @@ union disp_intr {
 	u32 raw;
 };
 
-union disp_online_odma_intr_sel {
+union disp_odma_intr_sel {
 	struct {
 		u32 resv0_8 : 8; //0
 		u32 disp_online_frame_end : 1;
@@ -656,20 +639,6 @@ enum disp_vo_sel {
 	DISP_VO_SEL_MAX,
 };
 
-enum disp_vo_intf {
-	DISP_VO_INTF_DISABLE,
-	DISP_VO_INTF_SW,
-	DISP_VO_INTF_I80,
-	DISP_VO_INTF_BT601,
-	DISP_VO_INTF_BT656,
-	DISP_VO_INTF_BT1120,
-	DISP_VO_INTF_MIPI,
-	DISP_VO_INTF_HDMI,
-	DISP_VO_INTF_LVDS,
-	DISP_VO_INTF_I80_HW,
-	DISP_VO_INTF_MAX,
-};
-
 enum disp_dsi_mode {
 	DISP_DSI_MODE_IDLE = 0,
 	DISP_DSI_MODE_SPKT = 1,
@@ -713,27 +682,6 @@ struct disp_privacy_cfg {
 	struct disp_privacy_map_cfg map_cfg;
 };
 
-enum disp_i80_mode {
-	DISP_I80_MODE_IDLE = 0,
-	DISP_I80_MODE_SW = 1,
-};
-
-#if 0
-struct sync_info {
-	u16  vid_hsa_pixels;
-	u16  vid_hbp_pixels;
-	u16  vid_hfp_pixels;
-	u16  vid_hline_pixels;
-	u16  vid_vsa_lines;
-	u16  vid_vbp_lines;
-	u16  vid_vfp_lines;
-	u16  vid_active_lines;
-	u16  edpi_cmd_size;
-	bool vid_vsa_pos_polarity;
-	bool vid_hsa_pos_polarity;
-};
-#endif
-
 /**
  * @ enable: gamma enbale
  * @ pre_osd: 0:osd-->gamma 1:gamma-->osd
@@ -750,8 +698,8 @@ struct disp_gamma_attr {
 void disp_ctrl_init(bool is_resume);
 void disp_set_intr_mask(u8 inst, union disp_intr_sel disp_intr);
 void disp_get_intr_mask(u8 inst, union disp_intr_sel *disp_intr);
-void disp_set_odma_intr_mask(u8 inst, union disp_online_odma_intr_sel online_odma_mask);
-void disp_get_odma_intr_mask(u8 inst, union disp_online_odma_intr_sel *online_odma_mask);
+void disp_set_odma_intr_mask(u8 inst, union disp_odma_intr_sel online_odma_mask);
+void disp_get_odma_intr_mask(u8 inst, union disp_odma_intr_sel *online_odma_mask);
 
 void disp_intr_clr(u8 inst, union disp_intr_clr disp_intr);
 void disp_odma_fifofull_clr(u8 inst);
@@ -759,17 +707,14 @@ void disp_odma_fifofull_clr(u8 inst);
 union disp_intr disp_intr_status(u8 inst);
 union disp_dbg_status disp_get_dbg_status(u8 inst, bool clr);
 
-// void disp_set_base_addr(void *base);
 void disp_set_vo_mac_base_addr(u8 inst, void *base);
 void disp_set_disp_base_addr(u8 inst, void *base);
 void disp_set_dsi_mac_base_addr(u8 inst, void *base);
 void disp_set_oenc_base_addr(u8 inst, void *base);
 void disp_top_set_vo_data_mux(u8 inst, u8 vodata_selID, u8 value);
-void disp_mux_sel(u8 inst, enum disp_vo_sel sel);
 enum disp_vo_sel disp_mux_get(u8 inst);
 void disp_set_vo_type_sel(u8 inst, enum disp_vo_sel vo_sel);
 
-bool disp_reg_shadow_mask(u8 inst, bool mask);
 void disp_reg_shadow_sel(u8 inst, bool read_shadow);
 void disp_reg_force_up(u8 inst);
 
@@ -779,7 +724,7 @@ struct disp_cfg *disp_get_cfg(u8 inst);
 int disp_set_rect(u8 inst, struct disp_rect rect);
 void disp_set_mem(u8 inst, struct disp_mem *mem);
 void disp_set_addr(u8 inst, u64 addr0, u64 addr1, u64 addr2);
-void disp_set_csc(u8 inst, struct disp_csc_matrix *cfg);
+void _disp_set_in_csc(u8 inst, struct disp_csc_matrix *cfg);
 void disp_set_in_csc(u8 inst, enum disp_csc csc);
 void disp_set_out_csc(u8 inst, enum disp_csc csc);
 void disp_set_pattern(u8 inst, enum disp_pat_type type,
@@ -790,11 +735,11 @@ void disp_enable_window_bgcolor(u8 inst, bool enable);
 bool disp_tgen_enable(u8 inst, bool enable);
 bool disp_check_tgen_enable(u8 inst);
 bool disp_check_i80_enable(u8 inst);
-union disp_dbg_status disp_get_dbg_status(u8 inst, bool clr);
 
 void disp_bt_set(u8 inst, union disp_bt_enc enc, union disp_bt_sync_code sync);
 void disp_bt_get(u8 inst, union disp_bt_enc *enc, union disp_bt_sync_code *sync);
-
+void disp_bt_en(u8 inst);
+void disp_vo_mux_sel(u8 inst, int vo_sel, int vo_mux);
 void disp_timing_setup_from_reg(u8 inst);
 void disp_cfg_setup_from_reg(u8 inst);
 void disp_checksum_en(u8 inst, bool enable);
@@ -814,38 +759,17 @@ int disp_dsi_config(u8 inst, u8 lane_num, enum disp_dsi_fmt fmt, u16 width);
 void disp_set_srgb_ttl_en(u8 inst, bool enable);
 void disp_set_srgb_ttl_4x(u8 inst, bool is_4x);
 
-void disp_set_i80_if(u8 inst, u8 sw_mode, enum disp_hw_mcu_format format);
-void i80_sw_mode(u8 inst, bool enable);
-void i80_packet(u8 inst, u32 cmd);
-void i80_hw_packet(u8 inst, u32 cmd);
-void i80_trig(u8 inst);
-void i80_run(u8 inst);
-void i80_set_cmd0(u8 inst, u32 cmd);
-void i80_set_cmd1(u8 inst, u32 cmd);
-void i80_set_cmd2(u8 inst, u32 cmd);
-void i80_set_cmd3(u8 inst, u32 cmd);
-void i80_set_cmd_cnt(u8 inst, u32 cmdcnt);
-void i80_set_2c(u8 inst);
-void i80_set_2c_only(u8 inst);
-void i80_set_hfde(u8 inst);
-void i80_set_trig_stop(u8 inst);
-void i80_set_trig(u8 inst);
-void i80_set_pre_cmd_en(u8 inst);
-
 void disp_gamma_ctrl(u8 inst, bool enable, bool pre_osd);
 void disp_gamma_lut_update(u8 inst, const u8 *b, const u8 *g, const u8 *r);
 void disp_gamma_lut_read(u8 inst, struct disp_gamma_attr *gamma_attr);
 
 int ctrl_set_disp_src(u8 inst, bool disp_from_sc);
 
-void disp_set_intf(u8 inst, enum disp_vo_intf intf);
+void disp_set_intf(u8 inst, enum vo_disp_intf intf);
 
 void disp_lvdstx_set(u8 inst, union disp_lvdstx cfg);
 void disp_lvdstx_get(u8 inst, union disp_lvdstx *cfg);
 
-void dump_disp_register(u8 inst);
-
-void disp_set_out_mode(u8 inst, enum disp_out_mode mode);
 void disp_oenc_set_cfg(u8 inst, struct disp_oenc_cfg *oenc_cfg);
 struct disp_oenc_cfg *disp_oenc_get_cfg(u8 inst);
 
@@ -859,16 +783,13 @@ int disp_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data);
 void disp_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct disp_gop_fb_cfg *cfg);
 u32 disp_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst);
 void disp_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr);
-
 void disp_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, u8 oenc_inst,
 					struct disp_gop_odec_cfg *odec_cfg);
 void disp_cover_set_cfg(u8 inst, u8 cover_w_inst, struct disp_cover_cfg *cover_cfg);
 
-
 void disp_set_timing(u8 inst, struct disp_timing *timing);
 struct disp_timing *disp_get_timing(u8 inst);
 void disp_get_hw_timing(u8 inst, struct disp_timing *timing);
-void disp_bt656_72mhz_vo_mux_set(u8 inst);
 
 // odma
 void disp_odma_set_addr(u8 inst, u64 addr0, u64 addr1, u64 addr2);
@@ -876,10 +797,9 @@ void disp_odma_set_mem(u8 inst, struct disp_mem *mem);
 void disp_odma_set_cfg(u8 inst, struct disp_odma_cfg *cfg);
 struct disp_odma_cfg *disp_odma_get_cfg(u8 inst);
 void disp_odma_set_fmt(u8 inst, enum disp_format fmt);
-void dump_disp_odma_register(u8 inst);
 void disp_odma_enable(u8 inst, bool enable);
 
 bool ddr_need_retrain(void);
 void trigger_8051(void);
 
-#endif  //_CVI_DISP_H_
+#endif  //_DISP_H_

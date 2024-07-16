@@ -1,4 +1,4 @@
-#ifdef ENV_CVITEST
+#ifdef ENVTEST
 #include <common.h>
 #include <stdbool.h>
 #include "system_common.h"
@@ -14,7 +14,7 @@
 #else
 #include <linux/types.h>
 #include <linux/delay.h>
-#endif  // ENV_CVITEST
+#endif  // ENVTEST
 
 #include "reg.h"
 #include "cmdq.h"
@@ -37,7 +37,7 @@
  * cmdq_set_package  - package reg_write to cmd_set.
  *
  */
-void cmdq_set_package(struct cmdq_set_reg *set, u32 addr, u32 data)
+void cmdq_set_package(struct cmdq_set_reg *set, unsigned int addr, unsigned int data)
 {
 	set->data = data;
 	set->addr = addr >> 2;
@@ -58,7 +58,7 @@ void cmdq_set_package(struct cmdq_set_reg *set, u32 addr, u32 data)
  *		counter if timer and flag_num if flag
  * @param intr: the interrupt condition
  */
-void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr)
+void cmdq_set_wait(union cmdq_set *set, bool is_timer, unsigned int data, unsigned char intr)
 {
 	if (is_timer) {
 		struct cmdq_set_wait_timer *wait = &(set->wait_timer);
@@ -88,7 +88,7 @@ void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr)
  * @param is_link: 1: link descriptor, 2: cmd_set
  * @param is_end: true if this is last entry in adma-table.
  */
-void cmdq_adma_package(struct cmdq_adma *item, u64 addr, u32 size,
+void cmdq_adma_package(struct cmdq_adma *item, unsigned long long addr, unsigned int size,
 		       bool is_link, bool is_end)
 {
 	item->addr = addr;
@@ -103,7 +103,7 @@ void cmdq_adma_package(struct cmdq_adma *item, u64 addr, u32 size,
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void cmdq_intr_ctrl(uintptr_t base, u8 intr_mask)
+void cmdq_intr_ctrl(uintptr_t base, unsigned char intr_mask)
 {
 	_reg_write(base + REG_CMDQ_INT_EN, intr_mask);
 }
@@ -115,7 +115,7 @@ void cmdq_intr_ctrl(uintptr_t base, u8 intr_mask)
  * @param base: base-address of cmdQ
  * @param intr_mask: the mask of the interrupt to clear.
  */
-void cmdq_intr_clr(uintptr_t base, u8 intr_mask)
+void cmdq_intr_clr(uintptr_t base, unsigned char intr_mask)
 {
 	_reg_write(base + REG_CMDQ_INT_EVENT, intr_mask);
 }
@@ -126,7 +126,7 @@ void cmdq_intr_clr(uintptr_t base, u8 intr_mask)
  *
  * @param base: base-address of cmdQ
  */
-u8 cmdq_intr_status(uintptr_t base)
+unsigned char cmdq_intr_status(uintptr_t base)
 {
 	return _reg_read(base + REG_CMDQ_INT_EVENT);
 }
@@ -141,11 +141,11 @@ u8 cmdq_intr_status(uintptr_t base)
  * @param is_adma: 1 if adma table is used.
  * @param cnt: the number of entry in cmdset. only useful if adma
  */
-void cmdq_engine(uintptr_t base, uintptr_t tbl_addr, u16 apb_base,
-		 bool is_hw_restart, bool is_adma, u16 cnt)
+void cmdq_engine(uintptr_t base, uintptr_t tbl_addr, unsigned short apb_base,
+		 bool is_hw_restart, bool is_adma, unsigned short cnt)
 {
-	u8 job_ctl = (is_hw_restart) ? 0x05 : 0x01;
-	u8 dma_cfg = (is_adma) ? 0x02 : 0x00;
+	unsigned char job_ctl = (is_hw_restart) ? 0x05 : 0x01;
+	unsigned char dma_cfg = (is_adma) ? 0x02 : 0x00;
 
 	// adma tbl addr
 	_reg_write(base + REG_CMDQ_DMA_ADDR_L, tbl_addr);
@@ -160,9 +160,9 @@ void cmdq_engine(uintptr_t base, uintptr_t tbl_addr, u16 apb_base,
 	_reg_write(base + REG_CMDQ_JOB_CTL, job_ctl);
 
 #ifdef ENV_EMU
-	u32 *cmdq_set = tbl_addr;
+	unsigned int *cmdq_set = tbl_addr;
 
-	for (u16 i = 0 ; i < cnt; ++i)
+	for (unsigned short i = 0 ; i < cnt; ++i)
 		printf("%3d: 0x%08x-%08x\n", i, cmdq_set[(i<<1) + 1], cmdq_set[(i<<1)]);
 #endif
 }

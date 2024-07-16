@@ -1,5 +1,5 @@
-#ifndef _CVI_DWA_CFG_H_
-#define _CVI_DWA_CFG_H_
+#ifndef _DWA_CFG_H_
+#define _DWA_CFG_H_
 
 #define DWA_INTR_NUM 15//16
 #define DWA2_INTR_NUM 16
@@ -37,26 +37,26 @@
 #define HTILE_MODE
 #define DWA_CMDQ_MAX_REG_CNT (100)
 struct dwa_buf {
-	u32 addrl;
-	u32 addrh;
-	u32 pitch;
-	u16 offset_x;
-	u16 offset_y;
+	unsigned int addrl;
+	unsigned int addrh;
+	unsigned int pitch;
+	unsigned short offset_x;
+	unsigned short offset_y;
 };
 
 struct dwa_cfg {
-	u8 pix_fmt;         // 0: YUV420, 1: RGB, 2: Y only
-	u8 output_target;   // 0: to scaler, 1: to DRAM
+	unsigned char pix_fmt;         // 0: YUV420, 1: RGB, 2: Y only
+	unsigned char output_target;   // 0: to scaler, 1: to DRAM
 
-	u32 bgcolor;        // R[0:7], G[15:8], B[23:16]
-	u32 bdcolor;        // R[0:7], G[15:8], B[23:16]
+	unsigned int bgcolor;        // R[0:7], G[15:8], B[23:16]
+	unsigned int bdcolor;        // R[0:7], G[15:8], B[23:16]
 	int src_width;
 	int src_height;
 	struct dwa_buf src_buf[3];
 	int dst_width;
 	int dst_height;
 	struct dwa_buf dst_buf[3];
-	u64 mesh_id;
+	unsigned long long mesh_id;
 };
 
-#endif // _CVI_DWA_CFG_H_
+#endif // _DWA_CFG_H_

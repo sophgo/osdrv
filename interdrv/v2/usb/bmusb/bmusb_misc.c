@@ -1,6 +1,7 @@
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/uaccess.h>  /* for put_user */
+#include <linux/compat.h>
 
 #include "bmusb_misc.h"
 #include "bmusb_drd.h"
@@ -159,12 +160,25 @@ static long bmusb_drd_unlocked_ioctl(struct file *file,
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static long bmusb_misc_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations bmusb_drd_file_ops = {
 		.owner = THIS_MODULE,
 		.open = bmusb_drd_open,
 		.read = bmusb_drd_read,
 		.write = bmusb_drd_write,
 		.unlocked_ioctl = bmusb_drd_unlocked_ioctl,
+#ifdef CONFIG_COMPAT
+		.compat_ioctl = bmusb_misc_compat_ptr_ioctl,
+#endif
 };
 
 void bmusb_drd_misc_register(struct bmusb_dev *bmusb, int res_address)
@@ -246,6 +260,9 @@ static const struct file_operations bmusb_dev_file_ops = {
 		.owner = THIS_MODULE,
 		.open = bmusb_dev_open,
 		.unlocked_ioctl = bmusb_dev_unlocked_ioctl,
+#ifdef CONFIG_COMPAT
+		.compat_ioctl = bmusb_misc_compat_ptr_ioctl,
+#endif
 };
 
 void bmusb_dev_misc_register(struct usb_ss_dev *usb_ss, int res_address)

@@ -16,6 +16,7 @@ ccflags-y += -I$(PWD)/../sys/common/ -I$(PWD)/../sys/common/uapi
 ccflags-y += -I$(PWD)/../base/chip/$(CVIARCH_L)/
 ccflags-y += -I$(PWD)/../base/
 ccflags-y += -I$(srctree)/drivers/staging/android
+ccflags-y += -I$(srctree)/drivers/pinctrl/cvitek/
 
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
@@ -25,6 +26,7 @@ all:
 
 clean:
 	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c *.mod
+	@rm -f mipi_tx/Module.symvers mipi_tx/*.ko mipi_tx/*.mod.c mipi_tx/*.mod mipi_tx/.*.cmd
 	@rm -rf .tmp_versions
 	@find . -name \*.o* -type f -delete
 endif

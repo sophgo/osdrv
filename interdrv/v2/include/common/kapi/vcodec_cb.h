@@ -16,19 +16,19 @@ enum VCODEC_CB_CMD {
 };
 
 struct venc_send_frm_info {
-	CVI_S32 vpss_grp;
-	CVI_S32 vpss_chn;
-	CVI_S32 vpss_chn1;
-	struct cvi_buffer stInFrmBuf;
-	struct cvi_buffer stInFrmBuf1;
-	CVI_BOOL isOnline;
-	CVI_U32 sb_nb;
+	s32 vpss_grp;
+	s32 vpss_chn;
+	s32 vpss_chn1;
+	struct video_buffer stInFrmBuf;
+	struct video_buffer stInFrmBuf1;
+	u8 isOnline;
+	u32 sb_nb;
 };
 
 struct venc_snap_frm_info {
-	CVI_S32 vpss_grp;
-	CVI_S32 vpss_chn;
-	CVI_U32 skip_frm_cnt;
+	s32 vpss_grp;
+	s32 vpss_chn;
+	u32 skip_frm_cnt;
 };
 
 #ifdef __cplusplus

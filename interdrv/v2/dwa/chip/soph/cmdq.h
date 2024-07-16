@@ -1,5 +1,5 @@
-#ifndef _CVI_CMDQ_H_
-#define _CVI_CMDQ_H_
+#ifndef _CMDQ_H_
+#define _CMDQ_H_
 
 enum {
 	CMDQ_MODE_SDMA,
@@ -7,12 +7,12 @@ enum {
 };
 
 struct cmdq_adma {
-	u64 addr;
-	u32 size;
-	u32 flags_end : 1;
-	u32 rsv : 2;
-	u32 flags_link : 1;
-	u32 rsv2 : 28;
+	unsigned long long addr;
+	unsigned int size;
+	unsigned int flags_end : 1;
+	unsigned int rsv : 2;
+	unsigned int flags_link : 1;
+	unsigned int rsv2 : 28;
 };
 
 enum {
@@ -22,34 +22,34 @@ enum {
 };
 
 struct cmdq_set_reg {
-	u32 data;
-	u32 addr : 20;
-	u32 byte_mask : 4;
-	u32 intr_end : 1;
-	u32 intr_int : 1;
-	u32 intr_last : 1;
-	u32 intr_rsv : 1;
-	u32 action : 4;  // 0 for this case
+	unsigned int data;
+	unsigned int addr : 20;
+	unsigned int byte_mask : 4;
+	unsigned int intr_end : 1;
+	unsigned int intr_int : 1;
+	unsigned int intr_last : 1;
+	unsigned int intr_rsv : 1;
+	unsigned int action : 4;  // 0 for this case
 };
 
 struct cmdq_set_wait_timer {
-	u32 counter;
-	u32 rsv : 24;
-	u32 intr_end : 1;
-	u32 intr_int : 1;
-	u32 intr_last : 1;
-	u32 intr_rsv : 1;
-	u32 action : 4;  // 1 for this case
+	unsigned int counter;
+	unsigned int rsv : 24;
+	unsigned int intr_end : 1;
+	unsigned int intr_int : 1;
+	unsigned int intr_last : 1;
+	unsigned int intr_rsv : 1;
+	unsigned int action : 4;  // 1 for this case
 };
 
 struct cmdq_set_wait_flags {
-	u32 flag_num;   // 0 ~ 15, depending on each module
-	u32 rsv : 24;
-	u32 intr_end : 1;
-	u32 intr_int : 1;
-	u32 intr_last : 1;
-	u32 intr_rsv : 1;
-	u32 action : 4;  // 2 for this case
+	unsigned int flag_num;   // 0 ~ 15, depending on each module
+	unsigned int rsv : 24;
+	unsigned int intr_end : 1;
+	unsigned int intr_int : 1;
+	unsigned int intr_last : 1;
+	unsigned int intr_rsv : 1;
+	unsigned int action : 4;  // 2 for this case
 };
 
 union cmdq_set {
@@ -62,7 +62,7 @@ union cmdq_set {
  * cmdq_set_package  - package reg_write to cmd_set.
  *
  */
-void cmdq_set_package(struct cmdq_set_reg *set, u32 addr, u32 data);
+void cmdq_set_package(struct cmdq_set_reg *set, unsigned int addr, unsigned int data);
 
 /**
  * cmdq_set_package  - package reg_write to cmd_set.
@@ -73,7 +73,7 @@ void cmdq_set_package(struct cmdq_set_reg *set, u32 addr, u32 data);
  *		counter if timer and flag_num if flag
  * @param intr: the interrupt condition
  */
-void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr);
+void cmdq_set_wait(union cmdq_set *set, bool is_timer, unsigned int data, unsigned char intr);
 
 /**
  * cmdq_adma_package  - package adma entries.
@@ -84,7 +84,7 @@ void cmdq_set_wait(union cmdq_set *set, bool is_timer, u32 data, u8 intr);
  * @param is_link: 1: link descriptor, 2: cmd_set
  * @param is_end: true if this is last entry in adma-table.
  */
-void cmdq_adma_package(struct cmdq_adma *item, u64 addr, u32 size, bool is_link,
+void cmdq_adma_package(struct cmdq_adma *item, unsigned long long addr, unsigned int size, bool is_link,
 		       bool is_end);
 
 /**
@@ -93,7 +93,7 @@ void cmdq_adma_package(struct cmdq_adma *item, u64 addr, u32 size, bool is_link,
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void cmdq_intr_ctrl(uintptr_t base, u8 intr_mask);
+void cmdq_intr_ctrl(uintptr_t base, unsigned char intr_mask);
 
 /**
  * cmdq_intr_ctrl - clear cmdQ's interrupt
@@ -102,7 +102,7 @@ void cmdq_intr_ctrl(uintptr_t base, u8 intr_mask);
  * @param base: base-address of cmdQ
  * @param intr_mask: the mask of the interrupt to clear.
  */
-void cmdq_intr_clr(uintptr_t base, u8 intr_mask);
+void cmdq_intr_clr(uintptr_t base, unsigned char intr_mask);
 
 /**
  * cmdq_intr_status - cmdQ's interrupt status
@@ -110,7 +110,7 @@ void cmdq_intr_clr(uintptr_t base, u8 intr_mask);
  *
  * @param base: base-address of cmdQ
  */
-u8 cmdq_intr_status(uintptr_t base);
+unsigned char cmdq_intr_status(uintptr_t base);
 
 /**
  * cmdq_engine - start cmdQ
@@ -122,8 +122,8 @@ u8 cmdq_intr_status(uintptr_t base);
  * @param is_adma: 1 if adma table is used.
  * @param cnt: the number of entry in cmdset. only useful if adma
  */
-void cmdq_engine(uintptr_t base, uintptr_t tbl_addr, u16 apb_base,
-		 bool is_hw_restart, bool is_adma, u16 cnt);
+void cmdq_engine(uintptr_t base, uintptr_t tbl_addr, unsigned short apb_base,
+		 bool is_hw_restart, bool is_adma, unsigned short cnt);
 
 /**
  * cmdq_sw_restart - toggle sw_restart if cmdQ wait-flag is sw-toggle.
@@ -134,4 +134,4 @@ void cmdq_sw_restart(uintptr_t base);
 
 bool cmdq_is_sw_restart(uintptr_t base);
 
-#endif  //_CVI_CMDQ_H_
+#endif  //_CMDQ_H_

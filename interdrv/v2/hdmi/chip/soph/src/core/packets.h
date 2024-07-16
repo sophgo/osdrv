@@ -6,10 +6,10 @@
 #include "core/video.h"
 #include "core/audio.h"
 
-#define PACKET_HDMIVIDEOFORMAT_MASK 0xE0
-#define PACKET_3D_STRUCTURE_MASK    0xF0
-#define PACKET_3D_EXT_DATA_MASK     0xF0
-#define PACKET_HDMI_VIC_MASK   	    0xFF
+#define PACKET_HDMIVIDEOFORMAT_MASK	0xE0
+#define PACKET_3D_STRUCTURE_MASK	0xF0
+#define PACKET_3D_EXT_DATA_MASK		0xF0
+#define PACKET_HDMI_VIC_MASK		0xFF
 
 /**
  * Initialize the packets package. Reset local variables.
@@ -26,17 +26,17 @@ int packets_initialize(hdmi_tx_dev_t *dev);
  * other video parameters)
  * @return TRUE when successful
  */
-int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video);
+int packets_configure(hdmi_tx_dev_t *dev, video_params_t * video);
 
 /**
  * Configure Audio Content Protection packets.
  * @param type Content protection type (see HDMI1.3a Section 9.3)
  * @param fields  ACP Type Dependent Fields
  * @param length of the ACP fields
- * @param autoSend Send Packets Automatically
+ * @param auto_send Send Packets Automatically
  */
 void packets_audio_content_protection(hdmi_tx_dev_t *dev, u8 type, const u8 * fields,
-				    u8 length, u8 autoSend);
+				    u8 length, u8 auto_send);
 
 /**
  * Configure ISRC 1 & 2 Packets
@@ -44,12 +44,12 @@ void packets_audio_content_protection(hdmi_tx_dev_t *dev, u8 type, const u8 * fi
  * @param initStatus Initial status which the packets are sent with (usually starting position)
  * @param codes ISRC codes array
  * @param length of the ISRC codes array
- * @param autoSend Send ISRC Automatically
+ * @param auto_send Send ISRC Automatically
  * @note Automatic sending does not change status automatically, it does the insertion of the packets in the data
  * islands.
  */
-void packets_isrc_packets(hdmi_tx_dev_t *dev, u8 initStatus, const u8 * codes,
-			 u8 length, u8 autoSend);
+void packets_isrc_packets(hdmi_tx_dev_t *dev, u8 init_status, const u8 * codes,
+			 u8 length, u8 auto_send);
 
 /**
  * Send/stop sending AV Mute in the General Control Packet
@@ -109,16 +109,16 @@ void packets_disable_all_packets(hdmi_tx_dev_t *dev);
  * Registration Identifier
  * @param payload Vendor Specific Info Payload
  * @param length of the payload array
- * @param autoSend Start send Vendor Specific InfoFrame automatically
+ * @param auto_send Start send Vendor Specific InfoFrame automatically
  */
-int packets_vendor_specific_info_frame(hdmi_tx_dev_t *dev, u32 oui, const u8 * payload, u8 length, u8 autoSend);
+int packets_vendor_specific_info_frame(hdmi_tx_dev_t *dev, u32 oui, const u8 * payload, u8 length, u8 auto_send);
 
 /**
  * Configure Colorimetry packets
  * @param dev Device structure
  * @param video Video information structure
  */
-void packets_colorimetry_config(hdmi_tx_dev_t *dev, videoParams_t * video);
+void packets_colorimetry_config(hdmi_tx_dev_t *dev, video_params_t * video);
 
 u8 vp_pixel_packing_phase(hdmi_tx_dev_t *dev);
 

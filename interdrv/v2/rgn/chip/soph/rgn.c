@@ -3,8 +3,8 @@
 #include <linux/uaccess.h>
 #include <uapi/linux/sched/types.h>
 
-#include <linux/cvi_base_ctx.h>
-#include <linux/cvi_errno.h>
+#include <base_ctx.h>
+#include <linux/comm_errno.h>
 #include <linux/delay.h>
 #include <linux/random.h>
 
@@ -32,11 +32,11 @@ struct rgn_mem_info {
  *  Global variables
  ******************************************************/
 //Keep every ctx include rgn_ctx and rgn_proc_ctx
-struct cvi_rgn_ctx rgn_prc_ctx[RGN_MAX_NUM];
-struct cvi_rgn_canvas_ctx rgn_canvas_ctx[RGN_MAX_NUM][RGN_MAX_BUF_NUM];
-static struct rgn_mem_info s_astMosaicBuf[VPSS_MAX_GRP_NUM][VPSS_MAX_CHN_NUM];
+struct rgn_ctx rgn_prc_ctx[RGN_MAX_NUM];
+struct rgn_canvas_ctx rgn_canvas_ctx[RGN_MAX_NUM][RGN_MAX_BUF_NUM];
+static struct rgn_mem_info mosaic_buf[VPSS_MAX_GRP_NUM][VPSS_MAX_CHN_NUM];
 
-static u32 u32RgnNum;
+static unsigned int rgn_num;
 static struct mutex hdlslock, g_rgnlock, g_rgnhashlock;
 
 DECLARE_HASHTABLE(rgn_hash, 6);
@@ -44,27 +44,27 @@ DECLARE_HASHTABLE(rgn_hash, 6);
 /*******************************************************
  *  Internal APIs
  ******************************************************/
-static bool _rgn_hash_find(RGN_HANDLE Handle, struct cvi_rgn_ctx **ctx, bool del)
+static bool _rgn_hash_find(rgn_handle handle, struct rgn_ctx **ctx, bool del)
 {
 	bool is_found = false;
-	struct cvi_rgn_ctx *obj;
+	struct rgn_ctx *obj;
 	int bkt;
 	struct hlist_node *tmp;
 
 #if 0 //Linux Hashmap for print every element
-	unsigned int bkt;
+	unsigned int  bkt;
 
-	CVI_TRACE_RGN(RGN_INFO, "_rgn_hash_find find handle(%d), del(%d)\n", Handle, del);
+	CVI_TRACE_RGN(RGN_INFO, "_rgn_hash_find find handle(%d), del(%d)\n", handle, del);
 	hash_for_each(rgn_hash, bkt, obj, node) {
-		CVI_TRACE_RGN(RGN_INFO, "rgn_hash: handle(%d), bCreated:(%d), stRegion.enType:(%d)\n"
-			, obj->Handle, obj->bCreated, obj->stRegion.enType);
+		CVI_TRACE_RGN(RGN_INFO, "rgn_hash: handle(%d), created:(%d), region.type:(%d)\n"
+			, obj->handle, obj->created, obj->region.type);
 	}
 #endif
 
 	mutex_lock(&g_rgnhashlock);
-	// hash_for_each_possible(rgn_hash, obj, node, Handle) {
+	// hash_for_each_possible(rgn_hash, obj, node, handle) {
 	hash_for_each_safe(rgn_hash, bkt, tmp, obj, node) {
-		if (obj->Handle == Handle) {
+		if (obj->handle == handle) {
 			if (del)
 				hash_del(&obj->node);
 			is_found = true;
@@ -79,17 +79,17 @@ static bool _rgn_hash_find(RGN_HANDLE Handle, struct cvi_rgn_ctx **ctx, bool del
 	return is_found;
 }
 
-static s32 CHECK_RGN_HANDLE(struct cvi_rgn_ctx **ctx, RGN_HANDLE Handle)
+static int check_rgn_handle(struct rgn_ctx **ctx, rgn_handle handle)
 {
-	if (!_rgn_hash_find(Handle, ctx, false)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is non-existent.\n", Handle);
-		return CVI_ERR_RGN_UNEXIST;
+	if (!_rgn_hash_find(handle, ctx, false)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is non-existent.\n", handle);
+		return ERR_RGN_UNEXIST;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static int _rgn_call_cb(u32 m_id, u32 cmd_id, void *data)
+static int _rgn_call_cb(unsigned int m_id, unsigned int cmd_id, void *data)
 {
 	struct base_exe_m_cb exe_cb;
 
@@ -107,58 +107,58 @@ int32_t _rgn_init(void)
 
 	hash_init(rgn_hash);
 	memset(rgn_prc_ctx, 0, sizeof(rgn_prc_ctx));
-	u32RgnNum = 0;
+	rgn_num = 0;
 	mutex_init(&hdlslock);
 	mutex_init(&g_rgnlock);
 	mutex_init(&g_rgnhashlock);
 	for (i = 0; i < RGN_MAX_NUM; ++i)
 		mutex_init(&rgn_prc_ctx[i].rgn_canvas_q_lock);
 	CVI_TRACE_RGN(RGN_INFO, "-\n");
-	return CVI_SUCCESS;
+	return 0;
 }
 
 int32_t _rgn_exit(void)
 {
 	unsigned int bkt;
-	struct cvi_rgn_ctx *obj;
+	struct rgn_ctx *obj;
 	struct hlist_node *tmp;
 	int i = 0;
 
 	hash_for_each_safe(rgn_hash, bkt, tmp, obj, node) {
-		rgn_detach_from_chn(obj->Handle, &obj->stChn);
-		rgn_destory(obj->Handle);
+		rgn_detach_from_chn(obj->handle, &obj->chn);
+		rgn_destory(obj->handle);
 	}
 	memset(rgn_prc_ctx, 0, sizeof(rgn_prc_ctx));
-	u32RgnNum = 0;
+	rgn_num = 0;
 	mutex_destroy(&hdlslock);
 	mutex_destroy(&g_rgnlock);
 	mutex_destroy(&g_rgnhashlock);
 	for (i = 0; i < RGN_MAX_NUM; ++i)
 		mutex_destroy(&rgn_prc_ctx[i].rgn_canvas_q_lock);
 	CVI_TRACE_RGN(RGN_INFO, "-\n");
-	return CVI_SUCCESS;
+	return 0;
 }
 
-u32 _rgn_proc_get_idx(RGN_HANDLE hHandle)
+unsigned int _rgn_proc_get_idx(rgn_handle hhandle)
 {
-	u32 i, idx = 0;
+	unsigned int i, idx = 0;
 
 	for (i = 0; i < RGN_MAX_NUM; ++i) {
-		if (rgn_prc_ctx[i].Handle == hHandle && rgn_prc_ctx[i].bCreated) {
+		if (rgn_prc_ctx[i].handle == hhandle && rgn_prc_ctx[i].created) {
 			idx = i;
 			break;
 		}
 	}
 
 	if (i == RGN_MAX_NUM)
-		CVI_TRACE_RGN(RGN_ERR, "cannot find corresponding rgn in rgn_prc_ctx, handle: %d\n", hHandle);
+		CVI_TRACE_RGN(RGN_ERR, "cannot find corresponding rgn in rgn_prc_ctx, handle: %d\n", hhandle);
 
 	return idx;
 }
 
-static inline s32 _rgn_get_bytesperline(PIXEL_FORMAT_E enPixelFormat, u32 width, u32 *bytesperline)
+static inline int _rgn_get_bytesperline(pixel_format_e pixel_format, unsigned int width, unsigned int *bytesperline)
 {
-	switch (enPixelFormat) {
+	switch (pixel_format) {
 	case PIXEL_FORMAT_ARGB_8888:
 		*bytesperline = width << 2;
 		break;
@@ -170,111 +170,111 @@ static inline s32 _rgn_get_bytesperline(PIXEL_FORMAT_E enPixelFormat, u32 width,
 		*bytesperline = width;
 		break;
 	default:
-		CVI_TRACE_RGN(RGN_ERR, "not supported pxl-fmt(%d).\n", enPixelFormat);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+		CVI_TRACE_RGN(RGN_ERR, "not supported pxl-fmt(%d).\n", pixel_format);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-bool is_rect_overlap(RECT_S *r0, RECT_S *r1)
+bool is_rect_overlap(rect_s *r0, rect_s *r1)
 {
 	// If one rectangle is on left side of other
-	if (((u32)r0->s32X >= (r1->s32X + r1->u32Width)) || ((u32)r1->s32X >= (r0->s32X + r0->u32Width)))
+	if (((u32)r0->x >= (r1->x + r1->width)) || ((u32)r1->x >= (r0->x + r0->width)))
 		return false;
 
 	// If one rectangle is above other
-	if (((u32)r0->s32Y >= (r1->s32Y + r1->u32Height)) || ((u32)r1->s32Y >= (r0->s32Y + r0->u32Height)))
+	if (((u32)r0->y >= (r1->y + r1->height)) || ((u32)r1->y >= (r0->y + r0->height)))
 		return false;
 
 	return true;
 }
 
-static s32 _rgn_get_rect(struct cvi_rgn_ctx *ctx, RECT_S *rect)
+static int _rgn_get_rect(struct rgn_ctx *ctx, rect_s *rect)
 {
-	if (ctx->stRegion.enType == OVERLAY_RGN) {
-		rect->s32X = ctx->stChnAttr.unChnAttr.stOverlayChn.stPoint.s32X;
-		rect->s32Y = ctx->stChnAttr.unChnAttr.stOverlayChn.stPoint.s32Y;
-		rect->u32Width = ctx->stRegion.unAttr.stOverlay.stSize.u32Width;
-		rect->u32Height = ctx->stRegion.unAttr.stOverlay.stSize.u32Height;
-		return CVI_SUCCESS;
+	if (ctx->region.type == OVERLAY_RGN) {
+		rect->x = ctx->chn_attr.unchn_attr.overlay_chn.point.x;
+		rect->y = ctx->chn_attr.unchn_attr.overlay_chn.point.y;
+		rect->width = ctx->region.unattr.overlay.size.width;
+		rect->height = ctx->region.unattr.overlay.size.height;
+		return 0;
 	}
-	if (ctx->stRegion.enType == OVERLAYEX_RGN) {
-		rect->s32X = ctx->stChnAttr.unChnAttr.stOverlayExChn.stPoint.s32X;
-		rect->s32Y = ctx->stChnAttr.unChnAttr.stOverlayExChn.stPoint.s32Y;
-		rect->u32Width = ctx->stRegion.unAttr.stOverlayEx.stSize.u32Width;
-		rect->u32Height = ctx->stRegion.unAttr.stOverlayEx.stSize.u32Height;
-		return CVI_SUCCESS;
+	if (ctx->region.type == OVERLAYEX_RGN) {
+		rect->x = ctx->chn_attr.unchn_attr.overlay_ex_chn.point.x;
+		rect->y = ctx->chn_attr.unchn_attr.overlay_ex_chn.point.y;
+		rect->width = ctx->region.unattr.overlay_ex.size.width;
+		rect->height = ctx->region.unattr.overlay_ex.size.height;
+		return 0;
 	}
-	if (ctx->stRegion.enType == COVER_RGN) {
-		*rect = ctx->stChnAttr.unChnAttr.stCoverChn.stRect;
-		return CVI_SUCCESS;
+	if (ctx->region.type == COVER_RGN) {
+		*rect = ctx->chn_attr.unchn_attr.cover_chn.rect;
+		return 0;
 	}
-	if (ctx->stRegion.enType == COVEREX_RGN) {
-		*rect = ctx->stChnAttr.unChnAttr.stCoverExChn.stRect;
-		return CVI_SUCCESS;
+	if (ctx->region.type == COVEREX_RGN) {
+		*rect = ctx->chn_attr.unchn_attr.cover_ex_chn.rect;
+		return 0;
 	}
-	if (ctx->stRegion.enType == MOSAIC_RGN) {
-		*rect = ctx->stChnAttr.unChnAttr.stMosaicChn.stRect;
-		return CVI_SUCCESS;
+	if (ctx->region.type == MOSAIC_RGN) {
+		*rect = ctx->chn_attr.unchn_attr.mosaic_chn.rect;
+		return 0;
 	}
-	return CVI_FAILURE;
+	return -1;
 }
 
-static s32 _rgn_get_layer(struct cvi_rgn_ctx *ctx, u32 *layer)
+static int _rgn_get_layer(struct rgn_ctx *ctx, unsigned int *layer)
 {
-	if (ctx->stRegion.enType == OVERLAY_RGN)
-		*layer = ctx->stChnAttr.unChnAttr.stOverlayChn.u32Layer;
-	else if (ctx->stRegion.enType == OVERLAYEX_RGN)
-		*layer = ctx->stChnAttr.unChnAttr.stOverlayExChn.u32Layer;
-	else if (ctx->stRegion.enType == COVER_RGN)
-		*layer = ctx->stChnAttr.unChnAttr.stCoverChn.u32Layer;
-	else if (ctx->stRegion.enType == COVEREX_RGN)
-		*layer = ctx->stChnAttr.unChnAttr.stCoverExChn.u32Layer;
-	else if (ctx->stRegion.enType == MOSAIC_RGN)
-		*layer = ctx->stChnAttr.unChnAttr.stMosaicChn.u32Layer;
+	if (ctx->region.type == OVERLAY_RGN)
+		*layer = ctx->chn_attr.unchn_attr.overlay_chn.layer;
+	else if (ctx->region.type == OVERLAYEX_RGN)
+		*layer = ctx->chn_attr.unchn_attr.overlay_ex_chn.layer;
+	else if (ctx->region.type == COVER_RGN)
+		*layer = ctx->chn_attr.unchn_attr.cover_chn.layer;
+	else if (ctx->region.type == COVEREX_RGN)
+		*layer = ctx->chn_attr.unchn_attr.cover_ex_chn.layer;
+	else if (ctx->region.type == MOSAIC_RGN)
+		*layer = ctx->chn_attr.unchn_attr.mosaic_chn.layer;
 	else
-		return CVI_FAILURE;
+		return -1;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 
 /* _rgn_check_order: check if r1's order should before r0.
  *
  */
-u8 _rgn_check_order(RECT_S *r0, RECT_S *r1)
+unsigned char _rgn_check_order(rect_s *r0, rect_s *r1)
 {
-	if (r0->s32X > r1->s32X)
-		return CVI_TRUE;
-	if ((r0->s32X == r1->s32X) && (r0->s32Y > r1->s32Y))
-		return CVI_TRUE;
-	return CVI_FALSE;
+	if (r0->x > r1->x)
+		return 1;
+	if ((r0->x == r1->x) && (r0->y > r1->y))
+		return 1;
+	return 0;
 }
 
-int _rgn_insert(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
+int _rgn_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	RECT_S rect_old, rect_new;
-	u8 i, j;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	rect_s rect_old, rect_new;
+	unsigned char i, j;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, hdl);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, hdl);
+	if (ret != 0)
+		return ret;
 
-	if (ctx->stCanvasInfo[ctx->canvas_idx].bCompressed
+	if (ctx->canvas_info[ctx->canvas_idx].compressed
 		&& hdls[0] != RGN_INVALID_HANDLE) {
 		CVI_TRACE_RGN(RGN_ERR, "cannot insert hdl(%d), only allow one ow when odec on\n",
 			hdl);
-		return CVI_FAILURE;
+		return -1;
 	}
-	if (_rgn_get_rect(ctx, &rect_new) != CVI_SUCCESS) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) can't get rect.\n", hdl);
-		return CVI_FAILURE;
+	if (_rgn_get_rect(ctx, &rect_new) != 0) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get rect.\n", hdl);
+		return -1;
 	}
 	if (hdls[size - 1] != RGN_INVALID_HANDLE) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) rgn's count is full.\n", hdl);
-		return CVI_FAILURE;
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) rgn's count is full.\n", hdl);
+		return -1;
 	}
 
 	//Check if previously attached rgns overlap new rgn before inserting new rgn
@@ -282,37 +282,37 @@ int _rgn_insert(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
 		if (hdls[i] == RGN_INVALID_HANDLE)
 			break;
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
-		if (_rgn_get_rect(ctx, &rect_old) != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) can't get rect.\n", hdls[i]);
-			return CVI_FAILURE;
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
+		if (_rgn_get_rect(ctx, &rect_old) != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get rect.\n", hdls[i]);
+			return -1;
 		}
 
 		if (is_rect_overlap(&rect_old, &rect_new)) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is overlapped on another RGN_HANDLE(%d).\n"
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is overlapped on another rgn_handle(%d).\n"
 				, hdl, hdls[i]);
 			CVI_TRACE_RGN(RGN_DEBUG, "(%d %d %d %d) <-> (%d %d %d %d)\n"
-				, rect_new.s32X, rect_new.s32Y, rect_new.u32Width, rect_new.u32Height
-				, rect_old.s32X, rect_old.s32Y, rect_old.u32Width, rect_old.u32Height);
-			return CVI_ERR_RGN_NOT_PERM;
+				, rect_new.x, rect_new.y, rect_new.width, rect_new.height
+				, rect_old.x, rect_old.y, rect_old.width, rect_old.height);
+			return ERR_RGN_NOT_PERM;
 		}
 	}
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE) {
 			hdls[i] = hdl;
-			CVI_TRACE_RGN(RGN_DEBUG, "RGN_HANDLE(%d) at index(%d).\n", hdl, i);
-			return CVI_SUCCESS;
+			CVI_TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			return 0;
 		}
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
-		if (_rgn_get_rect(ctx, &rect_old) != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) can't get rect.\n", hdls[i]);
-			return CVI_FAILURE;
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
+		if (_rgn_get_rect(ctx, &rect_old) != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get rect.\n", hdls[i]);
+			return -1;
 		}
 
 		if (_rgn_check_order(&rect_old, &rect_new)) {
@@ -320,47 +320,47 @@ int _rgn_insert(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
 				for (j = size - 1; j > i; j--)
 					hdls[j] = hdls[j - 1];
 			hdls[i] = hdl;
-			CVI_TRACE_RGN(RGN_DEBUG, "RGN_HANDLE(%d) at index(%d).\n", hdl, i);
-			return CVI_SUCCESS;
+			CVI_TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			return 0;
 		}
 	}
-	return CVI_FAILURE;
+	return -1;
 }
 
-int _rgn_ex_insert(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
+int _rgn_ex_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 layer_new, layer_old;
-	u8 i, j;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int layer_new, layer_old;
+	unsigned char i, j;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, hdl);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, hdl);
+	if (ret != 0)
+		return ret;
 
 	if (hdls[size - 1] != RGN_INVALID_HANDLE) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) rgn_ex's count is full.\n", hdl);
-		return CVI_FAILURE;
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) rgn_ex's count is full.\n", hdl);
+		return -1;
 	}
 
-	if (_rgn_get_layer(ctx, &layer_new) != CVI_SUCCESS) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) can't get layer.\n", hdl);
-		return CVI_FAILURE;
+	if (_rgn_get_layer(ctx, &layer_new) != 0) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get layer.\n", hdl);
+		return -1;
 	}
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE) {
 			hdls[i] = hdl;
-			CVI_TRACE_RGN(RGN_DEBUG, "RGN_HANDLE(%d) at index(%d).\n", hdl, i);
-			return CVI_SUCCESS;
+			CVI_TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			return 0;
 		}
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
-		if (_rgn_get_layer(ctx, &layer_old) != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) can't get layer.\n", hdls[i]);
-			return CVI_FAILURE;
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
+		if (_rgn_get_layer(ctx, &layer_old) != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get layer.\n", hdls[i]);
+			return -1;
 		}
 
 		if (layer_new < layer_old) {
@@ -368,30 +368,30 @@ int _rgn_ex_insert(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
 				for (j = size - 1; j > i; j--)
 					hdls[j] = hdls[j - 1];
 			hdls[i] = hdl;
-			CVI_TRACE_RGN(RGN_DEBUG, "RGN_HANDLE(%d) at index(%d).\n", hdl, i);
-			return CVI_SUCCESS;
+			CVI_TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			return 0;
 		}
 	}
-	return CVI_FAILURE;
+	return -1;
 }
 
-int _rgn_remove(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
+int _rgn_remove(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 {
-	u8 i;
+	unsigned char i;
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE)
-			return CVI_ERR_RGN_UNEXIST;
+			return ERR_RGN_UNEXIST;
 
 		if (hdl == hdls[i]) {
 			if ((i + 1) < size)
 				memmove(&hdls[i], &hdls[i + 1], sizeof(hdls[i]) * (size - 1 - i));
 			hdls[size - 1] = RGN_INVALID_HANDLE;
-			CVI_TRACE_RGN(RGN_DEBUG, "RGN_HANDLE(%d) at index(%d).\n", hdl, i);
+			CVI_TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			break;
 		}
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
 /* _rgn_fill_pattern: fill buffer of length with pattern.
@@ -401,11 +401,11 @@ int _rgn_remove(RGN_HANDLE hdls[], u8 size, RGN_HANDLE hdl)
  * @color: color pattern. It depends on the pixel-format.
  * @bpp: bytes-per-pixel. Only 2 or 4 works.
  */
-void _rgn_fill_pattern(void *buf, u32 len, u32 color, u8 bpp)
+void _rgn_fill_pattern(void *buf, unsigned int len, unsigned int color, unsigned char bpp)
 {
-	u32 *p = buf;
-	u32 i;
-	u32 pattern = color;
+	unsigned int *p = buf;
+	unsigned int i;
+	unsigned int pattern = color;
 
 	if (bpp == 2)
 		pattern |= (pattern << 16);
@@ -413,230 +413,230 @@ void _rgn_fill_pattern(void *buf, u32 len, u32 color, u8 bpp)
 		p[i] = pattern;
 
 	if (len & 0x02)
-		*(((u16 *)&p[i]) + 1) = color;
+		*(((unsigned short *)&p[i]) + 1) = color;
 }
 
 /* _rgn_update_cover_canvas: fill cover/coverex if needed.
  *
  * @ctx: the region ctx to be updated.
- * @pstChnAttr: could be NULL. If not, will be used to check if update needed.
+ * @pchn_attr: could be NULL. If not, will be used to check if update needed.
  */
-static s32 _rgn_update_cover_canvas(struct cvi_rgn_ctx *ctx, const RGN_CHN_ATTR_S *pstChnAttr)
+static int _rgn_update_cover_canvas(struct rgn_ctx *ctx, const rgn_chn_attr_s *pchn_attr)
 {
-	PIXEL_FORMAT_E enPixelFormat = PIXEL_FORMAT_ARGB_1555;
-	u32 bytesperline;
-	RECT_S rect;
-	u32 buf_len;
-	u32 stride;
-	u8 bfill = CVI_FALSE;
-	u32 proc_idx;
+	pixel_format_e pixel_format = PIXEL_FORMAT_ARGB_1555;
+	unsigned int bytesperline;
+	rect_s rect;
+	unsigned int buf_len;
+	unsigned int stride;
+	unsigned char bfill = 0;
+	unsigned int proc_idx;
 
-	if (!ctx || !pstChnAttr)
-		return CVI_ERR_RGN_NULL_PTR;
+	if (!ctx || !pchn_attr)
+		return ERR_RGN_NULL_PTR;
 
-	rect = (pstChnAttr->enType == COVER_RGN)
-	     ? pstChnAttr->unChnAttr.stCoverChn.stRect
-	     : pstChnAttr->unChnAttr.stCoverExChn.stRect;
+	rect = (pchn_attr->type == COVER_RGN)
+	     ? pchn_attr->unchn_attr.cover_chn.rect
+	     : pchn_attr->unchn_attr.cover_ex_chn.rect;
 
 	// check if color changed.
-	bfill = (((ctx->stChnAttr.enType == COVER_RGN)
-		&& (ctx->stChnAttr.unChnAttr.stCoverChn.u32Color
-		 != pstChnAttr->unChnAttr.stCoverChn.u32Color))) ||
-		(((ctx->stChnAttr.enType == COVEREX_RGN)
-		&& (ctx->stChnAttr.unChnAttr.stCoverExChn.u32Color
-		 != pstChnAttr->unChnAttr.stCoverExChn.u32Color)));
+	bfill = (((ctx->chn_attr.type == COVER_RGN)
+		&& (ctx->chn_attr.unchn_attr.cover_chn.color
+		 != pchn_attr->unchn_attr.cover_chn.color))) ||
+		(((ctx->chn_attr.type == COVEREX_RGN)
+		&& (ctx->chn_attr.unchn_attr.cover_ex_chn.color
+		 != pchn_attr->unchn_attr.cover_ex_chn.color)));
 
-	_rgn_get_bytesperline(enPixelFormat, rect.u32Width, &bytesperline);
+	_rgn_get_bytesperline(pixel_format, rect.width, &bytesperline);
 	stride = ALIGN(bytesperline, 32);
-	buf_len = stride * rect.u32Height;
+	buf_len = stride * rect.height;
 
-	proc_idx = _rgn_proc_get_idx(ctx->Handle);
+	proc_idx = _rgn_proc_get_idx(ctx->handle);
 	if (ctx->ion_len == 0) {
 		ctx->canvas_idx = rgn_prc_ctx[proc_idx].canvas_idx = 0;
-		rgn_prc_ctx[proc_idx].stCanvasInfo[0] = *ctx->stCanvasInfo;
+		rgn_prc_ctx[proc_idx].canvas_info[0] = *ctx->canvas_info;
 	}
 
 	// update canvas
 	if (buf_len > ctx->ion_len) {
 		if (ctx->ion_len != 0)
-			base_ion_free(ctx->stCanvasInfo[0].u64PhyAddr);
+			base_ion_free(ctx->canvas_info[0].phy_addr);
 
-		ctx->stCanvasInfo[0].enPixelFormat = enPixelFormat;
-		ctx->stCanvasInfo[0].stSize.u32Width = rect.u32Width;
-		ctx->stCanvasInfo[0].stSize.u32Height = rect.u32Height;
-		ctx->stCanvasInfo[0].u32Stride = stride;
-		ctx->ion_len = ctx->u32MaxNeedIon = buf_len;
-		if (base_ion_alloc(&ctx->stCanvasInfo[0].u64PhyAddr, (void **)&ctx->stCanvasInfo[0].pu8VirtAddr,
-						  "rgn_canvas", ctx->ion_len, false) != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas.\n", ctx->Handle);
-			return CVI_ERR_RGN_NOBUF;
+		ctx->canvas_info[0].pixel_format = pixel_format;
+		ctx->canvas_info[0].size.width = rect.width;
+		ctx->canvas_info[0].size.height = rect.height;
+		ctx->canvas_info[0].stride = stride;
+		ctx->ion_len = ctx->max_need_ion = buf_len;
+		if (base_ion_alloc(&ctx->canvas_info[0].phy_addr, (void **)&ctx->canvas_info[0].virt_addr,
+						  "rgn_canvas", ctx->ion_len, false) != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas.\n", ctx->handle);
+			return ERR_RGN_NOBUF;
 		}
-		bfill = CVI_TRUE;
+		bfill = 1;
 	} else if (buf_len <= ctx->ion_len) {
-		ctx->stCanvasInfo[0].stSize.u32Width = rect.u32Width;
-		ctx->stCanvasInfo[0].stSize.u32Height = rect.u32Height;
-		ctx->stCanvasInfo[0].u32Stride = stride;
+		ctx->canvas_info[0].size.width = rect.width;
+		ctx->canvas_info[0].size.height = rect.height;
+		ctx->canvas_info[0].stride = stride;
 	}
-	rgn_prc_ctx[proc_idx].stCanvasInfo[0] = ctx->stCanvasInfo[0];
+	rgn_prc_ctx[proc_idx].canvas_info[0] = ctx->canvas_info[0];
 
 	// fill color pattern to cover/coverex.
 	if (bfill) {
-		u16 color;
+		unsigned short color;
 
-		color = (ctx->stChnAttr.enType == COVEREX_RGN)
-		      ? RGB888_2_ARGB1555(pstChnAttr->unChnAttr.stCoverExChn.u32Color)
-		      : RGB888_2_ARGB1555(pstChnAttr->unChnAttr.stCoverChn.u32Color);
-		_rgn_fill_pattern(ctx->stCanvasInfo[0].pu8VirtAddr, ctx->ion_len, color, 2);
+		color = (ctx->chn_attr.type == COVEREX_RGN)
+		      ? RGB888_2_ARGB1555(pchn_attr->unchn_attr.cover_ex_chn.color)
+		      : RGB888_2_ARGB1555(pchn_attr->unchn_attr.cover_chn.color);
+		_rgn_fill_pattern(ctx->canvas_info[0].virt_addr, ctx->ion_len, color, 2);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static s32 _rgn_update_hw_cfg_to_module(RGN_HANDLE *hdls, void *cfg, MMF_CHN_S *pstChn,
-			RGN_TYPE_E enType, u8 bCmpr)
+static int _rgn_update_hw_cfg_to_module(rgn_handle *hdls, void *cfg, mmf_chn_s*pchn,
+			rgn_type_e type, unsigned char cmpr)
 {
 	struct _rgn_hdls_cb_param rgn_hdls_arg;
 
-	rgn_hdls_arg.stChn = *pstChn;
+	rgn_hdls_arg.chn = *pchn;
 	rgn_hdls_arg.hdls = hdls;
-	rgn_hdls_arg.enType = enType;
+	rgn_hdls_arg.type = type;
 	rgn_hdls_arg.layer = 0;
 
 	//Set VO module hdls and rgn_cfg
-	if (pstChn->enModId == CVI_ID_VO) {
+	if (pchn->mod_id == ID_VO) {
 		if (_rgn_call_cb(E_MODULE_VO, VO_CB_SET_RGN_HDLS, &rgn_hdls_arg) != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "VO_CB_SET_RGN_HDLS is failed\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
 
-		if (enType == OVERLAY_RGN || enType == COVER_RGN) {
+		if (type == OVERLAY_RGN || type == COVER_RGN) {
 			struct _rgn_cfg_cb_param rgn_cfg_arg;
 
-			rgn_cfg_arg.stChn = *pstChn;
-			rgn_cfg_arg.rgn_cfg = *(struct cvi_rgn_cfg *)cfg;
+			rgn_cfg_arg.chn = *pchn;
+			rgn_cfg_arg.rgn_cfg = *(struct rgn_cfg *)cfg;
 			if (_rgn_call_cb(E_MODULE_VO, VO_CB_SET_RGN_CFG, &rgn_cfg_arg) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "VO_CB_SET_RGN_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
 		} else {
-			CVI_TRACE_RGN(RGN_ERR, "VO unsupported enType(%d)\n", enType);
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			CVI_TRACE_RGN(RGN_ERR, "VO unsupported type(%d)\n", type);
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-	} else if (pstChn->enModId == CVI_ID_VPSS) {
-		u32 osd_layer = bCmpr ? RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
+	} else if (pchn->mod_id == ID_VPSS) {
+		unsigned int osd_layer = cmpr ? RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
 
-		if (enType == OVERLAY_RGN || enType == COVER_RGN)
+		if (type == OVERLAY_RGN || type == COVER_RGN)
 			rgn_hdls_arg.layer = osd_layer;
 
 		//Set VPSS module rgn hdls
 		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_RGN_HDLS, &rgn_hdls_arg) != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_RGN_HDLS is failed\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
 
 		//Set VPSS module rgn_cfg
-		if (enType == OVERLAY_RGN || enType == COVER_RGN) {
+		if (type == OVERLAY_RGN || type == COVER_RGN) {
 			struct _rgn_cfg_cb_param rgn_cfg_arg;
 
-			rgn_cfg_arg.stChn = *pstChn;
-			rgn_cfg_arg.rgn_cfg = *(struct cvi_rgn_cfg *)cfg;
+			rgn_cfg_arg.chn = *pchn;
+			rgn_cfg_arg.rgn_cfg = *(struct rgn_cfg *)cfg;
 			rgn_cfg_arg.layer = osd_layer;
 			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_RGN_CFG, &rgn_cfg_arg) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_RGN_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
-		} else if (enType == COVEREX_RGN) {
+		} else if (type == COVEREX_RGN) {
 			//Set VPSS module cover_ex_cfg
 			struct _rgn_coverex_cfg_cb_param rgn_coverex_cfg_arg;
 
-			rgn_coverex_cfg_arg.stChn = *pstChn;
-			rgn_coverex_cfg_arg.rgn_coverex_cfg = *(struct cvi_rgn_coverex_cfg *)cfg;
+			rgn_coverex_cfg_arg.chn = *pchn;
+			rgn_coverex_cfg_arg.rgn_coverex_cfg = *(struct rgn_coverex_cfg *)cfg;
 			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_COVEREX_CFG, &rgn_coverex_cfg_arg) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_COVEREX_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
-		} else if (enType == OVERLAYEX_RGN) {
+		} else if (type == OVERLAYEX_RGN) {
 			//Set VPSS module rgn_ex_cfg
 			struct _rgn_ex_cfg_cb_param rgnex_cfg_arg;
 
-			rgnex_cfg_arg.stChn = *pstChn;
-			rgnex_cfg_arg.rgn_ex_cfg = *(struct cvi_rgn_ex_cfg *)cfg;
+			rgnex_cfg_arg.chn = *pchn;
+			rgnex_cfg_arg.rgn_ex_cfg = *(struct rgn_ex_cfg *)cfg;
 			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_RGNEX_CFG, &rgnex_cfg_arg) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_RGNEX_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
-		} else if (enType == MOSAIC_RGN) {
+		} else if (type == MOSAIC_RGN) {
 			struct _rgn_mosaic_cfg_cb_param rgn_mosaic_cfg_arg;
 
-			rgn_mosaic_cfg_arg.stChn = *pstChn;
-			rgn_mosaic_cfg_arg.rgn_mosaic_cfg = *(struct cvi_rgn_mosaic_cfg *)cfg;
+			rgn_mosaic_cfg_arg.chn = *pchn;
+			rgn_mosaic_cfg_arg.rgn_mosaic_cfg = *(struct rgn_mosaic_cfg *)cfg;
 			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_MOSAIC_CFG, &rgn_mosaic_cfg_arg) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_MOSAIC_CFG is failed\n");
-				return CVI_ERR_RGN_ILLEGAL_PARAM;
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
 		}
 	} else {
-		CVI_TRACE_RGN(RGN_ERR, "Unsupported mod_id(%d)\n", pstChn->enModId);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+		CVI_TRACE_RGN(RGN_ERR, "Unsupported mod_id(%d)\n", pchn->mod_id);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 /* _rgn_set_hw_cfg: update cfg based on the rgn attached.
  *
  * @hdls: rgn handles on chn.
  * @size: size of gop acceptable.
- * @pstChn: attached chn.
- * @enType: rgn type.
- * @bCmpr: rgn compress enable.
+ * @pchn: attached chn.
+ * @type: rgn type.
+ * @cmpr: rgn compress enable.
  */
-static s32 _rgn_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TYPE_E enType, u8 bCmpr)
+static int _rgn_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s*pchn, rgn_type_e type, unsigned char cmpr)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	RECT_S rect;
-	u8 rgn_idx = 0;
-	u8 i;
-	s32 s32Ret;
-	struct cvi_rgn_cfg cfg = {0};
+	struct rgn_ctx *ctx = NULL;
+	rect_s rect;
+	unsigned char rgn_idx = 0;
+	unsigned char i;
+	int ret;
+	struct rgn_cfg cfg = {0};
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE)
 			break;
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
 
-		if (!ctx->stChnAttr.bShow)
+		if (!ctx->chn_attr.show)
 			continue;
-		if (_rgn_get_rect(ctx, &rect) != CVI_SUCCESS)
+		if (_rgn_get_rect(ctx, &rect) != 0)
 			continue;
 
-		switch (ctx->stCanvasInfo[ctx->canvas_idx].enPixelFormat) {
+		switch (ctx->canvas_info[ctx->canvas_idx].pixel_format) {
 		case PIXEL_FORMAT_ARGB_8888:
-			cfg.param[rgn_idx].fmt = CVI_RGN_FMT_ARGB8888;
+			cfg.param[rgn_idx].fmt = RGN_FMT_ARGB8888;
 			break;
 		case PIXEL_FORMAT_ARGB_4444:
-			cfg.param[rgn_idx].fmt = CVI_RGN_FMT_ARGB4444;
+			cfg.param[rgn_idx].fmt = RGN_FMT_ARGB4444;
 			break;
 		case PIXEL_FORMAT_8BIT_MODE:
-			cfg.param[rgn_idx].fmt = CVI_RGN_FMT_256LUT;
+			cfg.param[rgn_idx].fmt = RGN_FMT_256LUT;
 			break;
 		case PIXEL_FORMAT_ARGB_1555:
 		default:
-			cfg.param[rgn_idx].fmt = CVI_RGN_FMT_ARGB1555;
+			cfg.param[rgn_idx].fmt = RGN_FMT_ARGB1555;
 			break;
 		}
-		cfg.param[rgn_idx].rect.left	= rect.s32X;
-		cfg.param[rgn_idx].rect.top	= rect.s32Y;
-		cfg.param[rgn_idx].rect.width	= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Width;
-		cfg.param[rgn_idx].rect.height	= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Height;
-		cfg.param[rgn_idx].phy_addr	= ctx->stCanvasInfo[ctx->canvas_idx].u64PhyAddr;
-		cfg.param[rgn_idx].stride	= ctx->stCanvasInfo[ctx->canvas_idx].u32Stride;
+		cfg.param[rgn_idx].rect.left	= rect.x;
+		cfg.param[rgn_idx].rect.top	= rect.y;
+		cfg.param[rgn_idx].rect.width	= ctx->canvas_info[ctx->canvas_idx].size.width;
+		cfg.param[rgn_idx].rect.height	= ctx->canvas_info[ctx->canvas_idx].size.height;
+		cfg.param[rgn_idx].phy_addr	= ctx->canvas_info[ctx->canvas_idx].phy_addr;
+		cfg.param[rgn_idx].stride	= ctx->canvas_info[ctx->canvas_idx].stride;
 
 		//only one OSD window can be attached.
-		if (ctx->stCanvasInfo[ctx->canvas_idx].bCompressed) {
+		if (ctx->canvas_info[ctx->canvas_idx].compressed) {
 			// this function is first called by rgn_attach_to_chn, but cmpr data is not valid.
 			// so, do not enable odec at first time to void garbage
 			if (ctx->odec_data_valid) {
@@ -645,7 +645,7 @@ static s32 _rgn_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TY
 				cfg.odec.enable	= false;
 			}
 			cfg.odec.attached_ow	= rgn_idx;
-			cfg.odec.bso_sz	= ctx->stCanvasInfo[ctx->canvas_idx].u32CompressedSize;
+			cfg.odec.bso_sz	= ctx->canvas_info[ctx->canvas_idx].compressed_size;
 			cfg.odec.canvas_mutex_lock = (u64)&ctx->rgn_canvas_q_lock;
 			cfg.odec.rgn_canvas_waitq = (u64)&ctx->rgn_canvas_waitq;
 			cfg.odec.rgn_canvas_doneq = (u64)&ctx->rgn_canvas_doneq;
@@ -661,49 +661,49 @@ static s32 _rgn_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TY
 	cfg.vscale_x2 = false;
 	cfg.colorkey_en = false;
 
-	s32Ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&cfg, pstChn, enType, bCmpr);
-	if (s32Ret != CVI_SUCCESS) {
+	ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&cfg, pchn, type, cmpr);
+	if (ret != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "_rgn_update_hw_cfg_to_module failed\n");
 	}
 
-	return s32Ret;
+	return ret;
 }
 
 /* _rgn_ex_set_hw_cfg: update cfg based on the rgn_ex attached.
  *
  * @hdls: rgn_ex handles on chn.
  * @size: max num of rgn.
- * @pstChn: attached chn.
- * @enType: rgn type.
+ * @pchn: attached chn.
+ * @type: rgn type.
  */
-static s32 _rgn_ex_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TYPE_E enType)
+static int _rgn_ex_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s*pchn, rgn_type_e type)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	RECT_S rect;
-	u8 rgn_idx = 0;
-	u8 rgn_tile = 0; // 1: left tile, 2: right tile
-	u32 left_w = 0, bpp = 0;
-	u8 i;
-	s32 s32Ret;
-	struct cvi_rgn_ex_cfg ex_cfg = {0};
+	struct rgn_ctx *ctx = NULL;
+	rect_s rect;
+	unsigned char rgn_idx = 0;
+	unsigned char rgn_tile = 0; // 1: left tile, 2: right tile
+	unsigned int left_w = 0, bpp = 0;
+	unsigned char i;
+	int ret;
+	struct rgn_ex_cfg ex_cfg = {0};
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE)
 			break;
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
-		if (!ctx->stChnAttr.bShow)
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
+		if (!ctx->chn_attr.show)
 			continue;
-		if (_rgn_get_rect(ctx, &rect) != CVI_SUCCESS)
+		if (_rgn_get_rect(ctx, &rect) != 0)
 			continue;
 
-		if (rect.u32Width > RGN_EX_MAX_WIDTH) {
-			u32 byte_offset;
+		if (rect.width > RGN_EX_MAX_WIDTH) {
+			unsigned int byte_offset;
 
-			left_w = rect.u32Width / 2;
-			bpp = (ctx->stCanvasInfo[ctx->canvas_idx].enPixelFormat == PIXEL_FORMAT_ARGB_8888)
+			left_w = rect.width / 2;
+			bpp = (ctx->canvas_info[ctx->canvas_idx].pixel_format == PIXEL_FORMAT_ARGB_8888)
 				? 4 : 2;
 
 			byte_offset = (bpp * left_w) & (0x20 - 1);
@@ -714,46 +714,46 @@ static s32 _rgn_ex_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN
 		}
 
 		do {
-			switch (ctx->stCanvasInfo[ctx->canvas_idx].enPixelFormat) {
+			switch (ctx->canvas_info[ctx->canvas_idx].pixel_format) {
 			case PIXEL_FORMAT_ARGB_8888:
-				ex_cfg.rgn_ex_param[rgn_idx].fmt = CVI_RGN_FMT_ARGB8888;
+				ex_cfg.rgn_ex_param[rgn_idx].fmt = RGN_FMT_ARGB8888;
 				break;
 			case PIXEL_FORMAT_ARGB_4444:
-				ex_cfg.rgn_ex_param[rgn_idx].fmt = CVI_RGN_FMT_ARGB4444;
+				ex_cfg.rgn_ex_param[rgn_idx].fmt = RGN_FMT_ARGB4444;
 				break;
 			case PIXEL_FORMAT_ARGB_1555:
 			default:
-				ex_cfg.rgn_ex_param[rgn_idx].fmt = CVI_RGN_FMT_ARGB1555;
+				ex_cfg.rgn_ex_param[rgn_idx].fmt = RGN_FMT_ARGB1555;
 				break;
 			}
-			ex_cfg.rgn_ex_param[rgn_idx].stride = ctx->stCanvasInfo[ctx->canvas_idx].u32Stride;
+			ex_cfg.rgn_ex_param[rgn_idx].stride = ctx->canvas_info[ctx->canvas_idx].stride;
 
 			if (rgn_tile == 1) { // left tile
-				ex_cfg.rgn_ex_param[rgn_idx].phy_addr = ctx->stCanvasInfo[ctx->canvas_idx].u64PhyAddr;
-				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.s32X;
-				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.s32Y;
+				ex_cfg.rgn_ex_param[rgn_idx].phy_addr = ctx->canvas_info[ctx->canvas_idx].phy_addr;
+				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.x;
+				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.y;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.width = left_w;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.height
-						= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Height;
+						= ctx->canvas_info[ctx->canvas_idx].size.height;
 				rgn_tile = 2;
 			} else if (rgn_tile == 2) { // right tile
 				ex_cfg.rgn_ex_param[rgn_idx].phy_addr
-					= ctx->stCanvasInfo[ctx->canvas_idx].u64PhyAddr + (left_w * bpp);
-				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.s32X + left_w;
-				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.s32Y;
+					= ctx->canvas_info[ctx->canvas_idx].phy_addr + (left_w * bpp);
+				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.x + left_w;
+				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.y;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.width
-						= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Width - left_w;
+						= ctx->canvas_info[ctx->canvas_idx].size.width - left_w;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.height
-						= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Height;
+						= ctx->canvas_info[ctx->canvas_idx].size.height;
 				rgn_tile = 0;
 			} else { // no tile
-				ex_cfg.rgn_ex_param[rgn_idx].phy_addr = ctx->stCanvasInfo[ctx->canvas_idx].u64PhyAddr;
-				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.s32X;
-				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.s32Y;
+				ex_cfg.rgn_ex_param[rgn_idx].phy_addr = ctx->canvas_info[ctx->canvas_idx].phy_addr;
+				ex_cfg.rgn_ex_param[rgn_idx].rect.left = rect.x;
+				ex_cfg.rgn_ex_param[rgn_idx].rect.top = rect.y;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.width
-						= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Width;
+						= ctx->canvas_info[ctx->canvas_idx].size.width;
 				ex_cfg.rgn_ex_param[rgn_idx].rect.height
-						= ctx->stCanvasInfo[ctx->canvas_idx].stSize.u32Height;
+						= ctx->canvas_info[ctx->canvas_idx].size.height;
 				++rgn_idx;
 				break;
 			}
@@ -766,87 +766,87 @@ static s32 _rgn_ex_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN
 	ex_cfg.vscale_x2 = false;
 	ex_cfg.colorkey_en = false;
 
-	s32Ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&ex_cfg, pstChn, enType, false);
-	if (s32Ret != CVI_SUCCESS) {
+	ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&ex_cfg, pchn, type, false);
+	if (ret != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "_rgn_update_hw_cfg_to_module failed\n");
 	}
 
-	return s32Ret;
+	return ret;
 }
 
-static s32 _rgn_coverex_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TYPE_E enType)
+static int _rgn_coverex_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s*pchn, rgn_type_e type)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	RECT_S rect;
-	u8 rgn_idx = 0;
-	u8 i;
-	s32 s32Ret;
-	struct cvi_rgn_coverex_cfg coverex_cfg = {0};
+	struct rgn_ctx *ctx = NULL;
+	rect_s rect;
+	unsigned char rgn_idx = 0;
+	unsigned char i;
+	int ret;
+	struct rgn_coverex_cfg coverex_cfg = {0};
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE)
 			break;
 
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
 
-		if (!ctx->stChnAttr.bShow)
+		if (!ctx->chn_attr.show)
 			continue;
-		if (_rgn_get_rect(ctx, &rect) != CVI_SUCCESS)
+		if (_rgn_get_rect(ctx, &rect) != 0)
 			continue;
 
-		coverex_cfg.rgn_coverex_param[rgn_idx].rect.left = rect.s32X;
-		coverex_cfg.rgn_coverex_param[rgn_idx].rect.top = rect.s32Y;
-		coverex_cfg.rgn_coverex_param[rgn_idx].rect.width = rect.u32Width;
-		coverex_cfg.rgn_coverex_param[rgn_idx].rect.height = rect.u32Height;
+		coverex_cfg.rgn_coverex_param[rgn_idx].rect.left = rect.x;
+		coverex_cfg.rgn_coverex_param[rgn_idx].rect.top = rect.y;
+		coverex_cfg.rgn_coverex_param[rgn_idx].rect.width = rect.width;
+		coverex_cfg.rgn_coverex_param[rgn_idx].rect.height = rect.height;
 		coverex_cfg.rgn_coverex_param[rgn_idx].enable = 1;
-		coverex_cfg.rgn_coverex_param[rgn_idx].color = ctx->stChnAttr.unChnAttr.stCoverExChn.u32Color;
+		coverex_cfg.rgn_coverex_param[rgn_idx].color = ctx->chn_attr.unchn_attr.cover_ex_chn.color;
 		++rgn_idx;
 	}
 
-	s32Ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&coverex_cfg, pstChn, enType, false);
-	if (s32Ret != CVI_SUCCESS) {
+	ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&coverex_cfg, pchn, type, false);
+	if (ret != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "_rgn_update_hw_cfg_to_module failed\n");
 	}
 
-	return s32Ret;
+	return ret;
 }
 
-static s32 _rgn_mosaic_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn, RGN_TYPE_E enType)
+static int _rgn_mosaic_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s*pchn, rgn_type_e type)
 {
-	s32 s32Ret;
-	struct cvi_rgn_ctx *ctx = NULL;
-	RECT_S rect[RGN_MOSAIC_MAX_NUM];
-	u8 rgn_idx = 0;
-	u8 i, j, k, tmp;
-	MOSAIC_BLK_SIZE_E enBlkSize = MOSAIC_BLK_SIZE_16;
-	u8 grid_size = 16, grid_offset;
-	u32 buf_size;
-	s32 start_x = 0xffff, end_x = 0, start_y = 0xffff, end_y = 0;
-	u16 u32Stride, grid_num_w, grid_num_h, x_offset, y_offset, index;
-	u64 u64PhyAddr;
-	void *pu8VirtAddr;
-	u8 *pData;
-	struct rgn_mem_info *ion_buf = &s_astMosaicBuf[pstChn->s32DevId][pstChn->s32ChnId];
-	struct cvi_rgn_mosaic_cfg mosaic_cfg = {0};
+	int ret;
+	struct rgn_ctx *ctx = NULL;
+	rect_s rect[RGN_MOSAIC_MAX_NUM];
+	unsigned char rgn_idx = 0;
+	unsigned char i, j, k, tmp;
+	mosaic_blk_size_e blk_size = MOSAIC_BLK_SIZE_16;
+	unsigned char grid_size = 16, grid_offset;
+	unsigned int buf_size;
+	int start_x = 0xffff, end_x = 0, start_y = 0xffff, end_y = 0;
+	unsigned short stride, grid_num_w, grid_num_h, x_offset, y_offset, index;
+	u64 phy_addr;
+	void *virt_addr;
+	unsigned char *pdata;
+	struct rgn_mem_info *ion_buf = &mosaic_buf[pchn->dev_id][pchn->chn_id];
+	struct rgn_mosaic_cfg mosaic_cfg = {0};
 
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE)
 			break;
-		s32Ret = CHECK_RGN_HANDLE(&ctx, hdls[i]);
-		if (s32Ret != CVI_SUCCESS)
-			return s32Ret;
-		if (!ctx->stChnAttr.bShow)
+		ret = check_rgn_handle(&ctx, hdls[i]);
+		if (ret != 0)
+			return ret;
+		if (!ctx->chn_attr.show)
 			continue;
-		if (_rgn_get_rect(ctx, &rect[rgn_idx]) != CVI_SUCCESS)
+		if (_rgn_get_rect(ctx, &rect[rgn_idx]) != 0)
 			continue;
-		if (ctx->stChnAttr.unChnAttr.stMosaicChn.enBlkSize == MOSAIC_BLK_SIZE_8) {
-			enBlkSize = MOSAIC_BLK_SIZE_8;
+		if (ctx->chn_attr.unchn_attr.mosaic_chn.blk_size == MOSAIC_BLK_SIZE_8) {
+			blk_size = MOSAIC_BLK_SIZE_8;
 			grid_size = 8;
 		}
-		start_x = MIN(start_x, rect[rgn_idx].s32X);
-		start_y = MIN(start_y, rect[rgn_idx].s32Y);
+		start_x = MIN(start_x, rect[rgn_idx].x);
+		start_y = MIN(start_y, rect[rgn_idx].y);
 		rgn_idx++;
 	}
 
@@ -862,21 +862,21 @@ static s32 _rgn_mosaic_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn,
 
 	//rect align to 8x8 or 16x16
 	for (i = 0; i < rgn_idx; ++i) {
-		grid_offset = (rect[i].s32X - start_x) % grid_size;
-		rect[i].s32X -= grid_offset;
-		rect[i].u32Width = ALIGN(rect[i].u32Width + grid_offset, grid_size);
-		grid_offset = (rect[i].s32Y - start_y) % grid_size;
-		rect[i].s32Y -= grid_offset;
-		rect[i].u32Height = ALIGN(rect[i].u32Height + grid_offset, grid_size);
+		grid_offset = (rect[i].x - start_x) % grid_size;
+		rect[i].x -= grid_offset;
+		rect[i].width = ALIGN(rect[i].width + grid_offset, grid_size);
+		grid_offset = (rect[i].y - start_y) % grid_size;
+		rect[i].y -= grid_offset;
+		rect[i].height = ALIGN(rect[i].height + grid_offset, grid_size);
 
-		end_x = MAX(end_x, rect[i].s32X + rect[i].u32Width);
-		end_y = MAX(end_y, rect[i].s32Y + rect[i].u32Height);
+		end_x = MAX(end_x, rect[i].x + rect[i].width);
+		end_y = MAX(end_y, rect[i].y + rect[i].height);
 	}
 
 	grid_num_w = (end_x - start_x) / grid_size;
 	grid_num_h = (end_y - start_y) / grid_size;
-	u32Stride = ALIGN(grid_num_w, 16); //byte base, must be 16-byte align
-	buf_size = u32Stride * grid_num_h;
+	stride = ALIGN(grid_num_w, 16); //byte base, must be 16-byte align
+	buf_size = stride * grid_num_h;
 
 	if (buf_size > ion_buf->buf_len) {
 		if (ion_buf->buf_len != 0) {
@@ -885,391 +885,391 @@ static s32 _rgn_mosaic_set_hw_cfg(RGN_HANDLE hdls[], u8 size, MMF_CHN_S *pstChn,
 			ion_buf->buf_len = 0;
 			ion_buf->vir_addr = NULL;
 		}
-		if (base_ion_alloc(&u64PhyAddr, &pu8VirtAddr, "mosaic_canvas", buf_size, false) != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas.\n", ctx->Handle);
-			return CVI_ERR_RGN_NOBUF;
+		if (base_ion_alloc(&phy_addr, &virt_addr, "mosaic_canvas", buf_size, false) != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas.\n", ctx->handle);
+			return ERR_RGN_NOBUF;
 		}
-		ion_buf->phy_addr = u64PhyAddr;
+		ion_buf->phy_addr = phy_addr;
 		ion_buf->buf_len = buf_size;
-		ion_buf->vir_addr = pu8VirtAddr;
+		ion_buf->vir_addr = virt_addr;
 	} else {
-		pu8VirtAddr = ion_buf->vir_addr;
-		u64PhyAddr = ion_buf->phy_addr;
+		virt_addr = ion_buf->vir_addr;
+		phy_addr = ion_buf->phy_addr;
 		buf_size = ion_buf->buf_len;
 	}
 
-	memset(pu8VirtAddr, 0, buf_size);
-	pData = (u8 *)pu8VirtAddr;
+	memset(virt_addr, 0, buf_size);
+	pdata = (unsigned char *)virt_addr;
 	for (i = 0; i < rgn_idx; ++i) {
-		y_offset = (rect[i].s32Y - start_y) / grid_size * u32Stride;
-		for (j = 0; j < (rect[i].u32Height / grid_size); ++j) {
-			for (k = 0; k < (rect[i].u32Width / grid_size); ++k) {
-				x_offset = (rect[i].s32X - start_x) / grid_size;
-				index = y_offset + j * u32Stride + x_offset + k;
-				tmp = (u8)get_random_u32();
-				pData[index] = tmp ? tmp : 1;
+		y_offset = (rect[i].y - start_y) / grid_size * stride;
+		for (j = 0; j < (rect[i].height / grid_size); ++j) {
+			for (k = 0; k < (rect[i].width / grid_size); ++k) {
+				x_offset = (rect[i].x - start_x) / grid_size;
+				index = y_offset + j * stride + x_offset + k;
+				tmp = (unsigned char)get_random_u32();
+				pdata[index] = tmp ? tmp : 1;
 			}
 		}
 	}
 
 	CVI_TRACE_RGN(RGN_DEBUG, "mosaic num(%d),rect(%d %d %d %d), phy_addr:0x%llx buf_len:%d.\n",
-		rgn_idx, start_x, start_y, end_x, end_y, u64PhyAddr, buf_size);
+		rgn_idx, start_x, start_y, end_x, end_y, phy_addr, buf_size);
 
 	mosaic_cfg.start_x = start_x;
 	mosaic_cfg.start_y = start_y;
 	mosaic_cfg.end_x = end_x;
 	mosaic_cfg.end_y = end_y;
 	mosaic_cfg.enable = 1;
-	mosaic_cfg.blk_size = enBlkSize;
-	mosaic_cfg.phy_addr = u64PhyAddr;
+	mosaic_cfg.blk_size = blk_size;
+	mosaic_cfg.phy_addr = phy_addr;
 
 RGN_UPDATE_HW_CFG:
-	s32Ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&mosaic_cfg, pstChn, enType, false);
-	if (s32Ret != CVI_SUCCESS) {
+	ret = _rgn_update_hw_cfg_to_module(hdls, (void *)&mosaic_cfg, pchn, type, false);
+	if (ret != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "_rgn_update_hw_cfg_to_module failed\n");
 	}
 
-	return s32Ret;
+	return ret;
 }
 
 
 /* _rgn_get_chn_info: get info of chn for rgn.
  *
- * @pstChn: the chn want to check.
+ * @pchn: the chn want to check.
  * @numOfLayer: number of gop layer supported on the chn.
  * @size: number of ow supported on the chn.
  */
-static s32 _rgn_get_chn_info(struct cvi_rgn_ctx *ctx,
-	RGN_HANDLE *hdls, u8 *size)
+static int _rgn_get_chn_info(struct rgn_ctx *ctx,
+	rgn_handle *hdls, unsigned char *size)
 {
 	struct _rgn_hdls_cb_param rgn_hdls_arg;
 
-	rgn_hdls_arg.stChn = ctx->stChn;
+	rgn_hdls_arg.chn = ctx->chn;
 	rgn_hdls_arg.hdls = hdls;
-	rgn_hdls_arg.enType = ctx->stRegion.enType;
+	rgn_hdls_arg.type = ctx->region.type;
 
-	if (ctx->stChn.enModId == CVI_ID_VO) {
+	if (ctx->chn.mod_id == ID_VO) {
 		rgn_hdls_arg.layer = 0; // vo only has one layer gop
 		if (_rgn_call_cb(E_MODULE_VO, VO_CB_GET_RGN_HDLS, &rgn_hdls_arg) != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "VO_CB_GET_RGN_HDLS is failed\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-		if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN)
+		if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN)
 			*size = RGN_MAX_NUM_VO;
-		else if (ctx->stRegion.enType == COVEREX_RGN)
+		else if (ctx->region.type == COVEREX_RGN)
 			*size = RGN_COVEREX_MAX_NUM;
-	} else if (ctx->stChn.enModId == CVI_ID_VPSS) {
-		if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN) {
-			rgn_hdls_arg.layer = (ctx->stCanvasInfo[ctx->canvas_idx].bCompressed) ?
+	} else if (ctx->chn.mod_id == ID_VPSS) {
+		if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+			rgn_hdls_arg.layer = (ctx->canvas_info[ctx->canvas_idx].compressed) ?
 				RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
 			*size = RGN_MAX_NUM_VPSS;
-		} else if (ctx->stRegion.enType == COVEREX_RGN) {
+		} else if (ctx->region.type == COVEREX_RGN) {
 			rgn_hdls_arg.layer = 0; //invalid
 			*size = RGN_COVEREX_MAX_NUM;
-		} else if (ctx->stRegion.enType == OVERLAYEX_RGN) {
+		} else if (ctx->region.type == OVERLAYEX_RGN) {
 			rgn_hdls_arg.layer = 0; //invalid
 			*size = RGN_EX_MAX_NUM_VPSS;
-		} else if (ctx->stRegion.enType == MOSAIC_RGN) {
+		} else if (ctx->region.type == MOSAIC_RGN) {
 			rgn_hdls_arg.layer = 0; //invalid
 			*size = RGN_MOSAIC_MAX_NUM;
 		}
 
 		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_HDLS, &rgn_hdls_arg) != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_HDLS is failed\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
 	} else {
-		return CVI_ERR_RGN_INVALID_DEVID;
+		return ERR_RGN_INVALID_DEVID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static s32 _rgn_update_hw(struct cvi_rgn_ctx *ctx, enum RGN_OP op)
+static int _rgn_update_hw(struct rgn_ctx *ctx, enum rgn_op op)
 {
-	u8 size;
-	s32 ret;
-	RGN_HANDLE hdls[RGN_EX_MAX_NUM_VPSS];
+	unsigned char size;
+	int ret;
+	rgn_handle hdls[RGN_EX_MAX_NUM_VPSS];
 
 	mutex_lock(&hdlslock);
 	ret = _rgn_get_chn_info(ctx, hdls, &size);
-	if (ret != CVI_SUCCESS) {
+	if (ret != 0) {
 		mutex_unlock(&hdlslock);
 		return ret;
 	}
 
 	if (op == RGN_OP_INSERT) {
-		if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN) {
-			ret = _rgn_insert(hdls, size, ctx->Handle);
-			if (ret != CVI_SUCCESS) {
+		if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+			ret = _rgn_insert(hdls, size, ctx->handle);
+			if (ret != 0) {
 				mutex_unlock(&hdlslock);
 				return ret;
 			}
 		} else {
-			ret = _rgn_ex_insert(hdls, size, ctx->Handle);
-			if (ret != CVI_SUCCESS) {
+			ret = _rgn_ex_insert(hdls, size, ctx->handle);
+			if (ret != 0) {
 				mutex_unlock(&hdlslock);
 				return ret;
 			}
 		}
 	} else if (op == RGN_OP_REMOVE) {
-		ret = _rgn_remove(hdls, size, ctx->Handle);
-		if (ret != CVI_SUCCESS) {
+		ret = _rgn_remove(hdls, size, ctx->handle);
+		if (ret != 0) {
 			mutex_unlock(&hdlslock);
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) not at CHN(%s-%d-%d).\n", ctx->Handle
-			, sys_get_modname(ctx->stChn.enModId), ctx->stChn.s32DevId, ctx->stChn.s32ChnId);
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) not at CHN(%s-%d-%d).\n", ctx->handle
+			, sys_get_modname(ctx->chn.mod_id), ctx->chn.dev_id, ctx->chn.chn_id);
 			return ret;
 		}
 	} else if (op == RGN_OP_UPDATE) {
-		_rgn_remove(hdls, size, ctx->Handle);
-		if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN) {
-			ret = _rgn_insert(hdls, size, ctx->Handle);
-			if (ret != CVI_SUCCESS) {
+		_rgn_remove(hdls, size, ctx->handle);
+		if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+			ret = _rgn_insert(hdls, size, ctx->handle);
+			if (ret != 0) {
 				mutex_unlock(&hdlslock);
 				return ret;
 			}
 		} else {
-			ret = _rgn_ex_insert(hdls, size, ctx->Handle);
-			if (ret != CVI_SUCCESS) {
+			ret = _rgn_ex_insert(hdls, size, ctx->handle);
+			if (ret != 0) {
 				mutex_unlock(&hdlslock);
 				return ret;
 			}
 		}
 	}
 
-	if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN) {
-		ret = _rgn_set_hw_cfg(hdls, size, &ctx->stChn, ctx->stRegion.enType,
-					ctx->stCanvasInfo[ctx->canvas_idx].bCompressed);
-		if (ret != CVI_SUCCESS) {
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+		ret = _rgn_set_hw_cfg(hdls, size, &ctx->chn, ctx->region.type,
+					ctx->canvas_info[ctx->canvas_idx].compressed);
+		if (ret != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "_rgn_set_hw_cfg failed\n");
 			mutex_unlock(&hdlslock);
 			return ret;
 		}
-	} else if (ctx->stRegion.enType == COVEREX_RGN) {
-		ret = _rgn_coverex_set_hw_cfg(hdls, size, &ctx->stChn, ctx->stRegion.enType);
-		if (ret != CVI_SUCCESS) {
+	} else if (ctx->region.type == COVEREX_RGN) {
+		ret = _rgn_coverex_set_hw_cfg(hdls, size, &ctx->chn, ctx->region.type);
+		if (ret != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "_rgn_coverex_set_hw_cfg failed\n");
 			mutex_unlock(&hdlslock);
 			return ret;
 		}
-	} else if (ctx->stRegion.enType == OVERLAYEX_RGN) {
-		ret = _rgn_ex_set_hw_cfg(hdls, size, &ctx->stChn, ctx->stRegion.enType);
-		if (ret != CVI_SUCCESS) {
+	} else if (ctx->region.type == OVERLAYEX_RGN) {
+		ret = _rgn_ex_set_hw_cfg(hdls, size, &ctx->chn, ctx->region.type);
+		if (ret != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "_rgn_ex_set_hw_cfg failed\n");
 			mutex_unlock(&hdlslock);
 			return ret;
 		}
-	} else if (ctx->stRegion.enType == MOSAIC_RGN) {
-		ret = _rgn_mosaic_set_hw_cfg(hdls, size, &ctx->stChn, ctx->stRegion.enType);
-		if (ret != CVI_SUCCESS) {
+	} else if (ctx->region.type == MOSAIC_RGN) {
+		ret = _rgn_mosaic_set_hw_cfg(hdls, size, &ctx->chn, ctx->region.type);
+		if (ret != 0) {
 			CVI_TRACE_RGN(RGN_ERR, "_rgn_mosaic_set_hw_cfg failed\n");
 			mutex_unlock(&hdlslock);
 			return ret;
 		}
 	} else {
 		mutex_unlock(&hdlslock);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	base_ion_cache_flush(ctx->stCanvasInfo[ctx->canvas_idx].u64PhyAddr,
-		ctx->stCanvasInfo[ctx->canvas_idx].pu8VirtAddr, ctx->ion_len);
+	base_ion_cache_flush(ctx->canvas_info[ctx->canvas_idx].phy_addr,
+		ctx->canvas_info[ctx->canvas_idx].virt_addr, ctx->ion_len);
 
 	mutex_unlock(&hdlslock);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 _rgn_check_chn_attr(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, const RGN_CHN_ATTR_S *pstChnAttr)
+int _rgn_check_chn_attr(rgn_handle handle, const mmf_chn_s*pchn, const rgn_chn_attr_s *pchn_attr)
 {
-	RECT_S rect_chn, rect_rgn;
-	struct cvi_rgn_ctx *ctx;
+	rect_s rect_chn, rect_rgn;
+	struct rgn_ctx *ctx;
 
-	CHECK_RGN_HANDLE(&ctx, Handle);
+	check_rgn_handle(&ctx, handle);
 
-	if ((pstChnAttr->enType == OVERLAYEX_RGN || pstChnAttr->enType == MOSAIC_RGN) &&
-			(pstChn->enModId != CVI_ID_VPSS)) {
+	if ((pchn_attr->type == OVERLAYEX_RGN || pchn_attr->type == MOSAIC_RGN) &&
+			(pchn->mod_id != ID_VPSS)) {
 		CVI_TRACE_RGN(RGN_ERR, "overlayex/mosaic only vpss support!\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (pstChn->enModId == CVI_ID_VO) {
+	if (pchn->mod_id == ID_VO) {
 		struct _rgn_chn_size_cb_param rgn_chn_arg;
 
-		rgn_chn_arg.stChn = *pstChn;
+		rgn_chn_arg.chn = *pchn;
 
 		if (_rgn_call_cb(E_MODULE_VO, VO_CB_GET_CHN_SIZE, &rgn_chn_arg)) {
 			CVI_TRACE_RGN(RGN_ERR, "VO_CB_GET_CHN_SIZE failed!\n");
-			return CVI_ERR_RGN_INVALID_CHNID;
+			return ERR_RGN_INVALID_CHNID;
 		}
 		rect_chn = rgn_chn_arg.rect;
-	} else if (pstChn->enModId == CVI_ID_VPSS) {
+	} else if (pchn->mod_id == ID_VPSS) {
 		struct _rgn_chn_size_cb_param rgn_chn_arg;
 
-		rgn_chn_arg.stChn = *pstChn;
+		rgn_chn_arg.chn = *pchn;
 
 		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_CHN_SIZE, &rgn_chn_arg)) {
 			CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_GET_CHN_SIZE failed!\n");
-			return CVI_ERR_RGN_INVALID_CHNID;
+			return ERR_RGN_INVALID_CHNID;
 		}
 		rect_chn = rgn_chn_arg.rect;
 	} else
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+		return ERR_RGN_ILLEGAL_PARAM;
 
-	if (pstChnAttr->enType == COVEREX_RGN) {
-		if (pstChnAttr->unChnAttr.stCoverExChn.enCoverType != AREA_RECT) {
+	if (pchn_attr->type == COVEREX_RGN) {
+		if (pchn_attr->unchn_attr.cover_ex_chn.cover_type != AREA_RECT) {
 			CVI_TRACE_RGN(RGN_ERR, "AREA_RECT only now.\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-		rect_rgn = pstChnAttr->unChnAttr.stCoverExChn.stRect;
-	} else if (pstChnAttr->enType == COVER_RGN) {
-		if (pstChnAttr->unChnAttr.stCoverChn.enCoverType != AREA_RECT) {
+		rect_rgn = pchn_attr->unchn_attr.cover_ex_chn.rect;
+	} else if (pchn_attr->type == COVER_RGN) {
+		if (pchn_attr->unchn_attr.cover_chn.cover_type != AREA_RECT) {
 			CVI_TRACE_RGN(RGN_ERR, "AREA_RECT only now.\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-		if (pstChnAttr->unChnAttr.stCoverChn.enCoordinate != RGN_ABS_COOR) {
+		if (pchn_attr->unchn_attr.cover_chn.coordinate != RGN_ABS_COOR) {
 			CVI_TRACE_RGN(RGN_ERR, "abs-coordinate only now.\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-		rect_rgn = pstChnAttr->unChnAttr.stCoverChn.stRect;
-	} else if (pstChnAttr->enType == OVERLAY_RGN) {
-		rect_rgn.s32X = pstChnAttr->unChnAttr.stOverlayChn.stPoint.s32X;
-		rect_rgn.s32Y = pstChnAttr->unChnAttr.stOverlayChn.stPoint.s32Y;
-		rect_rgn.u32Width = ctx->stRegion.unAttr.stOverlay.stSize.u32Width;
-		rect_rgn.u32Height = ctx->stRegion.unAttr.stOverlay.stSize.u32Height;
-	} else if (pstChnAttr->enType == OVERLAYEX_RGN) {
-		rect_rgn.s32X = pstChnAttr->unChnAttr.stOverlayExChn.stPoint.s32X;
-		rect_rgn.s32Y = pstChnAttr->unChnAttr.stOverlayExChn.stPoint.s32Y;
-		rect_rgn.u32Width = ctx->stRegion.unAttr.stOverlayEx.stSize.u32Width;
-		rect_rgn.u32Height = ctx->stRegion.unAttr.stOverlayEx.stSize.u32Height;
-	} else if (pstChnAttr->enType == MOSAIC_RGN) {
-		if (pstChnAttr->unChnAttr.stMosaicChn.enBlkSize != MOSAIC_BLK_SIZE_8
-			&& pstChnAttr->unChnAttr.stMosaicChn.enBlkSize != MOSAIC_BLK_SIZE_16) {
+		rect_rgn = pchn_attr->unchn_attr.cover_chn.rect;
+	} else if (pchn_attr->type == OVERLAY_RGN) {
+		rect_rgn.x = pchn_attr->unchn_attr.overlay_chn.point.x;
+		rect_rgn.y = pchn_attr->unchn_attr.overlay_chn.point.y;
+		rect_rgn.width = ctx->region.unattr.overlay.size.width;
+		rect_rgn.height = ctx->region.unattr.overlay.size.height;
+	} else if (pchn_attr->type == OVERLAYEX_RGN) {
+		rect_rgn.x = pchn_attr->unchn_attr.overlay_ex_chn.point.x;
+		rect_rgn.y = pchn_attr->unchn_attr.overlay_ex_chn.point.y;
+		rect_rgn.width = ctx->region.unattr.overlay_ex.size.width;
+		rect_rgn.height = ctx->region.unattr.overlay_ex.size.height;
+	} else if (pchn_attr->type == MOSAIC_RGN) {
+		if (pchn_attr->unchn_attr.mosaic_chn.blk_size != MOSAIC_BLK_SIZE_8
+			&& pchn_attr->unchn_attr.mosaic_chn.blk_size != MOSAIC_BLK_SIZE_16) {
 			CVI_TRACE_RGN(RGN_ERR, "Mosaic only support block size 8/16.\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-		rect_rgn = pstChnAttr->unChnAttr.stMosaicChn.stRect;
+		rect_rgn = pchn_attr->unchn_attr.mosaic_chn.rect;
 	} else {
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (rect_rgn.s32X < 0 || rect_rgn.s32Y < 0) {
+	if (rect_rgn.x < 0 || rect_rgn.y < 0) {
 		CVI_TRACE_RGN(RGN_ERR, "The start point can't be less than 0, start point(%d %d).\n",
-			rect_rgn.s32X, rect_rgn.s32Y);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+			rect_rgn.x, rect_rgn.y);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
-	if ((rect_rgn.u32Width + rect_rgn.s32X) > rect_chn.u32Width
-		|| (rect_rgn.u32Height + rect_rgn.s32Y) > rect_chn.u32Height) {
+	if ((rect_rgn.width + rect_rgn.x) > rect_chn.width
+		|| (rect_rgn.height + rect_rgn.y) > rect_chn.height) {
 		CVI_TRACE_RGN(RGN_ERR, "size(%d %d %d %d) larger than chnsize(%d %d).\n",
-			rect_rgn.s32X, rect_rgn.u32Width, rect_rgn.s32Y, rect_rgn.u32Height,
-			rect_chn.u32Width, rect_chn.u32Height);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+			rect_rgn.x, rect_rgn.width, rect_rgn.y, rect_rgn.height,
+			rect_chn.width, rect_chn.height);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 /**************************************************************************
  *   Sinking RGN APIs related functions.
  **************************************************************************/
-s32 rgn_create(RGN_HANDLE Handle, const RGN_ATTR_S *pstRegion)
+int rgn_create(rgn_handle handle, const rgn_attr_s *pregion)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	s32 ret;
-	u32 proc_idx;
+	struct rgn_ctx *ctx = NULL;
+	int ret;
+	unsigned int proc_idx;
 
 	mutex_lock(&g_rgnlock);
 
-	if (_rgn_hash_find(Handle, &ctx, false)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is already existing.\n", Handle);
+	if (_rgn_hash_find(handle, &ctx, false)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is already existing.\n", handle);
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_EXIST;
+		return ERR_RGN_EXIST;
 	}
 
-	if (u32RgnNum >= RGN_MAX_NUM) {
+	if (rgn_num >= RGN_MAX_NUM) {
 		CVI_TRACE_RGN(RGN_ERR, "over max rgn number %d\n", RGN_MAX_NUM);
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_NOT_PERM;
+		return ERR_RGN_NOT_PERM;
 	}
 
-	if (pstRegion->enType == OVERLAYEX_RGN) {
+	if (pregion->type == OVERLAYEX_RGN) {
 		CVI_TRACE_RGN(RGN_ERR, "rgn extension only support on vpss rgnex mode.\n");
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
 	// check parameters.
-	if (pstRegion->enType == OVERLAY_RGN || pstRegion->enType == OVERLAYEX_RGN) {
-		PIXEL_FORMAT_E pixelFormat;
-		u32 canvasNum;
-		u8 check_fail = CVI_FALSE;
+	if (pregion->type == OVERLAY_RGN || pregion->type == OVERLAYEX_RGN) {
+		pixel_format_e pixel_format;
+		unsigned int canvas_num;
+		unsigned char check_fail = 0;
 
-		if (pstRegion->enType == OVERLAY_RGN) {
-			pixelFormat = pstRegion->unAttr.stOverlay.enPixelFormat;
-			canvasNum = pstRegion->unAttr.stOverlay.u32CanvasNum;
+		if (pregion->type == OVERLAY_RGN) {
+			pixel_format = pregion->unattr.overlay.pixel_format;
+			canvas_num = pregion->unattr.overlay.canvas_num;
 		} else {
-			pixelFormat = pstRegion->unAttr.stOverlayEx.enPixelFormat;
-			canvasNum = pstRegion->unAttr.stOverlayEx.u32CanvasNum;
+			pixel_format = pregion->unattr.overlay_ex.pixel_format;
+			canvas_num = pregion->unattr.overlay_ex.canvas_num;
 		}
 
-		if (canvasNum == 0 || canvasNum > RGN_MAX_BUF_NUM) {
-			CVI_TRACE_RGN(RGN_ERR, "invalid u32CanvasNum(%d).\n", canvasNum);
-			check_fail = CVI_TRUE;
+		if (canvas_num == 0 || canvas_num > RGN_MAX_BUF_NUM) {
+			CVI_TRACE_RGN(RGN_ERR, "invalid canvas_num(%d).\n", canvas_num);
+			check_fail = 1;
 		}
 
-		if ((pixelFormat != PIXEL_FORMAT_ARGB_8888)
-		 && (pixelFormat != PIXEL_FORMAT_ARGB_4444)
-		 && (pixelFormat != PIXEL_FORMAT_ARGB_1555)
-		 && (pixelFormat != PIXEL_FORMAT_8BIT_MODE)) {
-			CVI_TRACE_RGN(RGN_ERR, "unsupported pxl-fmt(%d).\n", pixelFormat);
-			check_fail = CVI_TRUE;
+		if ((pixel_format != PIXEL_FORMAT_ARGB_8888)
+		 && (pixel_format != PIXEL_FORMAT_ARGB_4444)
+		 && (pixel_format != PIXEL_FORMAT_ARGB_1555)
+		 && (pixel_format != PIXEL_FORMAT_8BIT_MODE)) {
+			CVI_TRACE_RGN(RGN_ERR, "unsupported pxl-fmt(%d).\n", pixel_format);
+			check_fail = 1;
 		}
 
 		if (check_fail) {
 			mutex_unlock(&g_rgnlock);
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
-	} else if (pstRegion->enType >= RGN_BUTT) {
-		CVI_TRACE_RGN(RGN_ERR, "enType(%d) not supported yet.\n", pstRegion->enType);
+	} else if (pregion->type >= RGN_BUTT) {
+		CVI_TRACE_RGN(RGN_ERR, "type(%d) not supported yet.\n", pregion->type);
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
 	ctx = kzalloc(sizeof(*ctx), GFP_ATOMIC);
-	if (ctx == CVI_NULL) {
+	if (ctx == NULL) {
 		CVI_TRACE_RGN(RGN_ERR, "malloc failed.\n");
-		ret = CVI_ERR_RGN_NOMEM;
+		ret = ERR_RGN_NOMEM;
 		goto RGN_CTX_MALLOC_FAIL;
 	}
-	ctx->Handle = Handle;
-	ctx->stRegion = *pstRegion;
+	ctx->handle = handle;
+	ctx->region = *pregion;
 
 	mutex_lock(&g_rgnhashlock);
-	hash_add(rgn_hash, &ctx->node, Handle);
+	hash_add(rgn_hash, &ctx->node, handle);
 	mutex_unlock(&g_rgnhashlock);
-	u32RgnNum++;
+	rgn_num++;
 
 #if 0 //Linux Hashmap for print every element
-	unsigned int bkt;
-	struct cvi_rgn_ctx *cur;
+	unsigned int  bkt;
+	struct rgn_ctx *cur;
 
 	hash_for_each(rgn_hash, bkt, cur, node) {
-		CVI_TRACE_RGN(RGN_INFO, "handle:%d, bCreated:%d, stRegion.enType:%d\n"
-			, cur->Handle, cur->bCreated, cur->stRegion.enType);
+		CVI_TRACE_RGN(RGN_INFO, "handle:%d, created:%d, region.type:%d\n"
+			, cur->handle, cur->created, cur->region.type);
 	}
 #endif
 
 	// update rgn proc info
 	for (proc_idx = 0; proc_idx < RGN_MAX_NUM; ++proc_idx) {
-		if (!rgn_prc_ctx[proc_idx].bCreated) {
-			rgn_prc_ctx[proc_idx].bCreated = true;
-			rgn_prc_ctx[proc_idx].Handle = ctx->Handle;
-			rgn_prc_ctx[proc_idx].stRegion = ctx->stRegion;
+		if (!rgn_prc_ctx[proc_idx].created) {
+			rgn_prc_ctx[proc_idx].created = true;
+			rgn_prc_ctx[proc_idx].handle = ctx->handle;
+			rgn_prc_ctx[proc_idx].region = ctx->region;
 			break;
 		}
 	}
 
 	mutex_unlock(&g_rgnlock);
-	return CVI_SUCCESS;
+	return 0;
 
 RGN_CTX_MALLOC_FAIL:
 	mutex_unlock(&g_rgnlock);
@@ -1277,274 +1277,274 @@ RGN_CTX_MALLOC_FAIL:
 
 }
 
-s32 rgn_destory(RGN_HANDLE Handle)
+int rgn_destory(rgn_handle handle)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 proc_idx;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int proc_idx;
 
 	mutex_lock(&g_rgnlock);
 
-	if (!_rgn_hash_find(Handle, &ctx, false)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is non-existent.\n", Handle);
+	if (!_rgn_hash_find(handle, &ctx, false)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is non-existent.\n", handle);
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_UNEXIST;
+		return ERR_RGN_UNEXIST;
 	}
 
-	if (ctx->stChn.enModId != CVI_ID_BASE) {
+	if (ctx->chn.mod_id != ID_BASE) {
 		_rgn_update_hw(ctx, RGN_OP_REMOVE);
 	}
 
-	CVI_TRACE_RGN(RGN_INFO, "RGN_HANDLE(%d) canvas fmt(%d) size(%d * %d) stride(%d).\n"
-	, Handle, ctx->stCanvasInfo[0].enPixelFormat, ctx->stCanvasInfo[0].stSize.u32Width
-	, ctx->stCanvasInfo[0].stSize.u32Height, ctx->stCanvasInfo[0].u32Stride);
+	CVI_TRACE_RGN(RGN_INFO, "rgn_handle(%d) canvas fmt(%d) size(%d * %d) stride(%d).\n"
+	, handle, ctx->canvas_info[0].pixel_format, ctx->canvas_info[0].size.width
+	, ctx->canvas_info[0].size.height, ctx->canvas_info[0].stride);
 
 	//remove ctx in rgn_hash
-	if (!_rgn_hash_find(Handle, &ctx, true)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) remove failed.\n", Handle);
+	if (!_rgn_hash_find(handle, &ctx, true)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) remove failed.\n", handle);
 		mutex_unlock(&g_rgnlock);
-		return CVI_ERR_RGN_UNEXIST;
+		return ERR_RGN_UNEXIST;
 	}
 
 	// update rgn proc info
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 	memset(&rgn_prc_ctx[proc_idx], 0, sizeof(rgn_prc_ctx[proc_idx]));
-	u32RgnNum--;
+	rgn_num--;
 
 	mutex_unlock(&g_rgnlock);
 
 	kfree(ctx);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 rgn_get_attr(RGN_HANDLE Handle, RGN_ATTR_S *pstRegion)
+int rgn_get_attr(rgn_handle handle, rgn_attr_s *pregion)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	*pstRegion = ctx->stRegion;
+	*pregion = ctx->region;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 rgn_set_attr(RGN_HANDLE Handle, const RGN_ATTR_S *pstRegion)
+int rgn_set_attr(rgn_handle handle, const rgn_attr_s *pregion)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 proc_idx;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int proc_idx;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	ctx->stRegion = rgn_prc_ctx[proc_idx].stRegion = *pstRegion;
+	ctx->region = rgn_prc_ctx[proc_idx].region = *pregion;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 rgn_set_bit_map(RGN_HANDLE Handle, const BITMAP_S *pstBitmap)
+int rgn_set_bit_map(rgn_handle handle, const bitmap_s *pbitmap)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 bytesperline;
-	RGN_CANVAS_INFO_S *pstCanvasInfo;
-	u32 proc_idx;
-	PIXEL_FORMAT_E pixelFormat;
-	u32 canvasNum;
-	SIZE_S rgnSize;
-	u16 h;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int bytesperline;
+	rgn_canvas_info_s *pcanvas_info;
+	unsigned int proc_idx;
+	pixel_format_e pixel_format;
+	unsigned int canvas_num;
+	size_s rgn_size;
+	unsigned short h;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stCanvasInfo[0].bCompressed) {
+	if (ctx->canvas_info[0].compressed) {
 		CVI_TRACE_RGN(RGN_ERR, "This function only suppors OSD_COMPRESS_MODE_NONE.\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (ctx->stRegion.enType != OVERLAY_RGN && ctx->stRegion.enType != OVERLAYEX_RGN) {
-		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->stRegion.enType);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+	if (ctx->region.type != OVERLAY_RGN && ctx->region.type != OVERLAYEX_RGN) {
+		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->region.type);
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
 	if (ctx->canvas_get) {
 		CVI_TRACE_RGN(RGN_ERR, "Need CVI_RGN_UpdateCanvas() first.\n");
-		return CVI_ERR_RGN_NOT_PERM;
+		return ERR_RGN_NOT_PERM;
 	}
 
-	if (ctx->stChn.enModId == CVI_ID_BASE) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) not attached to any chn yet.\n", Handle);
-		return CVI_ERR_RGN_NOT_CONFIG;
+	if (ctx->chn.mod_id == ID_BASE) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) not attached to any chn yet.\n", handle);
+		return ERR_RGN_NOT_CONFIG;
 	}
 
-	if (ctx->stRegion.enType == OVERLAY_RGN) {
-		pixelFormat = ctx->stRegion.unAttr.stOverlay.enPixelFormat;
-		canvasNum = ctx->stRegion.unAttr.stOverlay.u32CanvasNum;
-		rgnSize = ctx->stRegion.unAttr.stOverlay.stSize;
+	if (ctx->region.type == OVERLAY_RGN) {
+		pixel_format = ctx->region.unattr.overlay.pixel_format;
+		canvas_num = ctx->region.unattr.overlay.canvas_num;
+		rgn_size = ctx->region.unattr.overlay.size;
 	} else {
-		pixelFormat = ctx->stRegion.unAttr.stOverlayEx.enPixelFormat;
-		canvasNum = ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum;
-		rgnSize = ctx->stRegion.unAttr.stOverlayEx.stSize;
+		pixel_format = ctx->region.unattr.overlay_ex.pixel_format;
+		canvas_num = ctx->region.unattr.overlay_ex.canvas_num;
+		rgn_size = ctx->region.unattr.overlay_ex.size;
 	}
 
-	if ((pstBitmap->u32Width > rgnSize.u32Width)
-	 || (pstBitmap->u32Height > rgnSize.u32Height)) {
+	if ((pbitmap->width > rgn_size.width)
+	 || (pbitmap->height > rgn_size.height)) {
 		CVI_TRACE_RGN(RGN_ERR, "size of bitmap (%d * %d) > region (%d * %d).\n"
-			, pstBitmap->u32Width, pstBitmap->u32Height
-			, rgnSize.u32Width, rgnSize.u32Height);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+			, pbitmap->width, pbitmap->height
+			, rgn_size.width, rgn_size.height);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
-	if (pstBitmap->enPixelFormat != pixelFormat) {
+	if (pbitmap->pixel_format != pixel_format) {
 		CVI_TRACE_RGN(RGN_ERR, "pxl-fmt of bitmap(%d) != region(%d).\n"
-			, pstBitmap->enPixelFormat, pixelFormat);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+			, pbitmap->pixel_format, pixel_format);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
 	CVI_TRACE_RGN(RGN_INFO, "bitmap size(%d * %d) fmt(%d), region size(%d * %d) fmt(%d).\n"
-		, pstBitmap->u32Width, pstBitmap->u32Height, pstBitmap->enPixelFormat
-		, rgnSize.u32Width, rgnSize.u32Height, pixelFormat);
+		, pbitmap->width, pbitmap->height, pbitmap->pixel_format
+		, rgn_size.width, rgn_size.height, pixel_format);
 
-	if (_rgn_get_bytesperline(pstBitmap->enPixelFormat, pstBitmap->u32Width, &bytesperline) != CVI_SUCCESS)
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+	if (_rgn_get_bytesperline(pbitmap->pixel_format, pbitmap->width, &bytesperline) != 0)
+		return ERR_RGN_ILLEGAL_PARAM;
 
-	// single/double buffer update per u32CanvasNum.
-	if (canvasNum == 1)
-		pstCanvasInfo = &ctx->stCanvasInfo[0];
+	// single/double buffer update per canvas_num.
+	if (canvas_num == 1)
+		pcanvas_info = &ctx->canvas_info[0];
 	else {
 		ctx->canvas_idx = 1 - ctx->canvas_idx;
-		pstCanvasInfo = &ctx->stCanvasInfo[ctx->canvas_idx];
+		pcanvas_info = &ctx->canvas_info[ctx->canvas_idx];
 	}
 
-	pstCanvasInfo->enPixelFormat = pstBitmap->enPixelFormat;
-	pstCanvasInfo->stSize.u32Width = pstBitmap->u32Width;
-	pstCanvasInfo->stSize.u32Height = pstBitmap->u32Height;
-	pstCanvasInfo->u32Stride = ALIGN(bytesperline, 32);
+	pcanvas_info->pixel_format = pbitmap->pixel_format;
+	pcanvas_info->size.width = pbitmap->width;
+	pcanvas_info->size.height = pbitmap->height;
+	pcanvas_info->stride = ALIGN(bytesperline, 32);
 
 	CVI_TRACE_RGN(RGN_INFO, "canvas fmt(%d) size(%d * %d) stride(%d).\n"
-		, pstCanvasInfo->enPixelFormat, pstCanvasInfo->stSize.u32Width
-		, pstCanvasInfo->stSize.u32Height, pstCanvasInfo->u32Stride);
+		, pcanvas_info->pixel_format, pcanvas_info->size.width
+		, pcanvas_info->size.height, pcanvas_info->stride);
 
 	CVI_TRACE_RGN(RGN_INFO, "canvas v_addr(0x%lx), p_addr(0x%llx) size(%x)\n"
-		, (uintptr_t)pstCanvasInfo->pu8VirtAddr, pstCanvasInfo->u64PhyAddr
-		, pstCanvasInfo->u32Stride * pstCanvasInfo->stSize.u32Height);
+		, (uintptr_t)pcanvas_info->virt_addr, pcanvas_info->phy_addr
+		, pcanvas_info->stride * pcanvas_info->size.height);
 
-	CVI_TRACE_RGN(RGN_INFO, "pstBitmap->pData(0x%lx)\n", (uintptr_t)pstBitmap->pData);
+	CVI_TRACE_RGN(RGN_INFO, "pbitmap->data(0x%lx)\n", (uintptr_t)pbitmap->data);
 
-	for (h = 0; h < pstCanvasInfo->stSize.u32Height; ++h) {
-		if (copy_from_user(pstCanvasInfo->pu8VirtAddr + pstCanvasInfo->u32Stride * h,
-					pstBitmap->pData + bytesperline * h, bytesperline)) {
-			CVI_TRACE_RGN(RGN_ERR, "pstBitmap->pData, copy_from_user failed.\n");
-			return CVI_ERR_RGN_ILLEGAL_PARAM;
+	for (h = 0; h < pcanvas_info->size.height; ++h) {
+		if (copy_from_user(pcanvas_info->virt_addr + pcanvas_info->stride * h,
+					pbitmap->data + bytesperline * h, bytesperline)) {
+			CVI_TRACE_RGN(RGN_ERR, "pbitmap->data, copy_from_user failed.\n");
+			return ERR_RGN_ILLEGAL_PARAM;
 		}
 	}
 
 	// update rgn proc canvas info
-	if (canvasNum == 1)
-		rgn_prc_ctx[proc_idx].stCanvasInfo[0] = ctx->stCanvasInfo[0];
+	if (canvas_num == 1)
+		rgn_prc_ctx[proc_idx].canvas_info[0] = ctx->canvas_info[0];
 	else {
 		rgn_prc_ctx[proc_idx].canvas_idx = ctx->canvas_idx;
-		rgn_prc_ctx[proc_idx].stCanvasInfo[ctx->canvas_idx]
-			= ctx->stCanvasInfo[ctx->canvas_idx];
+		rgn_prc_ctx[proc_idx].canvas_info[ctx->canvas_idx]
+			= ctx->canvas_info[ctx->canvas_idx];
 	}
 
 	// update hw.
 	return _rgn_update_hw(ctx, RGN_OP_UPDATE);
 }
 
-s32 rgn_attach_to_chn(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, const RGN_CHN_ATTR_S *pstChnAttr)
+int rgn_attach_to_chn(rgn_handle handle, const mmf_chn_s*pchn, const rgn_chn_attr_s *pchn_attr)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 proc_idx;
-	s32 s32Ret;
-	u8 i;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int proc_idx;
+	int ret;
+	unsigned char i;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stRegion.enType != pstChnAttr->enType) {
+	if (ctx->region.type != pchn_attr->type) {
 		CVI_TRACE_RGN(RGN_ERR, "type(%d) is different with chn type(%d).\n"
-			, ctx->stRegion.enType, pstChnAttr->enType);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+			, ctx->region.type, pchn_attr->type);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
-	if (pstChn->enModId != CVI_ID_VPSS && pstChn->enModId != CVI_ID_VO) {
+	if (pchn->mod_id != ID_VPSS && pchn->mod_id != ID_VO) {
 		CVI_TRACE_RGN(RGN_ERR, "rgn can only be attached to vpss or vo.\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (ctx->stChn.enModId != CVI_ID_BASE) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) has been attached to CHN(%s-%d-%d).\n", Handle
-			, sys_get_modname(ctx->stChn.enModId), ctx->stChn.s32DevId, ctx->stChn.s32ChnId);
-		return CVI_ERR_RGN_NOT_CONFIG;
+	if (ctx->chn.mod_id != ID_BASE) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) has been attached to CHN(%s-%d-%d).\n", handle
+			, sys_get_modname(ctx->chn.mod_id), ctx->chn.dev_id, ctx->chn.chn_id);
+		return ERR_RGN_NOT_CONFIG;
 	}
 
-	if (ctx->stRegion.enType == OVERLAYEX_RGN) {
+	if (ctx->region.type == OVERLAYEX_RGN) {
 		CVI_TRACE_RGN(RGN_ERR, "rgn extension only support on vpss rgnex mode.\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (_rgn_check_chn_attr(Handle, pstChn, pstChnAttr) != CVI_SUCCESS)
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+	if (_rgn_check_chn_attr(handle, pchn, pchn_attr) != 0)
+		return ERR_RGN_ILLEGAL_PARAM;
 
 	mutex_lock(&g_rgnlock);
-	if (pstChnAttr->enType == COVER_RGN) {
-		s32Ret = _rgn_update_cover_canvas(ctx, pstChnAttr);
+	if (pchn_attr->type == COVER_RGN) {
+		ret = _rgn_update_cover_canvas(ctx, pchn_attr);
 
-		if (s32Ret != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) fill cover failed.\n", Handle);
+		if (ret != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) fill cover failed.\n", handle);
 			mutex_unlock(&g_rgnlock);
-			return s32Ret;
+			return ret;
 		}
 	}
-	ctx->stChnAttr = rgn_prc_ctx[proc_idx].stChnAttr = *pstChnAttr;
-	ctx->stChn = rgn_prc_ctx[proc_idx].stChn = *pstChn;
+	ctx->chn_attr = rgn_prc_ctx[proc_idx].chn_attr = *pchn_attr;
+	ctx->chn = rgn_prc_ctx[proc_idx].chn = *pchn;
 
-	if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == OVERLAYEX_RGN) {
-		PIXEL_FORMAT_E pixelFormat;
-		u32 canvasNum, bgColor, compressed_size;
-		SIZE_S rgnSize;
-		u32 bytesperline = 0;
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == OVERLAYEX_RGN) {
+		pixel_format_e pixel_format;
+		unsigned int canvas_num, bgColor, compressed_size;
+		size_s rgn_size;
+		unsigned int bytesperline = 0;
 
-		if (ctx->stRegion.enType == OVERLAY_RGN) {
-			pixelFormat = ctx->stRegion.unAttr.stOverlay.enPixelFormat;
-			canvasNum = ctx->stRegion.unAttr.stOverlay.u32CanvasNum;
-			rgnSize = ctx->stRegion.unAttr.stOverlay.stSize;
-			bgColor = ctx->stRegion.unAttr.stOverlay.u32BgColor;
-			switch (ctx->stRegion.unAttr.stOverlay.stCompressInfo.enOSDCompressMode) {
+		if (ctx->region.type == OVERLAY_RGN) {
+			pixel_format = ctx->region.unattr.overlay.pixel_format;
+			canvas_num = ctx->region.unattr.overlay.canvas_num;
+			rgn_size = ctx->region.unattr.overlay.size;
+			bgColor = ctx->region.unattr.overlay.bg_color;
+			switch (ctx->region.unattr.overlay.compress_info.osd_compress_mode) {
 			case OSD_COMPRESS_MODE_SW:
-				compressed_size = ctx->stRegion.unAttr.stOverlay.stCompressInfo.u32EstCompressedSize;
+				compressed_size = ctx->region.unattr.overlay.compress_info.Est_compressed_size;
 				break;
 			case OSD_COMPRESS_MODE_HW:
-				compressed_size = ctx->stRegion.unAttr.stOverlay.stCompressInfo.u32CompressedSize;
+				compressed_size = ctx->region.unattr.overlay.compress_info.compressed_size;
 				break;
 			default:
 				compressed_size = 0;
 				break;
 			}
 		} else {
-			pixelFormat = ctx->stRegion.unAttr.stOverlayEx.enPixelFormat;
-			canvasNum = ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum;
-			rgnSize = ctx->stRegion.unAttr.stOverlayEx.stSize;
-			bgColor = ctx->stRegion.unAttr.stOverlayEx.u32BgColor;
-			switch (ctx->stRegion.unAttr.stOverlayEx.stCompressInfo.enOSDCompressMode) {
+			pixel_format = ctx->region.unattr.overlay_ex.pixel_format;
+			canvas_num = ctx->region.unattr.overlay_ex.canvas_num;
+			rgn_size = ctx->region.unattr.overlay_ex.size;
+			bgColor = ctx->region.unattr.overlay_ex.bg_color;
+			switch (ctx->region.unattr.overlay_ex.compress_info.osd_compress_mode) {
 			case OSD_COMPRESS_MODE_SW:
-				compressed_size = ctx->stRegion.unAttr.stOverlayEx.stCompressInfo.u32EstCompressedSize;
+				compressed_size = ctx->region.unattr.overlay_ex.compress_info.Est_compressed_size;
 				break;
 			case OSD_COMPRESS_MODE_HW:
-				compressed_size = ctx->stRegion.unAttr.stOverlayEx.stCompressInfo.u32CompressedSize;
+				compressed_size = ctx->region.unattr.overlay_ex.compress_info.compressed_size;
 				break;
 			default:
 				compressed_size = 0;
@@ -1554,141 +1554,141 @@ s32 rgn_attach_to_chn(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, const RGN_CHN_
 
 		ctx->canvas_idx = 0;
 
-		s32Ret = _rgn_get_bytesperline(pixelFormat, rgnSize.u32Width, &bytesperline);
-		if (s32Ret != CVI_SUCCESS) {
+		ret = _rgn_get_bytesperline(pixel_format, rgn_size.width, &bytesperline);
+		if (ret != 0) {
 			goto RGN_FMT_INCORRECT;
 		}
 
-		ctx->stCanvasInfo[0].enPixelFormat = pixelFormat;
-		ctx->stCanvasInfo[0].stSize = rgnSize;
-		ctx->stCanvasInfo[0].u32Stride = ALIGN(bytesperline, 32);
-		if (ctx->stRegion.unAttr.stOverlay.stCompressInfo.enOSDCompressMode == OSD_COMPRESS_MODE_NONE) {
-			ctx->stCanvasInfo[0].bCompressed = false;
-			ctx->stCanvasInfo[0].enOSDCompressMode = OSD_COMPRESS_MODE_NONE;
-			ctx->stCanvasInfo[0].u32CompressedSize = 0;
-			ctx->ion_len = ctx->u32MaxNeedIon =
-				ctx->stCanvasInfo[0].u32Stride * ctx->stCanvasInfo[0].stSize.u32Height;
+		ctx->canvas_info[0].pixel_format = pixel_format;
+		ctx->canvas_info[0].size = rgn_size;
+		ctx->canvas_info[0].stride = ALIGN(bytesperline, 32);
+		if (ctx->region.unattr.overlay.compress_info.osd_compress_mode == OSD_COMPRESS_MODE_NONE) {
+			ctx->canvas_info[0].compressed = false;
+			ctx->canvas_info[0].osd_compress_mode = OSD_COMPRESS_MODE_NONE;
+			ctx->canvas_info[0].compressed_size = 0;
+			ctx->ion_len = ctx->max_need_ion =
+				ctx->canvas_info[0].stride * ctx->canvas_info[0].size.height;
 		} else {
-			ctx->stCanvasInfo[0].bCompressed = true;
-			ctx->stCanvasInfo[0].enOSDCompressMode =
-				ctx->stRegion.unAttr.stOverlay.stCompressInfo.enOSDCompressMode;
-			ctx->stCanvasInfo[0].u32CompressedSize = compressed_size;
-			ctx->ion_len = ctx->u32MaxNeedIon = compressed_size;
+			ctx->canvas_info[0].compressed = true;
+			ctx->canvas_info[0].osd_compress_mode =
+				ctx->region.unattr.overlay.compress_info.osd_compress_mode;
+			ctx->canvas_info[0].compressed_size = compressed_size;
+			ctx->ion_len = ctx->max_need_ion = compressed_size;
 		}
 
-		CVI_TRACE_RGN(RGN_INFO, "RGN_HANDLE(%d) canvas fmt(%d) size(%d * %d) stride(%d).\n"
-			, Handle, ctx->stCanvasInfo[0].enPixelFormat, ctx->stCanvasInfo[0].stSize.u32Width
-			, ctx->stCanvasInfo[0].stSize.u32Height, ctx->stCanvasInfo[0].u32Stride);
+		CVI_TRACE_RGN(RGN_INFO, "rgn_handle(%d) canvas fmt(%d) size(%d * %d) stride(%d).\n"
+			, handle, ctx->canvas_info[0].pixel_format, ctx->canvas_info[0].size.width
+			, ctx->canvas_info[0].size.height, ctx->canvas_info[0].stride);
 
-		if (ctx->stCanvasInfo[0].bCompressed)
-			CVI_TRACE_RGN(RGN_INFO, "RGN_HANDLE(%d) compressed canvas size(%d).\n"
-				, Handle, ctx->stCanvasInfo[0].u32CompressedSize);
+		if (ctx->canvas_info[0].compressed)
+			CVI_TRACE_RGN(RGN_INFO, "rgn_handle(%d) compressed canvas size(%d).\n"
+				, handle, ctx->canvas_info[0].compressed_size);
 
-		for (i = 1; i < canvasNum; ++i)
-			ctx->stCanvasInfo[i] = ctx->stCanvasInfo[0];
+		for (i = 1; i < canvas_num; ++i)
+			ctx->canvas_info[i] = ctx->canvas_info[0];
 
-		for (i = 0; i < canvasNum; ++i) {
-			if (base_ion_alloc(&ctx->stCanvasInfo[i].u64PhyAddr,
-							(void **)&ctx->stCanvasInfo[i].pu8VirtAddr,
-							"rgn_canvas", ctx->ion_len, true) != CVI_SUCCESS) {
-				CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas-%d.\n", Handle, i);
-				s32Ret = CVI_ERR_RGN_NOBUF;
+		for (i = 0; i < canvas_num; ++i) {
+			if (base_ion_alloc(&ctx->canvas_info[i].phy_addr,
+							(void **)&ctx->canvas_info[i].virt_addr,
+							"rgn_canvas", ctx->ion_len, true) != 0) {
+				CVI_TRACE_RGN(RGN_ERR, "Region(%d) Can't acquire ion for Canvas-%d.\n", handle, i);
+				ret = ERR_RGN_NOBUF;
 				goto RGN_ION_ALLOC_FAIL;
 			}
-			_rgn_fill_pattern(ctx->stCanvasInfo[i].pu8VirtAddr, ctx->ion_len, bgColor
-				, (pixelFormat == PIXEL_FORMAT_ARGB_8888) ? 4 :
-				((pixelFormat == PIXEL_FORMAT_8BIT_MODE) ? 1 : 2));
+			_rgn_fill_pattern(ctx->canvas_info[i].virt_addr, ctx->ion_len, bgColor
+				, (pixel_format == PIXEL_FORMAT_ARGB_8888) ? 4 :
+				((pixel_format == PIXEL_FORMAT_8BIT_MODE) ? 1 : 2));
 		}
-		if (ctx->stCanvasInfo[0].bCompressed && (canvasNum > 1)) {
-			FIFO_INIT(&ctx->rgn_canvas_waitq, canvasNum);
-			FIFO_INIT(&ctx->rgn_canvas_doneq, canvasNum);
-			rgn_canvas_ctx[proc_idx][0].u64PhyAddr = ctx->stCanvasInfo[0].u64PhyAddr;
-			rgn_canvas_ctx[proc_idx][0].pu8VirtAddr = ctx->stCanvasInfo[0].pu8VirtAddr;
-			rgn_canvas_ctx[proc_idx][0].u32Len = ctx->ion_len;
-			rgn_canvas_ctx[proc_idx][1].u64PhyAddr = ctx->stCanvasInfo[1].u64PhyAddr;
-			rgn_canvas_ctx[proc_idx][1].pu8VirtAddr = ctx->stCanvasInfo[1].pu8VirtAddr;
-			rgn_canvas_ctx[proc_idx][1].u32Len = ctx->ion_len;
+		if (ctx->canvas_info[0].compressed && (canvas_num > 1)) {
+			FIFO_INIT(&ctx->rgn_canvas_waitq, canvas_num);
+			FIFO_INIT(&ctx->rgn_canvas_doneq, canvas_num);
+			rgn_canvas_ctx[proc_idx][0].phy_addr = ctx->canvas_info[0].phy_addr;
+			rgn_canvas_ctx[proc_idx][0].virt_addr = ctx->canvas_info[0].virt_addr;
+			rgn_canvas_ctx[proc_idx][0].len = ctx->ion_len;
+			rgn_canvas_ctx[proc_idx][1].phy_addr = ctx->canvas_info[1].phy_addr;
+			rgn_canvas_ctx[proc_idx][1].virt_addr = ctx->canvas_info[1].virt_addr;
+			rgn_canvas_ctx[proc_idx][1].len = ctx->ion_len;
 			FIFO_PUSH(&ctx->rgn_canvas_doneq, &rgn_canvas_ctx[proc_idx][0]);
 			FIFO_PUSH(&ctx->rgn_canvas_waitq, &rgn_canvas_ctx[proc_idx][1]);
 		}
 
 		 // update rgn proc canvas info
-		if (ctx->stRegion.enType == OVERLAY_RGN) {
+		if (ctx->region.type == OVERLAY_RGN) {
 			rgn_prc_ctx[proc_idx].canvas_idx = ctx->canvas_idx;
-			for (i = 0; i < ctx->stRegion.unAttr.stOverlay.u32CanvasNum; ++i)
-				rgn_prc_ctx[proc_idx].stCanvasInfo[i] = ctx->stCanvasInfo[i];
-		} else if (ctx->stRegion.enType == OVERLAYEX_RGN) {
+			for (i = 0; i < ctx->region.unattr.overlay.canvas_num; ++i)
+				rgn_prc_ctx[proc_idx].canvas_info[i] = ctx->canvas_info[i];
+		} else if (ctx->region.type == OVERLAYEX_RGN) {
 			rgn_prc_ctx[proc_idx].canvas_idx = ctx->canvas_idx;
-			for (i = 0; i < ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum; ++i)
-				rgn_prc_ctx[proc_idx].stCanvasInfo[i] = ctx->stCanvasInfo[i];
+			for (i = 0; i < ctx->region.unattr.overlay_ex.canvas_num; ++i)
+				rgn_prc_ctx[proc_idx].canvas_info[i] = ctx->canvas_info[i];
 		}
-		rgn_prc_ctx[proc_idx].u32MaxNeedIon = ctx->u32MaxNeedIon;
+		rgn_prc_ctx[proc_idx].max_need_ion = ctx->max_need_ion;
 	}
 
-	s32Ret = _rgn_update_hw(ctx, RGN_OP_INSERT);
-	if (s32Ret == CVI_SUCCESS) {
+	ret = _rgn_update_hw(ctx, RGN_OP_INSERT);
+	if (ret == 0) {
 		// only update rgn_prc_ctx after _rgn_update_hw success
-		rgn_prc_ctx[proc_idx].bUsed = true;
+		rgn_prc_ctx[proc_idx].used = true;
 	}
 	mutex_unlock(&g_rgnlock);
 
-	return s32Ret;
+	return ret;
 RGN_ION_ALLOC_FAIL:
-	if (ctx->stRegion.enType == OVERLAY_RGN) {
-		for (i = 0; i < ctx->stRegion.unAttr.stOverlay.u32CanvasNum; ++i)
-			if (ctx->stCanvasInfo[i].u64PhyAddr)
-				base_ion_free(ctx->stCanvasInfo[i].u64PhyAddr);
-	} else if (ctx->stRegion.enType == OVERLAYEX_RGN) {
-		for (i = 0; i < ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum; ++i)
-			if (ctx->stCanvasInfo[i].u64PhyAddr)
-				base_ion_free(ctx->stCanvasInfo[i].u64PhyAddr);
+	if (ctx->region.type == OVERLAY_RGN) {
+		for (i = 0; i < ctx->region.unattr.overlay.canvas_num; ++i)
+			if (ctx->canvas_info[i].phy_addr)
+				base_ion_free(ctx->canvas_info[i].phy_addr);
+	} else if (ctx->region.type == OVERLAYEX_RGN) {
+		for (i = 0; i < ctx->region.unattr.overlay_ex.canvas_num; ++i)
+			if (ctx->canvas_info[i].phy_addr)
+				base_ion_free(ctx->canvas_info[i].phy_addr);
 	}
 RGN_FMT_INCORRECT:
 	mutex_unlock(&g_rgnlock);
-	return s32Ret;
+	return ret;
 }
 
-s32 rgn_detach_from_chn(RGN_HANDLE Handle, const MMF_CHN_S *pstChn)
+int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s*pchn)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	s32 ret = -EINVAL;
-	u32 proc_idx;
-	s32 s32Ret;
-	u8 i;
+	struct rgn_ctx *ctx = NULL;
+	int ret = -EINVAL;
+	unsigned int proc_idx;
+	int ret_tmp;
+	unsigned char i;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret_tmp = check_rgn_handle(&ctx, handle);
+	if (ret_tmp != 0)
+		return ret_tmp;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stChn.enModId == CVI_ID_BASE) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) not attached to any chn yet.\n", Handle);
-		return CVI_ERR_RGN_NOT_CONFIG;
+	if (ctx->chn.mod_id == ID_BASE) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) not attached to any chn yet.\n", handle);
+		return ERR_RGN_NOT_CONFIG;
 	}
 
 	mutex_lock(&g_rgnlock);
 	ret = _rgn_update_hw(ctx, RGN_OP_REMOVE);
-	if (ret == CVI_SUCCESS) {
-		ctx->stChn.enModId = rgn_prc_ctx[proc_idx].stChn.enModId = CVI_ID_BASE;
-		rgn_prc_ctx[proc_idx].bUsed = false;
+	if (ret == 0) {
+		ctx->chn.mod_id = rgn_prc_ctx[proc_idx].chn.mod_id = ID_BASE;
+		rgn_prc_ctx[proc_idx].used = false;
 	}
 	ctx->odec_data_valid = false;
 
-	if (ctx->stChnAttr.enType == OVERLAY_RGN) {
-		for (i = 0; i < ctx->stRegion.unAttr.stOverlay.u32CanvasNum; ++i)
-			if (ctx->stCanvasInfo[i].u64PhyAddr)
-				base_ion_free(ctx->stCanvasInfo[i].u64PhyAddr);
-	} else if (ctx->stChnAttr.enType == OVERLAYEX_RGN) {
-		for (i = 0; i < ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum; ++i)
-			if (ctx->stCanvasInfo[i].u64PhyAddr)
-				base_ion_free(ctx->stCanvasInfo[i].u64PhyAddr);
+	if (ctx->chn_attr.type == OVERLAY_RGN) {
+		for (i = 0; i < ctx->region.unattr.overlay.canvas_num; ++i)
+			if (ctx->canvas_info[i].phy_addr)
+				base_ion_free(ctx->canvas_info[i].phy_addr);
+	} else if (ctx->chn_attr.type == OVERLAYEX_RGN) {
+		for (i = 0; i < ctx->region.unattr.overlay_ex.canvas_num; ++i)
+			if (ctx->canvas_info[i].phy_addr)
+				base_ion_free(ctx->canvas_info[i].phy_addr);
 	} else {
-		if (ctx->stCanvasInfo[0].u64PhyAddr)
-			base_ion_free(ctx->stCanvasInfo[0].u64PhyAddr);
+		if (ctx->canvas_info[0].phy_addr)
+			base_ion_free(ctx->canvas_info[0].phy_addr);
 	}
 
-	if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == OVERLAYEX_RGN) {
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == OVERLAYEX_RGN) {
 		FIFO_EXIT(&ctx->rgn_canvas_waitq);
 		FIFO_EXIT(&ctx->rgn_canvas_doneq);
 	}
@@ -1698,114 +1698,114 @@ s32 rgn_detach_from_chn(RGN_HANDLE Handle, const MMF_CHN_S *pstChn)
 	return ret;
 }
 
-s32 rgn_set_display_attr(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, const RGN_CHN_ATTR_S *pstChnAttr)
+int rgn_set_display_attr(rgn_handle handle, const mmf_chn_s*pchn, const rgn_chn_attr_s *pchn_attr)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 proc_idx;
-	RGN_CHN_ATTR_S stChnAttr;
-	s32 ret = -EINVAL;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int proc_idx;
+	rgn_chn_attr_s chn_attr;
+	int ret = -EINVAL;
 
-	ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (ret != CVI_SUCCESS)
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
 		return ret;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stChn.enModId == CVI_ID_BASE
-		|| (ctx->stChn.enModId != pstChn->enModId
-		|| ctx->stChn.s32DevId != pstChn->s32DevId
-		|| ctx->stChn.s32ChnId != pstChn->s32ChnId)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is not attached on ModId(%d) s32DevId(%d) s32ChnId(%d)\n",
-			Handle, pstChn->enModId, pstChn->s32DevId, pstChn->s32ChnId);
-		return CVI_ERR_RGN_NOT_CONFIG;
+	if (ctx->chn.mod_id == ID_BASE
+		|| (ctx->chn.mod_id != pchn->mod_id
+		|| ctx->chn.dev_id != pchn->dev_id
+		|| ctx->chn.chn_id != pchn->chn_id)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is not attached on ModId(%d) dev_id(%d) chn_id(%d)\n",
+			handle, pchn->mod_id, pchn->dev_id, pchn->chn_id);
+		return ERR_RGN_NOT_CONFIG;
 	}
-	if (ctx->stChnAttr.enType != pstChnAttr->enType) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) enType not allowed to changed.\n", Handle);
-		return CVI_ERR_RGN_NOT_PERM;
+	if (ctx->chn_attr.type != pchn_attr->type) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) type not allowed to changed.\n", handle);
+		return ERR_RGN_NOT_PERM;
 	}
 
-	if (_rgn_check_chn_attr(Handle, pstChn, pstChnAttr) != CVI_SUCCESS)
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+	if (_rgn_check_chn_attr(handle, pchn, pchn_attr) != 0)
+		return ERR_RGN_ILLEGAL_PARAM;
 
-	if (ctx->stChnAttr.enType == COVER_RGN) {
-		ret = _rgn_update_cover_canvas(ctx, pstChnAttr);
+	if (ctx->chn_attr.type == COVER_RGN) {
+		ret = _rgn_update_cover_canvas(ctx, pchn_attr);
 
-		if (ret != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) fill cover failed.\n", Handle);
+		if (ret != 0) {
+			CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) fill cover failed.\n", handle);
 			return ret;
 		}
 	}
 
-	memcpy(&stChnAttr, &ctx->stChnAttr, sizeof(RGN_CHN_ATTR_S));
-	ctx->stChnAttr = rgn_prc_ctx[proc_idx].stChnAttr = *pstChnAttr;
+	memcpy(&chn_attr, &ctx->chn_attr, sizeof(rgn_chn_attr_s));
+	ctx->chn_attr = rgn_prc_ctx[proc_idx].chn_attr = *pchn_attr;
 
 	ret = _rgn_update_hw(ctx, RGN_OP_UPDATE);
-	if (ret != CVI_SUCCESS) {
-		ctx->stChnAttr = rgn_prc_ctx[proc_idx].stChnAttr = stChnAttr;
+	if (ret != 0) {
+		ctx->chn_attr = rgn_prc_ctx[proc_idx].chn_attr = chn_attr;
 	}
 
 	return ret;
 }
 
-s32 rgn_get_display_attr(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, RGN_CHN_ATTR_S *pstChnAttr)
+int rgn_get_display_attr(rgn_handle handle, const mmf_chn_s*pchn, rgn_chn_attr_s *pchn_attr)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	s32 s32Ret;
+	struct rgn_ctx *ctx = NULL;
+	int ret;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	*pstChnAttr = ctx->stChnAttr;
+	*pchn_attr = ctx->chn_attr;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 rgn_get_canvas_info(RGN_HANDLE Handle, RGN_CANVAS_INFO_S *pstCanvasInfo)
+int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	u32 proc_idx;
-	u32 canvasNum;
-	s32 s32Ret;
-	struct cvi_rgn_canvas_ctx *rgn_canvas;
-	s32 s32Cnt = 0;
+	struct rgn_ctx *ctx = NULL;
+	unsigned int proc_idx;
+	unsigned int canvas_num;
+	int ret;
+	struct rgn_canvas_ctx *rgn_canvas;
+	int cnt = 0;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret = check_rgn_handle(&ctx, handle);
+	if (ret != 0)
+		return ret;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stRegion.enType != OVERLAY_RGN && ctx->stRegion.enType != OVERLAYEX_RGN) {
-		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->stRegion.enType);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+	if (ctx->region.type != OVERLAY_RGN && ctx->region.type != OVERLAYEX_RGN) {
+		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->region.type);
+		return ERR_RGN_NOT_SUPPORT;
 	}
 	if (ctx->canvas_get) {
 		CVI_TRACE_RGN(RGN_ERR, "Need CVI_RGN_UpdateCanvas() first.\n");
-		return CVI_ERR_RGN_NOT_PERM;
+		return ERR_RGN_NOT_PERM;
 	}
 
-	if (ctx->stRegion.enType == OVERLAY_RGN)
-		canvasNum = ctx->stRegion.unAttr.stOverlay.u32CanvasNum;
+	if (ctx->region.type == OVERLAY_RGN)
+		canvas_num = ctx->region.unattr.overlay.canvas_num;
 	else
-		canvasNum = ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum;
+		canvas_num = ctx->region.unattr.overlay_ex.canvas_num;
 
-	if (canvasNum == 1)
-		*pstCanvasInfo = ctx->stCanvasInfo[0];
+	if (canvas_num == 1)
+		*pcanvas_info = ctx->canvas_info[0];
 	else {
 		ctx->canvas_idx = rgn_prc_ctx[proc_idx].canvas_idx = 1 - ctx->canvas_idx;
-		*pstCanvasInfo = ctx->stCanvasInfo[ctx->canvas_idx];
+		*pcanvas_info = ctx->canvas_info[ctx->canvas_idx];
 	}
-	CVI_TRACE_RGN(RGN_INFO, "RGN_HANDLE(%d) canvas fmt(%d) size(%d * %d) stride(%d) compressed(%d).\n"
-		, Handle, pstCanvasInfo->enPixelFormat, pstCanvasInfo->stSize.u32Width
-		, pstCanvasInfo->stSize.u32Height, pstCanvasInfo->u32Stride, pstCanvasInfo->bCompressed);
+	CVI_TRACE_RGN(RGN_INFO, "rgn_handle(%d) canvas fmt(%d) size(%d * %d) stride(%d) compressed(%d).\n"
+		, handle, pcanvas_info->pixel_format, pcanvas_info->size.width
+		, pcanvas_info->size.height, pcanvas_info->stride, pcanvas_info->compressed);
 
-	if (ctx->stCanvasInfo[0].bCompressed) {
+	if (ctx->canvas_info[0].compressed) {
 		while (FIFO_EMPTY(&ctx->rgn_canvas_waitq)) {
-			s32Cnt++;
-			if (s32Cnt % 5000 == 0) {
-				CVI_TRACE_RGN(RGN_WARN, "handle(%d) waitq fifo empty for too long!", Handle);
-				s32Cnt = 0;
+			cnt++;
+			if (cnt % 5000 == 0) {
+				CVI_TRACE_RGN(RGN_WARN, "handle(%d) waitq fifo empty for too long!", handle);
+				cnt = 0;
 			}
 			usleep_range(1000, 2000);
 		}
@@ -1814,37 +1814,37 @@ s32 rgn_get_canvas_info(RGN_HANDLE Handle, RGN_CANVAS_INFO_S *pstCanvasInfo)
 		FIFO_PUSH(&ctx->rgn_canvas_doneq, rgn_canvas);
 		mutex_unlock(&ctx->rgn_canvas_q_lock);
 	}
-	ctx->canvas_get = CVI_TRUE;
+	ctx->canvas_get = 1;
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-s32 rgn_update_canvas(RGN_HANDLE Handle)
+int rgn_update_canvas(rgn_handle handle)
 {
-	struct cvi_rgn_ctx *ctx = NULL;
-	s32 ret = -EINVAL;
-	s32 s32Ret;
-	u32 proc_idx;
+	struct rgn_ctx *ctx = NULL;
+	int ret = -EINVAL;
+	int ret_tmp;
+	unsigned int proc_idx;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret_tmp = check_rgn_handle(&ctx, handle);
+	if (ret_tmp != 0)
+		return ret_tmp;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if (ctx->stRegion.enType != OVERLAY_RGN && ctx->stRegion.enType != OVERLAYEX_RGN) {
-		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->stRegion.enType);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+	if (ctx->region.type != OVERLAY_RGN && ctx->region.type != OVERLAYEX_RGN) {
+		CVI_TRACE_RGN(RGN_ERR, "Only Overlay/OverlayEx support. type(%d).\n", ctx->region.type);
+		return ERR_RGN_NOT_SUPPORT;
 	}
 	if (!ctx->canvas_get) {
 		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_GetCanvasInfo() first.\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (ctx->stCanvasInfo[0].bCompressed) {
+	if (ctx->canvas_info[0].compressed) {
 		#if 0 /*bs size is passed from ioctl*/
-		if (ctx->stCanvasInfo[0].enOSDCompressMode == OSD_COMPRESS_MODE_SW) {
-			RGN_CANVAS_INFO_S *pstCanvasInfo = &ctx->stCanvasInfo[ctx->canvas_idx];
+		if (ctx->canvas_info[0].osd_compress_mode == OSD_COMPRESS_MODE_SW) {
+			rgn_canvas_info_s *pcanvas_info = &ctx->canvas_info[ctx->canvas_idx];
 			// first 8 bytes restores compress data header, original header:
 			// bit[0:7] version
 			// bit[8:11] osd_format
@@ -1868,11 +1868,11 @@ s32 rgn_update_canvas(RGN_HANDLE Handle)
 			// bit[27:28] rgb truncate
 			// bit[29:30] reserved
 			// bit[32:63] bitstream size
-			pstCanvasInfo->u32CompressedSize =
-				*((u32 *)pstCanvasInfo->pu8VirtAddr + 1);
-			*((u32 *)pstCanvasInfo->pu8VirtAddr + 1) =
-				(((pstCanvasInfo->stSize.u32Width - 1) & 0xFFFF) |
-				(((pstCanvasInfo->stSize.u32Height - 1) << 16) & 0xFFFF0000)) >> 1;
+			pcanvas_info->compressed_size =
+				*((unsigned int *)pcanvas_info->virt_addr + 1);
+			*((unsigned int *)pcanvas_info->virt_addr + 1) =
+				(((pcanvas_info->size.width - 1) & 0xFFFF) |
+				(((pcanvas_info->size.height - 1) << 16) & 0xFFFF0000)) >> 1;
 		}
 		#endif
 		ctx->odec_data_valid = true;
@@ -1882,7 +1882,7 @@ s32 rgn_update_canvas(RGN_HANDLE Handle)
 	ret = _rgn_update_hw(ctx, RGN_OP_UPDATE);
 	ctx->canvas_updated = false;
 
-	ctx->canvas_get = CVI_FALSE;
+	ctx->canvas_get = 0;
 	return ret;
 }
 
@@ -1890,195 +1890,76 @@ s32 rgn_update_canvas(RGN_HANDLE Handle)
  *   Chns' pixel-format should be YUV.
  *   RGN's pixel-format should be ARGB1555.
  *
- * @param Handle: RGN Handle
- * @param pstChn: the chn which rgn attached
- * @param pu32Color: rgn's content
+ * @param handle: RGN handle
+ * @param pchn: the chn which rgn attached
+ * @param pcolor: rgn's content
  */
-s32 rgn_invert_color(RGN_HANDLE Handle, MMF_CHN_S *pstChn, u32 *pu32Color)
+int rgn_invert_color(rgn_handle handle, mmf_chn_s*pchn, unsigned int *pcolor)
 {
-	s32 ret = -EINVAL;
-	struct cvi_rgn_ctx *ctx = NULL;
-	RGN_CANVAS_INFO_S stCanvasInfo;
-	s32 s32StrLen;
-	u32 u32LumaThresh;
-	u32 proc_idx;
-	u32 canvasNum;
-	OVERLAY_INVERT_COLOR_S invertColor;
-	POINT_S point;
-	s32 s32Ret;
+	int ret = -EINVAL;
+	struct rgn_ctx *ctx = NULL;
+	rgn_canvas_info_s canvas_info;
+	int str_len;
+	unsigned int luma_thresh;
+	unsigned int proc_idx;
+	unsigned int canvas_num;
+	overlay_invert_color_s invert_color;
+	point_s point;
+	int ret_tmp;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret_tmp = check_rgn_handle(&ctx, handle);
+	if (ret_tmp != 0)
+		return ret_tmp;
 
-	proc_idx = _rgn_proc_get_idx(Handle);
+	proc_idx = _rgn_proc_get_idx(handle);
 
-	if ((pstChn->enModId != ctx->stChn.enModId) || (pstChn->s32DevId != ctx->stChn.s32DevId) ||
-		(pstChn->s32ChnId != ctx->stChn.s32ChnId)) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) not attached to chn(%d-%d-%d) yet.\n",
-			Handle,  pstChn->enModId, pstChn->s32DevId, pstChn->s32ChnId);
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+	if ((pchn->mod_id != ctx->chn.mod_id) || (pchn->dev_id != ctx->chn.dev_id) ||
+		(pchn->chn_id != ctx->chn.chn_id)) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) not attached to chn(%d-%d-%d) yet.\n",
+			handle,  pchn->mod_id, pchn->dev_id, pchn->chn_id);
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
-	if (ctx->stRegion.enType != OVERLAY_RGN && ctx->stRegion.enType != OVERLAYEX_RGN) {
+	if (ctx->region.type != OVERLAY_RGN && ctx->region.type != OVERLAYEX_RGN) {
 		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color only support Overlay/OverlayEx (%d).\n"
-			, ctx->stRegion.enType);
-		return CVI_ERR_RGN_NOT_SUPPORT;
+			, ctx->region.type);
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (pstChn->enModId != CVI_ID_VPSS) {
+	if (pchn->mod_id != ID_VPSS) {
 		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color GRN did not attach to vpss.\n");
-		return CVI_ERR_RGN_NOT_SUPPORT;
+		return ERR_RGN_NOT_SUPPORT;
 	}
 
-	if (ctx->stRegion.enType == OVERLAY_RGN) {
-		canvasNum = ctx->stRegion.unAttr.stOverlay.u32CanvasNum;
-		invertColor = ctx->stChnAttr.unChnAttr.stOverlayChn.stInvertColor;
-		point = ctx->stChnAttr.unChnAttr.stOverlayChn.stPoint;
+	if (ctx->region.type == OVERLAY_RGN) {
+		canvas_num = ctx->region.unattr.overlay.canvas_num;
+		invert_color = ctx->chn_attr.unchn_attr.overlay_chn.invert_color;
+		point = ctx->chn_attr.unchn_attr.overlay_chn.point;
 	} else {
-		canvasNum = ctx->stRegion.unAttr.stOverlayEx.u32CanvasNum;
-		invertColor = ctx->stChnAttr.unChnAttr.stOverlayExChn.stInvertColor;
-		point = ctx->stChnAttr.unChnAttr.stOverlayExChn.stPoint;
+		canvas_num = ctx->region.unattr.overlay_ex.canvas_num;
+		invert_color = ctx->chn_attr.unchn_attr.overlay_ex_chn.invert_color;
+		point = ctx->chn_attr.unchn_attr.overlay_ex_chn.point;
 	}
 
-	if (invertColor.bInvColEn != CVI_TRUE) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color bInvColEn hasn't been set\n");
-		return CVI_ERR_RGN_SYS_NOTREADY;
+	if (invert_color.inv_col_en != 1) {
+		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color inv_col_en hasn't been set\n");
+		return ERR_RGN_SYS_NOTREADY;
 	}
 
-#if 0 //Need to try to use GOP HW invert function in 2x first.
-	VIDEO_FRAME_INFO_S stVideoFrame;
-	u8 *pstVirAddr;
-	u32 u32MainStride;
-	s32 s32StartX, s32StartY;
-	SIZE_S Font;
-	u32 u32Sum, u32Num;
-	u32 u32AverLuma;
-	//CVI_FLOAT proportion_x, proportion_y;
-	u32 scale, proportion_x, proportion_y;
-	s32 i;
-	u32 x, y;
-	VPSS_CROP_INFO_S pstGrpCropInfo;
-	VPSS_CROP_INFO_S pstChnCropInfo;
-	size_t Luma_size;
-	VPSS_CHN_ATTR_S stVpssChnAttr;
-
-	ret = CVI_VPSS_GetChnAttr(0, 0, &stVpssChnAttr);
-
-	if (stVpssChnAttr.bFlip != CVI_FALSE || stVpssChnAttr.bMirror != CVI_FALSE) {
-		if (stVpssChnAttr.stAspectRatio.enMode != ASPECT_RATIO_AUTO) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color only support keep aspect ratio\n");
-		return ret;
-	}
-
-	ret = CVI_VPSS_GetGrpCrop(pstChn->s32DevId, &pstGrpCropInfo);
-	if (pstGrpCropInfo.stCropRect.s32X != 0 || pstGrpCropInfo.stCropRect.s32Y != 0
-		|| pstGrpCropInfo.stCropRect.u32Width != 0 || pstGrpCropInfo.stCropRect.u32Height != 0) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color not support vpss group crop yet\n");
-		return ret;
-	}
-
-	ret = CVI_VPSS_GetChnCrop(pstChn->s32DevId, pstChn->s32ChnId, &pstChnCropInfo);
-	if (pstChnCropInfo.stCropRect.s32X != 0 || pstChnCropInfo.stCropRect.s32Y != 0
-		|| pstChnCropInfo.stCropRect.u32Width != 0 || pstChnCropInfo.stCropRect.u32Height != 0) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color not support vpss chn crop yet\n");
-		return ret;
-	}
-
-	ret = CVI_VI_GetChnFrame(0, 0, &stVideoFrame, 1000);
-	if (MOD_CHECK_NULL_PTR(CVI_ID_RGN, &stVideoFrame)) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color get vi chn frame failed with %#x\n", ret);
-		return CVI_ERR_RGN_SYS_NOTREADY;
-	}
-
-	if (!IS_FMT_YUV(stVideoFrame.stVFrame.enPixelFormat)) {
-		ret = CVI_VI_ReleaseChnFrame(0, 0, &stVideoFrame);
-
-		if (ret != CVI_SUCCESS) {
-			CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color release vi chn frame failed with %#x\n", ret);
-			return CVI_ERR_RGN_SYS_NOTREADY;
-		}
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color invert color only support yuv-fmt(%d).\n"
-			, stVideoFrame.stVFrame.enPixelFormat);
-		return CVI_ERR_RGN_NOT_SUPPORT;
-	}
-
-	Luma_size = stVideoFrame.stVFrame.u32Length[0];
-	pstVirAddr = stVideoFrame.stVFrame.pu8VirAddr[0];
-	//pstVirAddr = CVI_SYS_Mmap(stVideoFrame.stVFrame.u64PhyAddr[0], Luma_size);
-	u32MainStride = stVideoFrame.stVFrame.u32Stride[0];
-#endif
-
-	if (canvasNum == 1)
-		stCanvasInfo = ctx->stCanvasInfo[0];
+	if (canvas_num == 1)
+		canvas_info = ctx->canvas_info[0];
 	else {
 		ctx->canvas_idx = rgn_prc_ctx[proc_idx].canvas_idx = 1 - ctx->canvas_idx;
-		stCanvasInfo = ctx->stCanvasInfo[ctx->canvas_idx];
+		canvas_info = ctx->canvas_info[ctx->canvas_idx];
 	}
-	s32StrLen = stCanvasInfo.stSize.u32Width / invertColor.stInvColArea.u32Width;
+	str_len = canvas_info.size.width / invert_color.inv_col_area.width;
 
-	u32LumaThresh = invertColor.u32LumThresh;
-
-#if 0 //Need to try to use GOP HW invert function in 2x first.
-	//Original code in cvi_region.c.
-	//proportion_x = (CVI_FLOAT)stVideoFrame.stVFrame.u32Width / stVpssChnAttr.u32Width;
-	//proportion_y = (CVI_FLOAT)stVideoFrame.stVFrame.u32Height / stVpssChnAttr.u32Height;
-	//=> After sinking into kernel to remove CVI_FLOAT usage
-	//scale = stVpssChnAttr.u32Width * stVpssChnAttr.u32Height;
-	//proportion_x = (stVideoFrame.stVFrame.u32Width * stVpssChnAttr.u32Height) / scale;
-	//proportion_y = (stVideoFrame.stVFrame.u32Height * stVpssChnAttr.u32Width) / scale;
-	//=> After sinking into kernel to remove CVI_FLOAT usage and callback function.
-	scale = arg.stVpssChnAttr.u32Width * arg.stVpssChnAttr.u32Height;
-	proportion_x = (stVideoFrame.stVFrame.u32Width * arg.stVpssChnAttr.u32Height) / scale;
-	proportion_y = (stVideoFrame.stVFrame.u32Height * arg.stVpssChnAttr.u32Width) / scale;
-
-	s32StartX = (s32)(point.s32X * proportion_x);
-	s32StartY = (s32)(point.s32Y * proportion_y);
-
-	Font.u32Width = (u32)(invertColor.stInvColArea.u32Width * proportion_x);
-	Font.u32Height = (u32)(invertColor.stInvColArea.u32Height * proportion_y);
-
-	for (i = 0; i < s32StrLen; i++) {
-		u32Num = 0;
-		u32Sum = 0;
-		//get average Luma
-		for (y = s32StartY; y < s32StartY + Font.u32Height; y++) {
-			for (x = s32StartX + Font.u32Width * i; x < (s32StartX + Font.u32Width * (i + 1));
-				x++) {
-				u32Sum += *(pstVirAddr + x + y * u32MainStride);
-				u32Num++;
-			}
-			y++;
-		}
-		u32AverLuma = u32Sum / u32Num;
-
-		//invert color
-		if (invertColor.enChgMod == MORETHAN_LUM_THRESH) {
-			if (u32AverLuma > u32LumaThresh)
-				pu32Color[i] = RGN_COLOR_DARK;
-			else
-				pu32Color[i] = RGN_COLOR_BRIGHT;
-		} else {
-			if (u32AverLuma > u32LumaThresh)
-				pu32Color[i] = RGN_COLOR_BRIGHT;
-			else
-				pu32Color[i] = RGN_COLOR_DARK;
-		}
-	}
-
-	CVI_SYS_Munmap(pstVirAddr, Luma_size);
-
-	ret = CVI_VI_ReleaseChnFrame(0, 0, &stVideoFrame);
-	if (ret != CVI_SUCCESS) {
-		CVI_TRACE_RGN(RGN_ERR, "CVI_RGN_Invert_Color release vi chn frame failed with %#x\n", ret);
-		return CVI_ERR_RGN_SYS_NOTREADY;
-	}
-#endif
+	luma_thresh = invert_color.lum_thresh;
 
 	return ret;
 }
 
-RGN_COMP_INFO_S s_ConvertInfo[RGN_COLOR_FMT_BUTT] = {
+rgn_component_info_s convert_info[RGN_COLOR_FMT_BUTT] = {
 		{ 0, 4, 4, 4 }, /*RGB444*/
 		{ 4, 4, 4, 4 }, /*ARGB4444*/
 		{ 0, 5, 5, 5 }, /*RGB555*/
@@ -2092,10 +1973,10 @@ RGN_COMP_INFO_S s_ConvertInfo[RGN_COLOR_FMT_BUTT] = {
 		{ 8, 8, 8, 8 }  /*ARGB8888*/
 };
 
-u16 RGN_MAKECOLOR_U16_A(u8 a, u8 r, u8 g, u8 b, RGN_COMP_INFO_S input_fmt)
+unsigned short RGN_MAKECOLOR_U16_A(unsigned char a, unsigned char r, unsigned char g, unsigned char b, rgn_component_info_s input_fmt)
 {
-	u8 a1, r1, g1, b1;
-	u16 pixel;
+	unsigned char a1, r1, g1, b1;
+	unsigned short pixel;
 
 	pixel = a1 = r1 = g1 = b1 = 0;
 	a1 = ((input_fmt.alen - 4) > 0) ? a >> (input_fmt.alen - 4) :
@@ -2109,65 +1990,65 @@ u16 RGN_MAKECOLOR_U16_A(u8 a, u8 r, u8 g, u8 b, RGN_COMP_INFO_S input_fmt)
 	return pixel;
 }
 
-s32 rgn_set_chn_palette(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, RGN_PALETTE_S *pstPalette,
-			RGN_RGBQUARD_S *pstInputPixelTable)
+int rgn_set_chn_palette(rgn_handle handle, const mmf_chn_s*pchn, rgn_palette *ppalette,
+			rgn_rgbquad_s *input_pixel_table)
 {
-	struct cvi_rgn_ctx *ctx;
-	struct cvi_rgn_lut_cfg lut_cfg;
-	s32 ret = CVI_SUCCESS;
-	u32 idx, u32Pixel, osd_layer;
-	u16 u16Pixel;
-	u8 r, g, b, a;
-	// RGN_RGBQUARD_S *pstInputPixelTable;
+	struct rgn_ctx *ctx;
+	struct rgn_lut_cfg lut_cfg;
+	int ret = 0;
+	unsigned int idx, u32pixel, osd_layer;
+	unsigned short pixel;
+	unsigned char r, g, b, a;
+	// rgn_rgbquad_s *input_pixel_table;
 	struct _rgn_lut_cb_param rgn_lut_arg;
-	s32 s32Ret;
+	int ret_tmp;
 
-	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
-	if (s32Ret != CVI_SUCCESS)
-		return s32Ret;
+	ret_tmp = check_rgn_handle(&ctx, handle);
+	if (ret_tmp != 0)
+		return ret_tmp;
 
-	if (pstPalette->lut_length > 256) {
-		CVI_TRACE_RGN(RGN_ERR, "RGN_LUT_index(%d) is over maximum(256).\n", pstPalette->lut_length);
-		return CVI_FAILURE;
+	if (ppalette->lut_length > 256) {
+		CVI_TRACE_RGN(RGN_ERR, "RGN_LUT_index(%d) is over maximum(256).\n", ppalette->lut_length);
+		return -1;
 	}
 
-	osd_layer = (ctx->stCanvasInfo[ctx->canvas_idx].bCompressed) ?
+	osd_layer = (ctx->canvas_info[ctx->canvas_idx].compressed) ?
 				RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
 
 #if 0 /* todo---copy_from_user here is not right, why??? */
-	pstInputPixelTable = (RGN_RGBQUARD_S *)kmalloc_array(pstPalette->lut_length,
-		 sizeof(RGN_RGBQUARD_S), GFP_KERNEL);
-	if (pstInputPixelTable == CVI_NULL) {
+	input_pixel_table = (rgn_rgbquad_s *)kmalloc_array(ppalette->lut_length,
+		 sizeof(rgn_rgbquad_s), GFP_KERNEL);
+	if (input_pixel_table == NULL) {
 		CVI_TRACE_RGN(RGN_ERR, "kmalloc failed.\n");
-		return CVI_ERR_RGN_NOMEM;
+		return ERR_RGN_NOMEM;
 	}
 
-	if (copy_from_user(pstInputPixelTable, (void *)(pstPalette->pstPaletteTable),
-		lut_cfg.lut_length * sizeof(RGN_RGBQUARD_S))) {
+	if (copy_from_user(input_pixel_table, (void *)(ppalette->ppalette_table),
+		lut_cfg.lut_length * sizeof(rgn_rgbquad_s))) {
 		CVI_TRACE_RGN(RGN_ERR, "lut copy_from_user failed.\n");
-		ret = CVI_ERR_RGN_NOMEM;
-		kfree(pstInputPixelTable);
+		ret = ERR_RGN_NOMEM;
+		kfree(input_pixel_table);
 		return ret;
 	}
 
-	for (idx = 0; idx < pstPalette->lut_length ; idx++) {
+	for (idx = 0; idx < ppalette->lut_length ; idx++) {
 		CVI_TRACE_RGN(RGN_INFO, "index:%d pixel:%#x\n",
-			idx, (pstInputPixelTable[idx].argbBlue | pstInputPixelTable[idx].argbGreen << 8) |
-				(pstInputPixelTable[idx].argbRed << 16 | pstInputPixelTable[idx].argbAlpha << 24));
+			idx, (input_pixel_table[idx].argb_blue | input_pixel_table[idx].argb_green << 8) |
+				(input_pixel_table[idx].argb_red << 16 | input_pixel_table[idx].argb_alpha << 24));
 	}
 #endif
 
 	/* start color convert to ARGB4444 */
-	for (idx = 0 ; idx < pstPalette->lut_length ; idx++) {
-		switch (pstPalette->pixelFormat) {
+	for (idx = 0 ; idx < ppalette->lut_length ; idx++) {
+		switch (ppalette->pixel_format) {
 		case RGN_COLOR_FMT_RGB444:
 		case RGN_COLOR_FMT_RGB555:
 		case RGN_COLOR_FMT_RGB565:
 		case RGN_COLOR_FMT_RGB888:
 			a = 0xf; /*alpha*/
-			r = pstInputPixelTable[idx].argbRed;
-			g = pstInputPixelTable[idx].argbGreen;
-			b = pstInputPixelTable[idx].argbBlue;
+			r = input_pixel_table[idx].argb_red;
+			g = input_pixel_table[idx].argb_green;
+			b = input_pixel_table[idx].argb_blue;
 			break;
 
 		case RGN_COLOR_FMT_RGB1555:
@@ -2177,28 +2058,28 @@ s32 rgn_set_chn_palette(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, RGN_PALETTE_
 		case RGN_COLOR_FMT_ARGB4444:
 		case RGN_COLOR_FMT_ARGB1555:
 		default:
-			a = pstInputPixelTable[idx].argbAlpha;
-			r = pstInputPixelTable[idx].argbRed;
-			g = pstInputPixelTable[idx].argbGreen;
-			b = pstInputPixelTable[idx].argbBlue;
+			a = input_pixel_table[idx].argb_alpha;
+			r = input_pixel_table[idx].argb_red;
+			g = input_pixel_table[idx].argb_green;
+			b = input_pixel_table[idx].argb_blue;
 			break;
 		}
 
-		u32Pixel = (b | g << 8 | r << 16 | a << 24);
-		CVI_TRACE_RGN(RGN_INFO, "Input Table index(%d) (0x%x).\n", idx, u32Pixel);
+		u32pixel = (b | g << 8 | r << 16 | a << 24);
+		CVI_TRACE_RGN(RGN_INFO, "Input Table index(%d) (0x%x).\n", idx, u32pixel);
 
-		u16Pixel = RGN_MAKECOLOR_U16_A(a, r, g, b, s_ConvertInfo[pstPalette->pixelFormat]);
-		CVI_TRACE_RGN(RGN_INFO, "Output data = (0x%x).\n", u16Pixel);
+		pixel = RGN_MAKECOLOR_U16_A(a, r, g, b, convert_info[ppalette->pixel_format]);
+		CVI_TRACE_RGN(RGN_INFO, "Output data = (0x%x).\n", pixel);
 
-		lut_cfg.lut_addr[idx] = u16Pixel;
+		lut_cfg.lut_addr[idx] = pixel;
 	}
 
 	/* Write output_pixel_table and lut_length into cfg */
-	lut_cfg.lut_length = pstPalette->lut_length;
+	lut_cfg.lut_length = ppalette->lut_length;
 
 #if 0 // no rgnex for now
 	/* Get related device number to update LUT but RGNEX use device 0. */
-	if (ctx->stRegion.enType == OVERLAY_RGN || ctx->stRegion.enType == COVER_RGN)
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN)
 		lut_cfg.rgnex_en = false;
 	else
 		lut_cfg.rgnex_en = true;
@@ -2208,27 +2089,27 @@ s32 rgn_set_chn_palette(RGN_HANDLE Handle, const MMF_CHN_S *pstChn, RGN_PALETTE_
 	lut_cfg.lut_layer = osd_layer;
 
 	/* Uupdate device LUT in kernel space. */
-	rgn_lut_arg.stChn = ctx->stChn;
+	rgn_lut_arg.chn = ctx->chn;
 	rgn_lut_arg.lut_cfg = lut_cfg;
 	if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_SET_RGN_LUT_CFG, &rgn_lut_arg) != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_SET_LUT_CFG is failed\n");
-		return CVI_ERR_RGN_ILLEGAL_PARAM;
+		return ERR_RGN_ILLEGAL_PARAM;
 	}
 
 	return ret;
 }
 
-static int _rgn_sw_init(struct cvi_rgn_dev *rdev)
+static int _rgn_sw_init(struct rgn_dev *rdev)
 {
 	return _rgn_init();
 }
 
-static int _rgn_release_op(struct cvi_rgn_dev *rdev)
+static int _rgn_release_op(struct rgn_dev *rdev)
 {
 	return _rgn_exit();
 }
 
-static int _rgn_create_proc(struct cvi_rgn_dev *rdev)
+static int _rgn_create_proc(struct rgn_dev *rdev)
 {
 	int ret = -EINVAL;
 
@@ -2236,13 +2117,13 @@ static int _rgn_create_proc(struct cvi_rgn_dev *rdev)
 		CVI_TRACE_RGN(RGN_ERR, "rgn proc init failed\n");
 		goto err;
 	}
-	ret = CVI_SUCCESS;
+	ret = 0;
 
 err:
 	return ret;
 }
 
-static void _rgn_destroy_proc(struct cvi_rgn_dev *rdev)
+static void _rgn_destroy_proc(struct rgn_dev *rdev)
 {
 	rgn_proc_remove();
 }
@@ -2250,24 +2131,24 @@ static void _rgn_destroy_proc(struct cvi_rgn_dev *rdev)
 /*******************************************************
  *  File operations for core
  ******************************************************/
-static long _rgn_s_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
+static long _rgn_s_ctrl(struct rgn_dev *rdev, struct rgn_ext_control *p)
 {
 	int ret = -EINVAL;
-	RGN_ATTR_S stRegion;
-	BITMAP_S stBitmap;
-	MMF_CHN_S stChn;
-	RGN_CHN_ATTR_S stChnAttr;
-	u32 u32Color, id, sdk_id;
-	RGN_PALETTE_S stPalette;
-	RGN_HANDLE Handle;
+	rgn_attr_s region;
+	bitmap_s bitmap;
+	mmf_chn_s chn;
+	rgn_chn_attr_s chn_attr;
+	unsigned int color, id, sdk_id;
+	rgn_palette palette;
+	rgn_handle handle;
 
 	id	= p->id;
 	sdk_id	= p->sdk_id;
-	Handle	= p->handle;
+	handle	= p->handle;
 
 	switch (id) {
 	case RGN_IOCTL_SC_SET_RGN: {
-#if 0 //copy from cvi_vip_sc.c for V4L2_CID_DV_VIP_SC_SET_RGN
+#if 0 //copy from vip_sc.c for V4L2_CID_DV_VIP_SC_SET_RGN
 		if (copy_from_user(&sdev->vpss_chn_cfg[0].rgn_cfg, ext_ctrls[i].ptr,
 						   sizeof(sdev->vpss_chn_cfg[0].rgn_cfg))) {
 			CVI_TRACE_VPSS(CVI_DBG_ERR, "ioctl-%#x, copy_from_user failed.\n", ext_ctrls[i].id);
@@ -2280,19 +2161,19 @@ static long _rgn_s_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 	break;
 
 	case RGN_IOCTL_DISP_SET_RGN: {
-#if 0 //copy from cvi_vip_disp.c for V4L2_CID_DV_VIP_DISP_SET_RGN
+#if 0 //copy from vip_disp.c for V4L2_CID_DV_VIP_DISP_SET_RGN
 		struct sclr_disp_timing *timing = sclr_disp_get_timing();
 		struct sclr_size size;
-		struct cvi_rgn_cfg cfg;
+		struct rgn_cfg cfg;
 
-		if (copy_from_user(&cfg, ext_ctrls[i].ptr, sizeof(struct cvi_rgn_cfg))) {
+		if (copy_from_user(&cfg, ext_ctrls[i].ptr, sizeof(struct rgn_cfg))) {
 			dprintk(VIP_ERR, "ioctl-%#x, copy_from_user failed.\n", ext_ctrls[i].id);
 			break;
 		}
 
 		size.w = timing->hfde_end - timing->hfde_start + 1;
 		size.h = timing->vfde_end - timing->vfde_start + 1;
-		rc = cvi_vip_set_rgn_cfg(SCL_GOP_DISP, &cfg, &size);
+		rc = vip_set_rgn_cfg(SCL_GOP_DISP, &cfg, &size);
 #endif
 	} //RGN_IOCTL_DISP_SET_RGN:
 	break;
@@ -2300,140 +2181,140 @@ static long _rgn_s_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 	case RGN_IOCTL_SDK_CTRL: {
 		switch (sdk_id) {
 		case RGN_SDK_CREATE: {
-			if (copy_from_user(&stRegion, p->ptr1, sizeof(RGN_ATTR_S)) != 0) {
+			if (copy_from_user(&region, p->ptr1, sizeof(rgn_attr_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region create, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_create(Handle, &stRegion);
+			ret = rgn_create(handle, &region);
 		}
 		break;
 
 		case RGN_SDK_DESTORY: {
-			ret = rgn_destory(Handle);
+			ret = rgn_destory(handle);
 		}
 		break;
 
 		case RGN_SDK_SET_ATTR: {
-			if (copy_from_user(&stRegion, p->ptr1, sizeof(RGN_ATTR_S)) != 0) {
+			if (copy_from_user(&region, p->ptr1, sizeof(rgn_attr_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region set attribute, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_set_attr(Handle, &stRegion);
+			ret = rgn_set_attr(handle, &region);
 		}
 		break;
 
 		case RGN_SDK_SET_BIT_MAP: {
-			if (copy_from_user(&stBitmap, p->ptr1, sizeof(BITMAP_S)) != 0) {
+			if (copy_from_user(&bitmap, p->ptr1, sizeof(bitmap_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region set bitmap, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_set_bit_map(Handle, &stBitmap);
+			ret = rgn_set_bit_map(handle, &bitmap);
 		}
 		break;
 
 		case RGN_SDK_ATTACH_TO_CHN: {
-			if ((copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) ||
-				(copy_from_user(&stChnAttr, p->ptr2, sizeof(RGN_CHN_ATTR_S)) != 0)) {
+			if ((copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) ||
+				(copy_from_user(&chn_attr, p->ptr2, sizeof(rgn_chn_attr_s)) != 0)) {
 				CVI_TRACE_RGN(RGN_ERR, "Region attach to chn, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_attach_to_chn(Handle, &stChn, &stChnAttr);
+			ret = rgn_attach_to_chn(handle, &chn, &chn_attr);
 		}
 		break;
 
 		case RGN_SDK_DETACH_FROM_CHN: {
-			if (copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) {
+			if (copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region detach from chn, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_detach_from_chn(Handle, &stChn);
+			ret = rgn_detach_from_chn(handle, &chn);
 		}
 		break;
 
 		case RGN_SDK_SET_DISPLAY_ATTR: {
-			if ((copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) ||
-				(copy_from_user(&stChnAttr, p->ptr2, sizeof(RGN_CHN_ATTR_S)) != 0)) {
+			if ((copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) ||
+				(copy_from_user(&chn_attr, p->ptr2, sizeof(rgn_chn_attr_s)) != 0)) {
 				CVI_TRACE_RGN(RGN_ERR, "Region set display attribute, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_set_display_attr(Handle, &stChn, &stChnAttr);
+			ret = rgn_set_display_attr(handle, &chn, &chn_attr);
 		}
 		break;
 
 		case RGN_SDK_UPDATE_CANVAS: {
-			ret = rgn_update_canvas(Handle);
+			ret = rgn_update_canvas(handle);
 		}
 		break;
 
 		case RGN_SDK_INVERT_COLOR: {
-			if ((copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) ||
-				(copy_from_user(&u32Color, p->ptr2, sizeof(u32)) != 0)) {
+			if ((copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) ||
+				(copy_from_user(&color, p->ptr2, sizeof(u32)) != 0)) {
 				CVI_TRACE_RGN(RGN_ERR, "Region invert color, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_invert_color(Handle, &stChn, &u32Color);
+			ret = rgn_invert_color(handle, &chn, &color);
 		}
 		break;
 
 		case RGN_SDK_SET_CHN_PALETTE: {
-			RGN_RGBQUARD_S *pstInputPixelTable;
+			rgn_rgbquad_s *input_pixel_table;
 
-			if ((copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) ||
-			    (copy_from_user(&stPalette, p->ptr2, sizeof(RGN_PALETTE_S)) != 0)) {
+			if ((copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) ||
+			    (copy_from_user(&palette, p->ptr2, sizeof(rgn_palette)) != 0)) {
 				CVI_TRACE_RGN(RGN_ERR, "Region set chn palette, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			pstInputPixelTable = kmalloc_array(stPalette.lut_length, sizeof(RGN_RGBQUARD_S), GFP_KERNEL);
-			if (pstInputPixelTable == CVI_NULL) {
+			input_pixel_table = kmalloc_array(palette.lut_length, sizeof(rgn_rgbquad_s), GFP_KERNEL);
+			if (input_pixel_table == NULL) {
 				CVI_TRACE_RGN(RGN_ERR, "kmalloc failed.\n");
-				return CVI_ERR_RGN_NOMEM;
+				return ERR_RGN_NOMEM;
 			}
-			if (copy_from_user(pstInputPixelTable, (void *)(stPalette.pstPaletteTable),
-				stPalette.lut_length * sizeof(RGN_RGBQUARD_S))) {
+			if (copy_from_user(input_pixel_table, (void *)(palette.ppalette_table),
+				palette.lut_length * sizeof(rgn_rgbquad_s))) {
 				CVI_TRACE_RGN(RGN_ERR, "lut copy_from_user failed.\n");
-				ret = CVI_ERR_RGN_NOMEM;
-				kfree(pstInputPixelTable);
+				ret = ERR_RGN_NOMEM;
+				kfree(input_pixel_table);
 				break;
 			}
 
-			ret = rgn_set_chn_palette(Handle, &stChn, &stPalette, pstInputPixelTable);
-			kfree(pstInputPixelTable);
+			ret = rgn_set_chn_palette(handle, &chn, &palette, input_pixel_table);
+			kfree(input_pixel_table);
 		}
 		break;
 
 		case RGN_SDK_SET_CMPR_SIZE: {
-			s32 s32CmprSz;
-			struct cvi_rgn_ctx *ctx = NULL;
+			int cmpr_sz;
+			struct rgn_ctx *ctx = NULL;
 
-			if (!_rgn_hash_find(Handle, &ctx, false)) {
-				CVI_TRACE_RGN(RGN_ERR, "RGN_HANDLE(%d) is non-existent.\n", Handle);
+			if (!_rgn_hash_find(handle, &ctx, false)) {
+				CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is non-existent.\n", handle);
 				mutex_unlock(&g_rgnlock);
-				return CVI_ERR_RGN_UNEXIST;
+				return ERR_RGN_UNEXIST;
 			}
-			if ((copy_from_user(&s32CmprSz, p->ptr1, sizeof(s32)) != 0)) {
+			if ((copy_from_user(&cmpr_sz, p->ptr1, sizeof(s32)) != 0)) {
 				CVI_TRACE_RGN(RGN_ERR, "Region set compress size, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ctx->stCanvasInfo[ctx->canvas_idx].u32CompressedSize = s32CmprSz;
-			ret = CVI_SUCCESS;
+			ctx->canvas_info[ctx->canvas_idx].compressed_size = cmpr_sz;
+			ret = 0;
 		}
 		break;
 
@@ -2451,27 +2332,27 @@ static long _rgn_s_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 	return ret;
 }
 
-static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
+static long _rgn_g_ctrl(struct rgn_dev *rdev, struct rgn_ext_control *p)
 {
 	int ret = -EINVAL;
-	RGN_ATTR_S stRegion;
-	MMF_CHN_S stChn;
-	RGN_CHN_ATTR_S stChnAttr;
-	RGN_CANVAS_INFO_S stCanvasInfo;
-	u32 id, sdk_id;
-	RGN_HANDLE Handle;
+	rgn_attr_s region;
+	mmf_chn_s chn;
+	rgn_chn_attr_s chn_attr;
+	rgn_canvas_info_s canvas_info;
+	unsigned int id, sdk_id;
+	rgn_handle handle;
 
 	id	= p->id;
 	sdk_id	= p->sdk_id;
-	Handle	= p->handle;
+	handle	= p->handle;
 
 	switch (id) {
 	case RGN_IOCTL_SDK_CTRL: {
 		switch (sdk_id) {
 		case RGN_SDK_GET_ATTR: {
-			ret = rgn_get_attr(Handle, &stRegion);
+			ret = rgn_get_attr(handle, &region);
 
-			if (copy_to_user(p->ptr1, &stRegion, sizeof(RGN_ATTR_S)) != 0) {
+			if (copy_to_user(p->ptr1, &region, sizeof(rgn_attr_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region get attribute, copy_to_user failed.\n");
 				ret = -EFAULT;
 			}
@@ -2479,15 +2360,15 @@ static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 		break;
 
 		case RGN_SDK_GET_DISPLAY_ATTR: {
-			if (copy_from_user(&stChn, p->ptr1, sizeof(MMF_CHN_S)) != 0) {
+			if (copy_from_user(&chn, p->ptr1, sizeof(mmf_chn_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region get display attribute, copy_from_user failed.\n");
 				ret = -EFAULT;
 				break;
 			}
 
-			ret = rgn_get_display_attr(Handle, &stChn, &stChnAttr);
+			ret = rgn_get_display_attr(handle, &chn, &chn_attr);
 
-			if (copy_to_user(p->ptr2, &stChnAttr, sizeof(RGN_CHN_ATTR_S)) != 0) {
+			if (copy_to_user(p->ptr2, &chn_attr, sizeof(rgn_chn_attr_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region get display attribute, copy_to_user failed.\n");
 				ret = -EFAULT;
 			}
@@ -2495,9 +2376,9 @@ static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 		break;
 
 		case RGN_SDK_GET_CANVAS_INFO: {
-			ret = rgn_get_canvas_info(Handle, &stCanvasInfo);
+			ret = rgn_get_canvas_info(handle, &canvas_info);
 
-			if (copy_to_user(p->ptr1, &stCanvasInfo, sizeof(RGN_CANVAS_INFO_S)) != 0) {
+			if (copy_to_user(p->ptr1, &canvas_info, sizeof(rgn_canvas_info_s)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region get canvas info, copy_to_user failed.\n");
 				ret = -EFAULT;
 			}
@@ -2505,10 +2386,10 @@ static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 		break;
 
 		case RGN_SDK_GET_ION_LEN: {
-			struct cvi_rgn_ctx *ctx = NULL;
+			struct rgn_ctx *ctx = NULL;
 
-			ret = CHECK_RGN_HANDLE(&ctx, Handle);
-			if (ret != CVI_SUCCESS)
+			ret = check_rgn_handle(&ctx, handle);
+			if (ret != 0)
 				break;
 			if (copy_to_user(p->ptr1, &ctx->ion_len, sizeof(u32)) != 0) {
 				CVI_TRACE_RGN(RGN_ERR, "Region get ion length, copy_to_user failed.\n");
@@ -2535,7 +2416,7 @@ static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 long rgn_ioctl(struct file *file, u_int cmd, u_long arg)
 {
 	int ret = -EINVAL;
-	struct cvi_rgn_dev *rdev = file->private_data;
+	struct rgn_dev *rdev = file->private_data;
 	struct rgn_ext_control p;
 
 	if (copy_from_user(&p, (void __user *)arg, sizeof(struct rgn_ext_control)))
@@ -2565,15 +2446,15 @@ int rgn_open(struct inode *inode, struct file *file)
 
 	// only open once
 	if (!atomic_read(&dev_open_cnt)) {
-		struct cvi_rgn_dev *rdev =
-		container_of(file->private_data, struct cvi_rgn_dev, miscdev);
+		struct rgn_dev *rdev =
+		container_of(file->private_data, struct rgn_dev, miscdev);
 
 		file->private_data = rdev;
 		_rgn_sw_init(rdev);
 
 		CVI_TRACE_RGN(RGN_INFO, "-\n");
 
-		ret = CVI_SUCCESS;
+		ret = 0;
 	}
 
 	atomic_inc(&dev_open_cnt);
@@ -2587,15 +2468,15 @@ int rgn_release(struct inode *inode, struct file *file)
 
 	// only exit once
 	if (atomic_dec_and_test(&dev_open_cnt)) {
-		struct cvi_rgn_dev *rdev =
-		container_of(file->private_data, struct cvi_rgn_dev, miscdev);
+		struct rgn_dev *rdev =
+		container_of(file->private_data, struct rgn_dev, miscdev);
 
 		/* This should move to stop streaming */
 		_rgn_release_op(rdev);
 
 		CVI_TRACE_RGN(RGN_INFO, "-\n");
 
-		ret = CVI_SUCCESS;
+		ret = 0;
 	}
 
 	if (atomic_read(&dev_open_cnt) < 0)
@@ -2604,7 +2485,7 @@ int rgn_release(struct inode *inode, struct file *file)
 	return ret;
 }
 
-int rgn_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int rgn_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	int ret = 0;
 
@@ -2622,7 +2503,7 @@ int rgn_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 int rgn_create_instance(struct platform_device *pdev)
 {
 	int ret = -EINVAL;
-	struct cvi_rgn_dev *rdev;
+	struct rgn_dev *rdev;
 
 	rdev = dev_get_drvdata(&pdev->dev);
 	if (!rdev) {
@@ -2634,7 +2515,7 @@ int rgn_create_instance(struct platform_device *pdev)
 		CVI_TRACE_RGN(RGN_ERR, "Failed to create proc\n");
 		goto err;
 	}
-	ret = CVI_SUCCESS;
+	ret = 0;
 
 err:
 	return ret;
@@ -2643,7 +2524,7 @@ err:
 int rgn_destroy_instance(struct platform_device *pdev)
 {
 	int ret = -EINVAL;
-	struct cvi_rgn_dev *rdev;
+	struct rgn_dev *rdev;
 
 	rdev = dev_get_drvdata(&pdev->dev);
 	if (!rdev) {
@@ -2652,7 +2533,7 @@ int rgn_destroy_instance(struct platform_device *pdev)
 	}
 
 	_rgn_destroy_proc(rdev);
-	ret = CVI_SUCCESS;
+	ret = 0;
 
 err:
 	return ret;

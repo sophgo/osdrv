@@ -2,56 +2,57 @@
 #define _LDC_SDK_H_
 
 #include <linux/list.h>
-#include <linux/cvi_errno.h>
+#include <linux/comm_errno.h>
 #include <linux/irqreturn.h>
 #include "vb.h"
 #include "base_cb.h"
+#include "ldc_core.h"
 
 enum ldc_op_id { LDC_OP_MESH_JOB = 0, LDC_OP_MAX };
 
-int ldc_exec_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg);
+int ldc_exec_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg);
 int ldc_rm_cb(void);
-int ldc_reg_cb(struct cvi_ldc_vdev *wdev);
+int ldc_reg_cb(struct ldc_vdev *wdev);
 
-void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core);
+void ldc_work_handle_frm_done(struct ldc_vdev *dev, struct ldc_core *core);
 
 /* Begin a ldc job,then add task into the job,ldc will finish all the task in the job.
  *
- * @param phHandle: u64 *phHandle
+ * @param phandle: unsigned long long *phandle
  * @return Error code (0 if successful)
  */
-s32 ldc_begin_job(struct cvi_ldc_vdev *wdev,
-		  struct gdc_handle_data *phHandle);
+int ldc_begin_job(struct ldc_vdev *wdev,
+		  struct gdc_handle_data *phandle);
 
 /* End a job,all tasks in the job will be submmitted to ldc
  *
- * @param phHandle: u64 *phHandle
+ * @param phandle: unsigned long long *phandle
  * @return Error code (0 if successful)
  */
-s32 ldc_end_job(struct cvi_ldc_vdev *wdev, u64 hHandle);
+int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle);
 
 /* Cancel a job ,then all tasks in the job will not be submmitted to ldc
  *
- * @param phHandle: u64 *phHandle
+ * @param phandle: unsigned long long *phandle
  * @return Error code (0 if successful)
  */
-s32 ldc_cancel_job(struct cvi_ldc_vdev *wdev, u64 hHandle);
-s32 ldc_get_work_job(struct cvi_ldc_vdev *wdev, struct gdc_handle_data *data);
+int ldc_cancel_job(struct ldc_vdev *wdev, unsigned long long handle);
+int ldc_get_work_job(struct ldc_vdev *wdev, struct gdc_handle_data *data);
 
 /* Add a rotation task to a ldc job
  *
- * @param phHandle: u64 *phHandle
- * @param pstTask: to describe what to do
- * @param enRotation: for further settings
+ * @param phandle: unsigned long long *phandle
+ * @param ptask: to describe what to do
+ * @param rotation: for further settings
  * @return Error code (0 if successful)
  */
-s32 ldc_add_rotation_task(struct cvi_ldc_vdev *wdev, struct gdc_task_attr *attr);
-s32 ldc_add_ldc_task(struct cvi_ldc_vdev *wdev, struct gdc_task_attr *attr);
-s32 ldc_get_chn_frame(struct cvi_ldc_vdev *wdev, struct gdc_identity_attr *identity
-	, VIDEO_FRAME_INFO_S *pstVideoFrame, s32 s32MilliSec);
+int ldc_add_rotation_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
+	, video_frame_info_s *pstvideo_frame, int s32milli_sec);
 
-s32 ldc_attach_vb_pool(VB_POOL VbPool);
-s32 ldc_detach_vb_pool(void);
+int ldc_attach_vb_pool(vb_pool vb_pool);
+int ldc_detach_vb_pool(void);
 
 
 /* set meshsize for rotation only
@@ -60,108 +61,108 @@ s32 ldc_detach_vb_pool(void);
  * @param nMeshVer: mesh counts vertical
  * @return Error code (0 if successful)
  */
-s32 cvi_ldc_set_mesh_size(int nMeshHor, int nMeshVer);
+int ldc_set_mesh_size(int nMeshHor, int nMeshVer);
 
-int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev);
-void cvi_ldc_sw_deinit(struct cvi_ldc_vdev *wdev);
+int ldc_sw_init(struct ldc_vdev *wdev);
+void ldc_sw_deinit(struct ldc_vdev *wdev);
 
-s32 ldc_set_identity(struct cvi_ldc_vdev *wdev,
+int ldc_set_identity(struct ldc_vdev *wdev,
 				  struct gdc_identity_attr *attr);
-s32 ldc_suspend_handler(void);
-s32 ldc_resume_handler(void);
+int ldc_suspend_handler(void);
+int ldc_resume_handler(void);
 
 #define LDC_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_NV21) || (fmt == PIXEL_FORMAT_NV12) || (fmt == PIXEL_FORMAT_YUV_400))
 
-static inline s32 LDC_CHECK_NULL_PTR(const void *ptr)
+static inline int ldc_check_null_ptr(const void *ptr)
 {
 	if (!ptr) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "NULL pointer\n");
-		return CVI_ERR_GDC_NULL_PTR;
+		TRACE_LDC(DBG_ERR, "NULL pointer\n");
+		return ERR_GDC_NULL_PTR;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_LDC_FORMAT(VIDEO_FRAME_INFO_S imgIn, VIDEO_FRAME_INFO_S imgOut)
+static inline int check_ldc_format(video_frame_info_s imgIn, video_frame_info_s imgOut)
 {
-	if (imgIn.stVFrame.enPixelFormat !=
-		imgOut.stVFrame.enPixelFormat) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "in/out pixelformat(%d-%d) mismatch\n",
-			imgIn.stVFrame.enPixelFormat,
-			imgOut.stVFrame.enPixelFormat);
-		return CVI_ERR_GDC_ILLEGAL_PARAM;
+	if (imgIn.video_frame.pixel_format !=
+		imgOut.video_frame.pixel_format) {
+		TRACE_LDC(DBG_ERR, "in/out pixelformat(%d-%d) mismatch\n",
+			imgIn.video_frame.pixel_format,
+			imgOut.video_frame.pixel_format);
+		return ERR_GDC_ILLEGAL_PARAM;
 	}
-	if (!LDC_SUPPORT_FMT(imgIn.stVFrame.enPixelFormat)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "pixelformat(%d) unsupported\n",
-			imgIn.stVFrame.enPixelFormat);
-		return CVI_ERR_GDC_ILLEGAL_PARAM;
+	if (!LDC_SUPPORT_FMT(imgIn.video_frame.pixel_format)) {
+		TRACE_LDC(DBG_ERR, "pixelformat(%d) unsupported\n",
+			imgIn.video_frame.pixel_format);
+		return ERR_GDC_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 LDC_CHECK_PARAM_IS_VALID(struct cvi_ldc_vdev *wdev, struct gdc_task_attr *attr)
+static inline int ldc_check_param_is_valid(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = LDC_CHECK_NULL_PTR(wdev);
+	ret = ldc_check_null_ptr(wdev);
 	if (ret)
-		return CVI_FALSE;
+		return false;
 
-	ret = LDC_CHECK_NULL_PTR(attr);
+	ret = ldc_check_null_ptr(attr);
 	if (ret)
-		return CVI_FALSE;
+		return false;
 
-	ret = CHECK_LDC_FORMAT(attr->stImgIn, attr->stImgOut);
+	ret = check_ldc_format(attr->img_in, attr->img_out);
 	if (ret)
-		return CVI_FALSE;
+		return false;
 
-	return CVI_TRUE;
+	return true;
 }
 
-static inline s32 LDC_ROT_CHECK_SIZE(ROTATION_E enRotation, const struct gdc_task_attr *pstTask)
+static inline int ldc_rot_check_size(rotation_e rotation, const struct gdc_task_attr *ptask)
 {
-	if (enRotation > ROTATION_XY_FLIP) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "invalid rotation(%d).\n", enRotation);
-		return CVI_ERR_GDC_ILLEGAL_PARAM;
+	if (rotation > ROTATION_XY_FLIP) {
+		TRACE_LDC(DBG_ERR, "invalid rotation(%d).\n", rotation);
+		return ERR_GDC_ILLEGAL_PARAM;
 	}
 
-	if (enRotation == ROTATION_90 || enRotation == ROTATION_270 || enRotation == ROTATION_XY_FLIP) {
-		if (pstTask->stImgOut.stVFrame.u32Width < pstTask->stImgIn.stVFrame.u32Height) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "rotation(%d) invalid: 'output width(%d) < input height(%d)'\n",
-				enRotation, pstTask->stImgOut.stVFrame.u32Width,
-				pstTask->stImgIn.stVFrame.u32Height);
-			return CVI_ERR_GDC_ILLEGAL_PARAM;
+	if (rotation == ROTATION_90 || rotation == ROTATION_270 || rotation == ROTATION_XY_FLIP) {
+		if (ptask->img_out.video_frame.width < ptask->img_in.video_frame.height) {
+			TRACE_LDC(DBG_ERR, "rotation(%d) invalid: 'output width(%d) < input height(%d)'\n",
+				rotation, ptask->img_out.video_frame.width,
+				ptask->img_in.video_frame.height);
+			return ERR_GDC_ILLEGAL_PARAM;
 		}
-		if (pstTask->stImgOut.stVFrame.u32Height < pstTask->stImgIn.stVFrame.u32Width) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "rotation(%d) invalid: 'output height(%d) < input width(%d)'\n",
-				enRotation, pstTask->stImgOut.stVFrame.u32Height,
-				pstTask->stImgIn.stVFrame.u32Width);
-			return CVI_ERR_GDC_ILLEGAL_PARAM;
+		if (ptask->img_out.video_frame.height < ptask->img_in.video_frame.width) {
+			TRACE_LDC(DBG_ERR, "rotation(%d) invalid: 'output height(%d) < input width(%d)'\n",
+				rotation, ptask->img_out.video_frame.height,
+				ptask->img_in.video_frame.width);
+			return ERR_GDC_ILLEGAL_PARAM;
 		}
 	} else {
-		if (pstTask->stImgOut.stVFrame.u32Width < pstTask->stImgIn.stVFrame.u32Width) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "rotation(%d) invalid: 'output width(%d) < input width(%d)'\n",
-				enRotation, pstTask->stImgOut.stVFrame.u32Width,
-				pstTask->stImgIn.stVFrame.u32Width);
-			return CVI_ERR_GDC_ILLEGAL_PARAM;
+		if (ptask->img_out.video_frame.width < ptask->img_in.video_frame.width) {
+			TRACE_LDC(DBG_ERR, "rotation(%d) invalid: 'output width(%d) < input width(%d)'\n",
+				rotation, ptask->img_out.video_frame.width,
+				ptask->img_in.video_frame.width);
+			return ERR_GDC_ILLEGAL_PARAM;
 		}
-		if (pstTask->stImgOut.stVFrame.u32Height < pstTask->stImgIn.stVFrame.u32Height) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "rotation(%d) invalid: 'output height(%d) < input height(%d)'\n",
-				enRotation, pstTask->stImgOut.stVFrame.u32Height,
-				pstTask->stImgIn.stVFrame.u32Height);
-			return CVI_ERR_GDC_ILLEGAL_PARAM;
+		if (ptask->img_out.video_frame.height < ptask->img_in.video_frame.height) {
+			TRACE_LDC(DBG_ERR, "rotation(%d) invalid: 'output height(%d) < input height(%d)'\n",
+				rotation, ptask->img_out.video_frame.height,
+				ptask->img_in.video_frame.height);
+			return ERR_GDC_ILLEGAL_PARAM;
 		}
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 
-static inline u8 LDC_IDENTITY_IS_MATCH(GDC_IDENTITY_ATTR_S *attr_src, GDC_IDENTITY_ATTR_S *attr_dst)
+static inline unsigned char ldc_identity_is_match(gdc_identity_attr_s *attr_src, gdc_identity_attr_s *attr_dst)
 {
-	if ((attr_src->enModId == attr_dst->enModId)
-		&& (attr_src->u32ID == attr_dst->u32ID)
-		&& (strcmp(attr_src->Name, attr_dst->Name) == 0))
+	if ((attr_src->mod_id == attr_dst->mod_id)
+		&& (attr_src->id == attr_dst->id)
+		&& (strcmp(attr_src->name, attr_dst->name) == 0))
 		return true;
 	else
 		return false;

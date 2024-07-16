@@ -5,54 +5,54 @@
 	extern "C" {
 #endif
 
-#include <linux/cvi_comm_region.h>
+#include <linux/comm_region.h>
 
-enum RGN_CB_CMD {
+enum rgn_cb_cmd {
 	RGN_CB_MAX
 };
 
 struct _rgn_chn_size_cb_param {
-	MMF_CHN_S stChn;
-	RECT_S rect;
+	mmf_chn_s chn;
+	rect_s rect;
 };
 
 struct _rgn_hdls_cb_param {
-	MMF_CHN_S stChn;
-	RGN_HANDLE *hdls;
-	RGN_TYPE_E enType;
+	mmf_chn_s chn;
+	rgn_handle *hdls;
+	rgn_type_e type;
 	__u32 layer;
 };
 
 struct _rgn_cfg_cb_param {
-	MMF_CHN_S stChn;
-	struct cvi_rgn_cfg rgn_cfg;
+	mmf_chn_s chn;
+	struct rgn_cfg rgn_cfg;
 	__u32 layer;
 };
 
 struct _rgn_ex_cfg_cb_param {
-	MMF_CHN_S stChn;
-	struct cvi_rgn_ex_cfg rgn_ex_cfg;
+	mmf_chn_s chn;
+	struct rgn_ex_cfg rgn_ex_cfg;
 };
 
 struct _rgn_coverex_cfg_cb_param {
-	MMF_CHN_S stChn;
-	struct cvi_rgn_coverex_cfg rgn_coverex_cfg;
+	mmf_chn_s chn;
+	struct rgn_coverex_cfg rgn_coverex_cfg;
 };
 
 struct _rgn_mosaic_cfg_cb_param {
-	MMF_CHN_S stChn;
-	struct cvi_rgn_mosaic_cfg rgn_mosaic_cfg;
+	mmf_chn_s chn;
+	struct rgn_mosaic_cfg rgn_mosaic_cfg;
 };
 
 
 struct _rgn_lut_cb_param {
-	MMF_CHN_S stChn;
-	struct cvi_rgn_lut_cfg lut_cfg;
+	mmf_chn_s chn;
+	struct rgn_lut_cfg lut_cfg;
 };
 
 struct _rgn_get_ow_addr_cb_param {
-	MMF_CHN_S stChn;
-	RGN_HANDLE handle;
+	mmf_chn_s chn;
+	rgn_handle handle;
 	__u32 layer;
 	__u64 addr;
 };

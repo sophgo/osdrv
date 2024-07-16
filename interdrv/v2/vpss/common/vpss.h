@@ -1,12 +1,12 @@
-#ifndef _VPSS_H_
+#ifndef _VPSS_H_vpss_g
 #define _VPSS_H_
 
-#include <linux/cvi_common.h>
-#include <linux/cvi_comm_video.h>
-#include <linux/cvi_comm_sys.h>
-#include <linux/cvi_comm_vpss.h>
-#include <linux/cvi_comm_region.h>
-#include <linux/cvi_errno.h>
+#include <linux/common.h>
+#include <linux/comm_video.h>
+#include <linux/comm_sys.h>
+#include <linux/comm_vpss.h>
+#include <linux/comm_region.h>
+#include <linux/comm_errno.h>
 #include <linux/vpss_uapi.h>
 
 #include <vpss_ctx.h>
@@ -18,90 +18,90 @@
 typedef void (*vpss_timer_cb)(void *data);
 
 /* Configured from user, IOCTL */
-s32 vpss_create_grp(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr);
-s32 vpss_destroy_grp(VPSS_GRP VpssGrp);
-VPSS_GRP vpss_get_available_grp(void);
+signed int vpss_create_grp(vpss_grp grp_id, const vpss_grp_attr_s *grp_attr);
+signed int vpss_destroy_grp(vpss_grp grp_id);
+vpss_grp vpss_get_available_grp(void);
 
-s32 vpss_start_grp(VPSS_GRP VpssGrp);
-s32 vpss_stop_grp(VPSS_GRP VpssGrp);
+signed int vpss_start_grp(vpss_grp grp_id);
+signed int vpss_stop_grp(vpss_grp grp_id);
 
-s32 vpss_reset_grp(VPSS_GRP VpssGrp);
+signed int vpss_reset_grp(vpss_grp grp_id);
 
-s32 vpss_set_grp_attr(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr);
-s32 vpss_get_grp_attr(VPSS_GRP VpssGrp, VPSS_GRP_ATTR_S *pstGrpAttr);
+signed int vpss_set_grp_attr(vpss_grp grp_id, const vpss_grp_attr_s *grp_attr);
+signed int vpss_get_grp_attr(vpss_grp grp_id, vpss_grp_attr_s *grp_attr);
 
-s32 vpss_set_grp_crop(VPSS_GRP VpssGrp, const VPSS_CROP_INFO_S *pstCropInfo);
-s32 vpss_get_grp_crop(VPSS_GRP VpssGrp, VPSS_CROP_INFO_S *pstCropInfo);
+signed int vpss_set_grp_crop(vpss_grp grp_id, const vpss_crop_info_s *crop_info);
+signed int vpss_get_grp_crop(vpss_grp grp_id, vpss_crop_info_s *crop_info);
 
-s32 vpss_get_grp_frame(VPSS_GRP VpssGrp, VIDEO_FRAME_INFO_S *pstVideoFrame);
-s32 vpss_release_grp_frame(VPSS_GRP VpssGrp, const VIDEO_FRAME_INFO_S *pstVideoFrame);
+signed int vpss_get_grp_frame(vpss_grp grp_id, video_frame_info_s *video_frame);
+signed int vpss_release_grp_frame(vpss_grp grp_id, const video_frame_info_s *video_frame);
 
-s32 vpss_send_frame(VPSS_GRP VpssGrp, const VIDEO_FRAME_INFO_S *pstVideoFrame, s32 s32MilliSec);
-s32 vpss_send_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn
-	, const VIDEO_FRAME_INFO_S *pstVideoFrame, s32 s32MilliSec);
+signed int vpss_send_frame(vpss_grp grp_id, const video_frame_info_s *video_frame, signed int milli_sec);
+signed int vpss_send_chn_frame(vpss_grp grp_id, vpss_chn chn_id
+	, const video_frame_info_s *video_frame, signed int milli_sec);
 
-s32 vpss_set_chn_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VPSS_CHN_ATTR_S *pstChnAttr);
-s32 vpss_get_chn_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_CHN_ATTR_S *pstChnAttr);
+signed int vpss_set_chn_attr(vpss_grp grp_id, vpss_chn chn_id, const vpss_chn_attr_s *chn_attr);
+signed int vpss_get_chn_attr(vpss_grp grp_id, vpss_chn chn_id, vpss_chn_attr_s *chn_attr);
 
-s32 vpss_enable_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
-s32 vpss_disable_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
+signed int vpss_enable_chn(vpss_grp grp_id, vpss_chn chn_id);
+signed int vpss_disable_chn(vpss_grp grp_id, vpss_chn chn_id);
 
-s32 vpss_set_chn_crop(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VPSS_CROP_INFO_S *pstCropInfo);
-s32 vpss_get_chn_crop(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_CROP_INFO_S *pstCropInfo);
+signed int vpss_set_chn_crop(vpss_grp grp_id, vpss_chn chn_id, const vpss_crop_info_s *crop_info);
+signed int vpss_get_chn_crop(vpss_grp grp_id, vpss_chn chn_id, vpss_crop_info_s *crop_info);
 
-s32 vpss_set_chn_rotation(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, ROTATION_E enRotation);
-s32 vpss_get_chn_rotation(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, ROTATION_E *penRotation);
+signed int vpss_set_chn_rotation(vpss_grp grp_id, vpss_chn chn_id, rotation_e rotation);
+signed int vpss_get_chn_rotation(vpss_grp grp_id, vpss_chn chn_id, rotation_e *rotation);
 
-s32 vpss_set_chn_ldc_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VPSS_LDC_ATTR_S *pstLDCAttr,
+signed int vpss_set_chn_ldc_attr(vpss_grp grp_id, vpss_chn chn_id, const vpss_ldc_attr_s *ldc_attr,
 			u64 mesh_addr);
-s32 vpss_get_chn_ldc_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_LDC_ATTR_S *pstLDCAttr);
+signed int vpss_get_chn_ldc_attr(vpss_grp grp_id, vpss_chn chn_id, vpss_ldc_attr_s *ldc_attr);
 
-s32 vpss_set_chn_fisheye_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, ROTATION_E enRotation,
-			const FISHEYE_ATTR_S *pstFishEyeAttr, u64 mesh_addr);
-s32 vpss_get_chn_fisheye_attr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, FISHEYE_ATTR_S *pstFishEyeAttr);
+signed int vpss_set_chn_fisheye_attr(vpss_grp grp_id, vpss_chn chn_id, rotation_e rotation,
+			const fisheye_attr_s *fish_eye_attr, u64 mesh_addr);
+signed int vpss_get_chn_fisheye_attr(vpss_grp grp_id, vpss_chn chn_id, fisheye_attr_s *fish_eye_attr);
 
-s32 vpss_get_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VIDEO_FRAME_INFO_S *pstFrameInfo,
-			 s32 s32MilliSec);
-s32 vpss_release_chn_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VIDEO_FRAME_INFO_S *pstVideoFrame);
+signed int vpss_get_chn_frame(vpss_grp grp_id, vpss_chn chn_id, video_frame_info_s *frame_info,
+			 signed int milli_sec);
+signed int vpss_release_chn_frame(vpss_grp grp_id, vpss_chn chn_id, const video_frame_info_s *video_frame);
 
-s32 vpss_set_chn_align(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, u32 u32Align);
-s32 vpss_get_chn_align(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, u32 *pu32Align);
+signed int vpss_set_chn_align(vpss_grp grp_id, vpss_chn chn_id, u32 align);
+signed int vpss_get_chn_align(vpss_grp grp_id, vpss_chn chn_id, u32 *align);
 
-s32 vpss_set_chn_yratio(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, u32 YRatio);
-s32 vpss_get_chn_yratio(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, u32 *pYRatio);
+signed int vpss_set_chn_yratio(vpss_grp grp_id, vpss_chn chn_id, u32 y_ratio);
+signed int vpss_get_chn_yratio(vpss_grp grp_id, vpss_chn chn_id, u32 *y_ratio);
 
-s32 vpss_set_chn_scale_coef_level(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_SCALE_COEF_E enCoef);
-s32 vpss_get_chn_scale_coef_level(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_SCALE_COEF_E *penCoef);
+signed int vpss_set_chn_scale_coef_level(vpss_grp grp_id, vpss_chn chn_id, vpss_scale_coef_e coef);
+signed int vpss_get_chn_scale_coef_level(vpss_grp grp_id, vpss_chn chn_id, vpss_scale_coef_e *coef);
 
-s32 vpss_set_chn_draw_rect(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VPSS_DRAW_RECT_S *pstDrawRect);
-s32 vpss_get_chn_draw_rect(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_DRAW_RECT_S *pstDrawRect);
+signed int vpss_set_chn_draw_rect(vpss_grp grp_id, vpss_chn chn_id, const vpss_draw_rect_s *draw_rect);
+signed int vpss_get_chn_draw_rect(vpss_grp grp_id, vpss_chn chn_id, vpss_draw_rect_s *draw_rect);
 
-s32 vpss_set_chn_convert(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, const VPSS_CONVERT_S *pstConvert);
-s32 vpss_get_chn_convert(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VPSS_CONVERT_S *pstConvert);
+signed int vpss_set_chn_convert(vpss_grp grp_id, vpss_chn chn_id, const vpss_convert_s *convert);
+signed int vpss_get_chn_convert(vpss_grp grp_id, vpss_chn chn_id, vpss_convert_s *convert);
 
-s32 vpss_show_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
-s32 vpss_hide_chn(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
+signed int vpss_show_chn(vpss_grp grp_id, vpss_chn chn_id);
+signed int vpss_hide_chn(vpss_grp grp_id, vpss_chn chn_id);
 
-s32 vpss_attach_vb_pool(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, VB_POOL hVbPool);
-s32 vpss_detach_vb_pool(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
+signed int vpss_attach_vb_pool(vpss_grp grp_id, vpss_chn chn_id, vb_pool vb_pool);
+signed int vpss_detach_vb_pool(vpss_grp grp_id, vpss_chn chn_id);
 
-s32 vpss_trigger_snap_frame(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, u32 frame_cnt);
+signed int vpss_trigger_snap_frame(vpss_grp grp_id, vpss_chn chn_id, u32 frame_cnt);
 
-s32 vpss_stitch(u32 u32ChnNum, VPSS_STITCH_CHN_ATTR_S *pstInput,
-			VPSS_STITCH_OUTPUT_ATTR_S *pstOutput, VIDEO_FRAME_INFO_S *pstVideoFrame);
+signed int vpss_stitch(u32 chn_num, vpss_stitch_chn_attr_s *input,
+			vpss_stitch_output_attr_s *output, video_frame_info_s *video_frame);
 
-s32 vpss_set_mod_param(const VPSS_MOD_PARAM_S *pstModParam);
-s32 vpss_get_mod_param(VPSS_MOD_PARAM_S *pstModParam);
+signed int vpss_set_mod_param(const vpss_mod_param_s *mod_param);
+signed int vpss_get_mod_param(vpss_mod_param_s *mod_param);
 
-s32 vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg);
+signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg);
 
 /* INTERNAL */
-s32 vpss_set_vivpss_mode(const VI_VPSS_MODE_S *pstVIVPSSMode);
-s32 vpss_set_grp_csc(struct vpss_grp_csc_cfg *cfg);
-s32 vpss_set_chn_csc(struct vpss_chn_csc_cfg *cfg);
-s32 vpss_get_proc_amp_ctrl(PROC_AMP_E type, PROC_AMP_CTRL_S *ctrl);
-s32 vpss_get_proc_amp(VPSS_GRP VpssGrp, s32 *proc_amp);
-s32 vpss_get_all_proc_amp(struct vpss_all_proc_amp_cfg *cfg);
+signed int vpss_set_vivpss_mode(const vi_vpss_mode_s *mode);
+signed int vpss_set_grp_csc(struct vpss_grp_csc_cfg *cfg);
+signed int vpss_set_chn_csc(struct vpss_chn_csc_cfg *cfg);
+signed int vpss_get_proc_amp_ctrl(proc_amp_e type, proc_amp_ctrl_s *ctrl);
+signed int vpss_get_proc_amp(vpss_grp grp_id, signed int *proc_amp);
+signed int vpss_get_all_proc_amp(struct vpss_all_proc_amp_cfg *cfg);
 
 void vpss_set_mlv_info(u8 snr_num, struct mlv_i_s *p_m_lv_i);
 void vpss_get_mlv_info(u8 snr_num, struct mlv_i_s *p_m_lv_i);
@@ -109,9 +109,12 @@ void vpss_get_mlv_info(u8 snr_num, struct mlv_i_s *p_m_lv_i);
 int _vpss_call_cb(u32 m_id, u32 cmd_id, void *data);
 void vpss_init(void);
 void vpss_deinit(void);
-void vpss_gdc_callback(void *pParam, VB_BLK blk);
+s32 vpss_suspend_handler(void);
+s32 vpss_resume_handler(void);
 
-s32 check_vpss_id(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
+void vpss_gdc_callback(void *param, vb_blk blk);
+
+signed int check_vpss_id(vpss_grp grp_id, vpss_chn chn_id);
 
 void vpss_mode_init(void);
 void vpss_mode_deinit(void);
@@ -119,14 +122,12 @@ void vpss_mode_deinit(void);
 void register_timer_fun(vpss_timer_cb cb, void *data);
 
 
-struct cvi_vpss_ctx **vpss_get_ctx(void);
-
-void vpss_get_mod_param_void(VPSS_MOD_PARAM_S *pstModParam);
+struct vpss_ctx **vpss_get_ctx(void);
 
 void vpss_release_grp(void);
 
 //Check GRP and CHN VALID, CREATED and FMT
-#define VPSS_GRP_SUPPORT_FMT(fmt) \
+#define vpss_grp_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_RGB_888_PLANAR) || (fmt == PIXEL_FORMAT_BGR_888_PLANAR) ||	\
 	 (fmt == PIXEL_FORMAT_RGB_888) || (fmt == PIXEL_FORMAT_BGR_888) ||			\
 	 (fmt == PIXEL_FORMAT_YUV_PLANAR_420) || (fmt == PIXEL_FORMAT_YUV_PLANAR_422) ||	\
@@ -157,91 +158,91 @@ void vpss_release_grp(void);
 	&& (IS_FMT_YUV422(fmt_chn) || IS_FMT_RGB(fmt_chn) || (fmt_chn == PIXEL_FORMAT_YUV_PLANAR_444) || (fmt_chn == PIXEL_FORMAT_YUV_444))) \
 	|| (IS_FMT_YUV422(fmt_grp) && (IS_FMT_RGB(fmt_chn) || (fmt_chn == PIXEL_FORMAT_YUV_PLANAR_444) || (fmt_chn == PIXEL_FORMAT_YUV_444))))
 
-#define FRC_INVALID(stFrameRate)	\
-	(stFrameRate.s32DstFrameRate <= 0 || stFrameRate.s32SrcFrameRate <= 0 ||	\
-		stFrameRate.s32DstFrameRate >= stFrameRate.s32SrcFrameRate)
+#define FRC_INVALID(frame_rate)	\
+	(frame_rate.dst_frame_rate <= 0 || frame_rate.src_frame_rate <= 0 ||	\
+		frame_rate.dst_frame_rate >= frame_rate.src_frame_rate)
 
-static inline s32 mod_check_null_ptr(MOD_ID_E mod, const void *ptr)
+static inline signed int mod_check_null_ptr(mod_id_e mod, const void *ptr)
 {
-	if (mod >= CVI_ID_BUTT)
-		return CVI_FAILURE;
+	if (mod >= ID_BUTT)
+		return -1;
 	if (!ptr) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "NULL pointer\n");
-		return CVI_ERR_VPSS_NULL_PTR;
+		TRACE_VPSS(DBG_ERR, "NULL pointer\n");
+		return ERR_VPSS_NULL_PTR;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vpss_grp_valid(VPSS_GRP grp)
+static inline signed int check_vpss_grp_valid(vpss_grp grp)
 {
 	if ((grp >= VPSS_MAX_GRP_NUM) || (grp < 0)) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "VpssGrp(%d) exceeds Max(%d)\n", grp, VPSS_MAX_GRP_NUM);
-		return CVI_ERR_VPSS_ILLEGAL_PARAM;
+		TRACE_VPSS(DBG_ERR, "vpss_grp(%d) exceeds Max(%d)\n", grp, VPSS_MAX_GRP_NUM);
+		return ERR_VPSS_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_yuv_param(enum _PIXEL_FORMAT_E fmt, u32 w, u32 h)
+static inline signed int check_yuv_param(pixel_format_e fmt, u32 w, u32 h)
 {
 	if (fmt == PIXEL_FORMAT_YUV_PLANAR_422) {
 		if (w & 0x01) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "YUV_422 width(%d) should be even.\n", w);
-			return CVI_ERR_VPSS_ILLEGAL_PARAM;
+			TRACE_VPSS(DBG_ERR, "YUV_422 width(%d) should be even.\n", w);
+			return ERR_VPSS_ILLEGAL_PARAM;
 		}
 	} else if ((fmt == PIXEL_FORMAT_YUV_PLANAR_420)
 		   || (fmt == PIXEL_FORMAT_NV12)
 		   || (fmt == PIXEL_FORMAT_NV21)) {
 		if (w & 0x01) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "YUV_420 width(%d) should be even.\n", w);
-			return CVI_ERR_VPSS_ILLEGAL_PARAM;
+			TRACE_VPSS(DBG_ERR, "YUV_420 width(%d) should be even.\n", w);
+			return ERR_VPSS_ILLEGAL_PARAM;
 		}
 		if (h & 0x01) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "YUV_420 height(%d) should be even.\n", h);
-			return CVI_ERR_VPSS_ILLEGAL_PARAM;
+			TRACE_VPSS(DBG_ERR, "YUV_420 height(%d) should be even.\n", h);
+			return ERR_VPSS_ILLEGAL_PARAM;
 		}
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vpss_grp_fmt(VPSS_GRP grp, enum _PIXEL_FORMAT_E fmt)
+static inline signed int check_vpss_grp_fmt(vpss_grp grp, pixel_format_e fmt)
 {
-	if (!VPSS_GRP_SUPPORT_FMT(fmt)) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) enPixelFormat(%d) unsupported\n"
+	if (!vpss_grp_SUPPORT_FMT(fmt)) {
+		TRACE_VPSS(DBG_ERR, "Grp(%d) enPixelFormat(%d) unsupported\n"
 		, grp, fmt);
-		return CVI_ERR_VPSS_ILLEGAL_PARAM;
+		return ERR_VPSS_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vpss_chn_fmt(VPSS_GRP grp, VPSS_CHN chn, enum _PIXEL_FORMAT_E fmt)
+static inline signed int check_vpss_chn_fmt(vpss_grp grp, vpss_chn chn, pixel_format_e fmt)
 {
 	if (!VPSS_CHN_SUPPORT_FMT(fmt)) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) Chn(%d) enPixelFormat(%d) unsupported\n"
+		TRACE_VPSS(DBG_ERR, "Grp(%d) Chn(%d) enPixelFormat(%d) unsupported\n"
 		, grp, chn, fmt);
-		return CVI_ERR_VPSS_ILLEGAL_PARAM;
+		return ERR_VPSS_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vpss_gdc_fmt(VPSS_GRP grp, VPSS_CHN chn, enum _PIXEL_FORMAT_E fmt)
+static inline signed int check_vpss_gdc_fmt(vpss_grp grp, vpss_chn chn, pixel_format_e fmt)
 {
 	if (!GDC_SUPPORT_FMT(fmt)) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) Chn(%d) invalid PixFormat(%d) for GDC.\n"
+		TRACE_VPSS(DBG_ERR, "Grp(%d) Chn(%d) invalid PixFormat(%d) for GDC.\n"
 		, grp, chn, (fmt));
-		return CVI_ERR_VPSS_ILLEGAL_PARAM;
+		return ERR_VPSS_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 check_vpss_dwa_fmt(VPSS_GRP grp, VPSS_CHN chn, enum _PIXEL_FORMAT_E fmt)
+static inline signed int check_vpss_dwa_fmt(vpss_grp grp, vpss_chn chn, pixel_format_e fmt)
 {
 	if (!DWA_SUPPORT_FMT(fmt)) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "Grp(%d) Chn(%d) invalid PixFormat(%d) for DWA.\n"
+		TRACE_VPSS(DBG_ERR, "Grp(%d) Chn(%d) invalid PixFormat(%d) for DWA.\n"
 		, grp, chn, (fmt));
-		return CVI_ERR_VPSS_ILLEGAL_PARAM;
+		return ERR_VPSS_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
 #endif /* _VPSS_H_ */

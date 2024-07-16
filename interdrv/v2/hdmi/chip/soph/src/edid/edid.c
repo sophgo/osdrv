@@ -6,7 +6,7 @@
 #define EDID_I2C_SEGMENT_ADDR  	0x30
 
 static supported_dtd_t _dtd[] = {
-//refresh_rate mCode mLimitedToYcc420 mYcc420 mPixelRepetitionInput mPixelClock mInterlaced mHActive mHBlanking mHBorder mHImageSize mHSyncOffset mHSyncPulseWidth mHSyncPolarity mVActive mVBlanking mVBorder mVImageSize mVSyncOffset mVSyncPulseWidth mVSyncPolarity;
+//refresh_rate m_code m_limited_to_ycc420 m_ycc420 m_pixel_repetition_input m_pixel_clock m_interlaced m_hactive m_hblanking m_hborder m_himage_size m_hsync_offset m_hsync_pulse_width m_hsync_polarity m_vactive m_vblanking m_vborder m_vimage_size m_vsync_offset m_vsync_pulse_width m_vsync_polarity;
 	{60000,  {  1,  0, 0, 0, 25175,  0,  640,  160,  0,  4,   16,  96, 0,  480, 45, 0, 3, 10,  2, 0}},
 	{59940,  {  1,  0, 0, 0, 25175,  0,  640,  160,  0,  4,   16,  96, 0,  480, 45, 0, 3, 10,  2, 0}},
 	{60000,  {  2,  0, 0, 0, 27027,  0,  720,  138,  0,  4,   16,  62, 0,  480, 45, 0, 3,  9,  6, 0}},
@@ -218,29 +218,29 @@ int edid_extension_read(hdmi_tx_dev_t *dev, int block, u8 * edid_ext)
 int dtd_parse(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 data[18])
 {
 
-	dtd->mCode = -1;
-	dtd->mPixelRepetitionInput = 0;
-	dtd->mLimitedToYcc420 = 0;
-	dtd->mYcc420 = 0;
+	dtd->m_code = -1;
+	dtd->m_pixel_repetition_input = 0;
+	dtd->m_limited_to_ycc420 = 0;
+	dtd->m_ycc420 = 0;
 
-	dtd->mPixelClock = byte_to_word(data[1], data[0]);	/*  [10000Hz] */
-	if (dtd->mPixelClock < 0x01) {	/* 0x0000 is defined as reserved */
+	dtd->m_pixel_clock = byte_to_word(data[1], data[0]);	/*  [10000Hz] */
+	if (dtd->m_pixel_clock < 0x01) {	/* 0x0000 is defined as reserved */
 		return FALSE;
 	}
 
-	dtd->mHActive = concat_bits(data[4], 4, 4, data[2], 0, 8);
-	dtd->mHBlanking = concat_bits(data[4], 0, 4, data[3], 0, 8);
-	dtd->mHSyncOffset = concat_bits(data[11], 6, 2, data[8], 0, 8);
-	dtd->mHSyncPulseWidth = concat_bits(data[11], 4, 2, data[9], 0, 8);
-	dtd->mHImageSize = concat_bits(data[14], 4, 4, data[12], 0, 8);
-	dtd->mHBorder = data[15];
+	dtd->m_hactive = concat_bits(data[4], 4, 4, data[2], 0, 8);
+	dtd->m_hblanking = concat_bits(data[4], 0, 4, data[3], 0, 8);
+	dtd->m_hsync_offset = concat_bits(data[11], 6, 2, data[8], 0, 8);
+	dtd->m_hsync_pulse_width = concat_bits(data[11], 4, 2, data[9], 0, 8);
+	dtd->m_himage_size = concat_bits(data[14], 4, 4, data[12], 0, 8);
+	dtd->m_hborder = data[15];
 
-	dtd->mVActive = concat_bits(data[7], 4, 4, data[5], 0, 8);
-	dtd->mVBlanking = concat_bits(data[7], 0, 4, data[6], 0, 8);
-	dtd->mVSyncOffset = concat_bits(data[11], 2, 2, data[10], 4, 4);
-	dtd->mVSyncPulseWidth = concat_bits(data[11], 0, 2, data[10], 0, 4);
-	dtd->mVImageSize = concat_bits(data[14], 0, 4, data[13], 0, 8);
-	dtd->mVBorder = data[16];
+	dtd->m_vactive = concat_bits(data[7], 4, 4, data[5], 0, 8);
+	dtd->m_vblanking = concat_bits(data[7], 0, 4, data[6], 0, 8);
+	dtd->m_vsync_offset = concat_bits(data[11], 2, 2, data[10], 4, 4);
+	dtd->m_vsync_pulse_width = concat_bits(data[11], 0, 2, data[10], 0, 4);
+	dtd->m_vimage_size = concat_bits(data[14], 0, 4, data[13], 0, 8);
+	dtd->m_vborder = data[16];
 
 	if (bit_field(data[17], 4, 1) != 1) {	/* if not DIGITAL SYNC SIGNAL DEF */
 		pr_err("Invalid DTD Parameters - DIGITAL SYNC SIGNAL DEF\n");
@@ -251,28 +251,28 @@ int dtd_parse(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 data[18])
 		return FALSE;
 	}
 	/* no stereo viewing support in HDMI */
-	dtd->mInterlaced = bit_field(data[17], 7, 1) == 1;
-	dtd->mVSyncPolarity = bit_field(data[17], 2, 1) == 1;
-	dtd->mHSyncPolarity = bit_field(data[17], 1, 1) == 1;
+	dtd->m_interlaced = bit_field(data[17], 7, 1) == 1;
+	dtd->m_vsync_polarity = bit_field(data[17], 2, 1) == 1;
+	dtd->m_hsync_polarity = bit_field(data[17], 1, 1) == 1;
 	return TRUE;
 }
 
 /**
  * @short Get the DTD structure that contains the video parameters
  * @param[in] code VIC code to search for
- * @param[in] refreshRate
+ * @param[in] refresh_rate
  * @return returns a pointer to the DTD structure or NULL if not supported.
  * If refreshRate=0 then the first (default) parameters are returned for the VIC code.
  */
-dtd_t * get_dtd(u8 code, u32 refreshRate){
+dtd_t * get_dtd(u8 code, u32 refresh_rate){
 	int i = 0;
 
-	for(i = 0; _dtd[i].dtd.mCode != 0; i++){
-		if(_dtd[i].dtd.mCode == code){
-			if(is_equal(refreshRate, 0)){
+	for(i = 0; _dtd[i].dtd.m_code != 0; i++){
+		if(_dtd[i].dtd.m_code == code){
+			if(is_equal(refresh_rate, 0)){
 				return &_dtd[i].dtd;
 			}
-			if(is_equal(refreshRate, _dtd[i].refresh_rate)){
+			if(is_equal(refresh_rate, _dtd[i].refresh_rate)){
 				return &_dtd[i].dtd;
 			}
 		}
@@ -280,17 +280,17 @@ dtd_t * get_dtd(u8 code, u32 refreshRate){
 	return NULL;
 }
 
-int dtd_fill(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 code, u32 refreshRate)
+int dtd_fill(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 code, u32 refresh_rate)
 {
 	dtd_t * p_dtd = NULL;
 
-	p_dtd = get_dtd(code, refreshRate);
+	p_dtd = get_dtd(code, refresh_rate);
 	if(p_dtd == NULL){
-		pr_err("VIC code [%d] with refresh rate [%uHz] is not supported", code, refreshRate);
+		pr_err("VIC code [%d] with refresh rate [%uHz] is not supported", code, refresh_rate);
 		return FALSE;
 	}
-	p_dtd->mLimitedToYcc420 = FALSE;
-	p_dtd->mYcc420 = FALSE;
+	p_dtd->m_limited_to_ycc420 = FALSE;
+	p_dtd->m_ycc420 = FALSE;
 
 	memcpy(dtd, p_dtd, sizeof(dtd_t));
 
@@ -299,9 +299,9 @@ int dtd_fill(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 code, u32 refreshRate)
 
 u32 dtd_get_refresh_rate(dtd_t *dtd){
 	int i = 0;
-	for(i = 0; _dtd[i].dtd.mCode != 0; i++){
-		if(_dtd[i].dtd.mCode == dtd->mCode){
-			if(is_equal(dtd->mPixelClock, 0) || is_equal(_dtd[i].dtd.mPixelClock, dtd->mPixelClock))
+	for(i = 0; _dtd[i].dtd.m_code != 0; i++){
+		if(_dtd[i].dtd.m_code == dtd->m_code){
+			if(is_equal(dtd->m_pixel_clock, 0) || is_equal(_dtd[i].dtd.m_pixel_clock, dtd->m_pixel_clock))
 				return _dtd[i].refresh_rate;
 		}
 	}
@@ -311,10 +311,10 @@ u32 dtd_get_refresh_rate(dtd_t *dtd){
 dtd_t * find_dtd(u16 width, u16 height, u32 pclk){
 	int i;
 	pr_debug("width:%u, height:%u, pclk:%u\n", width, height, pclk);
-	for(i = 0; _dtd[i].dtd.mCode != 0; i++){
-		if((_dtd[i].dtd.mHActive == width) &&
-		   (_dtd[i].dtd.mVActive == height) &&
-		   (_dtd[i].dtd.mPixelClock == pclk)){
+	for(i = 0; _dtd[i].dtd.m_code != 0; i++){
+		if((_dtd[i].dtd.m_hactive == width) &&
+		   (_dtd[i].dtd.m_vactive == height) &&
+		   (_dtd[i].dtd.m_pixel_clock == pclk)){
 				return &_dtd[i].dtd;
 			}
 	}

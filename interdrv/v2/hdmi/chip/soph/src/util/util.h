@@ -68,20 +68,20 @@ static inline u8 set8(u8 data, u8 mask, u8 value)
 
 /**
  * Concatenate two parts of two 8-bit bytes into a new 16-bit word
- * @param bHi first byte
- * @param oHi shift part of first byte (to be place as most significant
+ * @param bhi first byte
+ * @param ohi shift part of first byte (to be place as most significant
  * bits)
- * @param nHi width part of first byte (to be place as most significant
+ * @param nhi width part of first byte (to be place as most significant
  * bits)
- * @param bLo second byte
- * @param oLo shift part of second byte (to be place as least
+ * @param blo second byte
+ * @param olo shift part of second byte (to be place as least
  * significant bits)
- * @param nLo width part of second byte (to be place as least
+ * @param nlo width part of second byte (to be place as least
  * significant bits)
  * @returns 16-bit concatenated word as part of the first byte and part of
  * the second byte
  */
-u16 concat_bits(u8 bHi, u8 oHi, u8 nHi, u8 bLo, u8 oLo, u8 nLo);
+u16 concat_bits(u8 bhi, u8 ohi, u8 nhi, u8 blo, u8 olo, u8 nlo);
 
 /** Concatenate two full bytes into a new 16-bit word
  * @param hi

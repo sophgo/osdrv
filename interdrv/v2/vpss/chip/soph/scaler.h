@@ -1,7 +1,7 @@
-#ifndef _CVI_SCL_H_
-#define _CVI_SCL_H_
+#ifndef _SCL_H_
+#define _SCL_H_
 
-#include <linux/cvi_defines.h>
+#include <linux/defines.h>
 
 #define SCL_MAX_INST VPSS_IP_NUM
 #define BORDER_VPP_MAX 4
@@ -24,6 +24,8 @@
 
 #define TILE_ON_IMG
 #define TILE_GUARD_PIXEL 260
+
+#define IMG_IN_PITCH_ALIGN 32
 
 #define SCL_TILE_LEFT		(1 << 0)
 #define SCL_TILE_RIGHT		(1 << 1)
@@ -808,7 +810,7 @@ void sclr_top_pg_late_clr(u8 inst);
 void sclr_top_bld_set_cfg(struct sclr_bld_cfg *cfg);
 void sclr_top_get_sb_default(struct sclr_top_sb_cfg *cfg);
 void sclr_top_set_sb(struct sclr_top_sb_cfg *cfg);
-void sclr_top_set_src_share(u8 inst, bool isShare);
+void sclr_top_set_src_share(u8 inst, bool is_share);
 void sclr_set_cfg(u8 inst, bool sc_bypass, bool gop_bypass,
 		  bool cir_bypass, bool odma_bypass);
 struct sclr_core_cfg *sclr_get_cfg(u8 inst);
@@ -820,6 +822,7 @@ void sclr_set_scale_phase(u8 inst, u32 h_ph, u32 v_ph);
 void sclr_set_scale(u8 inst);
 struct sclr_status sclr_get_status(u8 inst);
 void sclr_read_2tap_nor(u8 inst, u16 *resize_hnor, u16 *resize_vnor);
+void sclr_update_coef(u8 inst, enum sclr_algorithm coef);
 
 void sclr_img_reg_shadow_sel(u8 inst, bool read_shadow);
 void sclr_img_set_cfg(u8 inst, struct sclr_img_cfg *cfg);
@@ -883,7 +886,7 @@ u32 sclr_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst);
 void sclr_pri_set_cfg(u8 inst, struct sclr_privacy_cfg *cfg);
 void sclr_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, struct sclr_gop_odec_cfg *odec_cfg);
 
-void sclr_ctrl_init(u8 inst);
+void sclr_ctrl_init(u8 inst, bool is_resume);
 void sclr_get_2tap_scale(struct sclr_scale_2tap_cfg *cfg);
 void sclr_ctrl_set_scale(u8 inst, struct sclr_scale_cfg *cfg);
 int sclr_ctrl_set_input(u8 inst, enum sclr_input input,
@@ -918,4 +921,4 @@ int vpss_dwa_online_multi(int w, int h, enum sclr_format fmt_in, u64 *dst_addr);
 int vpss_dwa_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fmt_in, u64 dst_addr);
 int vpss_stitch_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fmt_out, u64 src_addr);
 
-#endif  //_CVI_SCL_H_
+#endif  //_SCL_H_

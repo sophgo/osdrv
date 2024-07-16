@@ -30,7 +30,7 @@ endif
 
 define MAKE_KO
 	( cd $(1) && $(MAKE) KERNEL_DIR=$(KERNEL_DIR) all -j$(shell nproc))
-    if [ -e $(1)/*.ko ]; then \
+    if [ $$(find $(1) -name '*.ko' | wc -l) -gt 0 ]; then \
         cd $(1) && cp -f *.ko $(INSTALL_DIR); \
     fi
 endef
@@ -55,33 +55,17 @@ SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 
 # prepare ko list
 
-KO_LIST = base pwm  mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
-
-# ifeq ($(CHIP_ARCH), $(filter $(CHIP_ARCH), CV183X CV182X))
-# 	KO_LIST += vip
-# 	FB_DEP = vip
-# endif
-
-# ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X CV186X))
-# 	KO_LIST += sys vi snsr_i2c cif vpss ldc dwa rgn rtos_cmdqu fast_image audio ive 2d_engine
-# 	BASE_DEP = sys
-# 	FB_DEP = vpss
-# else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
-# 	KO_LIST += sys vi snsr_i2c cif vpss dwa rgn rtos_cmdqu fast_image audio
-# 	BASE_DEP = sys
-# 	FB_DEP = vpss
-# endif
+KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
-	KO_LIST += sys vi snsr_i2c cif vpss ldc dwa vo mipi_tx rgn rtos_cmdqu ive 2d_engine dpu stitch spacc
-	BASE_DEP = sys
+	KO_LIST += vi snsr_i2c cif vpss ldc dwa vo mipi_tx rgn ive 2d_engine dpu stitch spacc
 	FB_DEP = vpss vo
 ifneq (${CONFIG_BOARD}, "fpga")
 	KO_LIST += hdmi
 endif
 
 else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
-	KO_LIST += sys vi snsr_i2c cif vpss dwa rgn rtos_cmdqu audio
+	KO_LIST += vi snsr_i2c cif vpss dwa rgn audio
 	FB_DEP = vpss
 endif
 
@@ -92,14 +76,18 @@ ifeq (, ${CONFIG_NO_TP})
 	# KO_LIST += tp
 endif
 
-$(info ** [ KO_LIST ] ** = $(KO_LIST))
-
 OTHERS :=
 
 ifeq (y, ${CONFIG_CP_EXT_WIRELESS})
 KO_LIST += wireless
 OTHERS += cp_ext_wireless
 endif
+
+ifeq (y, ${CONFIG_FB_USB_TO_HDMI})
+KO_LIST += ms9132
+endif
+
+$(info ** [ KO_LIST ] ** = $(KO_LIST))
 
 export CROSS_COMPILE=$(patsubst "%",%,$(CONFIG_CROSS_COMPILE_KERNEL))
 export ARCH=$(patsubst "%",%,$(CONFIG_ARCH))
@@ -213,8 +201,8 @@ ive:
 vc_drv:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
-rtos_cmdqu:
-	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+# rtos_cmdqu:
+# 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 2d_engine:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
@@ -239,6 +227,9 @@ wiegand-gpio:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
 gyro_i2c:
+	@$(call MAKE_EXT_KO, extdrv/${@})
+
+ms9132:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
 cp_ext_wireless:

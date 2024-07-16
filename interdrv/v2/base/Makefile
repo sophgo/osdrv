@@ -1,5 +1,7 @@
 include $(PWD)/../Makefile.interdrv.param
 
+CONFIG_LOG = 1
+
 $(CVIARCH_L)_base-objs = base.o \
 				base_common.o \
 				bind.o \
@@ -7,9 +9,9 @@ $(CVIARCH_L)_base-objs = base.o \
 				ion.o \
 				vb.o \
 				vbq.o \
-				proc/cvi_log_proc.o \
-				proc/cvi_sys_proc.o \
-				proc/cvi_vb_proc.o
+				proc/log_proc.o \
+				proc/sys_proc.o \
+				proc/vb_proc.o
 
 
 
@@ -25,6 +27,9 @@ ccflags-y += -I$(srctree)/drivers/tee \
              -I$(srctree)/drivers/staging/android \
              -I$(PWD)/proc \
 
+ifeq ($(CONFIG_LOG), 1)
+ccflags-y += -DCONFIG_LOG
+endif
 
 ifeq ($(SUBTYPE), fpga)
 ccflags-y += -DDRV_FPGA_PORTING
@@ -39,6 +44,6 @@ all:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:
-	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c
+	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod *.mod.c
 	@rm -rf .tmp_versions
 	@find . -name \*.o* -type f -delete

@@ -513,9 +513,9 @@ void sclr_top_get_sb_default(struct sclr_top_sb_cfg *cfg)
 	memset(cfg, 0, sizeof(*cfg));
 }
 
-void sclr_top_set_src_share(u8 inst, bool isShare)
+void sclr_top_set_src_share(u8 inst, bool is_share)
 {
-	u32 val = isShare ? 0x1 : 0x0;
+	u32 val = is_share ? 0x1 : 0x0;
 
 	_reg_write(reg_base + REG_SCL_TOP_SRC_SHARE(inst), val);
 }
@@ -530,7 +530,7 @@ void sclr_update_coef(u8 inst, enum sclr_algorithm coef)
 	u8 i = 0;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "inst=%d err.\n", inst);
+		TRACE_VPSS(DBG_ERR, "inst=%d err.\n", inst);
 		return;
 	}
 
@@ -751,7 +751,7 @@ void sclr_set_scale(u8 inst)
 {
 	u64 fix_fac;
 	struct sclr_fac_cfg fac;
-	bool isFacOver4 = false;
+	bool is_fac_over4 = false;
 	fac.h_pos = 0;
 	fac.v_pos = 0;
 
@@ -766,12 +766,12 @@ void sclr_set_scale(u8 inst)
 		// scale_x, 18.13
 		fix_fac = (u64)(g_sc_cfg[inst].sc.crop.w) << 13;
 		fac.h_fac = fix_fac / (g_sc_cfg[inst].sc.dst.w);
-		isFacOver4 |= (fac.h_fac >= (4 << 13));
+		is_fac_over4 |= (fac.h_fac >= (4 << 13));
 		// scale_y, 18.13
 		fix_fac = (u64)(g_sc_cfg[inst].sc.crop.h) << 13;
 		fac.v_fac = fix_fac / (g_sc_cfg[inst].sc.dst.h);
-		isFacOver4 |= (fac.v_fac >= (4 << 13));
-		sclr_set_scale_mode(inst, g_sc_cfg[inst].sc.mir_enable, isFacOver4, true);
+		is_fac_over4 |= (fac.v_fac >= (4 << 13));
+		sclr_set_scale_mode(inst, g_sc_cfg[inst].sc.mir_enable, is_fac_over4, true);
 	} else {
 		// scale_x, 8.23
 		fix_fac = (u64)(g_sc_cfg[inst].sc.crop.w) << 23;
@@ -1023,10 +1023,10 @@ void vpss_v_sw_top_reset(u8 inst)
 			mask_reset.b.vpss3 = 1;
 			break;
 		default:
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
+			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
 			return;
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
+	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
 	vi_sys_set_reset(mask_reset);
 	udelay(1);
 	vi_sys_set_reset(origin_value);
@@ -1048,10 +1048,10 @@ void vpss_d_sw_top_reset(u8 inst)
 			mask_reset.b.vpss1 = 1;
 			break;
 		default:
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
+			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
 			return;
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
+	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
 	vo_sys_set_reset(mask_reset);
 	udelay(1);
 	vo_sys_set_reset(origin_value);
@@ -1079,10 +1079,10 @@ void vpss_t_sw_top_reset(u8 inst)
 			mask_reset.b.vdsys1_vpss_1 = 0;
 			break;
 		default:
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
+			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
 			return;
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
+	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
 	top_sys_set_reset(mask_reset);
 	udelay(1);
 	top_sys_set_reset(origin_value);
@@ -1099,7 +1099,7 @@ void sclr_vpss_sw_top_reset(u8 inst)
 	else
 		vpss_d_sw_top_reset(inst);
 
-	sclr_ctrl_init(inst);
+	sclr_ctrl_init(inst, false);
 }
 
 void sclr_img_reset(u8 inst)
@@ -1324,14 +1324,14 @@ void sclr_border_set_cfg(u8 inst, struct sclr_border_cfg *cfg)
 {
 	if ((g_sc_cfg[inst].sc.dst.w + cfg->start.x) >
 		g_odma_cfg[inst].mem.width) {
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "[sc%d] sc_width(%d) + offset(%d) > odma_width(%d)\n",
+		TRACE_VPSS(DBG_DEBUG, "[sc%d] sc_width(%d) + offset(%d) > odma_width(%d)\n",
 			   inst, g_sc_cfg[inst].sc.dst.w, cfg->start.x, g_odma_cfg[inst].mem.width);
 		cfg->start.x = g_odma_cfg[inst].mem.width - g_sc_cfg[inst].sc.dst.w;
 	}
 
 	if ((g_sc_cfg[inst].sc.dst.h + cfg->start.y) >
 		g_odma_cfg[inst].mem.height) {
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "[sc%d] sc_height(%d) + offset(%d) > odma_height(%d)\n",
+		TRACE_VPSS(DBG_DEBUG, "[sc%d] sc_height(%d) + offset(%d) > odma_height(%d)\n",
 			   inst, g_sc_cfg[inst].sc.dst.h, cfg->start.y, g_odma_cfg[inst].mem.height);
 		cfg->start.y = g_odma_cfg[inst].mem.height - g_sc_cfg[inst].sc.dst.h;
 	}
@@ -1346,11 +1346,11 @@ void sclr_border_set_cfg(u8 inst, struct sclr_border_cfg *cfg)
 void sclr_border_vpp_set_cfg(u8 inst, u8 border_idx, struct sclr_border_vpp_cfg *cfg, bool update)
 {
 	if(cfg->inside_start.x > cfg->inside_end.x || cfg->inside_start.y > cfg->inside_end.y){
-		CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] border_idx(%d), inside(%d %d %d %d)\n", inst, border_idx,
+		TRACE_VPSS(DBG_WARN, "[sc%d] border_idx(%d), inside(%d %d %d %d)\n", inst, border_idx,
 				cfg->inside_start.x, cfg->inside_start.y, cfg->inside_end.x, cfg->inside_end.y);
 	}
 	if(cfg->outside_start.x > cfg->outside_end.x || cfg->outside_start.y > cfg->outside_end.y){
-		CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] idx(%d), outside(%d %d %d %d)\n", inst, border_idx,
+		TRACE_VPSS(DBG_WARN, "[sc%d] idx(%d), outside(%d %d %d %d)\n", inst, border_idx,
 				cfg->outside_start.x, cfg->outside_start.y, cfg->outside_end.x, cfg->outside_end.y);
 	}
 	_reg_write(reg_base + REG_SCL_BORDER_VPP_CFG(inst, border_idx), cfg->cfg.raw);
@@ -1507,7 +1507,7 @@ void sclr_set_csc_ctrl(u8 inst, struct sclr_csc_cfg *cfg)
 	if (cfg->mode == SCL_OUT_HSV) {
 		tmp |= BIT(4);
 		if(cfg->datatype != SCL_DATATYPE_DISABLE){
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "hsv can not enable in fp32/fp16/bf16/int8\n");
+			TRACE_VPSS(DBG_WARN, "hsv can not enable in fp32/fp16/bf16/int8\n");
 		}
 		if (cfg->hsv_round == SCL_HSV_ROUNDING_TOWARD_ZERO)
 			tmp |= BIT(5);
@@ -1704,7 +1704,7 @@ void sclr_gop_set_cfg(u8 inst, u8 layer, struct sclr_gop_cfg *cfg, bool update)
 			_reg_write(reg_base + REG_SCL_GOP1_DEC_CTRL(inst), cfg->odec_cfg.odec_ctrl.raw);
 
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 			return;
 		}
@@ -1761,7 +1761,7 @@ int sclr_gop_setup_256LUT(u8 inst, u8 layer, u16 length, u16 *data)
 				_reg_write(reg_base + REG_SCL_GOP1_256LUT1(inst), BIT(16));
 			}
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 		}
 	}
@@ -1795,7 +1795,7 @@ int sclr_gop_update_256LUT(u8 inst, u8 layer, u8 index, u16 data)
 			_reg_write(reg_base + REG_SCL_GOP1_256LUT1(inst), ~BIT(16));
 			_reg_write(reg_base + REG_SCL_GOP1_256LUT1(inst), BIT(16));
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 		}
 	}
@@ -1831,7 +1831,7 @@ int sclr_gop_setup_16LUT(u8 inst, u8 layer, u8 length, u16 *data)
 						   ((*(data + i + 1) << 16) | (*(data + i))));
 			}
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 		}
 	}
@@ -1876,7 +1876,7 @@ int sclr_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data)
 						   ((data << 16) | tmp));
 			}
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 		}
 	}
@@ -1939,7 +1939,7 @@ void sclr_gop_ow_set_cfg(u8 inst, u8 layer, u8 ow_inst, struct sclr_gop_ow_cfg *
 			_reg_write(reg_base + REG_SCL_GOP1_SIZE(inst, ow_inst),
 					   (ow_cfg->mem_size.h << 16) | ow_cfg->mem_size.w);
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 			return;
 		}
@@ -1976,7 +1976,7 @@ void sclr_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct sclr_gop_fb_cfg *
 			_reg_write(reg_base + REG_SCL_GOP1_FONTBOX_CFG(inst, fb_inst), fb_cfg->fb_ctrl.raw);
 			_reg_write(reg_base + REG_SCL_GOP1_FONTBOX_INIT(inst, fb_inst), fb_cfg->init_st);
 		} else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 		}
 	}
@@ -2001,7 +2001,7 @@ u32 sclr_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst)
 		else if (layer == 1)
 			return _reg_read(reg_base + REG_SCL_GOP1_FONTBOX_REC(inst, fb_inst));
 		else {
-			CVI_TRACE_VPSS(CVI_DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
 				inst, layer);
 			return -1;
 		}
@@ -2088,39 +2088,43 @@ void sclr_pri_set_cfg(u8 inst, struct sclr_privacy_cfg *cfg)
  * sclr_ctrl_init - setup all sc instances.
  *
  */
-void sclr_ctrl_init(u8 inst)
+void sclr_ctrl_init(u8 inst, bool is_resume)
 {
 	union sclr_intr intr_mask;
 	union sclr_rt_cfg rt_cfg;
 	u8 i;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "[sc%d] no enough sclr-instance\n", inst);
+		TRACE_VPSS(DBG_ERR, "[sc%d] no enough sclr-instance\n", inst);
 		return;
 	}
 
-	// init variables
-	memset(&g_sc_cfg[inst], 0, sizeof(g_sc_cfg[0]));
-	memset(&g_bd_cfg[inst], 0, sizeof(g_bd_cfg[0]));
-	memset(&g_cir_cfg[inst], 0, sizeof(g_cir_cfg[0]));
-	memset(&g_img_cfg[inst], 0, sizeof(g_img_cfg[0]));
-	memset(&g_odma_cfg[inst], 0, sizeof(g_odma_cfg[0]));
-	memset(&g_gop_cfg[inst], 0, sizeof(g_gop_cfg[0]));
+	if (!is_resume) {
+		// init variables
+		memset(&g_sc_cfg[inst], 0, sizeof(g_sc_cfg[0]));
+		memset(&g_bd_cfg[inst], 0, sizeof(g_bd_cfg[0]));
+		memset(&g_cir_cfg[inst], 0, sizeof(g_cir_cfg[0]));
+		memset(&g_img_cfg[inst], 0, sizeof(g_img_cfg[0]));
+		memset(&g_odma_cfg[inst], 0, sizeof(g_odma_cfg[0]));
+		memset(&g_gop_cfg[inst], 0, sizeof(g_gop_cfg[0]));
 
-	for (i = 0; i < SCL_MAX_GOP_INST; ++i) {
-		g_gop_cfg[inst][i].fb_ctrl.b.hi_thr = 0x30;
-		g_gop_cfg[inst][i].fb_ctrl.b.lo_thr = 0x20;
-		g_gop_cfg[inst][i].fb_ctrl.b.detect_fnum = 1;
-		g_gop_cfg[inst][i].fb_ctrl.b.hi_thr = 0x30;
-		g_gop_cfg[inst][i].fb_ctrl.b.lo_thr = 0x20;
-		g_gop_cfg[inst][i].fb_ctrl.b.detect_fnum = 1;
+		for (i = 0; i < SCL_MAX_GOP_INST; ++i) {
+			g_gop_cfg[inst][i].fb_ctrl.b.hi_thr = 0x30;
+			g_gop_cfg[inst][i].fb_ctrl.b.lo_thr = 0x20;
+			g_gop_cfg[inst][i].fb_ctrl.b.detect_fnum = 1;
+			g_gop_cfg[inst][i].fb_ctrl.b.hi_thr = 0x30;
+			g_gop_cfg[inst][i].fb_ctrl.b.lo_thr = 0x20;
+			g_gop_cfg[inst][i].fb_ctrl.b.detect_fnum = 1;
+		}
+		g_odma_cfg[inst].flip = SCL_FLIP_NO;
+		g_odma_cfg[inst].burst = false;
+		g_img_cfg[inst].burst = 7;
+		g_img_cfg[inst].src = SCL_INPUT_MEM;
+		g_sc_cfg[inst].coef = SCL_COEF_MAX;
+		g_sc_cfg[inst].sc.mir_enable = true;
+	} else {
+		g_sc_cfg[inst].coef = SCL_COEF_MAX;
 	}
-	g_odma_cfg[inst].flip = SCL_FLIP_NO;
-	g_odma_cfg[inst].burst = false;
-	g_img_cfg[inst].burst = 7;
-	g_img_cfg[inst].src = SCL_INPUT_MEM;
-	g_sc_cfg[inst].coef = SCL_COEF_MAX;
-	g_sc_cfg[inst].sc.mir_enable = true;
 
 	sclr_img_reg_shadow_sel(inst, false);
 
@@ -2161,7 +2165,7 @@ void sclr_ctrl_init(u8 inst)
 void sclr_ctrl_set_scale(u8 inst, struct sclr_scale_cfg *cfg)
 {
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "[sc%d] no enough sclr-instance\n", inst);
+		TRACE_VPSS(DBG_ERR, "[sc%d] no enough sclr-instance\n", inst);
 		return;
 	}
 	//if (memcmp(cfg, &g_sc_cfg[inst].sc, sizeof(*cfg)) == 0)
@@ -2243,18 +2247,18 @@ int sclr_ctrl_set_output(u8 inst, struct sclr_csc_cfg *cfg,
 		// sc's data is always rgb
 		if ((cfg->csc_type < SCL_CSC_601_LIMIT_RGB2YUV) &&
 			 (cfg->csc_type != SCL_CSC_NONE)) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "csc_type Invalid parameter\n");
+			TRACE_VPSS(DBG_ERR, "csc_type Invalid parameter\n");
 			return -EINVAL;
 		}
 		//yuv444p ---> SCL_FMT_RGB_PLANAR, yuv444 ---> SCL_FMT_RGB_PACKED
 		if (!IS_YUV_FMT(fmt) && (fmt != SCL_FMT_RGB_PLANAR) && ((fmt != SCL_FMT_RGB_PACKED))) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR, "format Invalid parameter\n");
+			TRACE_VPSS(DBG_ERR, "format Invalid parameter\n");
 			return -EINVAL;
 		}
 	} else {
 		// Use rgb for quant/hsv
 		if (IS_YUV_FMT(fmt)) {
-			CVI_TRACE_VPSS(CVI_DBG_ERR,"quant/hsv not support yuv format\n");
+			TRACE_VPSS(DBG_ERR,"quant/hsv not support yuv format\n");
 			return -EINVAL;
 		}
 	}
@@ -2629,9 +2633,9 @@ void sclr_engine_cmdq(u8 inst, struct sclr_ctrl_cfg *cfgs, u8 cnt,
 
 	buflen = sizeof(union cmdq_set) * cmd_idx;
 	if (buflen > cmdq_buf_size)
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "sc(%d) cmdq buf size is too small.\n", inst);
+		TRACE_VPSS(DBG_ERR, "sc(%d) cmdq buf size is too small.\n", inst);
 
-	//CVI_TRACE_VPSS(CVI_DBG_DEBUG, "use buf len(%d) cmd_idx(%d).\n", buflen, cmd_idx);
+	//TRACE_VPSS(DBG_DEBUG, "use buf len(%d) cmd_idx(%d).\n", buflen, cmd_idx);
 	base_ion_cache_flush(cmdq_phy_addr, cmdq_vir_addr, buflen);
 
 	cmdq_intr_ctrl(REG_SCL_CMDQ_BASE(inst), 0x02);
@@ -2698,8 +2702,8 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		h_pos = 1 << 22;
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%s: on sc(%d)\n", __func__, inst);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "width: src(%d), crop(%d), dst(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "%s: on sc(%d)\n", __func__, inst);
+	TRACE_VPSS(DBG_DEBUG, "width: src(%d), crop(%d), dst(%d)\n",
 		g_sc_cfg[inst].sc.src.w, crop_size.w, out_size.w);
 
 	if (cfg->crop.x >= src_l_last_pixel_max) {
@@ -2782,16 +2786,16 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 		}
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "h_sc_fac:%d\n", h_sc_fac);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "L last phase(%lld) last pixel(%d)\n", L_last_phase, L_last_pixel);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "R first phase(%lld) first pixel(%d)\n", R_first_phase, R_first_pixel);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "tile cfg: Left src width(%d) out(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "h_sc_fac:%d\n", h_sc_fac);
+	TRACE_VPSS(DBG_DEBUG, "L last phase(%lld) last pixel(%d)\n", L_last_phase, L_last_pixel);
+	TRACE_VPSS(DBG_DEBUG, "R first phase(%lld) first pixel(%d)\n", R_first_phase, R_first_pixel);
+	TRACE_VPSS(DBG_DEBUG, "tile cfg: Left src width(%d) out(%d)\n",
 		cfg->tile.src_l_width, cfg->tile.out_l_width);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "tile cfg: Right src offset(%d) width(%d) phase(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "tile cfg: Right src offset(%d) width(%d) phase(%d)\n"
 		, cfg->tile.src_r_offset, cfg->tile.src_r_width, cfg->tile.r_ini_phase);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "tile cfg: odma left x(%d) y(%d) width(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "tile cfg: odma left x(%d) y(%d) width(%d)\n"
 		, cfg->tile.dma_l_x, cfg->tile.dma_l_y, cfg->tile.dma_l_width);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "tile cfg: odma right x(%d) y(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "tile cfg: odma right x(%d) y(%d)\n"
 		, cfg->tile.dma_r_x, cfg->tile.dma_r_y);
 	return mode;
 }
@@ -2847,8 +2851,8 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 		v_pos = (((1 << 23) - v_sc_fac) >> 1);
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		v_pos = 1 << 22;
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "%s: on sc(%d)\n", __func__, inst);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "width: src(%d), crop(%d), dst(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "%s: on sc(%d)\n", __func__, inst);
+	TRACE_VPSS(DBG_DEBUG, "width: src(%d), crop(%d), dst(%d)\n",
 		g_sc_cfg[inst].sc.src.w, crop_size.w, out_size.w);
 
 	if (cfg->crop.y >= src_l_last_pixel_max) {
@@ -2927,16 +2931,16 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 		}
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "v_sc_fac:%d\n", v_sc_fac);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "L last phase(%lld) last pixel(%d)\n", L_last_phase, L_last_pixel);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "R first phase(%lld) first pixel(%d)\n", R_first_phase, R_first_pixel);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "v_tile cfg: Left src length(%d) out(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "v_sc_fac:%d\n", v_sc_fac);
+	TRACE_VPSS(DBG_DEBUG, "L last phase(%lld) last pixel(%d)\n", L_last_phase, L_last_pixel);
+	TRACE_VPSS(DBG_DEBUG, "R first phase(%lld) first pixel(%d)\n", R_first_phase, R_first_pixel);
+	TRACE_VPSS(DBG_DEBUG, "v_tile cfg: Left src length(%d) out(%d)\n",
 		cfg->v_tile.src_l_width, cfg->v_tile.out_l_width);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "v_tile cfg: Right src offset(%d) length(%d) phase(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "v_tile cfg: Right src offset(%d) length(%d) phase(%d)\n"
 		, cfg->v_tile.src_r_offset, cfg->v_tile.src_r_width, cfg->v_tile.r_ini_phase);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "v_tile cfg: odma left x(%d) y(%d) length(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "v_tile cfg: odma left x(%d) y(%d) length(%d)\n"
 		, cfg->v_tile.dma_l_x, cfg->v_tile.dma_l_y, cfg->v_tile.dma_l_width);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "v_tile cfg: odma right x(%d) y(%d)\n"
+	TRACE_VPSS(DBG_DEBUG, "v_tile cfg: odma right x(%d) y(%d)\n"
 		, cfg->v_tile.dma_r_x, cfg->v_tile.dma_r_y);
 	return mode;
 }
@@ -2973,7 +2977,7 @@ static void _gop_tile_shift(struct sclr_gop_ow_cfg *gop_ow_cfg, u16 left_width,
 
 		gop_ow_cfg->start.x += pixel_offset;
 		gop_ow_cfg->end.x += pixel_offset;
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop tile wa: byte_offset(%d) pixoffset(%d)\n", byte_offset, pixel_offset);
+		TRACE_VPSS(DBG_DEBUG, "gop tile wa: byte_offset(%d) pixoffset(%d)\n", byte_offset, pixel_offset);
 	}
 
 	if (is_right_tile) {
@@ -2987,7 +2991,7 @@ static void _gop_tile_shift(struct sclr_gop_ow_cfg *gop_ow_cfg, u16 left_width,
 		gop_ow_cfg->end.x = left_width;
 		gop_ow_cfg->mem_size.w = ALIGN(gop_ow_cfg->img_size.w * bpp, GOP_ALIGNMENT);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_tile(%s): addr(%#llx), startx(%d), endx(%d) img_width(%d) mem_width(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "gop_tile(%s): addr(%#llx), startx(%d), endx(%d) img_width(%d) mem_width(%d)\n",
 		is_right_tile ? "right" : "left",
 		gop_ow_cfg->addr, gop_ow_cfg->start.x, gop_ow_cfg->end.x,
 		gop_ow_cfg->img_size.w, gop_ow_cfg->mem_size.w);
@@ -3009,7 +3013,7 @@ static void _gop_v_tile_shift(struct sclr_gop_ow_cfg *gop_ow_cfg, u16 left_heigh
 		gop_ow_cfg->img_size.h = left_height - gop_ow_cfg->start.y;
 		gop_ow_cfg->end.y = left_height;
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_tile(%s): addr(%#llx), starty(%d), endy(%d) img_h(%d) mem_h(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "gop_tile(%s): addr(%#llx), starty(%d), endy(%d) img_h(%d) mem_h(%d)\n",
 		is_down_tile ? "down" : "top",
 		gop_ow_cfg->addr, gop_ow_cfg->start.y, gop_ow_cfg->end.y,
 		gop_ow_cfg->img_size.h, gop_ow_cfg->mem_size.h);
@@ -3033,8 +3037,8 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 	int i = 0, j = 0;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "no enough sclr-instance ");
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "for the requirement(%d)\n", inst);
+		TRACE_VPSS(DBG_ERR, "no enough sclr-instance ");
+		TRACE_VPSS(DBG_ERR, "for the requirement(%d)\n", inst);
 		return false;
 	}
 
@@ -3079,10 +3083,10 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 		odma_cfg->mem.width = sc->tile.dma_l_width;
 		sclr_odma_set_mem(inst, &odma_cfg->mem);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
+	TRACE_VPSS(DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
 		odma_cfg->mem.start_x, odma_cfg->mem.start_y, odma_cfg->mem.width,
 		odma_cfg->mem.height, odma_cfg->mem.pitch_y, odma_cfg->mem.pitch_c);
 
@@ -3091,7 +3095,7 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 		for (i = 0; i < SCL_MAX_GOP_OW_INST; ++i) {
 			if (gop_cfg.gop_ctrl.raw & BIT(i)) {
 				gop_ow_cfg = gop_cfg.ow_cfg[i];
-				CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop(%d) startx(%d) endx(%d), tile_l_width(%d)\n",
+				TRACE_VPSS(DBG_DEBUG, "gop(%d) startx(%d) endx(%d), tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.x, gop_ow_cfg.end.x, sc->tile.out_l_width);
 
 				// gop-window on right tile: pass
@@ -3110,7 +3114,7 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 				sclr_gop_ow_set_cfg(inst, j, i, &gop_ow_cfg, false);
 			}
 		}
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
+		TRACE_VPSS(DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
 
@@ -3129,8 +3133,8 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 	int i = 0, j = 0;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "no enough sclr-instance ");
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "for the requirement(%d)\n", inst);
+		TRACE_VPSS(DBG_ERR, "no enough sclr-instance ");
+		TRACE_VPSS(DBG_ERR, "for the requirement(%d)\n", inst);
 		return false;
 	}
 
@@ -3172,10 +3176,10 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 		odma_cfg->mem.height = sc->v_tile.dma_l_width;
 		sclr_odma_set_mem(inst, &odma_cfg->mem);
 	}
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
+	TRACE_VPSS(DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
 		odma_cfg->mem.start_x, odma_cfg->mem.start_y, odma_cfg->mem.width,
 		odma_cfg->mem.height, odma_cfg->mem.pitch_y, odma_cfg->mem.pitch_c);
 
@@ -3184,7 +3188,7 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 		for (i = 0; i < SCL_MAX_GOP_OW_INST; ++i) {
 			if (gop_cfg.gop_ctrl.raw & BIT(i)) {
 				gop_ow_cfg = gop_cfg.ow_cfg[i];
-				CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop(%d) starty(%d) endy(%d), tile_l_width(%d)\n",
+				TRACE_VPSS(DBG_DEBUG, "gop(%d) starty(%d) endy(%d), tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.y, gop_ow_cfg.end.y, sc->v_tile.out_l_width);
 
 				// gop-window on right tile: pass
@@ -3203,7 +3207,7 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 				sclr_gop_ow_set_cfg(inst, j, i, &gop_ow_cfg, false);
 			}
 		}
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
+		TRACE_VPSS(DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
 
@@ -3232,8 +3236,8 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 	u8 is_need_fill = 0;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "no enough sclr-instance ");
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "for the requirement(%d)\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "no enough sclr-instance ");
+		TRACE_VPSS(DBG_DEBUG, "for the requirement(%d)\n", inst);
 		return false;
 	}
 	sc = &(sclr_get_cfg(inst)->sc);
@@ -3271,10 +3275,10 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 	g_bd_cfg[inst].cfg.b.enable = false;
 	sclr_border_set_cfg(inst, &g_bd_cfg[inst]);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
+	TRACE_VPSS(DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
 		odma_cfg->mem.start_x, odma_cfg->mem.start_y, odma_cfg->mem.width,
 		odma_cfg->mem.height, odma_cfg->mem.pitch_y, odma_cfg->mem.pitch_c);
 
@@ -3291,7 +3295,7 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 				cover_cfg.start.b.x -= sc->tile.out_l_width;
 			if(cover_cfg.img_size.w == 0)
 				cover_cfg.start.b.enable = false;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "right_tile: cover(%d) start.x(%d) img_size.w(%d), v_tile_l_width(%d)\n",
+			TRACE_VPSS(DBG_DEBUG, "right_tile: cover(%d) start.x(%d) img_size.w(%d), v_tile_l_width(%d)\n",
 				j, cover_cfg.start.b.x, cover_cfg.img_size.w, sc->tile.out_l_width);
 		}
 		sclr_cover_set_cfg(inst, j, &cover_cfg, true);
@@ -3301,7 +3305,7 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 		for (i = 0; i < SCL_MAX_GOP_OW_INST; ++i) {
 			if (gop_cfg.gop_ctrl.raw & BIT(i)) {
 				gop_ow_cfg = gop_cfg.ow_cfg[i];
-				CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop(%d) startx(%d) endx(%d), tile_l_width(%d)\n",
+				TRACE_VPSS(DBG_DEBUG, "gop(%d) startx(%d) endx(%d), tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.x, gop_ow_cfg.end.x, sc->tile.out_l_width);
 
 				// gop-window on left tile: pass
@@ -3322,7 +3326,7 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 				sclr_gop_ow_set_cfg(inst, j, i, &gop_ow_cfg, false);
 			}
 		}
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
+		TRACE_VPSS(DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
 	for(j = 0; j < BORDER_VPP_MAX; ++j){
@@ -3355,7 +3359,7 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 				border_vpp_cfg.inside_end.y = border_vpp_cfg.inside_start.y;
 				border_vpp_cfg.outside_end.y += 1;
 			}
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "right_tile: border_vpp(%d) inside_start_x(%d) inside_end_x(%d) outside_start_x(%d) outside_end_x(%d), tile_l_width(%d)\n",
+			TRACE_VPSS(DBG_DEBUG, "right_tile: border_vpp(%d) inside_start_x(%d) inside_end_x(%d) outside_start_x(%d) outside_end_x(%d), tile_l_width(%d)\n",
 				j, border_vpp_cfg.inside_start.x, border_vpp_cfg.inside_end.x, border_vpp_cfg.outside_start.x, border_vpp_cfg.outside_end.x, sc->tile.out_l_width);
 		}
 		sclr_border_vpp_set_cfg(inst, j, &border_vpp_cfg, true);
@@ -3380,8 +3384,8 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 	u8 is_need_fill = 0;
 
 	if (inst >= SCL_MAX_INST) {
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "no enough sclr-instance ");
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "for the requirement(%d)\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "no enough sclr-instance ");
+		TRACE_VPSS(DBG_DEBUG, "for the requirement(%d)\n", inst);
 		return false;
 	}
 	sc = &(sclr_get_cfg(inst)->sc);
@@ -3420,10 +3424,10 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 	g_bd_cfg[inst].cfg.b.enable = false;
 	sclr_border_set_cfg(inst, &g_bd_cfg[inst]);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
+	TRACE_VPSS(DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d crop size: x=%d y=%d w=%d h=%d\n", inst, crop.x, crop.y, crop.w, crop.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d output size: w=%d h=%d\n", inst, dst.w, dst.h);
+	TRACE_VPSS(DBG_DEBUG, "sc%d odma mem: x=%d y=%d w=%d h=%d pitch_y=%d pitch_c=%d\n", inst,
 		odma_cfg->mem.start_x, odma_cfg->mem.start_y, odma_cfg->mem.width,
 		odma_cfg->mem.height, odma_cfg->mem.pitch_y, odma_cfg->mem.pitch_c);
 
@@ -3440,7 +3444,7 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				cover_cfg.start.b.y -= sc->v_tile.out_l_width;
 			if(cover_cfg.img_size.h == 0)
 				cover_cfg.start.b.enable = false;
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "down_tile: cover(%d) start.y(%d) img_size.h(%d), v_tile_l_width(%d)\n",
+			TRACE_VPSS(DBG_DEBUG, "down_tile: cover(%d) start.y(%d) img_size.h(%d), v_tile_l_width(%d)\n",
 				j, cover_cfg.start.b.y, cover_cfg.img_size.h, sc->v_tile.out_l_width);
 		}
 		sclr_cover_set_cfg(inst, j, &cover_cfg, false);
@@ -3450,7 +3454,7 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 		for (i = 0; i < SCL_MAX_GOP_OW_INST; ++i) {
 			if (gop_cfg.gop_ctrl.raw & BIT(i)) {
 				gop_ow_cfg = gop_cfg.ow_cfg[i];
-				CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop(%d) starty(%d) endy(%d), v_tile_l_width(%d)\n",
+				TRACE_VPSS(DBG_DEBUG, "gop(%d) starty(%d) endy(%d), v_tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.y, gop_ow_cfg.end.y, sc->v_tile.out_l_width);
 
 				// gop-window on left tile: pass
@@ -3471,7 +3475,7 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				sclr_gop_ow_set_cfg(inst, j, i, &gop_ow_cfg, false);
 			}
 		}
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
+		TRACE_VPSS(DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
 	for(j = 0; j < BORDER_VPP_MAX; ++j){
@@ -3504,7 +3508,7 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				border_vpp_cfg.inside_end.x = border_vpp_cfg.inside_start.x;
 				border_vpp_cfg.outside_end.x += 1;
 			}
-			CVI_TRACE_VPSS(CVI_DBG_DEBUG, "down_tile: border_vpp(%d) inside_start_y(%d) inside_end_y(%d) outside_start_y(%d) outside_end_y(%d), tile_l_width(%d)\n",
+			TRACE_VPSS(DBG_DEBUG, "down_tile: border_vpp(%d) inside_start_y(%d) inside_end_y(%d) outside_start_y(%d) outside_end_y(%d), tile_l_width(%d)\n",
 				j, border_vpp_cfg.inside_start.y, border_vpp_cfg.inside_end.y, border_vpp_cfg.outside_start.y, border_vpp_cfg.outside_end.y, sc->v_tile.out_l_width);
 		}
 		sclr_border_vpp_set_cfg(inst, j, &border_vpp_cfg, false);
@@ -3520,24 +3524,24 @@ void sclr_dump_top_register(u8 inst)
 	uintptr_t top_base = reg_base + REG_SCL_TOP_BASE(inst);
 
 	if (inst >= SCL_MAX_INST)
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "inst(%d) out of range\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "inst(%d) out of range\n", inst);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "vpss(%d) top base address=0x%lx\n", inst, top_base);
+	TRACE_VPSS(DBG_DEBUG, "vpss(%d) top base address=0x%lx\n", inst, top_base);
 
 	val = _reg_read(reg_base + REG_SCL_TOP_CFG1(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t sc_en=%d, fbd_en=%d, dma_qos_en=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t sc_en=%d, fbd_en=%d, dma_qos_en=0x%x\n",
 		(val >> 1) & 0x1, (val >> 5) & 0x1, (val >> 16) & 0xff);
 
 	val = _reg_read(reg_base + REG_SCL_TOP_INTR_STATUS(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t interrupter status=0x%x, img_in satrt=%d, img_in end=%d, sc end=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t interrupter status=0x%x, img_in satrt=%d, img_in end=%d, sc end=%d\n",
 		val, (val >> 4) & 0x1, (val >> 5) & 0x1, (val >> 7) & 0x1);
 
 	val = _reg_read(reg_base + REG_SCL_TOP_IMG_CTRL(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t trig_by_isp=%d trig_by_disp=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t trig_by_isp=%d trig_by_disp=%d\n",
 		(val >> 13) & 0x1, (val >> 9) & 0x1);
 
 	val = _reg_read(reg_base + REG_SCL_TOP_SRC_SHARE(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t share=%d\n", val & 0x1);
+	TRACE_VPSS(DBG_DEBUG, "\t share=%d\n", val & 0x1);
 
 }
 
@@ -3548,47 +3552,47 @@ void sclr_dump_img_in_register(int inst)
 	uintptr_t img_base = reg_base + REG_SCL_IMG_BASE(inst);
 
 	if (inst >= SCL_MAX_INST)
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "inst(%d) out of range\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "inst(%d) out of range\n", inst);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "img(%d) base addr 0x%lx\n", inst, img_base);
+	TRACE_VPSS(DBG_DEBUG, "img(%d) base addr 0x%lx\n", inst, img_base);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_CFG(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t source=%d, fmt=%d, csc_en=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t source=%d, fmt=%d, csc_en=%d\n",
 		val & 0x3, (val >> 4) & 0xf, (val >> 12) & 0x1);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_OFFSET(inst));
 	val2 = _reg_read(reg_base + REG_SCL_IMG_SIZE(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t crop(%d %d %d %d)\n",
+	TRACE_VPSS(DBG_DEBUG, "\t crop(%d %d %d %d)\n",
 		val & 0xffff, (val >> 16) & 0xffff, val2 & 0xffff, (val2 >> 16) & 0xffff);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_PITCH_Y(inst));
 	val2 = _reg_read(reg_base + REG_SCL_IMG_PITCH_C(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t pitch_y=%d pitch_c=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t pitch_y=%d pitch_c=%d\n",
 		val & 0xfffffff, val2 & 0xfffffff);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_ADDR0_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_IMG_ADDR0_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t Y: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t Y: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_ADDR1_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_IMG_ADDR1_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t U: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t U: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	val = _reg_read(reg_base + REG_SCL_IMG_ADDR2_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_IMG_ADDR2_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t V: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t V: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	status = sclr_img_get_dbg_status(inst, true);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t err_fwr_yuv(%d%d%d err_erd_yuv(%d%d%d) "
+	TRACE_VPSS(DBG_DEBUG, "\t err_fwr_yuv(%d%d%d err_erd_yuv(%d%d%d) "
 									"lb_full_yuv(%d%d%d) lb_empty_yuv(%d%d%d)\n"
 		  , status.b.err_fwr_y, status.b.err_fwr_u,  status.b.err_fwr_v, status.b.err_erd_y
 		  , status.b.err_erd_u, status.b.err_erd_v, status.b.lb_full_y, status.b.lb_full_u
 		  , status.b.lb_full_v, status.b.lb_empty_y, status.b.lb_empty_u, status.b.lb_empty_v);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t ip idle(%d) ip int(%d)\n", status.b.ip_idle, status.b.ip_int);
+	TRACE_VPSS(DBG_DEBUG, "\t ip idle(%d) ip int(%d)\n", status.b.ip_idle, status.b.ip_int);
 
 }
 
@@ -3599,30 +3603,30 @@ void sclr_dump_core_register(int inst)
 	uintptr_t core_base = reg_base + REG_SCL_CORE_BASE(inst);
 
 	if (inst >= SCL_MAX_INST)
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc(%d) out of range\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "sc(%d) out of range\n", inst);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc(%d) core base address=0x%lx\n", inst, core_base);
+	TRACE_VPSS(DBG_DEBUG, "sc(%d) core base address=0x%lx\n", inst, core_base);
 
 	val = _reg_read(reg_base + REG_SCL_CFG(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t bypass: sc_core(%d) vgop(%d) cir(%d) dma(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "\t bypass: sc_core(%d) vgop(%d) cir(%d) dma(%d)\n",
 		(val >> 1) & 0x1, (val >> 2) & 0x1, (val >> 5) & 0x1, (val >> 6) & 0x1);
 
 	val = _reg_read(reg_base + REG_SCL_SRC_SIZE(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t src_w=%d src_h=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t src_w=%d src_h=%d\n",
 		val & 0x3fff, (val >> 16) & 0x3fff);
 
 	val = _reg_read(reg_base + REG_SCL_CROP_OFFSET(inst));
 	val2 = _reg_read(reg_base + REG_SCL_CROP_SIZE(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t crop(%d %d %d %d)\n",
+	TRACE_VPSS(DBG_DEBUG, "\t crop(%d %d %d %d)\n",
 		val & 0x3fff, (val >> 16) & 0x3fff, val2 & 0x3fff, (val2 >> 16) & 0x3fff);
 
 	val = _reg_read(reg_base + REG_SCL_OUT_SIZE(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t out_w=%d out_h=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t out_w=%d out_h=%d\n",
 		val & 0x3fff, (val >> 16) & 0x3fff);
 
 	status = sclr_get_status(inst);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t crop(%d) hscale(%d) vscale(%d) gop(%d) dma(%d)\n",
+	TRACE_VPSS(DBG_DEBUG, "\t crop(%d) hscale(%d) vscale(%d) gop(%d) dma(%d)\n",
 		status.crop_idle, status.hscale_idle, status.vscale_idle, status.gop_idle, status.wdma_idle);
 }
 
@@ -3632,42 +3636,42 @@ void sclr_dump_odma_register(u8 inst)
 	uintptr_t odma_base = reg_base + REG_SCL_ODMA_BASE(inst);
 
 	if (inst >= SCL_MAX_INST)
-		CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc(%d) out of range\n", inst);
+		TRACE_VPSS(DBG_DEBUG, "sc(%d) out of range\n", inst);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "sc(%d) odma base address=0x%lx\n", inst, odma_base);
+	TRACE_VPSS(DBG_DEBUG, "sc(%d) odma base address=0x%lx\n", inst, odma_base);
 
 	_reg_write(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst), 0x1);
 	val = _reg_read(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t latch line count=%d\n", val >> 8);
+	TRACE_VPSS(DBG_DEBUG, "\t latch line count=%d\n", val >> 8);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_CFG(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t fmt=%d hflip=%d vflip=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t fmt=%d hflip=%d vflip=%d\n",
 		(val >> 8) & 0xf, (val >> 16) & 0x1, (val >> 17) & 0x1);
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t bf16_en=%d fp16_en=%d fp32_en=%d int8_en=%d uint8_en=%d convert_en=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t bf16_en=%d fp16_en=%d fp32_en=%d int8_en=%d uint8_en=%d convert_en=%d\n",
 		(val >> 23) & 0x1, (val >> 24) & 0x1, (val >> 25) & 0x1,
 		(val >> 26) & 0x1, (val >> 27) & 0x1, (val >> 28) & 0x1);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_ADDR0_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_ODMA_ADDR0_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t Y: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t Y: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_ADDR1_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_ODMA_ADDR1_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t U: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t U: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_ADDR2_L(inst));
 	val2 = _reg_read(reg_base + REG_SCL_ODMA_ADDR2_H(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t V: addr_h=0x%x addr_l=0x%x\n",
+	TRACE_VPSS(DBG_DEBUG, "\t V: addr_h=0x%x addr_l=0x%x\n",
 		val2 & 0xff, val);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_PITCH_Y(inst));
 	val2 = _reg_read(reg_base + REG_SCL_ODMA_PITCH_C(inst));
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t pitch_y=%d pitch_c=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t pitch_y=%d pitch_c=%d\n",
 		val & 0xfffffff, val2 & 0xfffffff);
 
-	CVI_TRACE_VPSS(CVI_DBG_DEBUG, "\t odma x=%d y=%d w=%d h=%d\n",
+	TRACE_VPSS(DBG_DEBUG, "\t odma x=%d y=%d w=%d h=%d\n",
 		_reg_read(reg_base + REG_SCL_ODMA_OFFSET_X(inst)),
 		_reg_read(reg_base + REG_SCL_ODMA_OFFSET_Y(inst)),
 		_reg_read(reg_base + REG_SCL_ODMA_WIDTH(inst)),
@@ -3677,81 +3681,81 @@ void sclr_dump_odma_register(u8 inst)
 void sclr_dump_register(u8 inst) {
 	int i;
 
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---dump vpss(%d) register---\n", inst);
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---sc top register---\n");
+	TRACE_VPSS(DBG_ERR, "---dump vpss(%d) register---\n", inst);
+	TRACE_VPSS(DBG_ERR, "---sc top register---\n");
 	for(i = 0; i <= 0xf4; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + i + 0x4));
 	}
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+	TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 		(unsigned int)(0x104), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + 0x104),
 		(unsigned int)(0x108), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + 0x108));
 	for(i = 0x220; i <= 0x22c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_TOP_BASE(inst) + i + 0x4));
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---sc img register---\n");
+	TRACE_VPSS(DBG_ERR, "---sc img register---\n");
 	for(i = 0; i <= 0x9c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_IMG_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_IMG_BASE(inst) + i + 0x4));
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---sc fbd register---\n");
+	TRACE_VPSS(DBG_ERR, "---sc fbd register---\n");
 	for(i = 0; i <= 0x34; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_FBD_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_FBD_BASE(inst) + i + 0x4));
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---sc core register---\n");
+	TRACE_VPSS(DBG_ERR, "---sc core register---\n");
 	for(i = 0; i <= 0x28; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x40; i <= 0x4c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x80; i <= 0x9c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x118; i <= 0x14c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x200; i <= 0x218; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x280; i <= 0x2ac; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x300; i <= 0x370; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_CORE_BASE(inst) + i + 0x4));
 	}
 
-	CVI_TRACE_VPSS(CVI_DBG_ERR, "---sc odma register---\n");
+	TRACE_VPSS(DBG_ERR, "---sc odma register---\n");
 	for(i = 0; i <= 0x5c; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i + 0x4));
 	}
 	for(i = 0x100; i <= 0x138; i += 8){
-		CVI_TRACE_VPSS(CVI_DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
+		TRACE_VPSS(DBG_ERR, "addr:0x%x 0x%x  addr:0x%x 0x%x\n",
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i + 0x4));
 	}

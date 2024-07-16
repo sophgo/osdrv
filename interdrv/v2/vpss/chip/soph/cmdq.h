@@ -1,5 +1,5 @@
-#ifndef _CVI_CMDQ_H_
-#define _CVI_CMDQ_H_
+#ifndef _CMDQ_H_
+#define _CMDQ_H_
 
 #include <stdbool.h>
 //#include <common.h>
@@ -137,4 +137,4 @@ void cmdq_sw_restart(uintptr_t base);
 
 bool cmdq_is_sw_restart(uintptr_t base);
 
-#endif  //_CVI_CMDQ_H_
+#endif  //_CMDQ_H_

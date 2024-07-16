@@ -2,11 +2,12 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/io.h>
-#include <linux/cvi_defines.h>
+#include <linux/defines.h>
 #include <linux/sys_uapi.h>
 
 #include "vo_sys.h"
 #include "reg.h"
+#include "sys_debug.h"
 
 /* register bank */
 #define TOP_RESET_BASE 0x28103000
@@ -35,12 +36,12 @@ unsigned int sys_comm_read_chip_id(void)
 {
 	unsigned int cpu_bonding = ioread32(otp_shadow_sys_base + BONDING_OFFSET) & 0x7;
 
-	pr_debug("cpu_bonding=0x%x\n", cpu_bonding);
+	TRACE_SYS(DBG_DEBUG, "cpu_bonding=0x%x\n", cpu_bonding);
 
 	switch (cpu_bonding) {
 	case 0x0:
 	case 0x7:
-		return E_CHIPID_BM1686;
+		return E_CHIPID_BM1688;
 	case 0x1:
 		return E_CHIPID_CV186AH;
 	default:
@@ -57,13 +58,13 @@ unsigned int sys_comm_read_chip_version(void)
 
 	chip_version = ioread32(top_base);
 
-	pr_debug("chip_version=0x%x\n", chip_version);
+	TRACE_SYS(DBG_DEBUG, "chip_version=0x%x\n", chip_version);
 
 	switch (chip_version) {
 	case 0x18802000:
 	case 0x18220000:
 	case 0x18100000:
-	case 0x1686A200: //Athena2
+	case 0x1686A200: // A2
 		return E_CHIPVERSION_U01;
 	case 0x18802001:
 	case 0x18220001:
@@ -81,7 +82,7 @@ unsigned int sys_comm_read_chip_pwr_on_reason(void)
 
 	reason = ioread32(rtc_base + RTC_ST_ON_REASON);
 
-	pr_debug("pwr on reason = 0x%x\n", reason);
+	TRACE_SYS(DBG_DEBUG, "pwr on reason = 0x%x\n", reason);
 
 	switch (reason) {
 	case 0x800d0000:
@@ -125,7 +126,7 @@ int sys_comm_init(void)
 	otp_shadow_sys_base = ioremap(OTP_SHADOW_SYS, OTP_SHADOW_SYS_SIZE);
 	top_rst_reg_base = (uintptr_t)ioremap(TOP_RESET_BASE, TOP_RESET_SIZE);
 
-	pr_notice("CVITEK CHIP ID = %d\n", sys_comm_read_chip_id());
+	TRACE_SYS(DBG_NOTICE, "CVITEK CHIP ID = %d\n", sys_comm_read_chip_id());
 
 	return 0;
 }
@@ -137,4 +138,3 @@ void sys_comm_deinit(void)
 	iounmap(otp_shadow_sys_base);
 	iounmap((void *)top_rst_reg_base);
 }
-

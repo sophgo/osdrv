@@ -43,8 +43,8 @@ int phy_i2c_write(hdmi_tx_dev_t *dev, u8 addr, u16 data)
 
 	do {
 		udelay(10);
-		status = dev_read_mask(IH_I2CMPHY_STAT0, IH_I2CMPHY_STAT0_I2CMPHYERROR_MASK |
-							     IH_I2CMPHY_STAT0_I2CMPHYDONE_MASK);
+		status = dev_read_mask(IH_I2CMPHY_STAT0,
+				IH_I2CMPHY_STAT0_I2CMPHYERROR_MASK | IH_I2CMPHY_STAT0_I2CMPHYDONE_MASK);
 	} while (status == 0 && (timeout--));
 
 	dev_write(IH_I2CMPHY_STAT0, status); //clear read status
@@ -73,8 +73,8 @@ int phy_i2c_read(hdmi_tx_dev_t *dev, u8 addr, u16 * value)
 
 	do {
 		udelay(10);
-		status = dev_read_mask(IH_I2CMPHY_STAT0, IH_I2CMPHY_STAT0_I2CMPHYERROR_MASK |
-													  IH_I2CMPHY_STAT0_I2CMPHYDONE_MASK);
+		status = dev_read_mask(IH_I2CMPHY_STAT0,
+				IH_I2CMPHY_STAT0_I2CMPHYERROR_MASK | IH_I2CMPHY_STAT0_I2CMPHYDONE_MASK);
 	} while (status == 0 && (timeout--));
 
 	dev_write(IH_I2CMPHY_STAT0, status); //clear read status

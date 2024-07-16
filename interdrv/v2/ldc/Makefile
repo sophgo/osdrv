@@ -3,10 +3,10 @@ include $(PWD)/../Makefile.interdrv.param
 ifneq ($(KERNELRELEASE),)
 include $(PWD)/chip/$(CVIARCH_L)/chip.mk
 ifeq ($(CVIARCH_L), soph)
-$(CVIARCH_L)_ldc-y += common/cvi_vip_ldc_proc.o
-$(CVIARCH_L)_ldc-y += common/cvi_vip_ldc.o
+$(CVIARCH_L)_ldc-y += common/ldc_proc.o
+$(CVIARCH_L)_ldc-y += common/ldc_core.o
 else
-$(CVIARCH_L)_ldc-y += common/cvi_vip_gdc_proc.o
+$(CVIARCH_L)_ldc-y += common/gdc_proc.o
 $(CVIARCH_L)_ldc-y += common/ldc_platform.o
 endif
 obj-m += $(CVIARCH_L)_ldc.o

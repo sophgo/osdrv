@@ -11,7 +11,7 @@
 #include <linux/i2c.h>
 #include <linux/version.h>
 
-#include "linux/vi_snsr.h"
+#include "vi_snsr.h"
 #include "snsr_i2c.h"
 #include "vi_sys.h"
 
@@ -24,11 +24,11 @@ enum {
 static int snsr_i2c_dbg = SNSR_I2C_DBG_DISABLE;
 module_param(snsr_i2c_dbg, int, 0644);
 
-static struct i2c_board_info cvi_info = {
+static struct i2c_board_info info = {
 	I2C_BOARD_INFO("sensor_i2c", (0x7b >> 1)),
 };
 
-static int snsr_i2c_write(struct cvi_i2c_dev *dev, struct isp_i2c_data *i2c)
+static int snsr_i2c_write(struct i2c_dev *dev, struct isp_i2c_data *i2c)
 {
 	struct i2c_client *client;
 	struct i2c_adapter *adap;
@@ -90,12 +90,12 @@ static int snsr_i2c_write(struct cvi_i2c_dev *dev, struct isp_i2c_data *i2c)
 	return ret == 1 ? 0 : -EIO;
 }
 
-static int snsr_i2c_burst_queue(struct cvi_i2c_dev *dev, struct isp_i2c_data *i2c)
+static int snsr_i2c_burst_queue(struct i2c_dev *dev, struct isp_i2c_data *i2c)
 {
 	struct i2c_client *client;
 	struct i2c_adapter *adap;
 	u8 i2c_dev = i2c->i2c_dev;
-	struct cvi_i2c_ctx *ctx;
+	struct i2c_ctx *ctx;
 	struct i2c_msg *msg;
 	int idx = 0;
 	u8 *tx;
@@ -148,7 +148,7 @@ static int snsr_i2c_burst_queue(struct cvi_i2c_dev *dev, struct isp_i2c_data *i2
 	return 0;
 }
 
-static void snsr_i2c_verify(struct i2c_client *client, struct cvi_i2c_ctx *ctx, uint32_t size)
+static void snsr_i2c_verify(struct i2c_client *client, struct i2c_ctx *ctx, uint32_t size)
 {
 	struct i2c_adapter *adap = client->adapter;
 	struct i2c_msg msg;
@@ -185,7 +185,7 @@ static void snsr_i2c_verify(struct i2c_client *client, struct cvi_i2c_ctx *ctx, 
 			}
 			if (ctx->msg[i].buf[1] != tx[0]) {
 				dev_dbg(&client->dev, "%s, addr 0x%02x, w: 0x%02x, r: 0x%02x\n",
-						__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1], tx[0]);
+					__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1], tx[0]);
 			}
 		} else if (step == 3) {
 			/* 2 byte address, 1 byte data*/
@@ -209,8 +209,8 @@ static void snsr_i2c_verify(struct i2c_client *client, struct cvi_i2c_ctx *ctx, 
 			}
 			if (ctx->msg[i].buf[2] != tx[0]) {
 				dev_dbg(&client->dev, "%s, addr 0x%02x,0x%02x w: 0x%02x, r: 0x%02x\n",
-						__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1],
-						ctx->msg[i].buf[2], tx[0]);
+					__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1],
+					ctx->msg[i].buf[2], tx[0]);
 			}
 		} else {
 			/* 2 byte address, 2 byte data*/
@@ -235,15 +235,15 @@ static void snsr_i2c_verify(struct i2c_client *client, struct cvi_i2c_ctx *ctx, 
 			}
 			if ((ctx->msg[i].buf[2] != tx[0]) || (ctx->msg[i].buf[3] != tx[1])) {
 				dev_dbg(&client->dev, "%s, addr 0x%02x 0x%02x, w: 0x%02x 0x%02x, r: 0x%02x 0x%02x\n",
-						__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1],
-						ctx->msg[i].buf[2], ctx->msg[i].buf[3],
-						tx[0], tx[1]);
+					__func__, ctx->msg[i].buf[0], ctx->msg[i].buf[1],
+					ctx->msg[i].buf[2], ctx->msg[i].buf[3],
+					tx[0], tx[1]);
 			}
 		}
 	}
 }
 
-static void snsr_i2c_print(struct i2c_client *client, struct cvi_i2c_ctx *ctx, uint32_t size)
+static void snsr_i2c_print(struct i2c_client *client, struct i2c_ctx *ctx, uint32_t size)
 {
 	int i, step;
 
@@ -252,22 +252,22 @@ static void snsr_i2c_print(struct i2c_client *client, struct cvi_i2c_ctx *ctx, u
 	for (i = 0; i < size; i++) {
 		if (step == 2)
 			dev_dbg(&client->dev, "a: 0x%02x, d: 0x%02x",
-					ctx->msg[i].buf[0], ctx->msg[i].buf[1]);
+				ctx->msg[i].buf[0], ctx->msg[i].buf[1]);
 		else if (step == 3)
 			dev_dbg(&client->dev, "a: 0x%02x, 0x%02x, d: 0x%02x",
-					ctx->msg[i].buf[0], ctx->msg[i].buf[1], ctx->msg[i].buf[2]);
+				ctx->msg[i].buf[0], ctx->msg[i].buf[1], ctx->msg[i].buf[2]);
 		else
 			dev_dbg(&client->dev, "a: 0x%02x, 0x%02x, d: 0x%02x, 0x%02x",
-					ctx->msg[i].buf[0], ctx->msg[i].buf[1],
-					ctx->msg[i].buf[2], ctx->msg[i].buf[3]);
+				ctx->msg[i].buf[0], ctx->msg[i].buf[1],
+				ctx->msg[i].buf[2], ctx->msg[i].buf[3]);
 	}
 }
 
-static int snsr_i2c_burst_fire(struct cvi_i2c_dev *dev, uint32_t i2c_dev)
+static int snsr_i2c_burst_fire(struct i2c_dev *dev, uint32_t i2c_dev)
 {
 	struct i2c_client *client;
 	struct i2c_adapter *adap;
-	struct cvi_i2c_ctx *ctx;
+	struct i2c_ctx *ctx;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 	struct timespec64 ts;
 #else
@@ -330,16 +330,16 @@ static int snsr_i2c_burst_fire(struct cvi_i2c_dev *dev, uint32_t i2c_dev)
 
 static long snsr_i2c_ioctl(void *hdlr, unsigned int cmd, void *arg)
 {
-	struct cvi_i2c_dev *dev = (struct cvi_i2c_dev *)hdlr;
+	struct i2c_dev *dev = (struct i2c_dev *)hdlr;
 	uint32_t *argp = (uint32_t *)arg;
 	uint32_t i2c_dev;
 
 	switch (cmd) {
-	case CVI_SNS_I2C_WRITE:
+	case SNS_I2C_WRITE:
 		return snsr_i2c_write(dev, (struct isp_i2c_data *)arg);
-	case CVI_SNS_I2C_BURST_QUEUE:
+	case SNS_I2C_BURST_QUEUE:
 		return snsr_i2c_burst_queue(dev, (struct isp_i2c_data *)arg);
-	case CVI_SNS_I2C_BURST_FIRE:
+	case SNS_I2C_BURST_FIRE:
 		i2c_dev = *argp;
 		return snsr_i2c_burst_fire(dev, i2c_dev);
 	default:
@@ -350,7 +350,7 @@ static long snsr_i2c_ioctl(void *hdlr, unsigned int cmd, void *arg)
 }
 
 static int snsr_i2c_register_cb(struct platform_device *pdev,
-				struct cvi_i2c_dev *dev)
+				struct i2c_dev *dev)
 {
 	/* register cmm callbacks */
 	return vi_sys_register_cmm_cb(0, dev, snsr_i2c_ioctl);
@@ -359,14 +359,14 @@ static int snsr_i2c_register_cb(struct platform_device *pdev,
 static int _init_resource(struct platform_device *pdev)
 {
 	struct i2c_adapter *i2c_adap;
-	struct cvi_i2c_dev *dev = dev_get_drvdata(&pdev->dev);
+	struct i2c_dev *dev = dev_get_drvdata(&pdev->dev);
 	int i = 0;
 
 	if (!dev)
 		return -ENODEV;
 
 	for (i = 0; i < I2C_MAX_NUM; i++) {
-		struct cvi_i2c_ctx *ctx;
+		struct i2c_ctx *ctx;
 
 		i2c_adap = i2c_get_adapter(i);
 		if (!i2c_adap)
@@ -376,9 +376,9 @@ static int _init_resource(struct platform_device *pdev)
 			ctx = &dev->ctx[i2c_adap->i2c_idx];
 			if (!ctx->client) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
-				ctx->client = i2c_new_client_device(i2c_adap, &cvi_info);
+				ctx->client = i2c_new_client_device(i2c_adap, &info);
 #else
-				ctx->client = i2c_new_device(i2c_adap, &cvi_info);
+				ctx->client = i2c_new_device(i2c_adap, &info);
 #endif
 				ctx->buf = kmalloc(I2C_BUF_SIZE, GFP_KERNEL);
 				if (!ctx->buf)
@@ -393,10 +393,10 @@ static int _init_resource(struct platform_device *pdev)
 	return 0;
 }
 
-static int cvi_snsr_i2c_probe(struct platform_device *pdev)
+static int snsr_i2c_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-	struct cvi_i2c_dev *dev;
+	struct i2c_dev *dev;
 
 	/* allocate main snsr state structure */
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
@@ -424,9 +424,9 @@ static int cvi_snsr_i2c_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int cvi_snsr_i2c_remove(struct platform_device *pdev)
+static int snsr_i2c_remove(struct platform_device *pdev)
 {
-	struct cvi_i2c_dev *dev;
+	struct i2c_dev *dev;
 	int i = 0;
 
 	if (!pdev) {
@@ -436,12 +436,12 @@ static int cvi_snsr_i2c_remove(struct platform_device *pdev)
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_snsr drvdata");
+		dev_err(&pdev->dev, "Can not get snsr drvdata");
 		return 0;
 	}
 
 	for (i = 0; i < I2C_MAX_NUM; i++) {
-		struct cvi_i2c_ctx *ctx;
+		struct i2c_ctx *ctx;
 
 		ctx = &dev->ctx[i];
 		if (ctx->client)
@@ -454,48 +454,48 @@ static int cvi_snsr_i2c_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void cvi_snsr_i2c_pdev_release(struct device *dev)
+static void snsr_i2c_pdev_release(struct device *dev)
 {
 }
 
-static struct platform_device cvi_snsr_i2c_pdev = {
+static struct platform_device snsr_i2c_pdev = {
 	.name		= "snsr_i2c",
-	.dev.release	= cvi_snsr_i2c_pdev_release,
+	.dev.release	= snsr_i2c_pdev_release,
 	.id		= PLATFORM_DEVID_NONE,
 };
 
-static struct platform_driver cvi_snsr_i2c_pdrv = {
-	.probe      = cvi_snsr_i2c_probe,
-	.remove     = cvi_snsr_i2c_remove,
+static struct platform_driver snsr_i2c_pdrv = {
+	.probe      = snsr_i2c_probe,
+	.remove     = snsr_i2c_remove,
 	.driver     = {
 		.name		= "snsr_i2c",
 		.owner		= THIS_MODULE,
 	},
 };
 
-static int __init cvi_snsr_i2c_init(void)
+static int __init snsr_i2c_init(void)
 {
 	int rc;
 
-	rc = platform_device_register(&cvi_snsr_i2c_pdev);
+	rc = platform_device_register(&snsr_i2c_pdev);
 	if (rc)
 		return rc;
 
-	rc = platform_driver_register(&cvi_snsr_i2c_pdrv);
+	rc = platform_driver_register(&snsr_i2c_pdrv);
 	if (rc)
-		platform_device_unregister(&cvi_snsr_i2c_pdev);
+		platform_device_unregister(&snsr_i2c_pdev);
 
 	return rc;
 }
 
-static void __exit cvi_snsr_i2c_exit(void)
+static void __exit snsr_i2c_exit(void)
 {
-	platform_driver_unregister(&cvi_snsr_i2c_pdrv);
-	platform_device_unregister(&cvi_snsr_i2c_pdev);
+	platform_driver_unregister(&snsr_i2c_pdrv);
+	platform_device_unregister(&snsr_i2c_pdev);
 }
 
 MODULE_DESCRIPTION("Cvitek Sensor Driver");
 MODULE_AUTHOR("Max Liao");
 MODULE_LICENSE("GPL");
-module_init(cvi_snsr_i2c_init);
-module_exit(cvi_snsr_i2c_exit);
+module_init(snsr_i2c_init);
+module_exit(snsr_i2c_exit);

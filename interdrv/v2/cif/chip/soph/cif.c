@@ -8,21 +8,17 @@
 #include <linux/delay.h>
 #include <linux/iommu.h>
 #include <linux/irq.h>
-#include <linux/compat.h>
 #include <linux/reset.h>
 #include <generated/compile.h>
 #include <linux/io.h>
 #include <linux/clk.h>
-#include <linux/cvi_defines.h>
-#if defined(__CV181X__)
-#include "pinctrl-cv181x.h"
-#elif defined(__CV180X__)
-#include "pinctrl-cv180x.h"
-#elif defined(__CV186X__)
+#include <linux/defines.h>
+#if defined(__CV186X__)
 #include "pinctrl-cv186x.h"
 #endif
 #include <linux/ctype.h>
 #include <linux/version.h>
+#include <linux/compat.h>
 
 #ifdef CONFIG_PROC_FS
 #include <linux/proc_fs.h>
@@ -30,8 +26,8 @@
 #include <linux/uaccess.h>
 #endif
 
-#include "linux/cif_uapi.h"
-#include "linux/vi_snsr.h"
+#include "linux/comm_cif.h"
+#include "vi_snsr.h"
 #include "drv/cif_drv.h"
 #include "cif.h"
 #include <vi_sys.h>
@@ -112,7 +108,7 @@ static void __iomem *mclk_update;
 static void __iomem *mclk_src;
 #endif
 
-static int cif_set_output_clk_edge(struct cvi_cif_dev *dev,
+static int cif_set_output_clk_edge(struct cif_dev *dev,
 				   struct clk_edge_s *clk_edge);
 
 const struct sync_code_s default_sync_code = {
@@ -126,14 +122,14 @@ const struct sync_code_s default_sync_code = {
 	.n1_bk_eav = 0x760,
 };
 
-static struct cvi_link *ctx_to_link(const struct cif_ctx *ctx)
+static struct link *ctx_to_link(const struct cif_ctx *ctx)
 {
-	return container_of(ctx, struct cvi_link, cif_ctx);
+	return container_of(ctx, struct link, cif_ctx);
 }
 
-static struct cvi_cif_dev *file_cif_dev(struct file *file)
+static struct cif_dev *file_cif_dev(struct file *file)
 {
-	return container_of(file->private_data, struct cvi_cif_dev, miscdev);
+	return container_of(file->private_data, struct cif_dev, miscdev);
 }
 
 const char *_to_string_input_mode(enum input_mode_e input_mode)
@@ -189,36 +185,36 @@ const char *_to_string_mac_clk(enum rx_mac_clk_e mac_clk)
 const char *_to_string_cmd(unsigned int cmd)
 {
 	switch (cmd) {
-	case CVI_MIPI_SET_DEV_ATTR:
-		return "CVI_MIPI_SET_DEV_ATTR";
-	case CVI_MIPI_SET_HS_MODE:
-		return "CVI_MIPI_SET_HS_MODE";
-	case CVI_MIPI_SET_OUTPUT_CLK_EDGE:
-		return "CVI_MIPI_SET_OUTPUT_CLK_EDGE";
-	case CVI_MIPI_RESET_MIPI:
-		return "CVI_MIPI_RESET_MIPI";
-	case CVI_MIPI_SET_CROP_TOP:
-		return "CVI_MIPI_SET_CROP_TOP";
-	case CVI_MIPI_SET_WDR_MANUAL:
-		return "CVI_MIPI_SET_WDR_MANUAL";
-	case CVI_MIPI_SET_LVDS_FP_VS:
-		return "CVI_MIPI_SET_LVDS_FP_VS";
-	case CVI_MIPI_RESET_SENSOR:
-		return "CVI_MIPI_RESET_SENSOR";
-	case CVI_MIPI_UNRESET_SENSOR:
-		return "CVI_MIPI_UNRESET_SENSOR";
-	case CVI_MIPI_ENABLE_SENSOR_CLOCK:
-		return "CVI_MIPI_ENABLE_SENSOR_CLOCK";
-	case CVI_MIPI_DISABLE_SENSOR_CLOCK:
-		return "CVI_MIPI_DISABLE_SENSOR_CLOCK";
-	case CVI_MIPI_RESET_LVDS:
-		return "CVI_MIPI_RESET_LVDS";
-	case CVI_MIPI_GET_CIF_ATTR:
-		return "CVI_MIPI_GET_CIF_ATTR";
-	case CVI_MIPI_SET_MAX_MAC_CLOCK:
-		return "CVI_MIPI_SET_MAX_MAC_CLOCK";
-	case CVI_MIPI_SET_CROP_WINDOW:
-		return "CVI_MIPI_SET_CROP_WINDOW";
+	case MIPI_SET_DEV_ATTR:
+		return "MIPI_SET_DEV_ATTR";
+	case MIPI_SET_HS_MODE:
+		return "MIPI_SET_HS_MODE";
+	case MIPI_SET_OUTPUT_CLK_EDGE:
+		return "MIPI_SET_OUTPUT_CLK_EDGE";
+	case MIPI_RESET_MIPI:
+		return "MIPI_RESET_MIPI";
+	case MIPI_SET_CROP_TOP:
+		return "MIPI_SET_CROP_TOP";
+	case MIPI_SET_WDR_MANUAL:
+		return "MIPI_SET_WDR_MANUAL";
+	case MIPI_SET_LVDS_FP_VS:
+		return "MIPI_SET_LVDS_FP_VS";
+	case MIPI_RESET_SENSOR:
+		return "MIPI_RESET_SENSOR";
+	case MIPI_UNRESET_SENSOR:
+		return "MIPI_UNRESET_SENSOR";
+	case MIPI_ENABLE_SENSOR_CLOCK:
+		return "MIPI_ENABLE_SENSOR_CLOCK";
+	case MIPI_DISABLE_SENSOR_CLOCK:
+		return "MIPI_DISABLE_SENSOR_CLOCK";
+	case MIPI_RESET_LVDS:
+		return "MIPI_RESET_LVDS";
+	case MIPI_GET_CIF_ATTR:
+		return "MIPI_GET_CIF_ATTR";
+	case MIPI_SET_MAX_MAC_CLOCK:
+		return "MIPI_SET_MAX_MAC_CLOCK";
+	case MIPI_SET_CROP_WINDOW:
+		return "MIPI_SET_CROP_WINDOW";
 	default:
 		return "unknown";
 	}
@@ -246,15 +242,15 @@ const char *_to_string_raw_data_type(enum raw_data_type_e raw_data_type)
 const char *_to_string_mipi_wdr_mode(enum mipi_wdr_mode_e wdr)
 {
 	switch (wdr) {
-	case CVI_MIPI_WDR_MODE_NONE:
+	case MIPI_WDR_MODE_NONE:
 		return "NONE";
-	case CVI_MIPI_WDR_MODE_VC:
+	case MIPI_WDR_MODE_VC:
 		return "VC";
-	case CVI_MIPI_WDR_MODE_DT:
+	case MIPI_WDR_MODE_DT:
 		return "DT";
-	case CVI_MIPI_WDR_MODE_DOL:
+	case MIPI_WDR_MODE_DOL:
 		return "DOL";
-	case CVI_MIPI_WDR_MODE_MANUAL:
+	case MIPI_WDR_MODE_MANUAL:
 		return "MANUAL";
 	default:
 		return "unknown";
@@ -264,15 +260,15 @@ const char *_to_string_mipi_wdr_mode(enum mipi_wdr_mode_e wdr)
 const char *_to_string_wdr_mode(enum wdr_mode_e wdr)
 {
 	switch (wdr) {
-	case CVI_WDR_MODE_NONE:
+	case CIF_WDR_MODE_NONE:
 		return "NONE";
-	case CVI_WDR_MODE_2F:
+	case CIF_WDR_MODE_2F:
 		return "2To1";
-	case CVI_WDR_MODE_3F:
+	case CIF_WDR_MODE_3F:
 		return "3To1";
-	case CVI_WDR_MODE_DOL_2F:
+	case CIF_WDR_MODE_DOL_2F:
 		return "DOL2To1";
-	case CVI_WDR_MODE_DOL_3F:
+	case CIF_WDR_MODE_DOL_3F:
 		return "DOL3To1";
 	default:
 		return "unknown";
@@ -403,7 +399,7 @@ const char *_to_string_deskew_state(enum mipi_deskew_state_e state)
 	}
 }
 
-static void cif_dump_dev_attr(struct cvi_cif_dev *dev,
+static void cif_dump_dev_attr(struct cif_dev *dev,
 			      struct combo_dev_attr_s *attr)
 {
 	struct device *_dev = dev->miscdev.this_device;
@@ -835,7 +831,7 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 #endif
 
 #ifdef MIPI_IF
-static int _cif_set_attr_mipi(struct cvi_cif_dev *dev,
+static int _cif_set_attr_mipi(struct cif_dev *dev,
 			      struct cif_ctx *ctx,
 			      struct mipi_dev_attr_s *attr,
 				  uint32_t devno)
@@ -1010,24 +1006,24 @@ static int _cif_set_attr_mipi(struct cvi_cif_dev *dev,
 		cif_set_hs_settle(ctx, attr->dphy.hs_settle);
 	/* config the wdr mode. */
 	switch (attr->wdr_mode) {
-	case CVI_MIPI_WDR_MODE_NONE:
+	case MIPI_WDR_MODE_NONE:
 		break;
-	case CVI_MIPI_WDR_MODE_DT:
+	case MIPI_WDR_MODE_DT:
 		csi->hdr_mode = CSI_HDR_MODE_DT;
 		for (i = 0; i < MAX_WDR_FRAME_NUM; i++)
 			csi->data_type[i] = attr->data_type[i];
 		break;
-	case CVI_MIPI_WDR_MODE_MANUAL:
+	case MIPI_WDR_MODE_MANUAL:
 		param->hdr_manual = combo->wdr_manu.manual_en;
 		param->hdr_shift = combo->wdr_manu.l2s_distance;
 		param->hdr_vsize = combo->wdr_manu.lsef_length;
 		param->hdr_rm_padding = combo->wdr_manu.discard_padding_lines;
 		cif_hdr_manual_config(ctx, param, !!combo->wdr_manu.update);
 		break;
-	case CVI_MIPI_WDR_MODE_VC:
+	case MIPI_WDR_MODE_VC:
 		csi->hdr_mode = CSI_HDR_MODE_VC;
 		break;
-	case CVI_MIPI_WDR_MODE_DOL:
+	case MIPI_WDR_MODE_DOL:
 		csi->hdr_mode = CSI_HDR_MODE_DOL;
 		break;
 	default:
@@ -1044,7 +1040,7 @@ static int _cif_set_attr_mipi(struct cvi_cif_dev *dev,
 		}
 	}
 
-	param->hdr_en = (attr->wdr_mode != CVI_MIPI_WDR_MODE_NONE);
+	param->hdr_en = (attr->wdr_mode != MIPI_WDR_MODE_NONE);
 	cif_streaming(ctx, 1, param->hdr_en);
 
 	return 0;
@@ -1059,7 +1055,7 @@ static int _cif_set_lvds_vsync_type(struct cif_ctx *ctx,
 	struct combo_dev_attr_s *combo =
 		container_of(attr, struct combo_dev_attr_s, lvds_attr);
 	struct lvds_vsync_type_s *type = &attr->vsync_type;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 
 	switch (type->sync_type) {
 	case LVDS_VSYNC_NORMAL:
@@ -1087,13 +1083,13 @@ static int _cif_set_lvds_vsync_type(struct cif_ctx *ctx,
 	return 0;
 }
 
-static int _cif_set_attr_sublvds(struct cvi_cif_dev *dev,
+static int _cif_set_attr_sublvds(struct cif_dev *dev,
 				 struct cif_ctx *ctx,
 				 struct lvds_dev_attr_s *attr,
 				 uint32_t devno)
 {
 	struct cif_param *param = ctx->cur_config;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	struct param_sublvds *sublvds = &param->cfg.sublvds;
 	struct sublvds_sync_code *sc;
 	uint32_t tbl = 0x1FF;
@@ -1283,13 +1279,13 @@ static int _cif_set_attr_sublvds(struct cvi_cif_dev *dev,
 
 	/* config the wdr */
 	switch (attr->wdr_mode) {
-	case CVI_WDR_MODE_NONE:
+	case CIF_WDR_MODE_NONE:
 		/* [TODO] use other api to set the fp */
 		link->distance_fp = 6;
 		cif_set_lvds_vsync_gen(ctx, 6);
 		break;
-	case CVI_WDR_MODE_DOL_2F:
-	case CVI_WDR_MODE_DOL_3F:
+	case CIF_WDR_MODE_DOL_2F:
+	case CIF_WDR_MODE_DOL_3F:
 		/* [TODO] 3 exposure hdr hw is not ready. */
 		/* config th Vsync type */
 		rc = _cif_set_lvds_vsync_type(ctx, attr, sublvds);
@@ -1299,9 +1295,9 @@ static int _cif_set_attr_sublvds(struct cvi_cif_dev *dev,
 	default:
 		return -EINVAL;
 	}
-	param->hdr_en = (attr->wdr_mode != CVI_WDR_MODE_NONE);
+	param->hdr_en = (attr->wdr_mode != CIF_WDR_MODE_NONE);
 	/* [TODO] config the fid type. */
-	cif_streaming(ctx, 1, attr->wdr_mode != CVI_WDR_MODE_NONE);
+	cif_streaming(ctx, 1, attr->wdr_mode != CIF_WDR_MODE_NONE);
 
 	return 0;
 }
@@ -1333,7 +1329,7 @@ static int _cif_set_hispi_vsync_type(struct cif_ctx *ctx,
 	return 0;
 }
 
-static int _cif_set_attr_hispi(struct cvi_cif_dev *dev,
+static int _cif_set_attr_hispi(struct cif_dev *dev,
 			       struct cif_ctx *ctx,
 			       struct lvds_dev_attr_s *attr,
 				   uint32_t devno)
@@ -1531,9 +1527,9 @@ static int _cif_set_attr_hispi(struct cvi_cif_dev *dev,
 
 	/* config the wdr */
 	switch (attr->wdr_mode) {
-	case CVI_WDR_MODE_NONE:
-	case CVI_WDR_MODE_2F:
-	case CVI_WDR_MODE_3F: /* [TODO] 3 exposure hdr hw is not ready. */
+	case CIF_WDR_MODE_NONE:
+	case CIF_WDR_MODE_2F:
+	case CIF_WDR_MODE_3F: /* [TODO] 3 exposure hdr hw is not ready. */
 		break;
 	default:
 		return -EINVAL;
@@ -1543,9 +1539,9 @@ static int _cif_set_attr_hispi(struct cvi_cif_dev *dev,
 	if (rc < 0)
 		return rc;
 
-	param->hdr_en = (attr->wdr_mode != CVI_WDR_MODE_NONE);
+	param->hdr_en = (attr->wdr_mode != CIF_WDR_MODE_NONE);
 	/* [TODO] config the fid type. */
-	cif_streaming(ctx, 1, attr->wdr_mode != CVI_WDR_MODE_NONE);
+	cif_streaming(ctx, 1, attr->wdr_mode != CIF_WDR_MODE_NONE);
 
 	return 0;
 }
@@ -1743,7 +1739,7 @@ static void cif_config_pinmux(enum ttl_src_e vi, uint32_t pad)
 
 #endif//FPGA_PORTING
 
-static int _cif_set_attr_cmos(struct cvi_cif_dev *dev,
+static int _cif_set_attr_cmos(struct cif_dev *dev,
 			      struct cif_ctx *ctx,
 			      struct combo_dev_attr_s *attr)
 {
@@ -1820,13 +1816,13 @@ static int _cif_set_attr_cmos(struct cvi_cif_dev *dev,
 #endif // DVP_IF
 
 #ifdef BT1120_IF
-static int _cif_set_attr_bt1120(struct cvi_cif_dev *dev,
+static int _cif_set_attr_bt1120(struct cif_dev *dev,
 				struct cif_ctx *ctx,
 				struct combo_dev_attr_s *attr)
 {
 	struct cif_param *param = ctx->cur_config;
 	struct param_ttl *ttl = &param->cfg.ttl;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	enum ttl_src_e vi = attr->ttl_attr.vi;
 	int i;
 
@@ -1873,13 +1869,13 @@ static int _cif_set_attr_bt1120(struct cvi_cif_dev *dev,
 #endif // BT1120_IF
 
 #ifdef BT601_IF
-static int _cif_set_attr_bt601(struct cvi_cif_dev *dev,
+static int _cif_set_attr_bt601(struct cif_dev *dev,
 				       struct cif_ctx *ctx,
 				       struct combo_dev_attr_s *attr)
 {
 	struct cif_param *param = ctx->cur_config;
 	struct param_ttl *ttl = &param->cfg.ttl;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	enum ttl_src_e vi = attr->ttl_attr.vi;
 	int i;
 
@@ -1962,13 +1958,13 @@ static int _cif_set_attr_bt601(struct cvi_cif_dev *dev,
 #endif // BT601_IF
 
 #ifdef BT_DEMUX_IF
-static int _cif_set_attr_bt_demux(struct cvi_cif_dev *dev,
+static int _cif_set_attr_bt_demux(struct cif_dev *dev,
 					struct cif_ctx *ctx,
 					struct combo_dev_attr_s *attr)
 {
 	struct cif_param *param = ctx->cur_config;
 	struct param_btdemux *btdemux = &param->cfg.btdemux;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	struct bt_demux_attr_s *info = &attr->bt_demux_attr;
 #ifndef FPGA_PORTING
 	enum ttl_src_e vi = info->vi;
@@ -2008,14 +2004,14 @@ static int _cif_set_attr_bt_demux(struct cvi_cif_dev *dev,
 	btdemux->clk_inv = link->clk_edge;
 	btdemux->v_fp = (!info->v_fp) ? 0x0f : info->v_fp;
 	btdemux->h_fp = (!info->h_fp) ? 0x0f : info->h_fp;
-	btdemux->sync_code_part_A[0] = info->sync_code_part_A[0];
-	btdemux->sync_code_part_A[1] = info->sync_code_part_A[1];
-	btdemux->sync_code_part_A[2] = info->sync_code_part_A[2];
+	btdemux->sync_code_part_a[0] = info->sync_code_part_a[0];
+	btdemux->sync_code_part_a[1] = info->sync_code_part_a[1];
+	btdemux->sync_code_part_a[2] = info->sync_code_part_a[2];
 	for (i = 0; i < BT_DEMUX_NUM; i++) {
-		btdemux->sync_code_part_B[i].sav_vld = info->sync_code_part_B[i].sav_vld;
-		btdemux->sync_code_part_B[i].sav_blk = info->sync_code_part_B[i].sav_blk;
-		btdemux->sync_code_part_B[i].eav_vld = info->sync_code_part_B[i].eav_vld;
-		btdemux->sync_code_part_B[i].eav_blk = info->sync_code_part_B[i].eav_blk;
+		btdemux->sync_code_part_b[i].sav_vld = info->sync_code_part_b[i].sav_vld;
+		btdemux->sync_code_part_b[i].sav_blk = info->sync_code_part_b[i].sav_blk;
+		btdemux->sync_code_part_b[i].eav_vld = info->sync_code_part_b[i].eav_vld;
+		btdemux->sync_code_part_b[i].eav_blk = info->sync_code_part_b[i].eav_blk;
 	}
 	btdemux->demux = (enum cif_btdmux_mode_e)info->mode;
 	btdemux->yc_exchg = info->yc_exchg;
@@ -2027,13 +2023,13 @@ static int _cif_set_attr_bt_demux(struct cvi_cif_dev *dev,
 #endif // BT_DEMUX_IF
 
 #ifdef BT656_IF
-static int _cif_set_attr_bt656_9b(struct cvi_cif_dev *dev,
+static int _cif_set_attr_bt656_9b(struct cif_dev *dev,
 				  struct cif_ctx *ctx,
 				  struct combo_dev_attr_s *attr)
 {
 	struct cif_param *param = ctx->cur_config;
 	struct param_ttl *ttl = &param->cfg.ttl;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	enum ttl_src_e vi = attr->ttl_attr.vi;
 	int i;
 
@@ -2077,13 +2073,13 @@ static int _cif_set_attr_bt656_9b(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static int _cif_set_attr_bt656_9b_ddr(struct cvi_cif_dev *dev,
+static int _cif_set_attr_bt656_9b_ddr(struct cif_dev *dev,
 				  struct cif_ctx *ctx,
 				  struct combo_dev_attr_s *attr)
 {
 	struct cif_param *param = ctx->cur_config;
 	struct param_ttl *ttl = &param->cfg.ttl;
-	struct cvi_link *link = ctx_to_link(ctx);
+	struct link *link = ctx_to_link(ctx);
 	enum ttl_src_e vi = attr->ttl_attr.vi;
 	int i;
 
@@ -2128,7 +2124,7 @@ static int _cif_set_attr_bt656_9b_ddr(struct cvi_cif_dev *dev,
 #endif // BT656_IF
 
 #ifdef	CUSTOM0_IF
-static int _cif_set_attr_custom0(struct cvi_cif_dev *dev,
+static int _cif_set_attr_custom0(struct cif_dev *dev,
 				struct cif_ctx *ctx,
 				struct combo_dev_attr_s *attr)
 {
@@ -2218,10 +2214,10 @@ static inline unsigned int _cif_mac_enum_to_value(enum rx_mac_clk_e mac_clk)
 	return val;
 }
 
-static int _cif_set_mac_clk(struct cvi_cif_dev *cdev, uint32_t devno,
+static int _cif_set_mac_clk(struct cif_dev *cdev, uint32_t devno,
 		enum rx_mac_clk_e mac_clk)
 {
-	struct cvi_link *link = &cdev->link[devno];
+	struct link *link = &cdev->link[devno];
 	struct cif_ctx *ctx;
 	u32 addr, data, mask, tmp;
 	u32 clk_val = _cif_mac_enum_to_value(mac_clk);
@@ -2362,13 +2358,13 @@ static int _cif_set_mac_clk(struct cvi_cif_dev *cdev, uint32_t devno,
 	return 0;
 }
 
-static inline int cif_set_mac_clk(struct cvi_cif_dev *dev, uint32_t devno,
+static inline int cif_set_mac_clk(struct cif_dev *dev, uint32_t devno,
 		enum rx_mac_clk_e mac_clk)
 {
 	return _cif_set_mac_clk(dev, devno, mac_clk);
 }
 
-static int cif_set_dev_attr(struct cvi_cif_dev *dev,
+static int cif_set_dev_attr(struct cif_dev *dev,
 			    struct combo_dev_attr_s *attr)
 {
 	struct device *_dev = dev->miscdev.this_device;
@@ -2497,7 +2493,7 @@ static int cif_set_dev_attr(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static int cif_set_output_clk_edge(struct cvi_cif_dev *dev,
+static int cif_set_output_clk_edge(struct cif_dev *dev,
 				   struct clk_edge_s *clk_edge)
 {
 	struct cif_ctx *ctx = &dev->link[clk_edge->devno].cif_ctx;
@@ -2514,7 +2510,7 @@ static int cif_set_output_clk_edge(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static void cif_reset_param(struct cvi_link *link)
+static void cif_reset_param(struct link *link)
 {
 	link->is_on = 0;
 	link->clk_edge = CLK_UP_EDGE;
@@ -2523,14 +2519,14 @@ static void cif_reset_param(struct cvi_link *link)
 	link->distance_fp = 0;
 	memset(&link->param, 0, sizeof(struct cif_param));
 	memset(&link->attr, 0, sizeof(struct combo_dev_attr_s));
-	memset(&link->sts_csi, 0, sizeof(struct cvi_csi_status));
-	memset(&link->sts_lvds, 0, sizeof(struct cvi_lvds_status));
+	memset(&link->sts_csi, 0, sizeof(struct csi_status));
+	memset(&link->sts_lvds, 0, sizeof(struct lvds_status));
 }
 
-static int cif_reset_mipi(struct cvi_cif_dev *dev, uint32_t devno)
+static int cif_reset_mipi(struct cif_dev *dev, uint32_t devno)
 {
 	union vi_sys_reset mask;
-	struct cvi_link *link = &dev->link[devno];
+	struct link *link = &dev->link[devno];
 	mask.raw = 0;
 	/* mask the interrupts */
 	if (link->is_on)
@@ -2580,7 +2576,7 @@ static int cif_reset_mipi(struct cvi_cif_dev *dev, uint32_t devno)
 	return 0;
 }
 
-static inline int cif_set_crop_top(struct cvi_cif_dev *dev,
+static inline int cif_set_crop_top(struct cif_dev *dev,
 			    struct crop_top_s *crop)
 {
 	struct cif_ctx *ctx = &dev->link[crop->devno].cif_ctx;
@@ -2592,7 +2588,7 @@ static inline int cif_set_crop_top(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static inline int cif_set_windowing(struct cvi_cif_dev *dev,
+static inline int cif_set_windowing(struct cif_dev *dev,
 			    struct cif_crop_win_s *win)
 {
 	struct cif_ctx *ctx = &dev->link[win->devno].cif_ctx;
@@ -2609,7 +2605,7 @@ static inline int cif_set_windowing(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static inline int cif_set_wdr_manual(struct cvi_cif_dev *dev,
+static inline int cif_set_wdr_manual(struct cif_dev *dev,
 			      struct manual_wdr_s *manual)
 {
 	struct cif_ctx *ctx = &dev->link[manual->devno].cif_ctx;
@@ -2625,7 +2621,7 @@ static inline int cif_set_wdr_manual(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static inline int cif_get_cif_attr(struct cvi_cif_dev *dev,
+static inline int cif_get_cif_attr(struct cif_dev *dev,
 			    struct cif_attr_s *cif_attr)
 {
 	struct cif_param *param = &dev->link[cif_attr->devno].param;
@@ -2640,7 +2636,7 @@ static inline int cif_get_cif_attr(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static inline int cif_set_lvds_fp_vs(struct cvi_cif_dev *dev,
+static inline int cif_set_lvds_fp_vs(struct cif_dev *dev,
 			      struct vsync_gen_s *vs)
 {
 	struct cif_ctx *ctx = &dev->link[vs->devno].cif_ctx;
@@ -2709,7 +2705,7 @@ void write_value_range(u32 *data, unsigned int start_bit, unsigned int end_bit, 
 }
 
 static int _cif_enable_snsr_clk(struct device *dev,
-				struct cvi_cif_dev *cdev,
+				struct cif_dev *cdev,
 				uint32_t devno, uint8_t on)
 {
 #ifndef FPGA_PORTING
@@ -2964,7 +2960,7 @@ static int _cif_enable_snsr_clk(struct device *dev,
 	return 0;
 }
 
-static inline int cif_enable_snsr_clk(struct cvi_cif_dev *dev,
+static inline int cif_enable_snsr_clk(struct cif_dev *dev,
 				uint32_t devno, uint8_t on)
 {
 	struct device *_dev = dev->miscdev.this_device;
@@ -2972,10 +2968,10 @@ static inline int cif_enable_snsr_clk(struct cvi_cif_dev *dev,
 	return _cif_enable_snsr_clk(_dev, dev, devno, on);
 }
 
-static int cif_reset_snsr_gpio(struct cvi_cif_dev *dev,
-			       SNS_RST_CONFIG *sns_rst_config, uint8_t on)
+static int cif_reset_snsr_gpio(struct cif_dev *dev,
+			       sns_rst_config *sns_rst_config, uint8_t on)
 {
-	struct cvi_link *link;
+	struct link *link;
 	int ret = 0;
 	int reset_pin = 0, reset_port = 0;
 
@@ -3039,13 +3035,13 @@ static int cif_reset_snsr_gpio(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static inline int cif_reset_lvds(struct cvi_cif_dev *dev,
+static inline int cif_reset_lvds(struct cif_dev *dev,
 				unsigned int devno)
 {
 	return 0;
 }
 
-static inline int cif_bt_fmt_out(struct cvi_cif_dev *dev,
+static inline int cif_bt_fmt_out(struct cif_dev *dev,
 			  struct bt_fmt_out_s *fmt_out)
 {
 	struct cif_ctx *ctx = &dev->link[fmt_out->devno].cif_ctx;
@@ -3056,7 +3052,7 @@ static inline int cif_bt_fmt_out(struct cvi_cif_dev *dev,
 	return 0;
 }
 
-static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
+static long _cif_ioctl(struct cif_dev *dev, unsigned int cmd,
 		       unsigned long arg, unsigned int from_user)
 {
 	struct device *_dev = dev->miscdev.this_device;
@@ -3071,7 +3067,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 	}
 
 	switch (cmd) {
-	case CVI_MIPI_SET_DEV_ATTR:
+	case MIPI_SET_DEV_ATTR:
 	{
 		struct combo_dev_attr_s attr;
 
@@ -3085,7 +3081,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_dev_attr(dev, &attr);
 	}
-	case CVI_MIPI_SET_OUTPUT_CLK_EDGE:
+	case MIPI_SET_OUTPUT_CLK_EDGE:
 	{
 		struct clk_edge_s clk;
 
@@ -3099,7 +3095,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_output_clk_edge(dev, &clk);
 	}
-	case CVI_MIPI_RESET_MIPI:
+	case MIPI_RESET_MIPI:
 		if (from_user) {
 			if (copy_from_user(&devno, (void *)arg, sizeof(devno))) {
 				dev_err(_dev, "copy_from_user failed.\n");
@@ -3109,7 +3105,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 			devno = *(uint32_t *)arg;
 
 		return cif_reset_mipi(dev, devno);
-	case CVI_MIPI_SET_CROP_TOP: // remove info line
+	case MIPI_SET_CROP_TOP: // remove info line
 	{
 		struct crop_top_s crop;
 
@@ -3123,7 +3119,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_crop_top(dev, &crop);
 	}
-	case CVI_MIPI_SET_CROP_WINDOW: // crop input image
+	case MIPI_SET_CROP_WINDOW: // crop input image
 	{
 		struct cif_crop_win_s win;
 
@@ -3137,7 +3133,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_windowing(dev, &win);
 	}
-	case CVI_MIPI_SET_WDR_MANUAL:
+	case MIPI_SET_WDR_MANUAL:
 	{
 		struct manual_wdr_s wdr_manu;
 
@@ -3151,7 +3147,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_wdr_manual(dev, &wdr_manu);
 	}
-	case CVI_MIPI_SET_LVDS_FP_VS:
+	case MIPI_SET_LVDS_FP_VS:
 	{
 		struct vsync_gen_s vsync;
 
@@ -3165,9 +3161,9 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_set_lvds_fp_vs(dev, &vsync);
 	}
-	case CVI_MIPI_RESET_SENSOR:
+	case MIPI_RESET_SENSOR:
 	{
-		SNS_RST_CONFIG rst_config;
+		sns_rst_config rst_config;
 
 		if (from_user) {
 			if (copy_from_user(&rst_config, (void *)arg, sizeof(rst_config))) {
@@ -3178,9 +3174,9 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 			memcpy(&rst_config, (void *)arg, sizeof(rst_config));
 		return cif_reset_snsr_gpio(dev, &rst_config, 1);
 	}
-	case CVI_MIPI_UNRESET_SENSOR:
+	case MIPI_UNRESET_SENSOR:
 	{
-		SNS_RST_CONFIG rst_config;
+		sns_rst_config rst_config;
 
 		if (from_user) {
 			if (copy_from_user(&rst_config, (void *)arg, sizeof(rst_config))) {
@@ -3191,7 +3187,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 			memcpy(&rst_config, (void *)arg, sizeof(rst_config));
 		return cif_reset_snsr_gpio(dev, &rst_config, 0);
 	}
-	case CVI_MIPI_ENABLE_SENSOR_CLOCK:
+	case MIPI_ENABLE_SENSOR_CLOCK:
 		if (from_user) {
 			if (copy_from_user(&devno, (void *)arg, sizeof(devno))) {
 				dev_err(_dev, "copy_from_user failed.\n");
@@ -3200,7 +3196,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 		} else
 			devno = *(uint32_t *)arg;
 		return cif_enable_snsr_clk(dev, devno, 1);
-	case CVI_MIPI_DISABLE_SENSOR_CLOCK:
+	case MIPI_DISABLE_SENSOR_CLOCK:
 		if (from_user) {
 			if (copy_from_user(&devno, (void *)arg, sizeof(devno))) {
 				dev_err(_dev, "copy_from_user failed.\n");
@@ -3209,7 +3205,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 		} else
 			devno = *(uint32_t *)arg;
 		return cif_enable_snsr_clk(dev, devno, 0);
-	case CVI_MIPI_RESET_LVDS:
+	case MIPI_RESET_LVDS:
 	case CIF_CB_RESET_LVDS:
 		if (from_user) {
 			if (copy_from_user(&devno, (void *)arg, sizeof(devno))) {
@@ -3219,7 +3215,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 		} else
 			devno = *(uint32_t *)arg;
 		return cif_reset_lvds(dev, devno);
-	case CVI_MIPI_GET_CIF_ATTR:
+	case MIPI_GET_CIF_ATTR:
 	case CIF_CB_GET_CIF_ATTR:
 	{
 		struct cif_attr_s cif_attr;
@@ -3243,7 +3239,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 			memcpy((void *)arg, &cif_attr, sizeof(cif_attr));
 		return 0;
 	}
-	case CVI_MIPI_SET_BT_FMT_OUT:
+	case MIPI_SET_BT_FMT_OUT:
 	{
 		struct bt_fmt_out_s bt_fmt;
 
@@ -3257,7 +3253,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return cif_bt_fmt_out(dev, &bt_fmt);
 	}
-	case CVI_MIPI_SET_SENSOR_CLOCK:
+	case MIPI_SET_SENSOR_CLOCK:
 	{
 		struct mclk_pll_s mclk;
 
@@ -3289,7 +3285,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 		return _cif_enable_snsr_clk(_dev, dev, mclk.cam, mclk.freq != CAMPLL_FREQ_NONE);
 	}
-	case CVI_MIPI_SET_MAX_MAC_CLOCK:
+	case MIPI_SET_MAX_MAC_CLOCK:
 		if (from_user) {
 			if (copy_from_user(&dev->max_mac_clk, (void *)arg, sizeof(u32))) {
 				dev_err(_dev, "copy_from_user failed.\n");
@@ -3305,7 +3301,7 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 		else
 			dev->max_mac_clk = 594;
 		break;
-	case CVI_MIPI_SET_YUV_SWAP:
+	case MIPI_SET_YUV_SWAP:
 	{
 		struct cif_yuv_swap_s swap;
 
@@ -3329,15 +3325,18 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 
 static long cif_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct cvi_cif_dev *dev = file_cif_dev(file);
+	struct cif_dev *dev = file_cif_dev(file);
 
 	return _cif_ioctl(dev, cmd, arg, 1);
 }
 
 #ifdef CONFIG_COMPAT
-static long cif_ioctl32(struct file *file, unsigned int cmd, unsigned long arg)
+static long cif_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	return cif_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif
 
@@ -3357,13 +3356,13 @@ static const struct file_operations cif_fops = {
 	.release = cif_release,
 	.unlocked_ioctl = cif_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = cif_ioctl32,
+	.compat_ioctl = cif_compat_ptr_ioctl,
 #endif
 };
 
-static int cif_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+static int cif_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
-	return _cif_ioctl((struct cvi_cif_dev *)dev, cmd, (unsigned long)arg, 0);
+	return _cif_ioctl((struct cif_dev *)dev, cmd, (unsigned long)arg, 0);
 }
 
 static int cif_rm_cb(void)
@@ -3371,7 +3370,7 @@ static int cif_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_CIF);
 }
 
-static int cif_register_cb(struct cvi_cif_dev *dev)
+static int cif_register_cb(struct cif_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -3382,7 +3381,7 @@ static int cif_register_cb(struct cvi_cif_dev *dev)
 	return base_reg_module_cb(&reg_cb);
 }
 
-static int cif_init_miscdev(struct platform_device *pdev, struct cvi_cif_dev *dev)
+static int cif_init_miscdev(struct platform_device *pdev, struct cif_dev *dev)
 {
 	int rc, i;
 
@@ -3414,7 +3413,7 @@ static int cif_init_miscdev(struct platform_device *pdev, struct cvi_cif_dev *de
 
 static irqreturn_t cif_isr(int irq, void *_link)
 {
-	struct cvi_link *link = (struct cvi_link *)_link;
+	struct link *link = (struct link *)_link;
 	struct cif_ctx *ctx = &link->cif_ctx;
 
 	if (cif_check_csi_int_sts(ctx, CIF_INT_STS_ECC_ERR_MASK))
@@ -3465,13 +3464,13 @@ static int _init_resource(struct platform_device *pdev)
 #if (DEVICE_FROM_DTS)
 	struct resource *res = NULL;
 	void *reg_base[20];
-	struct cvi_cif_dev *dev;
+	struct cif_dev *dev;
 	int i;
-	struct cvi_link *link;
+	struct link *link;
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_cif drvdata\n");
+		dev_err(&pdev->dev, "Can not get cif drvdata\n");
 		return -EINVAL;
 	}
 #ifndef FPGA_PORTING
@@ -3693,9 +3692,9 @@ static void cif_show_dev_attr(struct seq_file *m,
 }
 
 static void cif_show_mipi_sts(struct seq_file *m,
-			      struct cvi_link *link)
+			      struct link *link)
 {
-	struct cvi_csi_status *sts = &link->sts_csi;
+	struct csi_status *sts = &link->sts_csi;
 
 	seq_printf(m, "%6s%7s%7s%7s%6s%9s%9s\n",
 		   "Devno", "EccErr", "CrcErr", "HdrErr", "WcErr", "fifofull", "decode");
@@ -3707,7 +3706,7 @@ static void cif_show_mipi_sts(struct seq_file *m,
 }
 
 static void cif_show_phy_sts(struct seq_file *m,
-			      struct cvi_link *link)
+			      struct link *link)
 {
 	union mipi_phy_state state;
 
@@ -3810,7 +3809,7 @@ static void cif_show_phy_sts(struct seq_file *m,
 
 static int proc_cif_show(struct seq_file *m, void *v)
 {
-	struct cvi_cif_dev *dev = (struct cvi_cif_dev *)m->private;
+	struct cif_dev *dev = (struct cif_dev *)m->private;
 	int i;
 
 	seq_printf(m, "\nModule: [MIPI_RX], Build Time[%s]\n",
@@ -3860,9 +3859,9 @@ static void dbg_print_usage(struct device *dev)
 	dev_info(dev, "mac_clk [devno] [200/400/600]: set mac clock (MHz)\n");
 }
 
-static int dbg_hdler(struct cvi_cif_dev *dev, char const *input)
+static int dbg_hdler(struct cif_dev *dev, char const *input)
 {
-	struct cvi_link *link = &dev->link[0];
+	struct link *link = &dev->link[0];
 	struct cif_ctx *ctx;
 	//int reset;
 	u32 num;
@@ -4002,7 +4001,7 @@ static int dbg_hdler(struct cvi_cif_dev *dev, char const *input)
 
 static ssize_t cif_proc_write(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	struct cvi_cif_dev *dev = PDE_DATA(file_inode(file));
+	struct cif_dev *dev = PDE_DATA(file_inode(file));
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 	char txt_buff[MAX_CIF_PROC_BUF];
 
@@ -4020,7 +4019,7 @@ static ssize_t cif_proc_write(struct file *file, const char __user *user_buf, si
 
 static int proc_cif_open(struct inode *inode, struct file *file)
 {
-	struct cvi_cif_dev *dev = PDE_DATA(inode);
+	struct cif_dev *dev = PDE_DATA(inode);
 
 	return single_open(file, proc_cif_show, dev);
 }
@@ -4047,10 +4046,10 @@ static const struct file_operations cif_proc_fops = {
 static struct proc_dir_entry *cif_proc_entry;
 #endif
 
-static int cvi_cif_probe(struct platform_device *pdev)
+static int cif_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-	struct cvi_cif_dev *dev;
+	struct cif_dev *dev;
 	/* allocate main cif state structure */
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 	if (!dev)
@@ -4085,9 +4084,9 @@ static int cvi_cif_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int cvi_cif_remove(struct platform_device *pdev)
+static int cif_remove(struct platform_device *pdev)
 {
-	struct cvi_cif_dev *dev;
+	struct cif_dev *dev;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
@@ -4100,7 +4099,7 @@ static int cvi_cif_remove(struct platform_device *pdev)
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_cif drvdata");
+		dev_err(&pdev->dev, "Can not get cif drvdata");
 		return 0;
 	}
 
@@ -4113,63 +4112,63 @@ static int cvi_cif_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id cvi_cif_dt_match[] = {
+static const struct of_device_id cif_dt_match[] = {
 	{.compatible = "cvitek,cif"},
 	{}
 };
 
 #if (!DEVICE_FROM_DTS)
-static void cvi_cif_pdev_release(struct device *dev)
+static void cif_pdev_release(struct device *dev)
 {
 }
 
-static struct platform_device cvi_cif_pdev = {
+static struct platform_device cif_pdev = {
 	.name		= "cif",
-	.dev.release	= cvi_cif_pdev_release,
+	.dev.release	= cif_pdev_release,
 };
 #endif
 
-static struct platform_driver cvi_cif_pdrv = {
-	.probe      = cvi_cif_probe,
-	.remove     = cvi_cif_remove,
+static struct platform_driver cif_pdrv = {
+	.probe      = cif_probe,
+	.remove     = cif_remove,
 	.driver     = {
 		.name		= "cif",
 		.owner		= THIS_MODULE,
 #if (DEVICE_FROM_DTS)
-		.of_match_table	= cvi_cif_dt_match,
+		.of_match_table	= cif_dt_match,
 #endif
 	},
 };
 
-static int __init cvi_cif_init(void)
+static int __init _cif_init(void)
 {
 	int rc;
 
 #if (DEVICE_FROM_DTS)
-	rc = platform_driver_register(&cvi_cif_pdrv);
+	rc = platform_driver_register(&cif_pdrv);
 #else
-	rc = platform_device_register(&cvi_cif_pdev);
+	rc = platform_device_register(&cif_pdev);
 	if (rc)
 		return rc;
 
-	rc = platform_driver_register(&cvi_cif_pdrv);
+	rc = platform_driver_register(&cif_pdrv);
 	if (rc)
-		platform_device_unregister(&cvi_cif_pdev);
+		platform_device_unregister(&cif_pdev);
 #endif
 
 	return rc;
 }
 
-static void __exit cvi_cif_exit(void)
+static void __exit cif_exit(void)
 {
-	platform_driver_unregister(&cvi_cif_pdrv);
+	platform_driver_unregister(&cif_pdrv);
 #if (!DEVICE_FROM_DTS)
-	platform_device_unregister(&cvi_cif_pdev);
+	platform_device_unregister(&cif_pdev);
 #endif
 }
 
 MODULE_DESCRIPTION("Cvitek Camera Interface Driver");
 MODULE_AUTHOR("Saxen Ko");
 MODULE_LICENSE("GPL");
-module_init(cvi_cif_init);
-module_exit(cvi_cif_exit);
+module_init(_cif_init);
+module_exit(cif_exit);

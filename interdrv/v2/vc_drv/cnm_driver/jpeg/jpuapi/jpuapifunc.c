@@ -254,7 +254,6 @@ JpgRet GetJpgInstance(JpgInst ** ppInst)
 
     memset((void*)pJpgInst->JpgInfo, 0x00, sizeof(handleSize));
     *ppInst = pJpgInst;
-    jip->jpu_instance_num++;
 
     if (jdi_open_instance(pJpgInst->instIndex) < 0) {
         pJpgInst->inUse = 0;
@@ -274,7 +273,6 @@ void FreeJpgInstance(JpgInst * pJpgInst)
         return;
 
     pJpgInst->inUse = 0;
-    jip->jpu_instance_num--;
 
     jdi_close_instance(pJpgInst->instIndex);
 
@@ -286,6 +284,9 @@ JpgRet CheckJpgInstValidity(JpgInst * pci)
 {
     int i;
     jpu_instance_pool_t *jip;
+
+    if (pci == NULL)
+        return JPG_RET_FAILURE;
 
     jip = (jpu_instance_pool_t *)jdi_get_instance_pool();
     if (!jip)
@@ -365,7 +366,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
     int temp;
 
     // MIN Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x003);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x003);
     JLOG(INFO,"JpgDecHuffTabSetUp DC Luma\n");
     //DC Luma
     for(j=0; j<16; j++)
@@ -373,7 +374,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMin[0][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
 
     JLOG(INFO,"JpgDecHuffTabSetUp DC Chroma\n");
@@ -383,7 +384,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMin[2][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
 
     JLOG(INFO,"JpgDecHuffTabSetUp AC Luma\n");
@@ -393,7 +394,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMin[1][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
 
     JLOG(INFO,"JpgDecHuffTabSetUp AC Chroma\n");
@@ -403,12 +404,12 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMin[3][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
     JLOG(INFO,"JpgDecHuffTabSetUp MAX Tables\n");
     // MAX Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x403);
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_ADDR_REG, 0x440);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x403);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_ADDR_REG, 0x440);
 
     JLOG(INFO,"JpgDecHuffTabSetUp DC Luma\n");
     //DC Luma
@@ -417,7 +418,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMax[0][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
 
     JLOG(INFO,"JpgDecHuffTabSetUp DC Luma\n");
@@ -427,7 +428,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMax[2][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //AC Luma
     for(j=0; j<16; j++)
@@ -435,7 +436,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMax[1][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //AC Chroma
     for(j=0; j<16; j++)
@@ -443,12 +444,12 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffMax[3][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
 
     // PTR Tables
-    JpuWriteInstReg (instRegIndex, MJPEG_HUFF_CTRL_REG, 0x803);
-    JpuWriteInstReg (instRegIndex, MJPEG_HUFF_ADDR_REG, 0x880);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x803);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_ADDR_REG, 0x880);
 
 
     //DC Luma
@@ -457,7 +458,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffPtr[0][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //DC Chroma
     for(j=0; j<16; j++)
@@ -465,7 +466,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffPtr[2][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //AC Luma
     for(j=0; j<16; j++)
@@ -473,7 +474,7 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffPtr[1][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //AC Chroma
     for(j=0; j<16; j++)
@@ -481,11 +482,11 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffPtr[3][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
 
     // VAL Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0xC03);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0xC03);
 
     // VAL DC Luma
     HuffLength = 0;
@@ -499,11 +500,11 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffVal[0][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
 
     for (i=0; i<12-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL DC Chroma
@@ -517,10 +518,10 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffVal[2][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<12-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL AC Luma
@@ -535,10 +536,10 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffVal[1][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<162-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL AC Chroma
@@ -553,15 +554,15 @@ int JpgDecHuffTabSetUp(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex)
         HuffData = jpg->huffVal[3][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
 
     for (i=0; i<162-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // end SerPeriHuffTab
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x000);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x000);
 
     return 1;
 }
@@ -574,7 +575,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
     int temp;
 
     // MIN Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x003);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x003);
 
     JLOG(INFO,"JpgDecHuffTabSetUp_12b DC Luma\n");
     //DC Luma
@@ -583,7 +584,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[0][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
     //DC Chroma
     for(j=0; j<16; j++)
@@ -591,7 +592,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[2][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
     //AC Luma
     for(j=0; j<16; j++)
@@ -599,7 +600,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[1][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
     //AC Chroma
     for(j=0; j<16; j++)
@@ -607,7 +608,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[3][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
     //DC EX1
     for(j=0; j<16; j++)
@@ -615,7 +616,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[4][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
 
     //AC EX1
@@ -624,12 +625,12 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMin[5][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));    // 32-bit
     }
 
     // MAX Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x403);
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_ADDR_REG, 0x480);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x403);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_ADDR_REG, 0x480);
 
     //DC Luma
     for(j=0; j<16; j++)
@@ -637,7 +638,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[0][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //DC Chroma
     for(j=0; j<16; j++)
@@ -645,7 +646,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[2][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //AC Luma
     for(j=0; j<16; j++)
@@ -653,7 +654,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[1][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //AC Chroma
     for(j=0; j<16; j++)
@@ -661,7 +662,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[3][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
     //DC EX1
     for(j=0; j<16; j++)
@@ -669,7 +670,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[4][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
 
     //AC EX1
@@ -678,12 +679,12 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffMax[5][j];
         temp = (HuffData & 0x8000) >> 15;
         temp = (temp << 15) | (temp << 14) | (temp << 13) | (temp << 12) | (temp << 11) | (temp << 10) | (temp << 9) | (temp << 8) | (temp << 7 ) | (temp << 6) | (temp <<5) | (temp<<4) | (temp<<3) | (temp<<2) | (temp<<1)| (temp) ;
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFF) << 16) | HuffData));
     }
 
     // PTR Tables
-    JpuWriteInstReg (instRegIndex, MJPEG_HUFF_CTRL_REG, 0x803);
-    JpuWriteInstReg (instRegIndex, MJPEG_HUFF_ADDR_REG, 0x900);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x803);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_ADDR_REG, 0x900);
 
     //DC Luma
     for(j=0; j<16; j++)
@@ -691,7 +692,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[0][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //DC Chroma
     for(j=0; j<16; j++)
@@ -699,7 +700,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[2][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //AC Luma
     for(j=0; j<16; j++)
@@ -707,7 +708,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[1][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //AC Chroma
     for(j=0; j<16; j++)
@@ -715,7 +716,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[3][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     //DC EX1
     for(j=0; j<16; j++)
@@ -723,7 +724,7 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[4][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
 
     //AC EX1
@@ -732,11 +733,11 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffPtr[5][j];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
 
     // VAL Tables
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0xC03);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0xC03);
 
     // VAL DC Luma
     HuffLength = 0;
@@ -752,10 +753,10 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[0][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<16-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL DC Chroma
@@ -772,10 +773,10 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[2][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<16-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL AC Luma
@@ -792,10 +793,10 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[1][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<256-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL AC Chroma
@@ -812,10 +813,10 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[3][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<256-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL DC EX1
@@ -832,10 +833,10 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[4][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<16-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // VAL AC EX1
@@ -852,14 +853,14 @@ int JpgDecHuffTabSetUp_12b(JpgInst * pJpgInst, JpgDecInfo *jpg, int instRegIndex
         HuffData = jpg->huffVal[5][i];
         temp = (HuffData & 0x80) >> 7;
         temp = (temp<<23)|(temp<<22)|(temp<<21)|(temp<<20)|(temp<<19)|(temp<<18)|(temp<<17)|(temp<<16)|(temp<<15)|(temp<<14)|(temp<<13)|(temp<<12)|(temp<<11)|(temp<<10)|(temp<<9)|(temp<<8)|(temp<<7)|(temp<<6)|(temp<<5)|(temp<<4)|(temp<<3)|(temp<<2)|(temp<<1)|(temp);
-        JpuWriteInstReg (instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, (((temp & 0xFFFFFF) << 8) | HuffData));
     }
     for (i=0; i<256-HuffLength; i++) {
-        JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, 0xFFFFFFFF);
     }
 
     // end SerPeriHuffTab
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x000);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x000);
 
     return 1;
 }
@@ -872,7 +873,7 @@ int JpgDecQMatTabSetUp(JpgInst * pJpgInst,JpgDecInfo *jpg, int instRegIndex)
 
     // SetPeriQMatTab
     // Comp 0
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x03);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x03);
     table = jpg->cInfoTab[0][3];
 
     if (table >= 4)
@@ -880,33 +881,33 @@ int JpgDecQMatTabSetUp(JpgInst * pJpgInst,JpgDecInfo *jpg, int instRegIndex)
 
     for (i=0; i<64; i++) {
         val = jpg->qMatTab[table][i];
-        JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, val);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, val);
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
 
     // Comp 1
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x43);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x43);
     table = jpg->cInfoTab[1][3];
     if (table >= 4)
         return 0;
 
     for (i=0; i<64; i++) {
         val = jpg->qMatTab[table][i];
-        JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, val);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, val);
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
 
     // Comp 2
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x83);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x83);
     table = jpg->cInfoTab[2][3];
     if (table >= 4)
         return 0;
 
     for (i=0; i<64; i++) {
         val = jpg->qMatTab[table][i];
-        JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, val);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, val);
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x00);
 
     return 1;
 }
@@ -923,18 +924,18 @@ int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int 
     dExtBitBufCurPos    = jpg->pagePtr;
     dExtBitBufBaseAddr    = jpg->streamBufStartAddr;
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
 
     ktime_get_ts64(&ts);
     elapse = ts.tv_sec * 1000 + ts.tv_nsec/1000000;
 
     while(1)
     {
-        dMibStatus = JpuReadInstReg(instRegIndex, MJPEG_BBC_BUSY_REG);
+        dMibStatus = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BUSY_REG);
         if (dMibStatus == 0)
             break;
 
@@ -951,18 +952,18 @@ int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int 
     dMibStatus            = 1;
     dExtBitBufCurPos    = dExtBitBufCurPos + 1;
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
 
     ktime_get_ts64(&ts);
     elapse = ts.tv_sec * 1000 + ts.tv_nsec/1000000;
 
     while(1)
     {
-        dMibStatus = JpuReadInstReg(instRegIndex, MJPEG_BBC_BUSY_REG);
+        dMibStatus = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BUSY_REG);
         if (dMibStatus == 0)
             break;
 
@@ -978,25 +979,24 @@ int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int 
 
     dExtBitBufCurPos    = dExtBitBufCurPos + 1;
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);    // next unit page pointer
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CTRL_REG, (jpg->streamEndian<< 1) | 1);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);    // next unit page pointer
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CTRL_REG, (jpg->streamEndian<< 1) | 1);
 
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_WPTR_REG, jpg->wordPtr);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_WPTR_REG, jpg->wordPtr);
-
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBSR_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBER_REG, ((JPU_GBU_SIZE / 4) * 2) - 1);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBSR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBER_REG, ((JPU_GBU_SIZE / 4) * 2) - 1);
 
     if (jpg->pagePtr & 1) {
-        JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBIR_REG, 0);
-        JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBHR_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBIR_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBHR_REG, 0);
     }
     else {
-        JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBIR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
-        JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBHR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBIR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBHR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_CTRL_REG, 4);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_FF_RPTR_REG, jpg->bitPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_CTRL_REG, 4);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_FF_RPTR_REG, jpg->bitPtr);
 
     return JPG_RET_SUCCESS;
 }
@@ -1254,8 +1254,6 @@ int find_start_code(JpgDecInfo *jpg)
 {
     unsigned int word = 0;
 
-    //JLOG(INFO,"find_start_code bitstream addr:%lx index:%d size:%d\n",jpg->gbc.buffer, jpg->gbc.index, jpg->gbc.size);
-
     for(;;)
     {
         if (get_bits_left(&jpg->gbc) <= 16)
@@ -1263,9 +1261,8 @@ int find_start_code(JpgDecInfo *jpg)
             ////printf("hit end of stream\n");
             return 0;
         }
-        word = show_bits(&jpg->gbc, 16);
 
-        //JLOG(INFO,"find_start_code word:%x\n",word);
+        word = show_bits(&jpg->gbc, 16);
         if ((word > 0xFF00) && (word < 0xFFFF))
             break;
 
@@ -1275,32 +1272,6 @@ int find_start_code(JpgDecInfo *jpg)
 
     return word;
 }
-
-
-int show_all_code(JpgDecInfo *jpg)
-{
-    unsigned int word = 0;
-
-    JLOG(INFO,"show_all_code hit begin of stream\n");
-    for(;;)
-    {
-        if (get_bits_left(&jpg->gbc) <= 16)
-        {
-            ////printf("hit end of stream\n");
-            jpg->gbc.index = 0;
-            JLOG(INFO,"show_all_code hit end of stream\n");
-            return 0;
-        }
-        word = show_bits(&jpg->gbc, 16);
-
-        JLOG(INFO,"find index:%d word:%x\n",jpg->gbc.index, word);
-
-        get_bits(&jpg->gbc, 8);
-    }
-
-    return 0;
-}
-
 
 int find_start_soi_code(JpgDecInfo *jpg)
 {
@@ -1900,7 +1871,7 @@ int JpegDecodeHeader(JpgInst *    pJpgInst, JpgDecInfo *jpg)
     int size;
     BOOL yuv400_4Blocks = TRUE;   /* process 4block at a time for improving performance */
 
-    JpuWriteReg(MJPEG_INST_CTRL_START_REG, (1<<0));
+    JpuWriteReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_START_REG, (1<<0));
     for (i=0; i<THTC_LIST_CNT; i++) {
         jpg->thtc[i] = -1;
     }
@@ -2409,7 +2380,7 @@ int JpgEncLoadHuffTab(JpgInst *pJpgInst, int instRegIndex)
     for (i=0; i<4; i++)
         JpgEncGenHuffTab(pEncInfo, i);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x3);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x3);
 
     JLOG(INFO,"JpgEncLoadHuffTab update\n");
     for (j=0; j<4; j++)
@@ -2429,10 +2400,10 @@ int JpgEncLoadHuffTab(JpgInst *pJpgInst, int instRegIndex)
                 huffData =                    (pEncInfo->huffSize[t][i] - 1);    // Code length (1 ~ 16), 4-bit
                 huffData = (huffData << 16) | (pEncInfo->huffCode[t][i]    );    // Code word, 16-bit
             }
-            JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, huffData);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, huffData);
         }
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x0);
     return 1;
 }
 
@@ -2447,7 +2418,7 @@ int JpgEncLoadHuffTab_12b(JpgInst *pJpgInst, int instRegIndex)
     for (i=0; i<8; i++)
         JpgEncGenHuffTab(pEncInfo, i);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x3);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x3);
     JLOG(INFO,"JpgEncLoadHuffTab_12b update\n");
 
     for (j=0; j<8; j++)
@@ -2471,10 +2442,10 @@ int JpgEncLoadHuffTab_12b(JpgInst *pJpgInst, int instRegIndex)
                 huffData =                    (pEncInfo->huffSize[t][i] - 1);    // Code length (1 ~ 16), 4-bit
                 huffData = (huffData << 16) | (pEncInfo->huffCode[t][i]    );    // Code word, 16-bit
             }
-            JpuWriteInstReg(instRegIndex, MJPEG_HUFF_DATA_REG, huffData);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_DATA_REG, huffData);
         }
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_HUFF_CTRL_REG, 0x0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_HUFF_CTRL_REG, 0x0);
     return 1;
 }
 
@@ -2505,7 +2476,7 @@ int JpgEncLoadQMatTab(JpgInst *pJpgInst, int instRegIndex)
             return 0;
         t = (comp==0)? Q_COMPONENT0 :
             (comp==1)? Q_COMPONENT1 : Q_COMPONENT2;
-        JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, 0x3 + t);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, 0x3 + t);
 
         if (pEncInfo->jpg12bit != 0){
             if (comp == 0)
@@ -2522,13 +2493,13 @@ int JpgEncLoadQMatTab(JpgInst *pJpgInst, int instRegIndex)
                 quotient= dividend / divisor;
             // enhace bit precision & rounding Q
             if (qprec){
-                JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, (int)(divisor & 0xFFFF));
-                JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, (int)(quotient & 0xFFFFFFFF));
+                JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, (int)(divisor & 0xFFFF));
+                JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, (int)(quotient & 0xFFFFFFFF));
             }else
-                JpuWriteInstReg(instRegIndex, MJPEG_QMAT_DATA_REG, (int)(divisor<<20)|(int)(quotient & 0xFFFFF));
+                JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_DATA_REG, (int)(divisor<<20)|(int)(quotient & 0xFFFFF));
 
         }
-        JpuWriteInstReg(instRegIndex, MJPEG_QMAT_CTRL_REG, t);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_QMAT_CTRL_REG, t);
     }
 
 
@@ -3087,13 +3058,13 @@ int JpgEncSetQulityTable(JpgEncHandle handle, JpgQualityTable *pTable)
 
 JpgRet JpgEnterLock(void)
 {
-    //jdi_lock();
+    //jdi_lock(core_idx);
     return JPG_RET_SUCCESS;
 }
 
 JpgRet JpgLeaveLock(void)
 {
-    //jdi_unlock();
+    //jdi_unlock(core_idx);
     return JPG_RET_SUCCESS;
 }
 
@@ -3123,13 +3094,12 @@ JpgRet JpgSetClockGateEx(Uint32 on, Uint32 instIdx)
     if(inst && !on)
         return JPG_RET_SUCCESS;
 
-    jdi_set_clock_gate(on);
+    jdi_set_clock_gate(inst->coreIndex, on);
 
     return JPG_RET_SUCCESS;
 }
 
-
-JpgInst *GetJpgPendingInstEx(Uint32 instIdx)
+JpgInst *GetJpgPendingInstEx(JpgInst * inst)
 {
     jpu_instance_pool_t *jip;
 
@@ -3137,13 +3107,11 @@ JpgInst *GetJpgPendingInstEx(Uint32 instIdx)
     if (!jip)
         return NULL;
 
-    if (instIdx >= MAX_JPEG_NUM_INSTANCE)
+    if (inst->instIndex >= MAX_JPEG_NUM_INSTANCE)
         return NULL;
 
-    return jip->instPendingInst[instIdx];
+    return jip->instPendingInst[inst->instIndex];
 }
-
-
 
 void SetJpgPendingInstEx(JpgInst *inst, Uint32 instIdx)
 {
@@ -3171,25 +3139,5 @@ void ClearJpgPendingInstEx(Uint32 instIdx)
 
     if(jip->instPendingInst[instIdx])
         jip->instPendingInst[instIdx] = 0;
-}
-
-int JpgResRequestOneCore(int timeout)
-{
-    return jdi_core_request_one_core(timeout);
-}
-
-int JpgResSetTaskCore(pid_t pid, int coreidx)
-{
-    return jdi_core_hash_table_set_core(pid, coreidx);
-}
-
-int JpgResGetCoreByTask(pid_t pid)
-{
-    return jdi_core_hash_table_get_core(pid);
-}
-
-void JpgResReleaseCore(int coreidx)
-{
-    jdi_core_hash_table_clear_core(coreidx);
 }
 

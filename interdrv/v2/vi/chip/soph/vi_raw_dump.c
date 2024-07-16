@@ -1,6 +1,6 @@
 #include <vi_raw_dump.h>
 #include <vip/vi_drv.h>
-#include <linux/cvi_errno.h>
+#include <linux/comm_errno.h>
 #include <vb.h>
 
 struct isp_buffer *isp_byr[ISP_PRERAW_MAX], *isp_byr_se[ISP_PRERAW_MAX];
@@ -10,7 +10,7 @@ struct isp_queue raw_dump_b_q[ISP_PRERAW_MAX], raw_dump_b_se_q[ISP_PRERAW_MAX],
 
 static struct raw_dump_work g_raw_dump_work;
 
-void _isp_fe_be_raw_dump_cfg(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num, const u8 chn_num)
+void _isp_fe_be_raw_dump_cfg(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 chn_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	u8 trigger = false;
@@ -69,7 +69,7 @@ void _isp_fe_be_raw_dump_cfg(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw
 	}
 }
 
-int isp_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk *dump)
+int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b;
@@ -158,7 +158,7 @@ int isp_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk *dump)
 		dump[1].frm_num		= isp_byr_se[raw_num]->frm_num;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
 void free_isp_byr(u8 raw_num)
@@ -174,7 +174,7 @@ void free_isp_byr(u8 raw_num)
 	}
 }
 
-int isp_start_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_smooth_raw_param *pstSmoothRawParam)
+int isp_start_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL, *b_se = NULL;
@@ -186,7 +186,7 @@ int isp_start_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_smooth
 	frm_num = pstSmoothRawParam->frm_num;
 
 	if (raw_num > ISP_PRERAW_MAX - 1)
-		return CVI_ERR_VI_INVALID_PIPEID;
+		return ERR_VI_INVALID_PIPEID;
 
 	rawdump_crop.x = pstSmoothRawParam->raw_blk->crop_x;
 	rawdump_crop.y = pstSmoothRawParam->raw_blk->crop_y;
@@ -242,21 +242,21 @@ err:
 	return ret;
 }
 
-int isp_stop_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_smooth_raw_param *pstSmoothRawParam)
+int isp_stop_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
 {
 	u8 raw_num;
 
 	raw_num = pstSmoothRawParam->raw_num;
 
 	if (raw_num > ISP_PRERAW_MAX - 1)
-		return CVI_ERR_VI_INVALID_PIPEID;
+		return ERR_VI_INVALID_PIPEID;
 
 	atomic_set(&vdev->isp_smooth_raw_dump_en[raw_num], 2);
 
 	return 0;
 }
 
-int isp_get_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk *dump)
+int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL, *b_se = NULL;
@@ -290,7 +290,7 @@ int isp_get_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 		return ret;
 	}
 
-	memset(&dump[0], 0, sizeof(struct cvi_vip_isp_raw_blk));
+	memset(&dump[0], 0, sizeof(struct sop_vip_isp_raw_blk));
 	vi_pr(VI_DBG, "raw_le phy_addr=0x%llx byr_size=%d frm_num=%d\n",
 		b->addr, b->byr_size, b->frm_num);
 
@@ -313,7 +313,7 @@ int isp_get_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 			return ret;
 		}
 
-		memset(&dump[1], 0, sizeof(struct cvi_vip_isp_raw_blk));
+		memset(&dump[1], 0, sizeof(struct sop_vip_isp_raw_blk));
 		vi_pr(VI_DBG, "raw_se phy_addr=0x%llx byr_size=%d frm_num=%d\n",
 			b_se->addr, b_se->byr_size, b_se->frm_num);
 
@@ -327,10 +327,10 @@ int isp_get_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 		vfree(b_se);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-int isp_put_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk *dump)
+int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL, *b_se = NULL;
@@ -342,7 +342,7 @@ int isp_put_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 	if (b == NULL) {
 		vi_pr(VI_ERR, "le vmalloc size(%zu) fail\n", sizeof(*b));
 		vfree(b);
-		return CVI_FAILURE;
+		return -1;
 	}
 	b->addr = dump[0].raw_dump.phy_addr;
 	b->raw_num = raw_num;
@@ -357,7 +357,7 @@ int isp_put_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 		if (b_se == NULL) {
 			vi_pr(VI_ERR, "se vmalloc size(%zu) fail\n", sizeof(*b_se));
 			vfree(b_se);
-			return CVI_FAILURE;
+			return -1;
 		}
 		b_se->addr = dump[1].raw_dump.phy_addr;
 		b_se->raw_num = raw_num;
@@ -368,10 +368,10 @@ int isp_put_smooth_raw_dump(struct cvi_vi_dev *vdev, struct cvi_vip_isp_raw_blk 
 		isp_buf_queue(&raw_dump_b_se_q[b->raw_num], b_se);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-void _isp_raw_dump_chk(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num, const uint32_t frm_num)
+void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u32 frm_num)
 {
 	switch (atomic_read(&vdev->isp_smooth_raw_dump_en[raw_num])) {
 	default:
@@ -421,7 +421,7 @@ static void raw_dump_wq_handler(struct work_struct *worker)
 {
 	struct raw_dump_work *dump_work = container_of((void *)worker, struct raw_dump_work, worker);
 	struct isp_buffer *buf = NULL;
-	VB_BLK blk = 0;
+	vb_blk blk = 0;
 
 	do {
 		buf = isp_buf_remove(&dump_work->raw_dump_vb_q);

@@ -2,14 +2,14 @@
 #define _DPU_MODULE_
 
 //#include <stdio.h>
-#include <linux/cvi_errno.h>
-#include <linux/cvi_base_ctx.h>
-#include <linux/cvi_buffer.h>
-#include <linux/cvi_comm_vb.h>
+#include <linux/comm_errno.h>
+#include <base_ctx.h>
+#include <linux/comm_buffer.h>
+#include <linux/comm_vb.h>
 #include "linux/kernel.h"
 #include <linux/errno.h>
-#include <linux/cvi_defines.h>
-#include <linux/cvi_comm_dpu.h>
+#include <linux/defines.h>
+#include <linux/comm_dpu.h>
 #include "dpu_reg.h"
 #include "dpu_core.h"
 #include "../../common/dpu_debug.h"
@@ -29,65 +29,69 @@
 
 #undef DPU_ALIGN
 #define DPU_ALIGN(src,align) ((src+(align-1)) & ~((align-1)))
+#define FAILURE -1
+#define SUCCESS 0
+#define TRUE 1
+#define FALSE 0
 
 
-typedef struct _CVI_DPU_REG_{
-    u32 reg_dpu_enable ;
-    u32 reg_dpu_sgbm_enable ;
-    u32 reg_dpu_img_width ;
-    u32 reg_dpu_img_height ;
-    u32 reg_dpu_min_d ;
-    u32 reg_dpu_rshift1 ;
-    u32 reg_dpu_rshift2 ;
-    u32 reg_dpu_ca_p1 ;
-    u32 reg_dpu_ca_p2 ;
-    u32 reg_dpu_uniq_ratio ;
-    u32 reg_dpu_disp_shift ;
-    u32 reg_dpu_bfw_size;
-    u32 reg_dpu_census_shift ;
-    u32 reg_dpu_nd_ds ;
-    u32 reg_dpu_fxbaseline ;
-    u32 reg_dpu_disp_range ;
-    u32 reg_dpu_dcc_a234 ;
-    u32 reg_dpu_invalid_def ;
-    u32 reg_dpu_data_sel;
+typedef struct _dpu_reg_s{
+    unsigned int reg_dpu_enable ;
+    unsigned int reg_dpu_sgbm_enable ;
+    unsigned int reg_dpu_img_width ;
+    unsigned int reg_dpu_img_height ;
+    unsigned int reg_dpu_min_d ;
+    unsigned int reg_dpu_rshift1 ;
+    unsigned int reg_dpu_rshift2 ;
+    unsigned int reg_dpu_ca_p1 ;
+    unsigned int reg_dpu_ca_p2 ;
+    unsigned int reg_dpu_uniq_ratio ;
+    unsigned int reg_dpu_disp_shift ;
+    unsigned int reg_dpu_bfw_size;
+    unsigned int reg_dpu_census_shift ;
+    unsigned int reg_dpu_nd_ds ;
+    unsigned int reg_dpu_fxbaseline ;
+    unsigned int reg_dpu_disp_range ;
+    unsigned int reg_dpu_dcc_a234 ;
+    unsigned int reg_dpu_invalid_def ;
+    unsigned int reg_dpu_data_sel;
 
-    u32 reg_dpu_fgs_enable ;
-    u32 reg_dpu_fgs_max_count ;
-    u32 reg_dpu_fgs_max_t ;
-    u32 reg_dpu_fgs_w_scale ;
-    u32 reg_dpu_fgs_c_scale ;
-    u32 reg_dpu_fgs_f_scale ;
-    u32 reg_dpu_fgs_img_width ;
-    u32 reg_dpu_fgs_img_height ;
-    u32 reg_dpu_fgs_output_bit_choose ;
-    u32 reg_dpu_fgs_output_unit_choose ;
-    u32 reg_dpu_src_disp_mux ;
+    unsigned int reg_dpu_fgs_enable ;
+    unsigned int reg_dpu_fgs_max_count ;
+    unsigned int reg_dpu_fgs_max_t ;
+    unsigned int reg_dpu_fgs_w_scale ;
+    unsigned int reg_dpu_fgs_c_scale ;
+    unsigned int reg_dpu_fgs_f_scale ;
+    unsigned int reg_dpu_fgs_img_width ;
+    unsigned int reg_dpu_fgs_img_height ;
+    unsigned int reg_dpu_fgs_output_bit_choose ;
+    unsigned int reg_dpu_fgs_output_unit_choose ;
+    unsigned int reg_dpu_src_disp_mux ;
 
-    u32 reg_sgbm_bf_st_dma_enable;
-    u32 reg_sgbm_ld1_dma_enable;
-    u32 reg_sgbm_ld2_dma_enable;
-    u32 reg_sgbm_mux_st_dma_enable;
-    u32 reg_dma_enable_fgs1;
-    u32 reg_dma_enable_fgs2;
-    u32 reg_dma_enable_fgs3;
-    u32 reg_dma_enable_fgs4;
+    unsigned int reg_sgbm_bf_st_dma_enable;
+    unsigned int reg_sgbm_ld1_dma_enable;
+    unsigned int reg_sgbm_ld2_dma_enable;
+    unsigned int reg_sgbm_mux_st_dma_enable;
+    unsigned int reg_dma_enable_fgs1;
+    unsigned int reg_dma_enable_fgs2;
+    unsigned int reg_dma_enable_fgs3;
+    unsigned int reg_dma_enable_fgs4;
 
-    u32 reg_sgbm_bf_st_crop_enable;
-    u32 reg_sgbm_ld1_crop_enable;
-    u32 reg_sgbm_ld2_crop_enable;
-    u32 reg_sgbm_mux_st_crop_enable;
+    unsigned int reg_sgbm_bf_st_crop_enable;
+    unsigned int reg_sgbm_ld1_crop_enable;
+    unsigned int reg_sgbm_ld2_crop_enable;
+    unsigned int reg_sgbm_mux_st_crop_enable;
 
-    u32 reg_crop_enable_fgs_independent;
-    u32 reg_crop_enable_fgs_chfh;
-    u32 reg_crop_enable_fgs_gx;
-    u32 reg_crop_enable_fgs_ux;
+    unsigned int reg_crop_enable_fgs_independent;
+    unsigned int reg_crop_enable_fgs_chfh;
+    unsigned int reg_crop_enable_fgs_gx;
+    unsigned int reg_crop_enable_fgs_ux;
 
-    u32 reg_sgbm2fgs_online;
+    unsigned int reg_sgbm2fgs_online;
 
 	struct mutex lock;
 
-} CVI_DPU_REG;
+} dpu_reg_s;
 
 enum handler_state {
 	HANDLER_STATE_STOP = 0,
@@ -104,155 +108,156 @@ enum dpu_grp_state {
 	GPP_MAX_STATE
 };
 
-typedef enum CVI_DPU_INTR_STATE_E{
+typedef enum _dpu_intr_state_e{
 	DPU_INTR_STATE_DONE = 0x0,
 	DPU_INTR_STATE_OTHERS = 0x1,
 	DPU_INTR_STATE_BUTT
-}DPU_INTR_STATE_E;
+}dpu_intr_state_e;
 
-struct DPU_JOB_QUEUE_STATUS_S{
-	u32 BusyNum ; //numbers of busy nodes
-	u32 FreeNum ; //numbers of free nodes
+struct dpu_job_queue_status_s{
+	unsigned int busy_num ; //numbers of busy nodes
+	unsigned int free_num ; //numbers of free nodes
 };
 
-struct DPU_GRP_WORK_STATUS_S {
-	u8 GrpID;
-	u32 FrameRate;   		// Output frame rate
-	u32 StartCnt;    		//Number of times of task startup
-	u32 StartFailCnt; 		//Number of times of task startup failure
-	u32 SendPicCnt;  		//Number of times of successful image transmission
-	u32 CurTaskCostTm; 		//Time taken to complete the current task
-	u32 MaxTaskCostTm; 		//Historical maximum time taken to complete a task
+struct dpu_grp_work_status_s {
+	unsigned char grp_id;
+	unsigned int frame_rate;   		// Output frame rate
+	unsigned int start_cnt;    		//Number of times of task startup
+	unsigned int start_fail_cnt; 		//Number of times of task startup failure
+	unsigned int send_pic_cnt;  		//Number of times of successful image transmission
+	unsigned int cur_task_cost_tm; 		//Time taken to complete the current task
+	unsigned int max_task_cost_tm; 		//Historical maximum time taken to complete a task
 };
 
-struct DPU_RUN_TIME_INFO_S {
-	s32 CntPerSec; 			//Number of interrupts performed in the last second
-	u32 MaxCntPerSec; 		//Historical maximum number of interrupts performed in one second
-	u32 TotalIntCntLastSec; //Number of interrupts reported in the last second
-	u32 TotalIntCnt; 		//Number of interrupts generated by the DPU
-	u32 CostTm;      		//Time taken to performed the last interrupt /us
-	u32 MCostTm;      		//Maximum time taken to performed the last interrupt /us
-	u32 CostTmPerSec;      	//Time taken to performed in the last interrupt /us
-	u32 MCostTmPerSec;      //Maximum time taken to performed in the last interrupt /us
-	u32 TotalIntCostTm;     //Total time taken to performed all the interrupt /us
-	u32 CostTmPerFrm;     	//Time taken to process a single frame of image  /us
-	u32 HwCostTmPerFrm;     //Time taken by the hardware to process a single frame of image
-	u64 RunTm;              //Total running time of DPU /s
+struct dpu_run_time_info_s {
+	int cnt_per_sec; 			//Number of interrupts performed in the last second
+	unsigned int max_cnt_per_sec; 		//Historical maximum number of interrupts performed in one second
+	unsigned int total_int_cnt_last_sec; //Number of interrupts reported in the last second
+	unsigned int total_int_cnt; 		//Number of interrupts generated by the DPU
+	unsigned int cost_tm;      		//Time taken to performed the last interrupt /us
+	unsigned int max_cost_tm;      		//Maximum time taken to performed the last interrupt /us
+	unsigned int cost_tm_per_sec;      	//Time taken to performed in the last interrupt /us
+	unsigned int max_cost_tm_per_sec;      //Maximum time taken to performed in the last interrupt /us
+	unsigned int total_int_cost_tm;     //Total time taken to performed all the interrupt /us
+	unsigned int cost_tm_per_frm;     	//Time taken to process a single frame of image  /us
+	unsigned int hw_cost_tm_per_frm;     //Time taken by the hardware to process a single frame of image
+	unsigned long long run_tm;              //Total running time of DPU /s
 };
 
-struct DPU_CHN_CFG {
-	u8 isEnabled;
-	u8 isMuted;
-	DPU_CHN_ATTR_S stChnAttr;
-	PIXEL_FORMAT_E enPixelFormat;
-	u32 blk_size;
-	u32 align;
-	u32 VbPool;
-	u32 stride;
-	u8 is_cfg_changed;
-	VB_CAL_CONFIG_S stVbCalConfig;
+struct dpu_chn_cfg_s {
+	unsigned char isenabled;
+	unsigned char ismuted;
+	dpu_chn_attr_s chn_attr;
+	pixel_format_e pixel_format;
+	unsigned int blk_size;
+	unsigned int align;
+	unsigned int vb_pool;
+	unsigned int stride;
+	unsigned char is_cfg_changed;
+	vb_cal_config_s vb_config;
 };
 
-struct cvi_dpu_ctx {
-	u8 isCreated;
-	u8 isStarted;
-	DPU_GRP_ATTR_S stGrpAttr;
-	struct DPU_CHN_CFG stChnCfgs[DPU_MAX_CHN_NUM];
+struct dpu_ctx_s {
+	unsigned char iscreated;
+	unsigned char isstarted;
+	dpu_grp_attr_s grp_attr;
+	struct dpu_chn_cfg_s chn_cfgs[DPU_MAX_CHN_NUM];
 	struct mutex lock;
-	struct DPU_GRP_WORK_STATUS_S stGrpWorkStatus;
-	u32 grp_state;
-	u8 u8DpuDev;
-	u8 is_dma_cfg;
-	u32 u32Stride[2];
-	u32 chnNum;
-	PIXEL_FORMAT_E enPixelFormat;
-	struct DPU_JOB_QUEUE_STATUS_S stInputJobStatus;
-	struct DPU_JOB_QUEUE_STATUS_S stWorkingJobStatus;
-	struct DPU_JOB_QUEUE_STATUS_S stOutputJobStatus;
-	VB_BLK chfhBlk;
-	s32 frameNum;
-	s32 costTimeForSec;
-	uint64_t phyaddr_chfh;
+	struct dpu_grp_work_status_s grp_work_wtatus;
+	unsigned int grp_state;
+	unsigned char dpu_dev_id;
+	unsigned char is_dma_cfg;
+	unsigned int stride_arry[2];
+	unsigned int chn_num;
+	pixel_format_e pixel_format;
+	struct dpu_job_queue_status_s input_job_status;
+	struct dpu_job_queue_status_s working_job_status;
+	struct dpu_job_queue_status_s output_job_status;
+	vb_blk chfh_blk;
+	int frame_num;
+	int cost_time_for_sec;
+	unsigned long long phyaddr_chfh;
 	void *   viraddr_chfh;
 };
 
-struct cvi_dpu_handle_info {
+struct dpu_handle_info_s {
 	struct list_head list;
 	struct file *file;
-	u8 useGrp[8];
+	unsigned char use_grp[8];
 	pid_t open_pid;
 };
 
-struct cvi_dpu_dev {
+struct dpu_dev_s {
 	struct miscdevice miscdev;
 	spinlock_t lock;
 	struct mutex mutex;
 	unsigned int irq_num;
 	struct clk *clk_sys[2];
-	u32 clk_sys1_freq;
+	unsigned int clk_sys1_freq;
 	void *shared_mem;
 	wait_queue_head_t wait;
-	wait_queue_head_t sendFrame_wait;
+	wait_queue_head_t send_frame_wait;
 	wait_queue_head_t reset_wait;
-	u8 reset_done;
+	unsigned char reset_done;
 	struct task_struct *thread;
-	struct DPU_RUN_TIME_INFO_S stRunTimeInfo;
-	struct timespec64 timeTotalForSec;
-	u32 timeForSec;
-	u32 IntNumPerSec;
-	struct timespec64 timeStart;
-	u32 timeEnd;
-	u32 costTimeForSec ;
-	u32 IntTimePerSec;
-	u8 bBusy;
-	uint64_t phyaddr_chfh;
+	struct dpu_run_time_info_s run_time_info;
+	struct timespec64 time_total_for_sec;
+	unsigned int time_for_sec;
+	unsigned int int_num_per_sec;
+	struct timespec64 time_start;
+	unsigned int time_end;
+	unsigned int cost_time_for_sec ;
+	unsigned int int_time_per_sec;
+	unsigned char bbusy;
+	unsigned char hw_busy;
+	unsigned long long phyaddr_chfh;
 	void *   viraddr_chfh;
 	struct list_head handle_list;
-	struct mutex dpuLock;
-	CVI_BOOL bsuspend;
-	struct mutex suspendLock;
+	struct mutex dpu_lock;
+	unsigned int bsuspend;
+	struct mutex suspend_lock;
 };
 
-s32 cvi_dpu_create_grp(DPU_GRP DpuGrp,DPU_GRP_ATTR_S *pstGrpAttr);
+int dpu_create_grp(dpu_grp dpu_grp_id,dpu_grp_attr_s *pstGrpAttr);
 
-s32 cvi_dpu_destroy_grp(DPU_GRP DpuGrp);
+int dpu_destroy_grp(dpu_grp dpu_grp_id);
 
-DPU_GRP cvi_dpu_get_available_grp(void);
+dpu_grp dpu_get_available_grp(void);
 
-s32 cvi_dpu_set_grp_attr(DPU_GRP DpuGrp,const DPU_GRP_ATTR_S *pstGrpAttr);
+int dpu_set_grp_attr(dpu_grp dpu_grp_id,const dpu_grp_attr_s *pstGrpAttr);
 
-s32 cvi_dpu_get_grp_attr(DPU_GRP DpuGrp,DPU_GRP_ATTR_S *pstGrpAttr);
+int dpu_get_grp_attr(dpu_grp dpu_grp_id,dpu_grp_attr_s *pstGrpAttr);
 
-s32 cvi_dpu_start_grp(DPU_GRP DpuGrp);
+int dpu_start_grp(dpu_grp dpu_grp_id);
 
-s32 cvi_dpu_stop_grp(DPU_GRP DpuGrp);
+int dpu_stop_grp(dpu_grp dpu_grp_id);
 
-s32 cvi_dpu_set_chn_attr(DPU_GRP DpuGrp,DPU_CHN  DpuChn,const DPU_CHN_ATTR_S *pstChnAttr);
+int dpu_set_chn_attr(dpu_grp dpu_grp_id,dpu_chn  dpu_chn_id,const dpu_chn_attr_s *pchn_attr);
 
-s32 cvi_dpu_get_chn_attr(DPU_GRP DpuGrp,DPU_CHN DpuChn,DPU_CHN_ATTR_S *pstChnAttr);
+int dpu_get_chn_attr(dpu_grp dpu_grp_id,dpu_chn dpu_chn_id,dpu_chn_attr_s *pchn_attr);
 
-s32 cvi_dpu_enable_chn(DPU_GRP DpuGrp,DPU_CHN DpuChn);
+int dpu_enable_chn(dpu_grp dpu_grp_id,dpu_chn dpu_chn_id);
 
-s32 cvi_dpu_disable_chn(DPU_GRP DpuGrp,DPU_CHN DpuChn);
+int dpu_disable_chn(dpu_grp dpu_grp_id,dpu_chn dpu_chn_id);
 
-s32 cvi_dpu_send_frame(DPU_GRP DpuGrp,\
-                                const VIDEO_FRAME_INFO_S *pst_left_frame,\
-                                const VIDEO_FRAME_INFO_S *pst_right_frame,\
-                                s32 s32Millisec);
+int dpu_send_frame(dpu_grp dpu_grp_id,\
+                                const video_frame_info_s *pst_left_frame,\
+                                const video_frame_info_s *pst_right_frame,\
+                                int millisec);
 
-s32 cvi_dpu_send_chn_frame(DPU_GRP DpuGrp,\
-							DPU_CHN DpuChn,\
-                            const VIDEO_FRAME_INFO_S *pstVideoFrame,\
-							s32 s32Millisec);
+int dpu_send_chn_frame(dpu_grp dpu_grp_id,\
+							dpu_chn dpu_chn_id,\
+                            const video_frame_info_s *vdeo_frame_info,\
+							int millisec);
 
-s32 cvi_dpu_get_frame(DPU_GRP DpuGrp,\
-							DPU_CHN DpuChn,\
-							VIDEO_FRAME_INFO_S *pstFrameInfo,\
-							s32 s32Millisec);
+int dpu_get_frame(dpu_grp dpu_grp_id,\
+							dpu_chn dpu_chn_id,\
+							video_frame_info_s *vdeo_frame_info,\
+							int millisec);
 
-s32 cvi_dpu_release_frame(DPU_GRP DpuGrp,\
-							DPU_CHN DpuChn,\
-                            const VIDEO_FRAME_INFO_S *pstVideoFrame);
+int dpu_release_frame(dpu_grp dpu_grp_id,\
+							dpu_chn dpu_chn_id,\
+                            const video_frame_info_s *vdeo_frame_info);
 
 void dpu_check_reg_write(void);
 
@@ -262,7 +267,7 @@ void getsgbm_status(void);
 
 void getfgs_status(void);
 
-void dpu_irq_handler(u8 intr_status, struct cvi_dpu_dev *wdev);
+void dpu_irq_handler(unsigned char intr_status, struct dpu_dev_s *wdev);
 
 void dpu_set_base_addr(void *base);
 
@@ -270,9 +275,9 @@ void dpu_set_base_addr_sgbm_dma(void *base1,void *base2,void *base3,void *base4)
 
 void dpu_set_base_addr_fgs_dma(void *base1,void *base2,void *base3,void *base4);
 
-int dpu_get_handle_info(struct cvi_dpu_dev *dpu_wdev, struct file *file, struct cvi_dpu_handle_info **f_list);
+int dpu_get_handle_info(struct dpu_dev_s *dpu_wdev, struct file *file, struct dpu_handle_info_s **f_list);
 
-void dpu_mode_deinit(DPU_GRP DpuGrp);
+void dpu_mode_deinit(dpu_grp dpu_grp_id);
 
 void dpu_init(void *arg);
 
@@ -280,21 +285,21 @@ void dpu_deinit(void *arg);
 
 void dpu_reset(void);
 
-void dpu_engine(DPU_GRP workingGrpID);
+void dpu_engine(dpu_grp workinggrp_id);
 
-void dpu_intr_ctrl(u8 intr_mask);
+void dpu_intr_ctrl(unsigned char intr_mask);
 
 void dpu_intr_clr(void);
 
-u8 dpu_intr_status(void);
+unsigned char dpu_intr_status(void);
 
 void dpu_notify_isr_evt(void);
 
-struct cvi_dpu_ctx **dpu_get_shdw_ctx(void);
+struct dpu_ctx_s **dpu_get_shdw_ctx(void);
 
-struct cvi_dpu_dev *dpu_get_dev(void);
+struct dpu_dev_s *dpu_get_dev(void);
 
-struct dpu_handler_ctx *dpu_get_handler_ctx(void);
+struct dpu_handler_ctx_s *dpu_get_handler_ctx(void);
 
 #define DPU_GRP_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_YUV_400))
@@ -302,38 +307,38 @@ struct dpu_handler_ctx *dpu_get_handler_ctx(void);
 #define DPU_CHN_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_YUV_400))
 
-#define FRC_INVALID(ctx, DpuChn)	\
-	(ctx->stChnCfgs[DpuChn].stChnAttr.stFrameRate.s32DstFrameRate <= 0 ||		\
-		ctx->stChnCfgs[DpuChn].stChnAttr.stFrameRate.s32SrcFrameRate <= 0 ||		\
-		ctx->stChnCfgs[DpuChn].stChnAttr.stFrameRate.s32DstFrameRate >=		\
-		ctx->stChnCfgs[DpuChn].stChnAttr.stFrameRate.s32SrcFrameRate)
+#define FRC_INVALID(ctx, dpu_chn_id)	\
+	(ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.dst_frame_rate <= 0 ||		\
+		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.src_frame_rate <= 0 ||		\
+		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.dst_frame_rate >=		\
+		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.src_frame_rate)
 
-#define IS_FRAME_OFFSET_INVALID(f) \
-	((f).s16OffsetLeft < 0 || (f).s16OffsetRight < 0 || \
-	 (f).s16OffsetTop < 0 || (f).s16OffsetBottom < 0 || \
-	 ((u32)((f).s16OffsetLeft + (f).s16OffsetRight) > (f).u32Width) || \
-	 ((u32)((f).s16OffsetTop + (f).s16OffsetBottom) > (f).u32Height))
+// #define IS_FRAME_OFFSET_INVALID(f) 
+// 	((f).offset_left < 0 || (f).offset_right < 0 || 
+// 	 (f).offset_top < 0 || (f).offset_bottom < 0 || 
+// 	 ((unsigned int)((f).offset_left + (f).offset_right) > (f).width) || 
+// 	 ((unsigned int)((f).offset_top + (f).offset_bottom) > (f).height))
 
-static inline s32 MOD_CHECK_NULL_PTR(MOD_ID_E mod, const void *ptr)
+static inline int MOD_CHECK_NULL_PTR(mod_id_e mod, const void *ptr)
 {
-	if (mod >= CVI_ID_BUTT)
-		return CVI_FAILURE;
+	if (mod >= ID_BUTT)
+		return FAILURE;
 	if (!ptr) {
-		CVI_TRACE_DPU(CVI_DBG_ERR, "NULL pointer\n");
-		return CVI_ERR_DPU_NULL_PTR;
+		TRACE_DPU(DBG_ERR, "NULL pointer\n");
+		return ERR_DPU_NULL_PTR;
 	}
-	return CVI_SUCCESS;
+	return SUCCESS;
 }
 
-static inline s32 CHECK_DPU_CHN_FMT(DPU_CHN ChnIn, enum _PIXEL_FORMAT_E fmt)
+static inline int CHECK_DPU_CHN_FMT(dpu_chn chn_in, enum _pixel_format_e fmt)
 {
 
 	if (!DPU_CHN_SUPPORT_FMT(fmt)) {
-	CVI_TRACE_DPU(CVI_DBG_ERR, "Chn(%d) enPixelFormat(%d) unsupported\n"
-	, ChnIn, fmt);
-	return CVI_ERR_DPU_ILLEGAL_PARAM;
+	TRACE_DPU(DBG_ERR, "Chn(%d) pixel_format(%d) unsupported\n"
+	, chn_in, fmt);
+	return ERR_DPU_ILLEGAL_PARAM;
 	}
-	return CVI_SUCCESS;
+	return SUCCESS;
 
 }
 

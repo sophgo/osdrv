@@ -1,5 +1,5 @@
-#ifndef _CVI_LDC_CFG_H_
-#define _CVI_LDC_CFG_H_
+#ifndef _LDC_CFG_H_
+#define _LDC_CFG_H_
 
 #define LDC_ADDR_ALIGN 64
 #define LDC_SIZE_ALIGN 64
@@ -20,26 +20,26 @@ enum ldc_dst_mode {
 };
 
 struct ldc_cfg {
-	u8 pix_fmt;       // 0: Y only, 1: NV21
+	unsigned char pix_fmt;       // 0: Y only, 1: NV21
 	bool map_bypass;
 
-	u16 ras_width;      // output width
-	u16 ras_height;     // output height
-	u64 map_base;
+	unsigned short ras_width;      // output width
+	unsigned short ras_height;     // output height
+	unsigned long long map_base;
 
-	u64 src_y_base;
-	u64 src_c_base;
-	u16 src_width;      // src width, including padding
-	u16 src_height;     // src height, including padding
-	u16 src_xstart;
-	u16 src_xend;
-	u16 bgcolor;        // data outside start/end if used in opeartion
+	unsigned long long src_y_base;
+	unsigned long long src_c_base;
+	unsigned short src_width;      // src width, including padding
+	unsigned short src_height;     // src height, including padding
+	unsigned short src_xstart;
+	unsigned short src_xend;
+	unsigned short bgcolor;        // data outside start/end if used in opeartion
 
-	u64 dst_y_base;
-	u64 dst_c_base;
-	u32 extend_haddr;//dram bit[35:33]
+	unsigned long long dst_y_base;
+	unsigned long long dst_c_base;
+	unsigned int extend_haddr;//dram bit[35:33]
 	enum ldc_dst_mode dst_mode;
 	bool use_cmdq;
 };
 
-#endif // _CVI_LDC_CFG_H_
+#endif // _LDC_CFG_H_

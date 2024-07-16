@@ -22,7 +22,7 @@ struct isp_perf_chk {
 static struct isp_perf_chk time_chk;
 #endif //ISP_PERF_MEASURE
 
-void vi_record_sof_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
+void vi_record_sof_perf(struct sop_vi_dev *vdev, u8 raw_num, u8 chn_num)
 {
 #ifdef ISP_PERF_MEASURE
 	if (vdev->pre_fe_sof_cnt[raw_num][chn_num] < ISP_MEASURE_FRM) {
@@ -39,7 +39,7 @@ void vi_record_sof_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
 #endif
 }
 
-void vi_record_fe_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
+void vi_record_fe_perf(struct sop_vi_dev *vdev, u8 raw_num, u8 chn_num)
 {
 #ifdef ISP_PERF_MEASURE
 	if (vdev->pre_fe_frm_num[raw_num][chn_num] < ISP_MEASURE_FRM) {
@@ -56,7 +56,7 @@ void vi_record_fe_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
 #endif
 }
 
-void vi_record_be_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
+void vi_record_be_perf(struct sop_vi_dev *vdev, u8 raw_num, u8 chn_num)
 {
 #ifdef ISP_PERF_MEASURE
 	if (vdev->pre_be_frm_num[raw_num][chn_num] < ISP_MEASURE_FRM) {
@@ -73,7 +73,7 @@ void vi_record_be_perf(struct cvi_vi_dev *vdev, u8 raw_num, u8 chn_num)
 #endif
 }
 
-void vi_record_post_end(struct cvi_vi_dev *vdev, u8 raw_num)
+void vi_record_post_end(struct sop_vi_dev *vdev, u8 raw_num)
 {
 #ifdef ISP_PERF_MEASURE
 	if (vdev->postraw_frame_number[raw_num] < ISP_MEASURE_FRM) {
@@ -90,7 +90,7 @@ void vi_record_post_end(struct cvi_vi_dev *vdev, u8 raw_num)
 #endif
 }
 
-void vi_record_post_trigger(struct cvi_vi_dev *vdev, u8 raw_num)
+void vi_record_post_trigger(struct sop_vi_dev *vdev, u8 raw_num)
 {
 #ifdef ISP_PERF_MEASURE
 	if (vdev->postraw_frame_number[raw_num] < ISP_MEASURE_FRM) {

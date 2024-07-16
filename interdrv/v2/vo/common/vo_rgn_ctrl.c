@@ -1,9 +1,8 @@
 #include <linux/types.h>
 #include <linux/mm.h>
-#include <linux/cvi_defines.h>
-#include <linux/cvi_common.h>
-#include <linux/cvi_vip.h>
-#include <linux/cvi_buffer.h>
+#include <linux/defines.h>
+#include <linux/common.h>
+#include <linux/comm_buffer.h>
 
 #include <vo.h>
 #include <vo_cb.h>
@@ -15,7 +14,7 @@ static u8 _gop_get_bpp(enum disp_gop_format fmt)
 		(fmt == DISP_GOP_FMT_256LUT) ? 1 : 2;
 }
 
-static s32 vo_set_rgn_cfg(const u8 inst, const u8 layer, const struct cvi_rgn_cfg *cfg, const struct disp_size *size)
+static int vo_set_rgn_cfg(const u8 inst, const u8 layer, const struct rgn_cfg *cfg, const struct disp_size *size)
 {
 	u8 i;
 	struct disp_gop_cfg *gop_cfg = disp_gop_get_cfg(inst, layer);
@@ -69,7 +68,7 @@ static s32 vo_set_rgn_cfg(const u8 inst, const u8 layer, const struct cvi_rgn_cf
 		ow_cfg->mem_size.w = ALIGN(ow_cfg->img_size.w * bpp, GOP_ALIGNMENT);
 		ow_cfg->mem_size.h = ow_cfg->img_size.h;
 #if 0
-		CVI_TRACE_VO(CVI_DBG_INFO, "gop(%d) fmt(%d) rect(%d %d %d %d) addr(%llx) pitch(%d).\n", inst
+		TRACE_VO(DBG_INFO, "gop(%d) fmt(%d) rect(%d %d %d %d) addr(%llx) pitch(%d).\n", inst
 			, ow_cfg->fmt, ow_cfg->start.x, ow_cfg->start.y, ow_cfg->img_size.w, ow_cfg->img_size.h
 			, ow_cfg->addr, ow_cfg->pitch);
 #endif
@@ -78,195 +77,146 @@ static s32 vo_set_rgn_cfg(const u8 inst, const u8 layer, const struct cvi_rgn_cf
 
 	disp_gop_set_cfg(inst, layer, gop_cfg, true);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-#if 0
-static void vo_set_rgn_coverex_cfg(u8 inst, struct cvi_rgn_coverex_cfg *cfg)
+static int _check_vo_status(vo_layer layer)
 {
-	s32 i;
-	struct disp_cover_cfg sc_cover_cfg;
+	int ret = 0;
 
-	for (i = 0; i < RGN_COVEREX_MAX_NUM; i++) {
-		if (cfg->rgn_coverex_param[i].enable) {
-			sc_cover_cfg.start.raw = 0;
-			sc_cover_cfg.color.raw = 0;
-			sc_cover_cfg.start.b.enable = 1;
-			sc_cover_cfg.start.b.x = cfg->rgn_coverex_param[i].rect.left;
-			sc_cover_cfg.start.b.y = cfg->rgn_coverex_param[i].rect.top;
-			sc_cover_cfg.img_size.w = cfg->rgn_coverex_param[i].rect.width;
-			sc_cover_cfg.img_size.h = cfg->rgn_coverex_param[i].rect.height;
-			sc_cover_cfg.color.b.cover_color_r = (cfg->rgn_coverex_param[i].color >> 16) & 0xff;
-			sc_cover_cfg.color.b.cover_color_g = (cfg->rgn_coverex_param[i].color >> 8) & 0xff;
-			sc_cover_cfg.color.b.cover_color_b = cfg->rgn_coverex_param[i].color & 0xff;
-		} else {
-			memset(&sc_cover_cfg, 0, sizeof(sc_cover_cfg));
-		}
-		disp_cover_set_cfg(inst, i, &sc_cover_cfg);
-	}
-}
-#endif
-
-static s32 _check_vo_status(VO_LAYER VoLayer)
-{
-	s32 ret = CVI_SUCCESS;
-
-	ret = CHECK_VO_OVERLAY_VALID(VoLayer);
-	if (ret != CVI_SUCCESS)
+	ret = check_graphic_layer_valid(layer);
+	if (ret != 0)
 		return ret;
 
 	return ret;
 }
 
-s32 vo_cb_get_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
+int vo_cb_get_rgn_hdls(vo_layer layer, rgn_type_e enType, rgn_handle hdls[])
 {
-	s32 ret, i;
-	struct cvi_vo_overlay_ctx *pstOverlayCtx;
+	int ret, i;
+	struct vo_overlay_ctx *overlay_ctx;
 
-	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, hdls);
-	if (ret != CVI_SUCCESS)
+	ret = check_vo_null_ptr(ID_VO, hdls);
+	if (ret != 0)
 		return ret;
 
-	ret = _check_vo_status(VoLayer);
-	if (ret != CVI_SUCCESS)
+	ret = _check_vo_status(layer);
+	if (ret != 0)
 		return ret;
 
-	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
+	overlay_ctx = &g_vo_ctx->overlay_ctx[layer - VO_MAX_VIDEO_LAYER_NUM];
 	if (enType == OVERLAY_RGN || enType == COVER_RGN) {
 		for (i = 0; i < RGN_MAX_NUM_VO; ++i)
-			hdls[i] = pstOverlayCtx->rgn_handle[i];
+			hdls[i] = overlay_ctx->rgn_handle[i];
 	} else {
-		ret = CVI_ERR_VO_NOT_SUPPORT;
+		ret = ERR_VO_NOT_SUPPORT;
 	}
 
 	return ret;
 }
 
-s32 vo_cb_set_rgn_hdls(VO_LAYER VoLayer, RGN_TYPE_E enType, RGN_HANDLE hdls[])
+int vo_cb_set_rgn_hdls(vo_layer layer, rgn_type_e enType, rgn_handle hdls[])
 {
-	s32 ret, i;
-	struct cvi_vo_overlay_ctx *pstOverlayCtx;
+	int ret, i;
+	struct vo_overlay_ctx *overlay_ctx;
 
-	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, hdls);
-	if (ret != CVI_SUCCESS)
+	ret = check_vo_null_ptr(ID_VO, hdls);
+	if (ret != 0)
 		return ret;
 
-	ret = _check_vo_status(VoLayer);
-	if (ret != CVI_SUCCESS)
+	ret = _check_vo_status(layer);
+	if (ret != 0)
 		return ret;
 
-	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
+	overlay_ctx = &g_vo_ctx->overlay_ctx[layer - VO_MAX_VIDEO_LAYER_NUM];
 	if (enType == OVERLAY_RGN || enType == COVER_RGN) {
 		for (i = 0; i < RGN_MAX_NUM_VO; ++i)
-			pstOverlayCtx->rgn_handle[i] = hdls[i];
+			overlay_ctx->rgn_handle[i] = hdls[i];
 	} else {
-		ret = CVI_ERR_VO_NOT_SUPPORT;
+		ret = ERR_VO_NOT_SUPPORT;
 	}
 
 	return ret;
 }
 
-s32 vo_cb_set_rgn_cfg(VO_LAYER VoLayer, struct cvi_rgn_cfg *cfg)
+int vo_cb_set_rgn_cfg(vo_layer layer, struct rgn_cfg *cfg)
 {
-	s32 ret, i;
-	struct cvi_vo_overlay_ctx *pstOverlayCtx;
-	struct cvi_vo_dev_ctx *pstDevCtx;
+	int ret, i;
+	struct vo_overlay_ctx *overlay_ctx;
+	struct vo_dev_ctx *dev_ctx;
 	struct disp_timing *timing;
 	struct disp_size size;
-	VO_DEV VoDev;
-	VO_LAYER Overlay;
-	s32 VgopIndex = -1;
+	vo_dev dev;
+	vo_layer overlay;
+	int vgop_index = -1;
 
-	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, cfg);
-	if (ret != CVI_SUCCESS)
+	ret = check_vo_null_ptr(ID_VO, cfg);
+	if (ret != 0)
 		return ret;
 
-	ret = _check_vo_status(VoLayer);
-	if (ret != CVI_SUCCESS)
+	ret = _check_vo_status(layer);
+	if (ret != 0)
 		return ret;
 
-	Overlay = VoLayer - VO_MAX_LAYER_NUM;
-	pstOverlayCtx = &gVoCtx->astOverlayCtx[Overlay];
-	memcpy(&pstOverlayCtx->rgn_cfg, cfg, sizeof(*cfg));
+	overlay = layer - VO_MAX_VIDEO_LAYER_NUM;
+	overlay_ctx = &g_vo_ctx->overlay_ctx[overlay];
+	memcpy(&overlay_ctx->rgn_cfg, cfg, sizeof(*cfg));
 
-	VoDev = pstOverlayCtx->s32BindDevId;
-	if (VoDev == -1) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind any Dev\n", VoLayer);
-		return CVI_ERR_VO_DEV_NOT_BINDED;
+	dev = overlay_ctx->bind_dev_id;
+	if (dev == -1) {
+		TRACE_VO(DBG_ERR, "layer(%d) not bind any Dev\n", layer);
+		return ERR_VO_DEV_NOT_BINDED;
 	}
 
-	pstDevCtx = &gVoCtx->astDevCtx[VoDev];
+	dev_ctx = &g_vo_ctx->dev_ctx[dev];
 
-	mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
-	for (i = 0; i < VO_MAX_OVERLAY_IN_DEV; ++i) {
-		if (pstDevCtx->s32BindOverlayId[i] == VoLayer) {
-			VgopIndex = i;
-		}
-	}
-	mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+	mutex_lock(&g_vo_ctx->dev_ctx[dev].dev_lock);
+	for (i = 0; i < VO_MAX_GRAPHIC_LAYER_IN_DEV; ++i)
+		if (dev_ctx->bind_overlay_id[i] == layer)
+			vgop_index = i;
 
-	if (VgopIndex == -1)
-		return CVI_ERR_VO_DEV_NOT_BINDED;
+	mutex_unlock(&g_vo_ctx->dev_ctx[dev].dev_lock);
 
-	timing = disp_get_timing(VoDev);
+	if (vgop_index == -1)
+		return ERR_VO_DEV_NOT_BINDED;
+
+	timing = disp_get_timing(dev);
 	size.w = timing->hfde_end - timing->hfde_start + 1;
 	size.h = timing->vfde_end - timing->vfde_start + 1;
 
-	vo_set_rgn_cfg(pstOverlayCtx->s32BindDevId, VgopIndex, cfg, &size);
+	vo_set_rgn_cfg(overlay_ctx->bind_dev_id, vgop_index, cfg, &size);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-#if 0
-s32 vo_cb_set_rgn_coverex_cfg(VO_LAYER VoLayer, struct cvi_rgn_coverex_cfg *cfg)
+int vo_cb_get_chn_size(vo_layer layer, rect_s *rect)
 {
-	s32 ret;
-	struct cvi_vo_layer_ctx *pstLayerCtx;
+	int ret;
+	struct vo_overlay_ctx *overlay_ctx;
+	vo_dev dev;
+	vo_layer video_layer;
 
-	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, cfg);
-	if (ret != CVI_SUCCESS)
+	ret = check_vo_null_ptr(ID_VO, rect);
+	if (ret != 0)
 		return ret;
 
-	ret = _check_vo_status(VoLayer);
-	if (ret != CVI_SUCCESS)
+	ret = _check_vo_status(layer);
+	if (ret != 0)
 		return ret;
 
-	pstLayerCtx = &gVoCtx->astLayerCtx[VoLayer];
-	memcpy(&pstLayerCtx->rgn_coverex_cfg, cfg, sizeof(*cfg));
-	vo_set_rgn_coverex_cfg(pstLayerCtx->s32BindDevId, cfg);
+	overlay_ctx = &g_vo_ctx->overlay_ctx[layer - VO_MAX_VIDEO_LAYER_NUM];
 
-	return CVI_SUCCESS;
-}
-#endif
-
-s32 vo_cb_get_chn_size(VO_LAYER VoLayer, RECT_S *rect)
-{
-	s32 ret;
-	struct cvi_vo_overlay_ctx *pstOverlayCtx;
-	VO_DEV VoDev;
-	VO_LAYER VideoLayer;
-
-	ret = CHECK_VO_NULL_PTR(CVI_ID_VO, rect);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	ret = _check_vo_status(VoLayer);
-	if (ret != CVI_SUCCESS)
-		return ret;
-
-	pstOverlayCtx = &gVoCtx->astOverlayCtx[VoLayer - VO_MAX_LAYER_NUM];
-
-	VoDev = pstOverlayCtx->s32BindDevId;
-	if (VoDev == -1) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not bind any Dev\n", VoLayer);
-		return CVI_ERR_VO_DEV_NOT_BINDED;
+	dev = overlay_ctx->bind_dev_id;
+	if (dev == -1) {
+		TRACE_VO(DBG_ERR, "layer(%d) not bind any Dev\n", layer);
+		return ERR_VO_DEV_NOT_BINDED;
 	}
 
-	mutex_lock(&gVoCtx->astDevCtx[VoDev].dev_lock);
-	VideoLayer = gVoCtx->astDevCtx[VoDev].s32BindLayerId;
-	mutex_unlock(&gVoCtx->astDevCtx[VoDev].dev_lock);
+	mutex_lock(&g_vo_ctx->dev_ctx[dev].dev_lock);
+	video_layer = g_vo_ctx->dev_ctx[dev].bind_layer_id;
+	mutex_unlock(&g_vo_ctx->dev_ctx[dev].dev_lock);
 
-	memcpy(rect, &gVoCtx->astLayerCtx[VideoLayer].stLayerAttr.stDispRect, sizeof(*rect));
+	memcpy(rect, &g_vo_ctx->layer_ctx[video_layer].layer_attr.disp_rect, sizeof(*rect));
 
-	return CVI_SUCCESS;
+	return 0;
 }

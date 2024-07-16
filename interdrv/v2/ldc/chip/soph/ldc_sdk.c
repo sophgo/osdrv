@@ -6,22 +6,22 @@
 #include <linux/mm.h>
 #include <uapi/linux/sched/types.h>
 
-#include <linux/cvi_comm_video.h>
-#include <linux/cvi_comm_gdc.h>
+#include <linux/comm_video.h>
+#include <linux/comm_gdc.h>
 #include <linux/ldc_uapi.h>
 
 #include <base_cb.h>
 #include <vb.h>
 #include <sys.h>
 #include "ldc_debug.h"
-#include "cvi_vip_ldc.h"
+#include "ldc_core.h"
 #include "ldc_sdk.h"
 #include "ldc_common.h"
 #include "ldc.h"
 #include "cmdq.h"
 #include "ion.h"
 #include "vbq.h"
-#include "cvi_vip_ldc_proc.h"
+#include "ldc_proc.h"
 #include "mesh.h"
 #include "base_cb.h"
 
@@ -37,56 +37,56 @@
 
 static struct mutex g_mesh_lock;
 
-static enum ENUM_MODULES_ID convert_cb_id(MOD_ID_E enModId)
+static enum enum_modules_id convert_cb_id(mod_id_e mod_id)
 {
-	if (enModId == CVI_ID_VI)
+	if (mod_id == ID_VI)
 		return E_MODULE_VI;
-	else if (enModId == CVI_ID_VO)
+	else if (mod_id == ID_VO)
 		return E_MODULE_VO;
-	else if (enModId == CVI_ID_VPSS)
+	else if (mod_id == ID_VPSS)
 		return E_MODULE_VPSS;
 
 	return E_MODULE_BUTT;
 }
 
-static MOD_ID_E convert_mod_id(enum ENUM_MODULES_ID cbModId)
+static mod_id_e convert_mod_id(enum enum_modules_id cbModId)
 {
 	if (cbModId == E_MODULE_VI)
-		return CVI_ID_VI;
+		return ID_VI;
 	else if (cbModId == E_MODULE_VO)
-		return CVI_ID_VO;
+		return ID_VO;
 	else if (cbModId == E_MODULE_VPSS)
-		return CVI_ID_VPSS;
+		return ID_VPSS;
 
-	return CVI_ID_BUTT;
+	return ID_BUTT;
 }
 
-int ldc_exec_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int ldc_exec_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
-	struct cvi_ldc_vdev *wdev = (struct cvi_ldc_vdev *)dev;
+	struct ldc_vdev *wdev = (struct ldc_vdev *)dev;
 	struct mesh_gdc_cfg *cfg;
-	MOD_ID_E enModId;
+	mod_id_e mod_id;
 	int rc = -1;
 
 	switch (cmd) {
 		case LDC_CB_MESH_GDC_OP: {
 			mutex_lock(&g_mesh_lock);
 			cfg = (struct mesh_gdc_cfg *)arg;
-			enModId = convert_mod_id(caller);
+			mod_id = convert_mod_id(caller);
 			mutex_unlock(&g_mesh_lock);
 
-			if (enModId == CVI_ID_BUTT) {
-				CVI_TRACE_LDC(CVI_DBG_WARN, "invalid mod do GDC_OP\n");
-				return CVI_FAILURE;
+			if (mod_id == ID_BUTT) {
+				TRACE_LDC(DBG_WARN, "invalid mod do GDC_OP\n");
+				return -1;
 			}
-			rc = mesh_gdc_do_op(wdev, cfg->usage, cfg->pUsageParam
-				, cfg->vb_in, cfg->enPixFormat, cfg->mesh_addr
-				,cfg->sync_io, cfg->pcbParam, cfg->cbParamSize
-				, enModId, cfg->enRotation);
+			rc = mesh_gdc_do_op(wdev, cfg->usage, cfg->usage_param
+				, cfg->vb_in, cfg->pix_format, cfg->mesh_addr
+				,cfg->sync_io, cfg->cb_param, cfg->cb_param_size
+				, mod_id, cfg->rotation);
 			break;
 		}
 		default: {
-			CVI_TRACE_LDC(CVI_DBG_WARN, "invalid cb CMD\n");
+			TRACE_LDC(DBG_WARN, "invalid cb CMD\n");
 			break;
 		}
 	}
@@ -99,7 +99,7 @@ int ldc_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_LDC);
 }
 
-int ldc_reg_cb(struct cvi_ldc_vdev *wdev)
+int ldc_reg_cb(struct ldc_vdev *wdev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -110,14 +110,14 @@ int ldc_reg_cb(struct cvi_ldc_vdev *wdev)
 	return base_reg_module_cb(&reg_cb);
 }
 
-static void ldc_op_done_cb(MOD_ID_E enModId, void *pParam, VB_BLK blk)
+static void ldc_op_done_cb(mod_id_e mod_id, void *param, vb_blk blk)
 {
 	struct ldc_op_done_cfg cfg;
 	struct base_exe_m_cb exe_cb;
-	enum ENUM_MODULES_ID callee = convert_cb_id(enModId);
+	enum enum_modules_id callee = convert_cb_id(mod_id);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "callee=%d, enModId(%d)\n", callee, enModId);
-	cfg.pParam = pParam;
+	TRACE_LDC(DBG_DEBUG, "callee=%d, mod_id(%d)\n", callee, mod_id);
+	cfg.param = param;
 	cfg.blk = blk;
 
 	exe_cb.callee = callee;
@@ -127,24 +127,24 @@ static void ldc_op_done_cb(MOD_ID_E enModId, void *pParam, VB_BLK blk)
 	base_exe_module_cb(&exe_cb);
 }
 
-static void ldc_hdl_hw_tsk_cb(struct cvi_ldc_vdev *wdev, struct ldc_job *job
+static void ldc_hdl_hw_tsk_cb(struct ldc_vdev *wdev, struct ldc_job *job
 	, struct ldc_task *tsk, bool is_last)
 {
 	bool is_internal;
-	VB_BLK blk_in = VB_INVALID_HANDLE, blk_out = VB_INVALID_HANDLE;
-	MOD_ID_E enModId;
-	u8 isLastTask;
+	vb_blk blk_in = VB_INVALID_HANDLE, blk_out = VB_INVALID_HANDLE;
+	mod_id_e mod_id;
+	unsigned char isLatask;
 	struct ldc_vb_done *vb_done = NULL;
 	unsigned long flags;
 
 	if (unlikely(!wdev || !job || !tsk)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "invalid param\n");
+		TRACE_LDC(DBG_ERR, "invalid param\n");
 		return;
 	}
-	is_internal = (tsk->attr.reserved == CVI_GDC_MAGIC);
-	enModId = job->identity.enModId;
+	is_internal = (tsk->attr.reserved == GDC_MAGIC);
+	mod_id = job->identity.mod_id;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "is_internal=%d\n", is_internal);
+	TRACE_LDC(DBG_DEBUG, "is_internal=%d\n", is_internal);
 
 	/* []internal module]:
 	 *  sync_io or async_io
@@ -159,52 +159,52 @@ static void ldc_hdl_hw_tsk_cb(struct cvi_ldc_vdev *wdev, struct ldc_job *job
 	 */
 	if (is_internal) {
 		// for internal module handshaking. such as vi/vpss rotation.
-		isLastTask = (u8)tsk->attr.au64privateData[1];
+		isLatask = (u8)tsk->attr.private_data[1];
 
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "isLastTask=%d, blk_in(pa=0x%llx), blk_out(pa=0x%llx)\n",
-				isLastTask,
-				(unsigned long long)tsk->attr.stImgIn.stVFrame.u64PhyAddr[0],
-				(unsigned long long)tsk->attr.stImgOut.stVFrame.u64PhyAddr[0]);
+		TRACE_LDC(DBG_DEBUG, "isLatask=%d, blk_in(pa=0x%llx), blk_out(pa=0x%llx)\n",
+				isLatask,
+				(unsigned long long)tsk->attr.img_in.video_frame.phyaddr[0],
+				(unsigned long long)tsk->attr.img_out.video_frame.phyaddr[0]);
 
-		blk_in = vb_phys_addr2handle(tsk->attr.stImgIn.stVFrame.u64PhyAddr[0]);
-		blk_out = vb_phys_addr2handle(tsk->attr.stImgOut.stVFrame.u64PhyAddr[0]);
+		blk_in = vb_phys_addr2handle(tsk->attr.img_in.video_frame.phyaddr[0]);
+		blk_out = vb_phys_addr2handle(tsk->attr.img_out.video_frame.phyaddr[0]);
 		if (blk_out == VB_INVALID_HANDLE)
-			CVI_TRACE_LDC(CVI_DBG_ERR, "blk_out is invalid vb_blk, no callback to(%d)\n", enModId);
+			TRACE_LDC(DBG_ERR, "blk_out is invalid vb_blk, no callback to(%d)\n", mod_id);
 		else {
-			atomic_long_fetch_and(~BIT(CVI_ID_GDC), &((struct vb_s *)blk_out)->mod_ids);
-			if (isLastTask)
-				ldc_op_done_cb(enModId, (void *)(uintptr_t)tsk->attr.au64privateData[2], blk_out);
+			atomic_long_fetch_and(~BIT(ID_GDC), &((struct vb_s *)blk_out)->mod_ids);
+			if (isLatask)
+				ldc_op_done_cb(mod_id, (void *)(uintptr_t)tsk->attr.private_data[2], blk_out);
 		}
 
 		// User space:
 		//   Caller always assign callback.
 		//   Null callback used for internal ldc sub job.
 		// Kernel space:
-		//  !isLastTask used for internal ldc sub job.
-		if (isLastTask && blk_in != VB_INVALID_HANDLE) {
-			atomic_long_fetch_and(~BIT(CVI_ID_GDC), &((struct vb_s *)blk_in)->mod_ids);
+		//  !isLatask used for internal ldc sub job.
+		if (isLatask && blk_in != VB_INVALID_HANDLE) {
+			atomic_long_fetch_and(~BIT(ID_GDC), &((struct vb_s *)blk_in)->mod_ids);
 			vb_release_block(blk_in);
-		} else if (!isLastTask) {
-			vfree((void *)(uintptr_t)tsk->attr.au64privateData[2]);
+		} else if (!isLatask) {
+			vfree((void *)(uintptr_t)tsk->attr.private_data[2]);
 		}
 	} else {
-		if (!job->identity.syncIo && is_last) {
+		if (!job->identity.sync_io && is_last) {
 			vb_done = kzalloc(sizeof(*vb_done), GFP_ATOMIC);
 
 			spin_lock_irqsave(&wdev->job_lock, flags);
-			memcpy(&vb_done->stImgOut, &tsk->attr.stImgOut, sizeof(vb_done->stImgOut));
+			memcpy(&vb_done->img_out, &tsk->attr.img_out, sizeof(vb_done->img_out));
 			memcpy(&vb_done->job, job, sizeof(*job));
 			list_add_tail(&vb_done->node, &wdev->vb_doneq.doneq);
 			spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
+			TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 			up(&wdev->vb_doneq.sem);
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
+			TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "vb_done->stImgOut[%llx-%d]\n"
-				, vb_done->stImgOut.stVFrame.u64PhyAddr[0], vb_done->stImgOut.stVFrame.u32Width);
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "vb_doneq identity[%d-%d-%s]\n"
-				, vb_done->job.identity.enModId, vb_done->job.identity.u32ID, vb_done->job.identity.Name);
+			TRACE_LDC(DBG_DEBUG, "vb_done->img_out[%llx-%d]\n"
+				, vb_done->img_out.video_frame.phyaddr[0], vb_done->img_out.video_frame.width);
+			TRACE_LDC(DBG_DEBUG, "vb_doneq identity[%d-%d-%s]\n"
+				, vb_done->job.identity.mod_id, vb_done->job.identity.id, vb_done->job.identity.name);
 		}
 	}
 }
@@ -213,7 +213,7 @@ static void ldc_wkup_cmdq_tsk(struct ldc_core *core) {
 #if USE_REAL_CMDQ
 	(void)(core);
 #else
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "ldc_wkup_cmdq_tsk\n");
+	TRACE_LDC(DBG_DEBUG, "ldc_wkup_cmdq_tsk\n");
 
 	core->cmdq_evt = true;
 	wake_up_interruptible(&core->cmdq_wq);
@@ -222,17 +222,17 @@ static void ldc_wkup_cmdq_tsk(struct ldc_core *core) {
 
 static void ldc_notify_wkup_evt_kth(void *data, enum ldc_wait_evt evt)
 {
-	struct cvi_ldc_vdev *dev = (struct cvi_ldc_vdev *)data;
+	struct ldc_vdev *dev = (struct ldc_vdev *)data;
 	unsigned long flags;
 
 	if(!dev) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
 		return;
 	}
 
 	spin_lock_irqsave(&dev->job_lock, flags);
 	dev->evt |= evt;
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
+	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
 	spin_unlock_irqrestore(&dev->job_lock, flags);
 
 	wake_up_interruptible(&dev->wait);
@@ -240,33 +240,33 @@ static void ldc_notify_wkup_evt_kth(void *data, enum ldc_wait_evt evt)
 
 static void ldc_clr_evt_kth(void *data)
 {
-	struct cvi_ldc_vdev *dev = (struct cvi_ldc_vdev *)data;
+	struct ldc_vdev *dev = (struct ldc_vdev *)data;
 	unsigned long flags;
 	enum ldc_wait_evt evt;
 
 	if(!dev) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
 		return;
 	}
 
 	spin_lock_irqsave(&dev->job_lock, flags);
 	evt = dev->evt;
 	dev->evt &= ~evt;
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
+	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
 	spin_unlock_irqrestore(&dev->job_lock, flags);
 }
 
-static void ldc_work_handle_job_done(struct cvi_ldc_vdev *dev, struct ldc_job *job, u8 irq_coreid)
+static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job, unsigned char irq_coreid)
 {
 	unsigned long flags;
 	struct fasync_struct *fasync;
 
 	if (!job) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "null job\n");
+		TRACE_LDC(DBG_ERR, "null job\n");
 		return;
 	}
 
-	atomic_set(&job->enJobState, LDC_JOB_END);
+	atomic_set(&job->job_state, LDC_JOB_END);
 
 	ldc_proc_record_job_done(job);
 
@@ -275,26 +275,26 @@ static void ldc_work_handle_job_done(struct cvi_ldc_vdev *dev, struct ldc_job *j
 	spin_unlock_irqrestore(&dev->job_lock, flags);
 	ldc_notify_wkup_evt_kth(dev, LDC_EVENT_EOF);
 
-	if (job->identity.syncIo) {
-		CVI_TRACE_LDC(CVI_DBG_INFO, "job[%px]\n", job);
+	if (job->identity.sync_io) {
+		TRACE_LDC(DBG_INFO, "job[%px]\n", job);
 		job->job_done_evt = true;
-		wake_up_interruptible(&job->job_done_wq);
+		wake_up(&job->job_done_wq);
 	} else {
 		kfree(job);
 		job = NULL;
 		fasync = ldc_get_dev_fasync();
 		kill_fasync(&fasync, SIGIO, POLL_IN);
 	}
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job done\n");
+	TRACE_LDC(DBG_DEBUG, "job done\n");
 }
 
-static void ldc_work_handle_tsk_done(struct cvi_ldc_vdev *dev
-	, struct ldc_task *tsk, struct ldc_job *job, u8 irq_coreid, bool is_last_tsk)
+static void ldc_work_handle_tsk_done(struct ldc_vdev *dev
+	, struct ldc_task *tsk, struct ldc_job *job, unsigned char irq_coreid, bool is_last_tsk)
 {
 	unsigned long flags;
 
 	if (!tsk) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "null tsk\n");
+		TRACE_LDC(DBG_ERR, "null tsk\n");
 		return;
 	}
 
@@ -307,39 +307,39 @@ static void ldc_work_handle_tsk_done(struct cvi_ldc_vdev *dev
 		ldc_proc_record_hw_tsk_done(job, tsk);
 
 		spin_lock_irqsave(&dev->job_lock, flags);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "tsk[%px]\n", tsk);
+		TRACE_LDC(DBG_DEBUG, "tsk[%px]\n", tsk);
 		kfree(tsk);
 		tsk = NULL;
 		spin_unlock_irqrestore(&dev->job_lock, flags);
 
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "tsk done, is last tsk[%d]\n", is_last_tsk);
+		TRACE_LDC(DBG_DEBUG, "tsk done, is last tsk[%d]\n", is_last_tsk);
 		if (is_last_tsk) {
 			ldc_work_handle_job_done(dev, job, irq_coreid);
 		}
 	} else {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "invalid tsk state(%d).\n"
+		TRACE_LDC(DBG_ERR, "invalid tsk state(%d).\n"
 			, (enum ldc_task_state)atomic_read(&tsk->state));
 	}
 }
 
-void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core)
+void ldc_work_handle_frm_done(struct ldc_vdev *dev, struct ldc_core *core)
 {
 	struct ldc_job *job;
 	struct ldc_task *tsk;
 	unsigned long flags;
-	u8 irq_coreid;
+	unsigned char irq_coreid;
 	bool is_last_tsk = false;
 
 	if(!dev) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
 		return;
 	}
 
 	atomic_set(&core->state, LDC_CORE_STATE_IDLE);
 	irq_coreid = (u8)core->dev_type;
-	CVI_TRACE_LDC(CVI_DBG_INFO, "core(%d) state set(%d)\n", irq_coreid, LDC_CORE_STATE_IDLE);
+	TRACE_LDC(DBG_INFO, "core(%d) state set(%d)\n", irq_coreid, LDC_CORE_STATE_IDLE);
 
-	if (unlikely(irq_coreid) >= CVI_DEV_LDC_MAX)
+	if (unlikely(irq_coreid) >= DEV_LDC_MAX)
 		return;
 
 	spin_lock_irqsave(&dev->job_lock, flags);
@@ -349,7 +349,7 @@ void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core)
 	if (unlikely(!job))
 		return;
 
-	if (atomic_read(&job->enJobState) == LDC_JOB_WORKING) {
+	if (atomic_read(&job->job_state) == LDC_JOB_WORKING) {
 		spin_lock_irqsave(&dev->job_lock, flags);
 		tsk = list_first_entry_or_null(&dev->core[irq_coreid].list.done_list, struct ldc_task, node);
 		if (unlikely(!tsk)) {
@@ -366,8 +366,8 @@ void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core)
 		if (job && job->use_cmdq && !is_last_tsk)
 			ldc_wkup_cmdq_tsk(&dev->core[irq_coreid]);
 	} else {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "invalid job(%px) state(%d).\n"
-			, job, (enum ldc_job_state)atomic_read(&job->enJobState));
+		TRACE_LDC(DBG_ERR, "invalid job(%px) state(%d).\n"
+			, job, (enum ldc_job_state)atomic_read(&job->job_state));
 	}
 }
 
@@ -375,10 +375,10 @@ void ldc_work_handle_frm_done(struct cvi_ldc_vdev *dev, struct ldc_core *core)
 static void ldc_work_frm_done(struct work_struct *work)//intr post handle
 {
 	struct ldc_core *core = container_of(work, struct ldc_core, work_frm_done);
-	struct cvi_ldc_vdev *dev = ldc_get_dev();
+	struct ldc_vdev *dev = ldc_get_dev();
 
 	if(!core || !dev) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev or core isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev or core isn't created yet.\n");
 		return;
 	}
 
@@ -392,7 +392,7 @@ static void ldc_wkup_frm_done_work(void *data, int top_id)
 	(void)top_id;
 
 	if (!core) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc core isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc core isn't created yet.\n");
 		return;
 	}
 
@@ -404,34 +404,34 @@ static void ldc_wkup_frm_done_work(void *data, int top_id)
 #endif
 }
 
-static void ldc_reset_cur_abord_job(struct cvi_ldc_vdev *dev, u8 coreid, struct ldc_job *job)
+static void ldc_reset_cur_abord_job(struct ldc_vdev *dev, unsigned char coreid, struct ldc_job *job)
 {
 #if USE_EXCEPTION_HDL
 	struct ldc_task *tsk, tsk_tmp;
 
 	if (unlikely(!dev)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
 		return;
 	}
 
 	if (unlikely(!job)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "err job is null\n");
+		TRACE_LDC(DBG_ERR, "err job is null\n");
 		return;
 	}
 
 	if (list_empty(&job->task_list)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "err tsklist is null\n");
+		TRACE_LDC(DBG_ERR, "err tsklist is null\n");
 		return;
 	}
 
 	list_for_each_entry_safe(tsk, tsk_tmp, &job->task_list, node) {
 		if (unlikely(!tsk)) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "cur job(%px) cur tsk is null\n", job);
+			TRACE_LDC(DBG_ERR, "cur job(%px) cur tsk is null\n", job);
 			continue;
 		}
 
 		if (unlikely(tsk->tsk_id < 0 || tsk->tsk_id >= LDC_JOB_MAX_TSK_NUM)) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "cur job(%px) cur tsk id(%d) invalid\n", job, tsk->tsk_id);
+			TRACE_LDC(DBG_ERR, "cur job(%px) cur tsk id(%d) invalid\n", job, tsk->tsk_id);
 			continue;
 		}
 
@@ -454,9 +454,9 @@ static void ldc_reset_cur_abord_job(struct cvi_ldc_vdev *dev, u8 coreid, struct 
 #endif
 }
 
-static void ldc_try_reset_abort_job(struct cvi_ldc_vdev *wdev)
+static void ldc_try_reset_abort_job(struct ldc_vdev *wdev)
 {
-	u8 coreid;
+	unsigned char coreid;
 	unsigned long flags;
 	struct ldc_job *work_job;
 
@@ -464,48 +464,48 @@ static void ldc_try_reset_abort_job(struct cvi_ldc_vdev *wdev)
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 		work_job = list_first_entry_or_null(&wdev->list.work_list[coreid], struct ldc_job, node);
 		if (unlikely(!work_job)) {
-			CVI_TRACE_LDC(CVI_DBG_NOTICE, "ldc vdev core[%d] select timeout,hw busy\n", coreid);
+			TRACE_LDC(DBG_NOTICE, "ldc vdev core[%d] select timeout,hw busy\n", coreid);
 			ldc_reset_cur_abord_job(wdev, coreid, work_job);
 		}
 	}
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 }
 
-static void ldc_set_tsk_run_status(struct cvi_ldc_vdev *wdev, int top_id
+static void ldc_set_tsk_run_status(struct ldc_vdev *wdev, int top_id
 	, struct ldc_job *job, struct ldc_task *tsk)
 {
 	atomic_set(&wdev->core[top_id].state, LDC_CORE_STATE_RUNNING);
-	CVI_TRACE_LDC(CVI_DBG_INFO, "core(%d) state set(%d)\n", top_id, LDC_CORE_STATE_RUNNING);
+	TRACE_LDC(DBG_INFO, "core(%d) state set(%d)\n", top_id, LDC_CORE_STATE_RUNNING);
 
 	atomic_set(&tsk->state, LDC_TASK_STATE_RUNNING);
 
 	ldc_proc_record_hw_tsk_start(job, tsk, top_id);
 }
 
-static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
+static void ldc_submit_hw(struct ldc_vdev *wdev, int top_id
 	, struct ldc_job *job, struct ldc_task *tsk)
 {
 	struct ldc_cfg cfg;
-	VIDEO_FRAME_S *in_frame, *out_frame;
-	PIXEL_FORMAT_E enPixFormat;
-	ROTATION_E enRotation;
-	u64 mesh_addr;
-	u8 num_of_plane, extend_haddr;
+	video_frame_s *in_frame, *out_frame;
+	pixel_format_e pix_format;
+	rotation_e rotation;
+	unsigned long long mesh_addr;
+	unsigned char num_of_plane, extend_haddr;
 	unsigned long flags;
 	struct ldc_job *work_job;
 	struct ldc_task *work_tsk;
 
 	ldc_set_tsk_run_status(wdev, top_id, job, tsk);
 
-	mesh_addr = tsk->attr.au64privateData[0];
+	mesh_addr = tsk->attr.private_data[0];
 	mesh_addr = (mesh_addr != DEFAULT_MESH_PADDR) ? mesh_addr : 0;
-	in_frame = &tsk->attr.stImgIn.stVFrame;
-	out_frame = &tsk->attr.stImgOut.stVFrame;
-	enPixFormat = in_frame->enPixelFormat;
-	enRotation = tsk->enRotation;
+	in_frame = &tsk->attr.img_in.video_frame;
+	out_frame = &tsk->attr.img_out.video_frame;
+	pix_format = in_frame->pixel_format;
+	rotation = tsk->rotation;
 
 	memset(&cfg, 0, sizeof(cfg));
-	switch (out_frame->enPixelFormat) {
+	switch (out_frame->pixel_format) {
 	case PIXEL_FORMAT_YUV_400:
 		cfg.pix_fmt = YUV400;
 		num_of_plane = 1;
@@ -518,7 +518,7 @@ static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
 		break;
 	};
 
-	switch (enRotation) {
+	switch (rotation) {
 	case ROTATION_90:
 		cfg.dst_mode = LDC_DST_ROT_270;
 		break;
@@ -535,8 +535,8 @@ static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
 
 	cfg.map_base = mesh_addr;
 	cfg.bgcolor = (u16)LDC_YUV_BLACK /*ctx->bgcolor*/;
-	cfg.src_width = ALIGN(in_frame->u32Width, 64);
-	cfg.src_height = ALIGN(in_frame->u32Height, 64);
+	cfg.src_width = ALIGN(in_frame->width, 64);
+	cfg.src_height = ALIGN(in_frame->height, 64);
 	cfg.ras_width = cfg.src_width;
 	cfg.ras_height = cfg.src_height;
 
@@ -546,16 +546,16 @@ static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
 		cfg.map_bypass = false;
 
 	cfg.src_xstart = 0;
-	cfg.src_xend = in_frame->u32Width - 1;
+	cfg.src_xend = in_frame->width - 1;
 
-	extend_haddr = in_frame->u64PhyAddr[0] >> 33;
+	extend_haddr = in_frame->phyaddr[0] >> 33;
 	cfg.extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
 
-	cfg.src_y_base = in_frame->u64PhyAddr[0];
-	cfg.dst_y_base = out_frame->u64PhyAddr[0];
+	cfg.src_y_base = in_frame->phyaddr[0];
+	cfg.dst_y_base = out_frame->phyaddr[0];
 	if (num_of_plane == 2) {
-		cfg.src_c_base = in_frame->u64PhyAddr[1];
-		cfg.dst_c_base = out_frame->u64PhyAddr[1];
+		cfg.src_c_base = in_frame->phyaddr[1];
+		cfg.dst_c_base = out_frame->phyaddr[1];
 	}
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
@@ -570,7 +570,7 @@ static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	if (unlikely(!work_job || !work_tsk)) {
-		CVI_TRACE_LDC(CVI_DBG_WARN, "core_id:[%d] null work job tsk\n", top_id);
+		TRACE_LDC(DBG_WARN, "core_id:[%d] null work job tsk\n", top_id);
 		return;
 	}
 
@@ -579,30 +579,30 @@ static void ldc_submit_hw(struct cvi_ldc_vdev *wdev, int top_id
 	ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);
 	ldc_engine(&cfg, top_id);
 
-	CVI_TRACE_LDC(CVI_DBG_INFO, "job[%px]\n", job);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "core_id:%d\n", top_id);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "update size src(%d %d)\n", cfg.src_width, cfg.src_height);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "update src-buf: %#llx-%#llx-%#llx\n",
-		in_frame->u64PhyAddr[0], in_frame->u64PhyAddr[1], in_frame->u64PhyAddr[2]);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "update dst-buf: %#llx-%#llx-%#llx\n",
-		out_frame->u64PhyAddr[0], out_frame->u64PhyAddr[1], out_frame->u64PhyAddr[2]);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg.map_base);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n", cfg.bgcolor, cfg.pix_fmt);
+	TRACE_LDC(DBG_INFO, "job[%px]\n", job);
+	TRACE_LDC(DBG_DEBUG, "core_id:%d\n", top_id);
+	TRACE_LDC(DBG_DEBUG, "update size src(%d %d)\n", cfg.src_width, cfg.src_height);
+	TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx-%#llx\n",
+		in_frame->phyaddr[0], in_frame->phyaddr[1], in_frame->phyaddr[2]);
+	TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx-%#llx\n",
+		out_frame->phyaddr[0], out_frame->phyaddr[1], out_frame->phyaddr[2]);
+	TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg.map_base);
+	TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n", cfg.bgcolor, cfg.pix_fmt);
 #if 0
 	ldc_dump_register(top_id);
 #endif
 }
 
-static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
+static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 	, struct ldc_job *job, struct ldc_task *last_tsk, struct ldc_task **tskq)
 {
 	struct ldc_cfg *cfg_q[LDC_JOB_MAX_TSK_NUM] = {NULL};
 	union cmdq_set *cmdq_addr = NULL;
-	VIDEO_FRAME_S *in_frame, *out_frame;
-	PIXEL_FORMAT_E enPixFormat;
-	ROTATION_E enRotation;
-	u64 mesh_addr;
-	u8 num_of_plane, i, tsk_idx, extend_haddr;
+	video_frame_s *in_frame, *out_frame;
+	pixel_format_e pix_format;
+	rotation_e rotation;
+	unsigned long long mesh_addr;
+	unsigned char num_of_plane, i, tsk_idx, extend_haddr;
 	int tsk_num, cmdq_wq_ret;
 	struct ldc_job *work_job;
 	struct ldc_task *work_tsk;
@@ -612,7 +612,7 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 
 	tsk_num = atomic_read(&job->task_num);
 	if (unlikely(last_tsk != tskq[tsk_num - 1])) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "invalid last_tsk, not match with tskq\n");
+		TRACE_LDC(DBG_ERR, "invalid last_tsk, not match with tskq\n");
 		return;
 	}
 
@@ -625,14 +625,14 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 
 		cfg_q[tsk_idx] = kzalloc(sizeof(struct ldc_cfg), GFP_ATOMIC);
 
-		mesh_addr = tskq[tsk_idx]->attr.au64privateData[0];
+		mesh_addr = tskq[tsk_idx]->attr.private_data[0];
 		mesh_addr = (mesh_addr != DEFAULT_MESH_PADDR) ? mesh_addr : 0;
-		in_frame = &tskq[tsk_idx]->attr.stImgIn.stVFrame;
-		out_frame = &tskq[tsk_idx]->attr.stImgOut.stVFrame;
-		enPixFormat = in_frame->enPixelFormat;
-		enRotation = tskq[tsk_idx]->enRotation;
+		in_frame = &tskq[tsk_idx]->attr.img_in.video_frame;
+		out_frame = &tskq[tsk_idx]->attr.img_out.video_frame;
+		pix_format = in_frame->pixel_format;
+		rotation = tskq[tsk_idx]->rotation;
 
-		switch (out_frame->enPixelFormat) {
+		switch (out_frame->pixel_format) {
 		case PIXEL_FORMAT_YUV_400:
 			cfg_q[tsk_idx]->pix_fmt = YUV400;
 			num_of_plane = 1;
@@ -645,7 +645,7 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 			break;
 		};
 
-		switch (enRotation) {
+		switch (rotation) {
 		case ROTATION_90:
 			cfg_q[tsk_idx]->dst_mode = LDC_DST_ROT_270;
 			break;
@@ -662,8 +662,8 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 
 		cfg_q[tsk_idx]->map_base = mesh_addr;
 		cfg_q[tsk_idx]->bgcolor = (u16)LDC_YUV_BLACK /*ctx->bgcolor*/;
-		cfg_q[tsk_idx]->src_width = ALIGN(in_frame->u32Width, LDC_SIZE_ALIGN);
-		cfg_q[tsk_idx]->src_height = ALIGN(in_frame->u32Height, LDC_SIZE_ALIGN);
+		cfg_q[tsk_idx]->src_width = ALIGN(in_frame->width, LDC_SIZE_ALIGN);
+		cfg_q[tsk_idx]->src_height = ALIGN(in_frame->height, LDC_SIZE_ALIGN);
 		cfg_q[tsk_idx]->ras_width = cfg_q[tsk_idx]->src_width;
 		cfg_q[tsk_idx]->ras_height = cfg_q[tsk_idx]->src_height;
 
@@ -673,16 +673,16 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 			cfg_q[tsk_idx]->map_bypass = false;
 
 		cfg_q[tsk_idx]->src_xstart = 0;
-		cfg_q[tsk_idx]->src_xend = in_frame->u32Width - 1;
+		cfg_q[tsk_idx]->src_xend = in_frame->width - 1;
 
-		extend_haddr = in_frame->u64PhyAddr[0] >> 33;
+		extend_haddr = in_frame->phyaddr[0] >> 33;
 		cfg_q[tsk_idx]->extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
 
-		cfg_q[tsk_idx]->src_y_base = in_frame->u64PhyAddr[0];
-		cfg_q[tsk_idx]->dst_y_base = out_frame->u64PhyAddr[0];
+		cfg_q[tsk_idx]->src_y_base = in_frame->phyaddr[0];
+		cfg_q[tsk_idx]->dst_y_base = out_frame->phyaddr[0];
 		if (num_of_plane == 2) {
-			cfg_q[tsk_idx]->src_c_base = in_frame->u64PhyAddr[1];
-			cfg_q[tsk_idx]->dst_c_base = out_frame->u64PhyAddr[1];
+			cfg_q[tsk_idx]->src_c_base = in_frame->phyaddr[1];
+			cfg_q[tsk_idx]->dst_c_base = out_frame->phyaddr[1];
 		}
 
 		spin_lock_irqsave(&wdev->job_lock, flags);
@@ -708,11 +708,11 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 			cmdq_wq_ret = wait_event_interruptible_timeout(wdev->core[top_id].cmdq_wq
 				, wdev->core[top_id].cmdq_evt, LDC_EOF_WAIT_TIMEOUT_MS);
 			if (cmdq_wq_ret <= 0) {
-				CVI_TRACE_LDC(CVI_DBG_WARN, "ldc cdmq wait timeout, ret(%d)\n", cmdq_wq_ret);
+				TRACE_LDC(DBG_WARN, "ldc cdmq wait timeout, ret(%d)\n", cmdq_wq_ret);
 				tsk_idx++;
 				goto FREE_CMDQ_RES;
 			}
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "ldc cdmq wait done, ret(%d)\n", cmdq_wq_ret);
+			TRACE_LDC(DBG_DEBUG, "ldc cdmq wait done, ret(%d)\n", cmdq_wq_ret);
 		}
 #endif
 	}
@@ -729,16 +729,16 @@ static void ldc_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, int top_id
 FREE_CMDQ_RES:
 	//last_tsk->coreid = top_id;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "cmd_start(%px)\n",cmdq_addr);
+	TRACE_LDC(DBG_DEBUG, "cmd_start(%px)\n",cmdq_addr);
 	for (i = 0; i < tsk_idx; i++) {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "tsk_id[%d]-core_id[%d]\n", i,  top_id);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "update size src(%d %d)\n", cfg_q[i]->src_width, cfg_q[i]->src_height);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "update src-buf: %#llx-%#llx\n",
+		TRACE_LDC(DBG_DEBUG, "tsk_id[%d]-core_id[%d]\n", i,  top_id);
+		TRACE_LDC(DBG_DEBUG, "update size src(%d %d)\n", cfg_q[i]->src_width, cfg_q[i]->src_height);
+		TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx\n",
 			cfg_q[i]->src_y_base, cfg_q[i]->src_c_base);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "update dst-buf: %#llx-%#llx\n",
+		TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx\n",
 			cfg_q[i]->dst_y_base, cfg_q[i]->dst_c_base);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg_q[i]->map_base);
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n"
+		TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg_q[i]->map_base);
+		TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n"
 			, cfg_q[i]->bgcolor, cfg_q[i]->pix_fmt);
 
 		if (cfg_q[i])
@@ -754,8 +754,8 @@ if (cmdq_addr)
 #endif
 }
 
-static int ldc_try_submit_hw(struct cvi_ldc_vdev *wdev, struct ldc_job *job
-	, struct ldc_task *tsk, u8 use_cmdq, struct ldc_task **tskq)
+static int ldc_try_submit_hw(struct ldc_vdev *wdev, struct ldc_job *job
+	, struct ldc_task *tsk, unsigned char use_cmdq, struct ldc_task **tskq)
 {
 	int i, top_id, ret = -1;
 	enum ldc_core_state state;
@@ -765,7 +765,7 @@ static int ldc_try_submit_hw(struct cvi_ldc_vdev *wdev, struct ldc_job *job
 		finish = ldc_is_finish(i);
 		state = atomic_read(&wdev->core[i].state);
 
-		CVI_TRACE_LDC(CVI_DBG_INFO, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
+		TRACE_LDC(DBG_INFO, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
 
 		if ((state == LDC_CORE_STATE_IDLE) && finish) {
 			top_id = i;
@@ -780,39 +780,39 @@ static int ldc_try_submit_hw(struct cvi_ldc_vdev *wdev, struct ldc_job *job
 	}
 
 	if (ret)
-		CVI_TRACE_LDC(CVI_DBG_NOTICE, "ldc_submit_hw fail,hw busy\n");
+		TRACE_LDC(DBG_NOTICE, "ldc_submit_hw fail,hw busy\n");
 
 	return ret;
 }
 
-static int ldc_try_submit_hw_cmdq(struct cvi_ldc_vdev *wdev, struct ldc_job *job
+static int ldc_try_submit_hw_cmdq(struct ldc_vdev *wdev, struct ldc_job *job
 	, struct ldc_task **tskq, struct ldc_task *last_tsk)
 {
 	return ldc_try_submit_hw(wdev, job, last_tsk, true, tskq);
 }
 
-static u8 ldc_is_tsk_ready(struct ldc_task *tsk)
+static unsigned char ldc_is_tsk_ready(struct ldc_task *tsk)
 {
 	if (unlikely(!tsk)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "cur tsk is null\n");
-		return CVI_FALSE;
+		TRACE_LDC(DBG_ERR, "cur tsk is null\n");
+		return false;
 	}
 
 	if (unlikely(tsk->tsk_id < 0 || tsk->tsk_id >= LDC_JOB_MAX_TSK_NUM)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "cur tsk id(%d) invalid\n", tsk->tsk_id);
-		return CVI_FALSE;
+		TRACE_LDC(DBG_ERR, "cur tsk id(%d) invalid\n", tsk->tsk_id);
+		return false;
 	}
 
 	if (unlikely(down_trylock(&tsk->sem))) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "cur tsk(%px) get sem fail\n", tsk);
-		return CVI_FALSE;
+		TRACE_LDC(DBG_ERR, "cur tsk(%px) get sem fail\n", tsk);
+		return false;
 	}
-	return CVI_TRUE;
+	return true;
 }
 
-static u8 ldc_get_idle_coreid(struct cvi_ldc_vdev *wdev)
+static unsigned char ldc_get_idle_coreid(struct ldc_vdev *wdev)
 {
-	u8 coreid;
+	unsigned char coreid;
 	enum ldc_core_state state;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
@@ -823,9 +823,9 @@ static u8 ldc_get_idle_coreid(struct cvi_ldc_vdev *wdev)
 	return coreid;
 }
 
-static bool ldc_have_idle_core(struct cvi_ldc_vdev *wdev)
+static bool ldc_have_idle_core(struct ldc_vdev *wdev)
 {
-	u8 coreid;
+	unsigned char coreid;
 	enum ldc_core_state state;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
@@ -836,17 +836,17 @@ static bool ldc_have_idle_core(struct cvi_ldc_vdev *wdev)
 	return false;
 }
 
-static void ldc_try_commit_job(struct cvi_ldc_vdev *wdev, struct ldc_job *job)
+static void ldc_try_commit_job(struct ldc_vdev *wdev, struct ldc_job *job)
 {
 	unsigned long flags;
-	u8 use_cmdq = false, is_ready = CVI_TRUE;
-	u8 i = 0, tsk_num;
+	unsigned char use_cmdq = false, is_ready = true;
+	unsigned char i = 0, tsk_num;
 	struct ldc_task *tsk = NULL, *tmp_tsk = NULL, *tskq[LDC_JOB_MAX_TSK_NUM], *last_tsk = NULL;
 
 	if (!wdev || !job)
 		return;
 
-	if (atomic_read(&job->enJobState) != LDC_JOB_WORKING)
+	if (atomic_read(&job->job_state) != LDC_JOB_WORKING)
 		return;
 
 	if (!ldc_have_idle_core(wdev))
@@ -854,7 +854,7 @@ static void ldc_try_commit_job(struct cvi_ldc_vdev *wdev, struct ldc_job *job)
 
 	tsk_num = atomic_read(&job->task_num);
 	if (unlikely(tsk_num <= 0)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "cur job(%px) tsk_num(%d) invalid\n"
+		TRACE_LDC(DBG_ERR, "cur job(%px) tsk_num(%d) invalid\n"
 			, job, tsk_num);
 		return;
 	}
@@ -878,47 +878,47 @@ static void ldc_try_commit_job(struct cvi_ldc_vdev *wdev, struct ldc_job *job)
 	}
 
 	if (!is_ready) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "cur job(%px) cur tsk(%px) is not ready\n", job, tsk);
+		TRACE_LDC(DBG_ERR, "cur job(%px) cur tsk(%px) is not ready\n", job, tsk);
 		return;
 	}
 
 	job->use_cmdq = use_cmdq;
 	if (use_cmdq) {
 		if (unlikely(!last_tsk)) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "invalid last_tsk,is null\n");
+			TRACE_LDC(DBG_ERR, "invalid last_tsk,is null\n");
 			return;
 		}
 		if (unlikely(!list_is_last(&last_tsk->node, &job->task_list))) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "invalid last_tsk,is not last node\n");
+			TRACE_LDC(DBG_ERR, "invalid last_tsk,is not last node\n");
 			return;
 		}
 #if USE_REAL_CMDQ
-		last_tsk->pfnTskCB = ldc_wkup_frm_done_work;
+		last_tsk->fn_tsk_cb = ldc_wkup_frm_done_work;
 #else
 		for (i = 0; i < atomic_read(&job->task_num); i++)
-			tskq[i]->pfnTskCB = ldc_wkup_frm_done_work;
+			tskq[i]->fn_tsk_cb = ldc_wkup_frm_done_work;
 #endif
 		ldc_try_submit_hw_cmdq(wdev, job, tskq, last_tsk);
 	} else {
-		tsk->pfnTskCB = ldc_wkup_frm_done_work;
+		tsk->fn_tsk_cb = ldc_wkup_frm_done_work;
 		ldc_try_submit_hw(wdev, job, tsk, false, NULL);
 	}
 }
 
 static int ldc_event_handler_th(void *data)
 {
-	struct cvi_ldc_vdev *wdev = (struct cvi_ldc_vdev *)data;
+	struct ldc_vdev *wdev = (struct ldc_vdev *)data;
 	unsigned long flags;
 	struct ldc_job *job, *job_tmp;
 	int ret;
 	unsigned long idle_timeout = msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(LDC_EOF_WAIT_TIMEOUT_MS);
 	unsigned long timeout = idle_timeout;
-	u8 idle_coreid;
+	unsigned char idle_coreid;
 	bool have_idle_job;
 
 	if (!wdev) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
 		return -1;
 	}
 
@@ -956,12 +956,12 @@ static int ldc_event_handler_th(void *data)
 
 		idle_coreid = ldc_get_idle_coreid(wdev);
 		if (idle_coreid >= wdev->core_num) {
-			CVI_TRACE_LDC(CVI_DBG_INFO, "ldc vdev hw busy, no idle core\n");
+			TRACE_LDC(DBG_INFO, "ldc vdev hw busy, no idle core\n");
 			goto continue_th;
 		}
 
 		if (list_empty(&wdev->job_list)) {
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "job list empty\n");
+			TRACE_LDC(DBG_DEBUG, "job list empty\n");
 			atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
 			up(&wdev->sem);
 			goto continue_th;
@@ -971,20 +971,20 @@ static int ldc_event_handler_th(void *data)
 		spin_lock_irqsave(&wdev->job_lock, flags);
 		list_for_each_entry_safe(job, job_tmp, &wdev->job_list, node) {
 			if (job->coreid == LDC_INVALID_CORE_ID) {
-				CVI_TRACE_LDC(CVI_DBG_DEBUG, "got idle job[%px]\n", job);
+				TRACE_LDC(DBG_DEBUG, "got idle job[%px]\n", job);
 				have_idle_job = true;
 				break;
 			}
 		}
 
 		if (!have_idle_job) { //have idle core but cur job is doing
-			CVI_TRACE_LDC(CVI_DBG_INFO, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
+			TRACE_LDC(DBG_INFO, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
 				, job, job_tmp, job_tmp->coreid);
 			spin_unlock_irqrestore(&wdev->job_lock, flags);
 			goto continue_th;
 		}
 
-		atomic_set(&job->enJobState, LDC_JOB_WORKING);
+		atomic_set(&job->job_state, LDC_JOB_WORKING);
 		list_del(&job->node);
 		spin_unlock_irqrestore(&wdev->job_lock, flags);
 
@@ -1005,19 +1005,19 @@ continue_th:
 static void ldc_cancel_cur_tsk(struct ldc_job *job)
 {
 	struct ldc_task *tsk = NULL;
-	u8 i;
+	unsigned char i;
 
 	if (unlikely(!job))
 		return;
 	if (unlikely(list_empty(&job->task_list))) {
-		CVI_TRACE_LDC(CVI_DBG_NOTICE, "null tsk list\n");
+		TRACE_LDC(DBG_NOTICE, "null tsk list\n");
 		return;
 	}
 
 	for (i = 0; i < atomic_read(&job->task_num); i++) {
 		tsk = list_first_entry_or_null(&job->task_list, struct ldc_task, node);
 		if (tsk) {
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "free tsk[%px]\n", tsk);
+			TRACE_LDC(DBG_DEBUG, "free tsk[%px]\n", tsk);
 			list_del(&tsk->node);
 			kfree(tsk);
 			tsk = NULL;
@@ -1028,64 +1028,64 @@ static void ldc_cancel_cur_tsk(struct ldc_job *job)
 /**************************************************************************
  *   Public APIs.
  **************************************************************************/
-s32 ldc_begin_job(struct cvi_ldc_vdev *wdev, struct gdc_handle_data *data)
+int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 {
 	struct ldc_job *job;
 	unsigned long flags;
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	ret = LDC_CHECK_NULL_PTR(wdev) ||
-		LDC_CHECK_NULL_PTR(data);
+	ret = ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(data);
 	if (ret)
 		return ret;
 
 	if (is_ldc_suspended()) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc dev suspend\n");
-		return CVI_ERR_GDC_NOT_PERMITTED;
+		TRACE_LDC(DBG_ERR, "ldc dev suspend\n");
+		return ERR_GDC_NOT_PERMITTED;
 	}
 
 	job = kzalloc(sizeof(struct ldc_job), GFP_ATOMIC);
 	if (job == NULL) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "malloc failed.\n");
-		return CVI_ERR_GDC_NOBUF;
+		TRACE_LDC(DBG_ERR, "malloc failed.\n");
+		return ERR_GDC_NOBUF;
 	}
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
 	INIT_LIST_HEAD(&job->task_list);
-	atomic_set(&job->enJobState, LDC_JOB_CREAT);
+	atomic_set(&job->job_state, LDC_JOB_CREAT);
 	atomic_set(&job->task_num, 0);
-	job->identity.syncIo = true;
+	job->identity.sync_io = true;
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	data->handle = (u64)(uintptr_t)job;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job[%px]++\n", job);
+	TRACE_LDC(DBG_DEBUG, "job[%px]++\n", job);
 
 	return ret;
 }
 
-s32 ldc_end_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
+int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 {
-	s32 ret = CVI_SUCCESS, sync_io_ret = 1;
-	struct ldc_job *job = (struct ldc_job *)(uintptr_t)hHandle;
+	int ret = 0, sync_io_ret = 1;
+	struct ldc_job *job = (struct ldc_job *)(uintptr_t)handle;
 	unsigned long flags;
 	int tsk_num = 0;
 	unsigned long timeout = msecs_to_jiffies(LDC_SYNC_IO_WAIT_TIMEOUT_MS);
 	struct ldc_task *tsk, *tmp_tsk;
 
-	ret = LDC_CHECK_NULL_PTR(wdev) ||
-		LDC_CHECK_NULL_PTR(job);
+	ret = ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(job);
 	if (ret)
 		return ret;
 
 	if (list_empty(&job->task_list)) {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "no task in job.\n");
-		return CVI_ERR_GDC_NOT_PERMITTED;
+		TRACE_LDC(DBG_DEBUG, "no task in job.\n");
+		return ERR_GDC_NOT_PERMITTED;
 	}
-	CVI_TRACE_LDC(CVI_DBG_INFO, "job[%px]\n", job);
+	TRACE_LDC(DBG_INFO, "job[%px]\n", job);
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
-	atomic_set(&job->enJobState, LDC_JOB_WAIT);
+	atomic_set(&job->job_state, LDC_JOB_WAIT);
 	list_add_tail(&job->node, &wdev->job_list);
 	wdev->job_cnt++;
 
@@ -1102,20 +1102,23 @@ s32 ldc_end_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 
 	ldc_notify_wkup_evt_kth(wdev, LDC_EVENT_WKUP);
 
-	if (job->identity.syncIo) {
+	if (job->identity.sync_io) {
 		init_waitqueue_head(&job->job_done_wq);
 		job->job_done_evt = false;
-		sync_io_ret = wait_event_interruptible_timeout(job->job_done_wq, job->job_done_evt, timeout);
+		sync_io_ret = wait_event_timeout(job->job_done_wq, job->job_done_evt, timeout);
 		if (sync_io_ret <= 0) {
-			CVI_TRACE_LDC(CVI_DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
+			TRACE_LDC(DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
 			ret = -1;
+			spin_lock_irqsave(&wdev->job_lock, flags);
+			wdev->job_cnt--;
+			spin_unlock_irqrestore(&wdev->job_lock, flags);
 		} else
 			ret = 0;
 	}
 
-	CVI_TRACE_LDC(CVI_DBG_INFO, "jobname[%s] sync_io=%d, ret=%d\n", job->identity.Name, job->identity.syncIo, ret);
+	TRACE_LDC(DBG_INFO, "jobname[%s] sync_io=%d, ret=%d\n", job->identity.name, job->identity.sync_io, ret);
 
-	if (job->identity.syncIo) {
+	if (job->identity.sync_io) {
 		kfree(job);
 		job = NULL;
 	}
@@ -1123,29 +1126,29 @@ s32 ldc_end_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 	return ret;
 }
 
-s32 ldc_cancel_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
+int ldc_cancel_job(struct ldc_vdev *wdev, unsigned long long handle)
 {
-	s32 ret = CVI_SUCCESS;
-	struct ldc_job *job = (struct ldc_job *)(uintptr_t)hHandle;
+	int ret = 0;
+	struct ldc_job *job = (struct ldc_job *)(uintptr_t)handle;
 	struct ldc_job *job_tmp, *work_job, *wait_job;
 	unsigned long flags;
-	u8 coreid;
+	unsigned char coreid;
 	bool needfreeJob = false;
 
-	ret = LDC_CHECK_NULL_PTR(wdev) ||
-		LDC_CHECK_NULL_PTR(job);
+	ret = ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(job);
 	if (ret)
 		return ret;
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
-	if (atomic_read(&job->enJobState) == LDC_JOB_CREAT) {
+	if (atomic_read(&job->job_state) == LDC_JOB_CREAT) {
 		needfreeJob = true;
 		goto FREE_JOB;
 	}
 
 	list_for_each_entry_safe(wait_job, job_tmp, &wdev->job_list, node) {
 		if (job == wait_job) {
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "cancel wait job(%px)\n", wait_job);
+			TRACE_LDC(DBG_DEBUG, "cancel wait job(%px)\n", wait_job);
 			atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
 			needfreeJob = true;
 			ldc_cancel_cur_tsk(job);
@@ -1157,7 +1160,7 @@ s32 ldc_cancel_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 	for (coreid = 0; coreid < LDC_DEV_MAX_CNT; coreid++) {
 		list_for_each_entry_safe(work_job, job_tmp, &wdev->list.work_list[coreid], node) {
 			if (job == work_job) {
-				CVI_TRACE_LDC(CVI_DBG_DEBUG, "cancel work job(%px)\n", wait_job);
+				TRACE_LDC(DBG_DEBUG, "cancel work job(%px)\n", wait_job);
 				atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
 				atomic_set(&wdev->core[coreid].state, LDC_CORE_STATE_IDLE);
 				ldc_core_deinit(coreid);
@@ -1171,24 +1174,24 @@ s32 ldc_cancel_job(struct cvi_ldc_vdev *wdev, u64 hHandle)
 
 FREE_JOB:
 	if (needfreeJob) {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "free job[%px]\n", job);
+		TRACE_LDC(DBG_DEBUG, "free job[%px]\n", job);
 		// kfree(job);
 	}
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "++\n");
+	TRACE_LDC(DBG_DEBUG, "++\n");
 
 	return ret;
 }
 
-s32 ldc_get_work_job(struct cvi_ldc_vdev *wdev, struct gdc_handle_data *data)
+int ldc_get_work_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 {
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 	struct ldc_job *job = NULL;
 	unsigned long flags;
-	u8 coreid;
+	unsigned char coreid;
 
-	ret = LDC_CHECK_NULL_PTR(wdev) ||
-		LDC_CHECK_NULL_PTR(data);
+	ret = ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(data);
 	if (ret)
 		return ret;
 
@@ -1203,54 +1206,54 @@ s32 ldc_get_work_job(struct cvi_ldc_vdev *wdev, struct gdc_handle_data *data)
 
 	data->handle = (u64)(uintptr_t)job;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job[%px]\n", job);
+	TRACE_LDC(DBG_DEBUG, "job[%px]\n", job);
 
 	return ret;
 }
 
-s32 ldc_set_identity(struct cvi_ldc_vdev *wdev,
+int ldc_set_identity(struct ldc_vdev *wdev,
 			  struct gdc_identity_attr *identity)
 {
 	struct ldc_job *job;
 	unsigned long flags;
-	u64 handle;
+	unsigned long long handle;
 
-	if( LDC_CHECK_NULL_PTR(wdev) ||
-		LDC_CHECK_NULL_PTR(identity)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "null dev or identity_attr\n");
-		return CVI_FAILURE;
+	if( ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(identity)) {
+		TRACE_LDC(DBG_ERR, "null dev or identity_attr\n");
+		return -1;
 	}
 	handle = identity->handle;
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct ldc_job *)(uintptr_t)handle;
 	if (!job) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "null job handle\n");
-		return CVI_FAILURE;
+		TRACE_LDC(DBG_ERR, "null job handle\n");
+		return -1;
 	}
 
 	memcpy(&job->identity, &identity->attr, sizeof(identity->attr));
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "syncIo:%d, name:%s, u32ID:%d\n"
-		, job->identity.syncIo, job->identity.Name, job->identity.u32ID);
-	return CVI_SUCCESS;
+	TRACE_LDC(DBG_DEBUG, "sync_io:%d, name:%s, id:%d\n"
+		, job->identity.sync_io, job->identity.name, job->identity.id);
+	return 0;
 }
 
-s32 ldc_add_rotation_task(struct cvi_ldc_vdev *wdev,
+int ldc_add_rotation_task(struct ldc_vdev *wdev,
 			  struct gdc_task_attr *attr)
 {
 	struct ldc_job *job;
 	struct ldc_task *tsk;
-	u64 handle;
+	unsigned long long handle;
 	unsigned long flags;
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	if (!LDC_CHECK_PARAM_IS_VALID(wdev, attr))
-		return CVI_FAILURE;
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
 	handle = attr->handle;
 
-	ret = LDC_ROT_CHECK_SIZE(attr->enRotation, attr);
+	ret = ldc_rot_check_size(attr->rotation, attr);
 	if (ret)
 		return ret;
 
@@ -1261,31 +1264,31 @@ s32 ldc_add_rotation_task(struct cvi_ldc_vdev *wdev,
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = LDC_TASK_TYPE_ROT;
-	tsk->enRotation = attr->enRotation;
+	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
 	list_add_tail(&tsk->node, &job->task_list);
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
 	return ret;
 }
 
-s32 ldc_add_ldc_task(struct cvi_ldc_vdev *wdev, struct gdc_task_attr *attr)
+int ldc_add_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
 {
 	struct ldc_job *job;
 	struct ldc_task *tsk;
-	u64 handle;
+	unsigned long long handle;
 	unsigned long flags;
-	s32 ret = CVI_SUCCESS;
+	int ret = 0;
 
-	if (!LDC_CHECK_PARAM_IS_VALID(wdev, attr))
-		return CVI_FAILURE;
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
 	handle = attr->handle;
 
 #if 0
-	ret = LDC_ROT_CHECK_SIZE(attr->enRotation, attr);
+	ret = ldc_rot_check_size(attr->rotation, attr);
 	if (ret)
 		return ret;
 #endif
@@ -1297,139 +1300,139 @@ s32 ldc_add_ldc_task(struct cvi_ldc_vdev *wdev, struct gdc_task_attr *attr)
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = LDC_TASK_TYPE_LDC;
-	tsk->enRotation = attr->enRotation;
+	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
 	list_add_tail(&tsk->node, &job->task_list);
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
 	return ret;
 }
 
-s32 ldc_get_chn_frame(struct cvi_ldc_vdev *wdev, struct gdc_identity_attr *identity
-	, VIDEO_FRAME_INFO_S *pstVideoFrame, s32 s32MilliSec)
+int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
+	, video_frame_info_s *pstvideo_frame, int s32milli_sec)
 {
-	s32 ret;
+	int ret;
 	unsigned long flags;
 	struct ldc_vb_done *vb_done = NULL, *vb_done_tmp = NULL;
 	bool ismatch = false;
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "++\n");
-	ret = LDC_CHECK_NULL_PTR(pstVideoFrame)
-		|| LDC_CHECK_NULL_PTR(wdev)
-		|| LDC_CHECK_NULL_PTR(identity);
-	if (ret != CVI_SUCCESS)
+	TRACE_LDC(DBG_DEBUG, "++\n");
+	ret = ldc_check_null_ptr(pstvideo_frame)
+		|| ldc_check_null_ptr(wdev)
+		|| ldc_check_null_ptr(identity);
+	if (ret != 0)
 		return ret;
 
-	memset(pstVideoFrame, 0, sizeof(*pstVideoFrame));
-	if (s32MilliSec <= 0) {
+	memset(pstvideo_frame, 0, sizeof(*pstvideo_frame));
+	if (s32milli_sec <= 0) {
 		if (down_trylock(&wdev->vb_doneq.sem)) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "cannot get sem, doneq not ready\n");
-			return CVI_ERR_GDC_SYS_NOTREADY;
+			TRACE_LDC(DBG_ERR, "cannot get sem, doneq not ready\n");
+			return ERR_GDC_SYS_NOTREADY;
 		}
 	} else {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
-		ret = down_timeout(&wdev->vb_doneq.sem, msecs_to_jiffies(s32MilliSec));
+		TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
+		ret = down_timeout(&wdev->vb_doneq.sem, msecs_to_jiffies(s32milli_sec));
 		if (ret == -ETIME) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "get sem timeout, doneq not ready\n");
+			TRACE_LDC(DBG_ERR, "get sem timeout, doneq not ready\n");
 			return ret;
 		}
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
+		TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 	}
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
 	if (list_empty(&wdev->vb_doneq.doneq)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "vb_doneq is empty\n");
+		TRACE_LDC(DBG_ERR, "vb_doneq is empty\n");
 		spin_unlock_irqrestore(&wdev->job_lock, flags);
-		return CVI_ERR_GDC_NOBUF;
+		return ERR_GDC_NOBUF;
 	}
 
 	list_for_each_entry_safe(vb_done, vb_done_tmp, &wdev->vb_doneq.doneq, node) {
 		if (!vb_done) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "vb_done is null\n");
+			TRACE_LDC(DBG_ERR, "vb_done is null\n");
 			spin_unlock_irqrestore(&wdev->job_lock, flags);
-			return CVI_ERR_GDC_NOBUF;
+			return ERR_GDC_NOBUF;
 		}
 
-		if (LDC_IDENTITY_IS_MATCH(&vb_done->job.identity, &identity->attr)) {
-			CVI_TRACE_LDC(CVI_DBG_DEBUG, "vb_doneq identity[%d-%d-%s] is match [%d-%d-%s]\n"
-				, vb_done->job.identity.enModId, vb_done->job.identity.u32ID, vb_done->job.identity.Name
-				, identity->attr.enModId, identity->attr.u32ID, identity->attr.Name);
+		if (ldc_identity_is_match(&vb_done->job.identity, &identity->attr)) {
+			TRACE_LDC(DBG_DEBUG, "vb_doneq identity[%d-%d-%s] is match [%d-%d-%s]\n"
+				, vb_done->job.identity.mod_id, vb_done->job.identity.id, vb_done->job.identity.name
+				, identity->attr.mod_id, identity->attr.id, identity->attr.name);
 			ismatch = true;
 			break;
 		}
 	}
 
 	if (!ismatch) {
-		CVI_TRACE_LDC(CVI_DBG_DEBUG, "vb_doneq[%px] identity[%d-%d-%s] not match [%d-%d-%s]\n"
-			, vb_done_tmp, vb_done_tmp->job.identity.enModId, vb_done_tmp->job.identity.u32ID, vb_done_tmp->job.identity.Name
-			, identity->attr.enModId, identity->attr.u32ID, identity->attr.Name);
+		TRACE_LDC(DBG_DEBUG, "vb_doneq[%px] identity[%d-%d-%s] not match [%d-%d-%s]\n"
+			, vb_done_tmp, vb_done_tmp->job.identity.mod_id, vb_done_tmp->job.identity.id, vb_done_tmp->job.identity.name
+			, identity->attr.mod_id, identity->attr.id, identity->attr.name);
 		up(&wdev->vb_doneq.sem);
 		spin_unlock_irqrestore(&wdev->job_lock, flags);
-		return CVI_ERR_GDC_NOBUF;
+		return ERR_GDC_NOBUF;
 	}
 
 	list_del(&vb_done->node);
 
-	memcpy(pstVideoFrame, &vb_done->stImgOut, sizeof(*pstVideoFrame));
+	memcpy(pstvideo_frame, &vb_done->img_out, sizeof(*pstvideo_frame));
 	kfree(vb_done);
 	vb_done = NULL;
 
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "end to get pstVideoFrame width:%d height:%d buf:0x%llx\n"
-		, pstVideoFrame->stVFrame.u32Width
-		, pstVideoFrame->stVFrame.u32Height
-		, pstVideoFrame->stVFrame.u64PhyAddr[0]);
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "--\n");
+	TRACE_LDC(DBG_DEBUG, "end to get pstvideo_frame width:%d height:%d buf:0x%llx\n"
+		, pstvideo_frame->video_frame.width
+		, pstvideo_frame->video_frame.height
+		, pstvideo_frame->video_frame.phyaddr[0]);
+	TRACE_LDC(DBG_DEBUG, "--\n");
 
 	return ret;
 }
 
-s32 ldc_attach_vb_pool(VB_POOL VbPool)
+int ldc_attach_vb_pool(vb_pool vb_pool)
 {
 	unsigned long flags;
-	struct cvi_ldc_vdev *wdev = ldc_get_dev();
+	struct ldc_vdev *wdev = ldc_get_dev();
 
 	if (!wdev)
-		return CVI_FAILURE;
+		return -1;
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
-	wdev->VbPool = VbPool;
+	wdev->vb_pool = vb_pool;
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "attach vb pool(%d)\n", VbPool);
-	return CVI_SUCCESS;
+	TRACE_LDC(DBG_DEBUG, "attach vb pool(%d)\n", vb_pool);
+	return 0;
 }
 
-s32 ldc_detach_vb_pool(void)
+int ldc_detach_vb_pool(void)
 {
 	unsigned long flags;
-	struct cvi_ldc_vdev *wdev = ldc_get_dev();
+	struct ldc_vdev *wdev = ldc_get_dev();
 
 	if (!wdev)
-		return CVI_FAILURE;
+		return -1;
 
 	spin_lock_irqsave(&wdev->job_lock, flags);
-	wdev->VbPool = VB_INVALID_POOLID;
+	wdev->vb_pool = VB_INVALID_POOLID;
 	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "dettach vb pool\n");
-	return CVI_SUCCESS;
+	TRACE_LDC(DBG_DEBUG, "dettach vb pool\n");
+	return 0;
 }
 
 /**************************************************************************
  *   internal APIs.
  **************************************************************************/
-int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
+int ldc_sw_init(struct ldc_vdev *wdev)
 {
 	struct sched_param tsk;
-	s32 ret = CVI_SUCCESS;
-	u8 coreid;
+	int ret = 0;
+	unsigned char coreid;
 
-	ret = LDC_CHECK_NULL_PTR(wdev);
+	ret = ldc_check_null_ptr(wdev);
 	if (ret)
 		return ret;
 
@@ -1442,7 +1445,7 @@ int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
 	spin_lock_init(&wdev->job_lock);
 	wdev->core_num = LDC_DEV_MAX_CNT;
 	wdev->evt = LDC_EVENT_BUSY_OR_NOT_STAT;
-	wdev->VbPool = VB_INVALID_POOLID;
+	wdev->vb_pool = VB_INVALID_POOLID;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 #if LDC_USE_WORKQUEUE
@@ -1460,7 +1463,7 @@ int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
 
 	wdev->thread = kthread_run(ldc_event_handler_th, (void *)wdev, "ldc_event_handler_th");
 	if (IS_ERR(wdev->thread)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "failed to create ldc kthread\n");
+		TRACE_LDC(DBG_ERR, "failed to create ldc kthread\n");
 		return -1;
 	}
 
@@ -1468,11 +1471,11 @@ int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
 	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
 	ret = sched_setscheduler(wdev->thread, SCHED_FIFO, &tsk);
 	if (ret)
-		CVI_TRACE_LDC(CVI_DBG_WARN, "ldc thread priority update failed: %d\n", ret);
+		TRACE_LDC(DBG_WARN, "ldc thread priority update failed: %d\n", ret);
 
 	/*wdev->workqueue = create_singlethread_workqueue("ldc_workqueue");
 	if (!wdev->workqueue) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc dev create_workqueue failed.\n");
+		TRACE_LDC(DBG_ERR, "ldc dev create_workqueue failed.\n");
 		return -2;
 	}
 
@@ -1481,10 +1484,10 @@ int cvi_ldc_sw_init(struct cvi_ldc_vdev *wdev)
 	return ret;
 }
 
-void cvi_ldc_sw_deinit(struct cvi_ldc_vdev *wdev)
+void ldc_sw_deinit(struct ldc_vdev *wdev)
 {
-	u8 coreid;
-	if (LDC_CHECK_NULL_PTR(wdev) != CVI_SUCCESS)
+	unsigned char coreid;
+	if (ldc_check_null_ptr(wdev) != 0)
 		return;
 
 	/*if (wdev->workqueue)
@@ -1503,59 +1506,67 @@ void cvi_ldc_sw_deinit(struct cvi_ldc_vdev *wdev)
 	(void)coreid;
 	if (!IS_ERR(wdev->thread)) {
 		if (kthread_stop(wdev->thread))
-			CVI_TRACE_LDC(CVI_DBG_ERR, "fail to stop ldc kthread\n");
+			TRACE_LDC(DBG_ERR, "fail to stop ldc kthread\n");
 	}
 
 	list_del_init(&wdev->job_list);
 	list_del_init(&wdev->vb_doneq.doneq);
 }
 
-s32 ldc_suspend_handler(void)
+int ldc_suspend_handler(void)
 {
 	int ret;
-	struct cvi_ldc_vdev * dev = ldc_get_dev();
+	struct ldc_vdev * dev = ldc_get_dev();
+	struct ldc_job *job;
 
 	if (unlikely(!dev)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
-		return CVI_ERR_GDC_NULL_PTR;
+		TRACE_LDC(DBG_ERR, "ldc_dev is null\n");
+		return ERR_GDC_NULL_PTR;
 	}
 
 	if (!dev->thread) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc thread not initialized yet\n");
-		return CVI_ERR_GDC_SYS_NOTREADY;
+		TRACE_LDC(DBG_ERR, "ldc thread not initialized yet\n");
+		return ERR_GDC_SYS_NOTREADY;
 	}
 
 	if (dev->job_cnt > 0 || !list_empty(&dev->job_list) || atomic_read(&dev->state) == LDC_DEV_STATE_RUNNING) {
 		sema_init(&dev->sem, 0);
 		ret = down_timeout(&dev->sem, msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS));
 		if (ret == -ETIME) {
-			CVI_TRACE_LDC(CVI_DBG_ERR, "get sem timeout, dev not idle yet\n");
+			TRACE_LDC(DBG_ERR, "get sem timeout, dev not idle yet\n");
 			return ret;
 		}
 	}
 	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
+	spin_lock(&dev->job_lock);
+	while(!list_empty(&dev->job_list)) {
+		job = list_first_entry_or_null(&dev->job_list, struct ldc_job, node);
+		list_del(&job->node);
+	}
+	dev->job_cnt = 0;
+	spin_unlock(&dev->job_lock);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "suspend handler+\n");
-	return CVI_SUCCESS;
+	TRACE_LDC(DBG_WARN, "suspend handler+\n");
+	return 0;
 }
 
-s32 ldc_resume_handler(void)
+int ldc_resume_handler(void)
 {
-	struct cvi_ldc_vdev * dev = ldc_get_dev();
+	struct ldc_vdev * dev = ldc_get_dev();
 
 	if (unlikely(!dev)) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc_dev is null\n");
-		return CVI_ERR_GDC_NULL_PTR;
+		TRACE_LDC(DBG_ERR, "ldc_dev is null\n");
+		return ERR_GDC_NULL_PTR;
 	}
 
 	if (!dev->thread) {
-		CVI_TRACE_LDC(CVI_DBG_ERR, "ldc thread not initialized yet\n");
-		return CVI_ERR_GDC_SYS_NOTREADY;
+		TRACE_LDC(DBG_ERR, "ldc thread not initialized yet\n");
+		return ERR_GDC_SYS_NOTREADY;
 	}
 
 	atomic_set(&dev->state, LDC_DEV_STATE_RUNNING);
 
-	CVI_TRACE_LDC(CVI_DBG_DEBUG, "resume handler+\n");
-	return CVI_SUCCESS;
+	TRACE_LDC(DBG_WARN, "resume handler+\n");
+	return 0;
 }
 

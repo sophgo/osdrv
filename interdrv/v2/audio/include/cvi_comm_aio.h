@@ -8,9 +8,9 @@
 #ifndef __CVI_COMM_AIO_H__
 #define __CVI_COMM_AIO_H__
 
-#include "cvi_common.h"
+#include "common.h"
 #ifndef AUDIO_DRV
-#include "cvi_errno.h"
+#include "comm_errno.h"
 #endif
 
 #ifdef __cplusplus

@@ -5,18 +5,19 @@
 #include "util/util.h"
 #include "core/video.h"
 
-#define BSTATUS_HDMI_MODE_MASK 			0x1000
-#define BSTATUS_MAX_CASCADE_EXCEEDED_MASK 	0x0800
-#define BSTATUS_DEPTH_MASK 			0x0700
-#define BSTATUS_MAX_DEVS_EXCEEDED_MASK 		0x0080
-#define BSTATUS_DEVICE_COUNT_MASK 		0x007F
-#define KSV_MSK 	0x7F
-#define VRL_LENGTH 	0x05
-#define VRL_HEADER 	5
-#define VRL_NUMBER 	3
-#define HEADER 		10
-#define SHAMAX 		20
-#define DSAMAX 		20
+#define BSTATUS_HDMI_MODE_MASK              0x1000
+#define BSTATUS_MAX_CASCADE_EXCEEDED_MASK   0x0800
+#define BSTATUS_DEPTH_MASK                  0x0700
+#define BSTATUS_MAX_DEVS_EXCEEDED_MASK      0x0080
+#define BSTATUS_DEVICE_COUNT_MASK           0x007F
+
+#define KSV_MSK     0x7F
+#define VRL_LENGTH  0x05
+#define VRL_HEADER  5
+#define VRL_NUMBER  3
+#define HEADER      10
+#define SHAMAX      20
+#define DSAMAX      20
 
 typedef enum {
 	HDCP_IDLE = 0,
@@ -29,17 +30,17 @@ typedef enum {
 } hdcp_status_t;
 
 typedef struct {
-	u8 mLength[8];
-	u8 mBlock[64];
-	int mIndex;
-	int mComputed;
-	int mCorrupted;
-	unsigned mDigest[5];
+	u8 mlength[8];
+	u8 mblock[64];
+	int mindex;
+	int mcomputed;
+	int mcorrupted;
+	unsigned mdigest[5];
 } sha_t;
 
 /**
  * @param dev Device structure
- * @param dataEnablePolarity
+ * @param data_enable_polarity
  * @return TRUE if successful
  */
 int hdcp_initialize(hdmi_tx_dev_t *dev);
@@ -53,7 +54,7 @@ int hdcp_initialize(hdmi_tx_dev_t *dev);
  * @param vsPol VSYNC polarity
  * @return TRUE if successful
  */
-int hdcp_configure(hdmi_tx_dev_t *dev, hdcpParams_t * hdcp, videoParams_t *video);
+int hdcp_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp, video_params_t *video);
 
 /**
  * The method handles DONE and ERROR events.
@@ -125,7 +126,7 @@ void sha_process_block(hdmi_tx_dev_t *dev, sha_t * sha);
 
 void sha_pad_message(hdmi_tx_dev_t *dev, sha_t * sha);
 
-int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * M, size_t n, const u8 * r, const u8 * s);
+int hdcp_verify_dsa(hdmi_tx_dev_t *dev, const u8 * m, size_t n, const u8 * r, const u8 * s);
 
 int hdcp_array_add(hdmi_tx_dev_t *dev, u8 * r, const u8 * a, const u8 * b, size_t n);
 
@@ -133,11 +134,11 @@ int hdcp_array_cmp(hdmi_tx_dev_t *dev, const u8 * a, const u8 * b, size_t n);
 
 void hdcp_array_cpy(hdmi_tx_dev_t *dev, u8 * dst, const u8 * src, size_t n);
 
-int hdcp_array_div(hdmi_tx_dev_t *dev, u8 * r, const u8 * D, const u8 * d, size_t n);
+int hdcp_array_div(hdmi_tx_dev_t *dev, u8 * r, const u8 * dd, const u8 * d, size_t n);
 
-int hdcp_array_mac(hdmi_tx_dev_t *dev, u8 * r, const u8 * M, const u8 m, size_t n);
+int hdcp_array_mac(hdmi_tx_dev_t *dev, u8 * r, const u8 * mm, const u8 m, size_t n);
 
-int hdcp_array_mul(hdmi_tx_dev_t *dev, u8 * r, const u8 * M, const u8 * m, size_t n);
+int hdcp_array_mul(hdmi_tx_dev_t *dev, u8 * r, const u8 * mm, const u8 * m, size_t n);
 
 void hdcp_array_set(hdmi_tx_dev_t *dev, u8 * dst, const u8 src, size_t n);
 
@@ -147,7 +148,7 @@ void hdcp_array_swp(hdmi_tx_dev_t *dev, u8 * r, size_t n);
 
 int hdcp_array_tst(hdmi_tx_dev_t *dev, const u8 * a, const u8 b, size_t n);
 
-int hdcp_compute_exp(hdmi_tx_dev_t *dev, u8 * c, const u8 * M, const u8 * e, const u8 * p, size_t n, size_t nE);
+int hdcp_compute_exp(hdmi_tx_dev_t *dev, u8 * c, const u8 * m, const u8 * e, const u8 * p, size_t n, size_t ne);
 
 int hdcp_compute_inv(hdmi_tx_dev_t *dev, u8 * out, const u8 * z, const u8 * a, size_t n);
 
@@ -159,5 +160,5 @@ int hdcp_verify_ksv(hdmi_tx_dev_t *dev, const u8 * data, size_t size);
 
 int hdcp_verify_srm(hdmi_tx_dev_t *dev, const u8 * data, size_t size);
 
-void hdcp_params_reset(hdmi_tx_dev_t *dev, hdcpParams_t * params);
+void hdcp_params_reset(hdmi_tx_dev_t *dev, hdcp_params_t * params);
 #endif	/* _HDCP_H_ */

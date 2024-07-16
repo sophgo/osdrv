@@ -8,17 +8,18 @@
 #include <linux/version.h>
 #include <linux/interrupt.h>
 #include <linux/irqreturn.h>
-#include <linux/cvi_comm_video.h>
+#include <linux/comm_video.h>
 #include <base_cb.h>
 #include <base_ctx.h>
 #include <linux/pm.h>
+#include <linux/compat.h>
 //#include <vi_sys.h>
 
 #include "../../common/dpu_debug.h"
 #include "dpu_core.h"
 #include "../../common/dpu_proc.h"
 #include "../../common/dpu_ioctl.h"
-
+#include <linux/delay.h>
 
 #define DPU_CLASS_NAME "soph-dpu"
 #define DPU_DEV_NAME "soph-dpu"
@@ -27,9 +28,9 @@
 
 #define DPU_OSDRV_TEST 1
 
-u32 dpu_log_lv = CVI_DBG_WARN/*CVI_DBG_INFO*/;
+unsigned int dpu_log_lv = DBG_WARN/*DBG_INFO*/;
 
-s32 hw_wait_time = 33;
+int hw_wait_time = 33;
 //static atomic_t open_count = ATOMIC_INIT(0);
 
 static const char *const CLK_DPU_NAME = "clk_dpu";
@@ -37,7 +38,7 @@ static const char *const CLK_DPU_NAME = "clk_dpu";
 module_param(dpu_log_lv, int, 0644);
 module_param(hw_wait_time, int, 0644);
 
-int dpu_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int dpu_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	return 0;
 }
@@ -47,7 +48,7 @@ static int dpu_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_DPU);
 }
 
-static int dpu_register_cb(struct cvi_dpu_dev *dev)
+static int dpu_register_cb(struct dpu_dev_s *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -60,17 +61,17 @@ static int dpu_register_cb(struct cvi_dpu_dev *dev)
 //done
 static int dpu_open(struct inode *inode, struct file *filp)
 {
-	u32 i;
-	struct cvi_dpu_handle_info *h_info;
-	struct cvi_dpu_dev *wdev =
-		container_of(filp->private_data, struct cvi_dpu_dev, miscdev);
+	unsigned int i;
+	struct dpu_handle_info_s *h_info;
+	struct dpu_dev_s *wdev =
+		container_of(filp->private_data, struct dpu_dev_s, miscdev);
 
 	if (!wdev) {
 		pr_err("cannot find dpu private data\n");
 		return -ENODEV;
 	}
 
-	h_info = kmalloc(sizeof(struct cvi_dpu_handle_info), GFP_KERNEL);
+	h_info = kmalloc(sizeof(struct dpu_handle_info_s), GFP_KERNEL);
 	if(!h_info){
 		return -ENODEV;
 	}
@@ -79,11 +80,11 @@ static int dpu_open(struct inode *inode, struct file *filp)
 	h_info->open_pid = current->pid;
 
 	for(i = 0; i < DPU_MAX_GRP_NUM; i++)
-		h_info->useGrp[i] = CVI_FALSE;
+		h_info->use_grp[i] = FALSE;
 
-	mutex_lock(&wdev->dpuLock);
+	mutex_lock(&wdev->dpu_lock);
 	list_add(&h_info->list, &wdev->handle_list);
-	mutex_unlock(&wdev->dpuLock);
+	mutex_unlock(&wdev->dpu_lock);
 
 	return 0;
 }
@@ -91,23 +92,23 @@ static int dpu_open(struct inode *inode, struct file *filp)
 //done
 static int dpu_release(struct inode *inode, struct file *filp)
 {
-	u32 i;
-	struct cvi_dpu_dev *wdev = (struct cvi_dpu_dev*) filp->private_data;
-	struct cvi_dpu_handle_info *h_info, *h_node;
+	unsigned int i;
+	struct dpu_dev_s *wdev = (struct dpu_dev_s*) filp->private_data;
+	struct dpu_handle_info_s *h_info, *h_node;
 
 	if (dpu_get_handle_info(wdev, filp, &h_info)) {
 		pr_err("dpudrv: file list is not found!\n");
 		return -EINVAL;
 	}
 
-	mutex_lock(&wdev->dpuLock);
+	mutex_lock(&wdev->dpu_lock);
 
 	list_for_each_entry(h_node, &wdev->handle_list, list) {
 		if(h_node->open_pid == h_info->open_pid){
 			for(i = 0; i < DPU_MAX_GRP_NUM; i++){
-				if(h_info->useGrp[i]){
+				if(h_info->use_grp[i]){
 					dpu_mode_deinit(i);
-					h_info->useGrp[i] = CVI_FALSE;
+					h_info->use_grp[i] = FALSE;
 				}
 			}
 		}
@@ -115,10 +116,20 @@ static int dpu_release(struct inode *inode, struct file *filp)
 
 	list_del(&h_info->list);
 	kfree(h_info);
-	mutex_unlock(&wdev->dpuLock);
+	mutex_unlock(&wdev->dpu_lock);
 
 	return 0;
 }
+
+#ifdef CONFIG_COMPAT
+static long dpu_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
 
 //done
 static const struct file_operations dpu_fops = {
@@ -126,11 +137,14 @@ static const struct file_operations dpu_fops = {
 	.open = dpu_open,
 	.release = dpu_release,
 	.unlocked_ioctl = dpu_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = dpu_compat_ptr_ioctl,
+#endif
 
 };
 
 //done
-static int _register_dev(struct cvi_dpu_dev *wdev)
+static int _register_dev(struct dpu_dev_s *wdev)
 {
 	int rc;
 
@@ -140,7 +154,7 @@ static int _register_dev(struct cvi_dpu_dev *wdev)
 
 	rc = misc_register(&wdev->miscdev);
 	if (rc) {
-		pr_err("cvi_dpu: failed to register misc device.\n");
+		pr_err("dpu: failed to register misc device.\n");
 		return rc;
 	}
 
@@ -154,7 +168,7 @@ static int _register_dev(struct cvi_dpu_dev *wdev)
 int dpu_create_instance(struct platform_device *pdev)
 {
 	int i, rc = 0;
-	struct cvi_dpu_dev *wdev;
+	struct dpu_dev_s *wdev;
 	static const char * const clk_sys_name[] = {"clk_sys_1","clk_dpu_enable"};
 
 	wdev = dev_get_drvdata(&pdev->dev);
@@ -163,7 +177,7 @@ int dpu_create_instance(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	mutex_init(&wdev->mutex);
-	mutex_init(&wdev->suspendLock);
+	mutex_init(&wdev->suspend_lock);
 	// spin_lock_init(&wdev->lock);
 
 	for (i = 0; i < ARRAY_SIZE(clk_sys_name); ++i) {
@@ -177,7 +191,7 @@ int dpu_create_instance(struct platform_device *pdev)
 	//wdev->align = DPU_ADDR_ALIGN;
 	rc =_register_dev(wdev);
 	if(rc){
-		CVI_TRACE_DPU(CVI_DBG_ERR, "Failed to register dev\n");
+		TRACE_DPU(DBG_ERR, "Failed to register dev\n");
 		goto err_dev;
 	}
 
@@ -204,14 +218,14 @@ err_proc:
 
 err_dev:
 	dev_set_drvdata(&pdev->dev, NULL);
-	CVI_TRACE_DPU(CVI_DBG_ERR, "failed with rc(%d).\n", rc);
+	TRACE_DPU(DBG_ERR, "failed with rc(%d).\n", rc);
 	return rc;
 }
 
 //done
 int dpu_destroy_instance(struct platform_device *pdev)
 {
-	struct cvi_dpu_dev *wdev;
+	struct dpu_dev_s *wdev;
 
 	wdev = dev_get_drvdata(&pdev->dev);
 	if (!wdev) {
@@ -234,7 +248,7 @@ int dpu_destroy_instance(struct platform_device *pdev)
 //Get Reg Base And Irq Num
 static int _init_resources(struct platform_device *pdev)
 {
-	uint64_t phyAddr;
+	unsigned long long phy_addr;
 	int rc = 0;
 	int irq_num;
 	static const char *const irq_name = "dpu";
@@ -248,7 +262,7 @@ static int _init_resources(struct platform_device *pdev)
 	void *reg_base_fgs_chfh_ld_dma;
 	void *reg_base_fgs_chfh_st_dma;
 	void *reg_base_fgs_ux_dma;
-	struct cvi_dpu_dev *wdev;
+	struct dpu_dev_s *wdev;
 
 	wdev = dev_get_drvdata(&pdev->dev);
 	if (!wdev) {
@@ -268,9 +282,9 @@ static int _init_resources(struct platform_device *pdev)
 	reg_base = devm_ioremap_nocache(&pdev->dev, res->start,
 					res->end - res->start);
 #endif
-	phyAddr=(uint64_t)reg_base;
-	CVI_TRACE_DPU(CVI_DBG_INFO, "  (%d) res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%llx).\n",
-	       1, res->start, res->end, phyAddr);
+	phy_addr=(unsigned long long)reg_base;
+	TRACE_DPU(DBG_INFO, "  (%d) res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%llx).\n",
+	       1, res->start, res->end, phy_addr);
 
 	dpu_set_base_addr(reg_base+0x600);
 	reg_base_sgbm_ld1_dma    =reg_base;
@@ -293,7 +307,7 @@ static int _init_resources(struct platform_device *pdev)
 		dev_err(&pdev->dev, "No IRQ resource for %s\n", irq_name);
 		return -ENODEV;
 	}
-	CVI_TRACE_DPU(CVI_DBG_INFO, "irq(%d) for %s get from platform driver.\n", irq_num,
+	TRACE_DPU(DBG_INFO, "irq(%d) for %s get from platform driver.\n", irq_num,
 		irq_name);
 
 	wdev->irq_num = irq_num;
@@ -303,20 +317,20 @@ static int _init_resources(struct platform_device *pdev)
 
 static irqreturn_t dpu_isr(int irq, void *dev)
 {
-	u8 intr_status ;
-	CVI_TRACE_DPU(CVI_DBG_INFO, "dpu_isr        +\n");
+	unsigned char intr_status ;
+	TRACE_DPU(DBG_INFO, "dpu_isr        +\n");
 	intr_status = dpu_intr_status();
 	getsgbm_status();
 	getfgs_status();
 	dpu_irq_handler(intr_status,dev);
-	CVI_TRACE_DPU(CVI_DBG_INFO, "dpu_isr        -\n");
+	TRACE_DPU(DBG_INFO, "dpu_isr        -\n");
 	return IRQ_HANDLED;
 }
 
-static int cvi_dpu_probe(struct platform_device *pdev)
+static int dpu_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-	struct cvi_dpu_dev *wdev;
+	struct dpu_dev_s *wdev;
 
 	/* allocate main structure */
 	wdev = devm_kzalloc(&pdev->dev, sizeof(*wdev), GFP_KERNEL);
@@ -332,7 +346,7 @@ static int cvi_dpu_probe(struct platform_device *pdev)
 	// get hw-resources
 	rc = _init_resources(pdev);
 	if (rc){
-		CVI_TRACE_DPU(CVI_DBG_ERR, "Failed to init resource\n");
+		TRACE_DPU(DBG_ERR, "Failed to init resource\n");
 		goto err_dev;
 	}
 
@@ -344,7 +358,7 @@ static int cvi_dpu_probe(struct platform_device *pdev)
 	}
 
 	if (devm_request_irq(&pdev->dev, wdev->irq_num, dpu_isr,
-			     IRQF_SHARED, "CVI_DPU", wdev)) {
+			     IRQF_SHARED, "DPU", wdev)) {
 		dev_err(&pdev->dev, "Unable to request dpu IRQ(%d)\n",
 			wdev->irq_num);
 		return -EINVAL;
@@ -356,7 +370,7 @@ static int cvi_dpu_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	CVI_TRACE_DPU(CVI_DBG_INFO, "done with rc(%d).\n", rc);
+	TRACE_DPU(DBG_INFO, "done with rc(%d).\n", rc);
 
 	return rc;
 
@@ -368,13 +382,13 @@ err_dev:
 }
 
 /*
- * cvi_dpu_remove - device remove method.
+ * dpu_remove - device remove method.
  * @pdev: Pointer of platform device.
  */
 //done
-static int cvi_dpu_remove(struct platform_device *pdev)
+static int dpu_remove(struct platform_device *pdev)
 {
-	struct cvi_dpu_dev *wdev;
+	struct dpu_dev_s *wdev;
 
 	dpu_destroy_instance(pdev);
 
@@ -390,7 +404,7 @@ static int cvi_dpu_remove(struct platform_device *pdev)
 
 	wdev = dev_get_drvdata(&pdev->dev);
 	if (!wdev) {
-		dev_err(&pdev->dev, "Can not get cvi_vip drvdata");
+		dev_err(&pdev->dev, "Can not get vip drvdata");
 		return 0;
 	}
 
@@ -400,47 +414,55 @@ static int cvi_dpu_remove(struct platform_device *pdev)
 }
 
 //done
-static const struct of_device_id cvi_dpu_dt_match[] = {
+static const struct of_device_id dpu_dt_match[] = {
 	{ .compatible = "cvitek,dpu" },
 	{}
 };
 
 #if (!DEVICE_FROM_DTS)
-static void cvi_dpu_pdev_release(struct device *dev)
+static void dpu_pdev_release(struct device *dev)
 {
 }
 
-static struct platform_device cvi_dpu_pdev = {
+static struct platform_device dpu_pdev = {
 	.name		= "dpu",
-	.dev.release	= cvi_dpu_pdev_release,
+	.dev.release	= dpu_pdev_release,
 };
 #endif
 
 #ifdef CONFIG_PM_SLEEP
 static int dpu_suspend(struct device *dev)
 {
-	struct cvi_dpu_dev *wdev = dev_get_drvdata(dev);
+	struct dpu_dev_s *wdev = dev_get_drvdata(dev);
 	if (!wdev)
         return -ENODEV;
-	mutex_lock(&wdev->suspendLock);
-	wdev->bsuspend =CVI_TRUE;
-	mutex_unlock(&wdev->suspendLock);
+
+	while(wdev->bbusy || wdev->hw_busy){
+		udelay(5000);
+	}
+	mutex_lock(&wdev->suspend_lock);
+	wdev->bsuspend =TRUE;
+	mutex_unlock(&wdev->suspend_lock);
 	if(wdev->clk_sys[1])
 		clk_disable_unprepare(wdev->clk_sys[1]);
+
+
+	TRACE_DPU(DBG_WARN, "dpu suspended\n");
 	return 0;
 }
 
 static int dpu_resume(struct device *dev)
 {
-	struct cvi_dpu_dev *wdev = dev_get_drvdata(dev);
+	struct dpu_dev_s *wdev = dev_get_drvdata(dev);
 	if (!wdev)
         return -ENODEV;
 	if(wdev->clk_sys[1])
 		clk_prepare_enable(wdev->clk_sys[1]);
 
-	mutex_lock(&wdev->suspendLock);
-	wdev->bsuspend =CVI_FALSE;
-	mutex_unlock(&wdev->suspendLock);
+	mutex_lock(&wdev->suspend_lock);
+	wdev->bsuspend =FALSE;
+	mutex_unlock(&wdev->suspend_lock);
+	TRACE_DPU(DBG_WARN, "dpu resumed\n");
 
 	return 0;
 }
@@ -449,49 +471,49 @@ static int dpu_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(dpu_pm_ops, dpu_suspend, dpu_resume);
 
 //done
-static struct platform_driver cvi_dpu_driver = {
-	.probe      = cvi_dpu_probe,
-	.remove     = cvi_dpu_remove,
+static struct platform_driver dpu_driver = {
+	.probe      = dpu_probe,
+	.remove     = dpu_remove,
 	.driver     = {
 	.name		= "soph-dpu",
 	.owner		= THIS_MODULE,
-	.of_match_table	= cvi_dpu_dt_match,
+	.of_match_table	= dpu_dt_match,
 	.pm		= &dpu_pm_ops,
 	},
 };
 
-static int __init cvi_dpu_init(void)
+static int __init dpu_dev_init(void)
 {
 	int rc;
 
-	CVI_TRACE_DPU(CVI_DBG_INFO, " +\n");
+	TRACE_DPU(DBG_INFO, " +\n");
 	#if (DEVICE_FROM_DTS)
-	rc = platform_driver_register(&cvi_dpu_driver);
+	rc = platform_driver_register(&dpu_driver);
 	#else
-	rc = platform_device_register(&cvi_dpu_pdev);
+	rc = platform_device_register(&dpu_pdev);
 	if (rc)
 		return rc;
 
-	rc = platform_driver_register(&cvi_dpu_driver);
+	rc = platform_driver_register(&dpu_driver);
 	if (rc)
-		platform_device_unregister(&cvi_dpu_pdev);
+		platform_device_unregister(&dpu_pdev);
 	#endif
 
 	return rc;
 }
 
-static void __exit cvi_dpu_exit(void)
+static void __exit dpu_dev_exit(void)
 {
-	CVI_TRACE_DPU(CVI_DBG_INFO, " +\n");
-	platform_driver_unregister(&cvi_dpu_driver);
+	TRACE_DPU(DBG_INFO, " +\n");
+	platform_driver_unregister(&dpu_driver);
 	#if (!DEVICE_FROM_DTS)
-	platform_device_unregister(&cvi_dpu_pdev);
+	platform_device_unregister(&dpu_pdev);
 	#endif
 }
 
 MODULE_DESCRIPTION("Cvitek dpu driver");
 MODULE_AUTHOR("zhongbin.wang");
 MODULE_LICENSE("GPL");
-module_init(cvi_dpu_init);
-module_exit(cvi_dpu_exit);
+module_init(dpu_dev_init);
+module_exit(dpu_dev_exit);
 

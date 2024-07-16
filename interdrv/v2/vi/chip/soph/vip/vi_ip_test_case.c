@@ -87,17 +87,17 @@ enum VI_TEST_CASE {
 
 extern int vi_ip_test_case;
 extern struct isp_ccm_cfg ccm_hw_cfg;
-extern uint16_t ygamma_data[];
-extern uint16_t gamma_data[];
-extern uint16_t ycur_data[];
+extern u16 ygamma_data[];
+extern u16 gamma_data[];
+extern u16 ycur_data[];
 extern u16 dci_map_lut_50[];
-extern uint16_t ltm_d_lut[];
-extern uint16_t ltm_b_lut[];
-extern uint16_t ltm_g_lut[];
+extern u16 ltm_d_lut[];
+extern u16 ltm_b_lut[];
+extern u16 ltm_g_lut[];
 
-extern uint16_t c_lut_r_lut[];
-extern uint16_t c_lut_g_lut[];
-extern uint16_t c_lut_b_lut[];
+extern u16 c_lut_r_lut[];
+extern u16 c_lut_g_lut[];
+extern u16 c_lut_b_lut[];
 
 /*******************************************************************************
  *	IPs test case config
@@ -420,7 +420,7 @@ void vi_ip_test_cases_init(struct isp_ctx *ctx)
 	}
 	case VI_TEST_DPC_ENABLE_STATIC_ONLY: //18
 	{
-		uint32_t bps[40] = {((0 << 12) | 0), ((0 << 12) | 20), ((0 << 12) | 40), ((0 << 12) | 60)};
+		u32 bps[40] = {((0 << 12) | 0), ((0 << 12) | 20), ((0 << 12) | 40), ((0 << 12) | 60)};
 
 		vi_pr(VI_INFO, "DPC enable static only output %s\n", ctx->is_hdr_on ? "SE" : "Default");
 		ispblk_dpc_config(ctx, ISP_RAW_PATH_LE, true, 1);

@@ -1,9 +1,16 @@
 include $(PWD)/../Makefile.interdrv.param
 
+CONFIG_LOG = 1
+
 ccflags-y += -I$(PWD)/../include/common/uapi/ -I$(PWD)/../include/common/kapi/
 ccflags-y += -I$(PWD)/chip/$(CVIARCH_L)/ \
              -I$(src)/../include/chip/$(CVIARCH_L)/uapi \
-             -I$(src)/../include/chip/$(CVIARCH_L)/kapi
+             -I$(src)/../include/chip/$(CVIARCH_L)/kapi \
+			 -I$(PWD)/common
+
+ifeq ($(CONFIG_LOG), 1)
+ccflags-y += -DCONFIG_LOG
+endif
 
 ccflags-y += $(INTRERDRV_FLAGS)
 
@@ -25,7 +32,7 @@ all:
 clean:
 	@rm -f *.o* *.ko
 	@rm -f Module.symvers modules.order
-	@rm -f *.mod.c
+	@rm -f *.mod *.mod.c
 	@rm -rf .tmp_versions
 	@rm -f .*cmd
 	@rm -f $(CHIP)/*.o*

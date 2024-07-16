@@ -1,34 +1,33 @@
 #ifndef __ENC_CTX_H__
 #define __ENC_CTX_H__
 
-#include <linux/cvi_comm_venc.h>
-#include "cvi_jpg_interface.h"
-#include "sophgo_jpeg_interface.h"
-#include "cvi_h265_interface.h"
+#include <linux/comm_venc.h>
+#include "jpeg_api.h"
+#include "h265_interface.h"
 
 
 typedef struct _venc_jpeg_ctx {
-    CVIJpgHandle *handle;
+    drv_jpg_handle *handle;
 } venc_jpeg_ctx;
 
 typedef struct _venc_vid_ctx {
-    CVI_VOID (*setInitCfgFixQp)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgCbr)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgVbr)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgAVbr)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgQpMap)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgUbr)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_VOID (*setInitCfgRc)
-    (cviInitEncConfig *pInitEncCfg, CVI_VOID *pchnctx);
-    CVI_S32 (*mapNaluType)(VENC_PACK_S *ppack, CVI_S32 naluType);
-    CVI_VOID *pHandle;
-    cviVEncStreamInfo streamInfo;
+    void (*setInitCfgFixQp)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgCbr)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgVbr)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgAVbr)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgQpMap)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgUbr)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    void (*setInitCfgRc)
+    (InitEncConfig *pInitEncCfg, void *pchnctx);
+    int (*mapNaluType)(venc_pack_s *ppack, int naluType);
+    void *pHandle;
+    VEncStreamInfo streamInfo;
 } venc_vid_ctx;
 
 typedef struct _venc_h264_ctx {
@@ -38,25 +37,25 @@ typedef struct _venc_h265_ctx {
 } venc_h265_ctx;
 
 typedef struct _venc_enc_ctx_base {
-    CVI_S32 x;
-    CVI_S32 y;
-    CVI_S32 width;
-    CVI_S32 height;
-    CVI_S32 u32Profile;
-    CVI_S32 rcMode;
-    CVI_BOOL bVariFpsEn;
-    CVI_U64 u64PTS;
-    CVI_U64 u64EncHwTime;
-    CVI_S32 (*init)(CVI_VOID);
-    CVI_S32 (*open)(CVI_VOID *handle, CVI_VOID *pchnctx);
-    CVI_S32 (*close)(CVI_VOID *ctx);
-    CVI_S32 (*encOnePic)
-    (CVI_VOID *ctx, const VIDEO_FRAME_INFO_S *pstFrame,
-     CVI_S32 s32MilliSec);
-    CVI_S32 (*getStream)
-    (CVI_VOID *ctx, VENC_STREAM_S *pstStream, CVI_S32 s32MIlliSec);
-    CVI_S32 (*releaseStream)(CVI_VOID *ctx, VENC_STREAM_S *pstStream);
-    CVI_S32 (*ioctl)(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg);
+    int x;
+    int y;
+    int width;
+    int height;
+    int u32Profile;
+    int rcMode;
+    unsigned char bVariFpsEn;
+    uint64_t u64PTS;
+    uint64_t u64EncHwTime;
+    int (*init)(void *ctx);
+    int (*open)(void *handle, void *pchnctx);
+    int (*close)(void *ctx);
+    int (*encOnePic)
+    (void *ctx, const video_frame_info_s *pstFrame,
+     int s32MilliSec);
+    int (*getStream)
+    (void *ctx, venc_stream_s *pstStream, int s32MIlliSec);
+    int (*releaseStream)(void *ctx, venc_stream_s *pstStream);
+    int (*ioctl)(void *ctx, int op, void *arg);
 } venc_enc_ctx_base;
 
 typedef struct _venc_enc_ctx {
@@ -91,60 +90,60 @@ typedef struct _venc_enc_ctx {
 
 
 
-CVI_S32 venc_create_enc_ctx(venc_enc_ctx *pEncCtx, CVI_VOID *pchnctx);
+int venc_create_enc_ctx(venc_enc_ctx *pEncCtx, void *pchnctx);
 #if 0
-CVI_S32 jpege_init(CVI_VOID);
-CVI_S32 jpege_open(CVI_VOID *handle, CVI_VOID *pchnctx);
-CVI_S32 jpege_close(CVI_VOID *ctx);
-CVI_S32 jpege_enc_one_pic(CVI_VOID *ctx,
-                 const VIDEO_FRAME_INFO_S *pstFrame,
+int jpege_init(void);
+int jpege_open(void *handle, void *pchnctx);
+int jpege_close(void *ctx);
+int jpege_enc_one_pic(void *ctx,
+                 const video_frame_info_s *pstFrame,
                  int s32MilliSec);
-CVI_VOID setSrcInfo(CVIFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
-               const VIDEO_FRAME_INFO_S *pstFrame);
-CVI_S32 jpege_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
-                CVI_S32 s32MilliSec);
-CVI_S32 jpege_release_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream);
-CVI_S32 jpege_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg);
+void setSrcInfo(DRVFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
+               const video_frame_info_s *pstFrame);
+int jpege_get_stream(void *ctx, venc_stream_s *pstStream,
+                int s32MilliSec);
+int jpege_release_stream(void *ctx, venc_stream_s *pstStream);
+int jpege_ioctl(void *ctx, int op, void *arg);
 
-CVI_S32 vidEnc_init(CVI_VOID);
-CVI_S32 vidEnc_open(CVI_VOID *handle, CVI_VOID *pchnctx);
-CVI_S32 vidEnc_close(CVI_VOID *ctx);
-CVI_S32 vidEnc_enc_one_pic(CVI_VOID *ctx,
-                  const VIDEO_FRAME_INFO_S *pstFrame,
-                  CVI_S32 s32MilliSec);
-CVI_S32 vidEnc_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
-                 CVI_S32 s32MilliSec);
-CVI_S32 vidEnc_release_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream);
-CVI_S32 vidEnc_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg);
+int vidEnc_init(void);
+int vidEnc_open(void *handle, void *pchnctx);
+int vidEnc_close(void *ctx);
+int vidEnc_enc_one_pic(void *ctx,
+                  const video_frame_info_s *pstFrame,
+                  int s32MilliSec);
+int vidEnc_get_stream(void *ctx, venc_stream_s *pstStream,
+                 int s32MilliSec);
+int vidEnc_release_stream(void *ctx, venc_stream_s *pstStream);
+int vidEnc_ioctl(void *ctx, int op, void *arg);
 
-CVI_VOID h265e_setInitCfgFixQp(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx);
-CVI_VOID h265e_setInitCfgCbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_VOID h265e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_VOID h265e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
-                     CVI_VOID *pchnctx);
-CVI_VOID h265e_setInitCfgQpMap(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx);
-CVI_VOID h265e_setInitCfgUbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_S32 h265e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 naluType);
+void h265e_setInitCfgFixQp(InitEncConfig *pInitEncCfg,
+                      void *pchnctx);
+void h265e_setInitCfgCbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+void h265e_setInitCfgVbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+void h265e_setInitCfgAVbr(InitEncConfig *pInitEncCfg,
+                     void *pchnctx);
+void h265e_setInitCfgQpMap(InitEncConfig *pInitEncCfg,
+                      void *pchnctx);
+void h265e_setInitCfgUbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+int h265e_mapNaluType(venc_pack_s *ppack, int naluType);
 
 
-CVI_VOID cviSetInitCfgGop(cviInitEncConfig *pInitEncCfg,
+void set_init_cfg_gop(InitEncConfig *pInitEncCfg,
                  venc_chn_context *pChnHandle);
-CVI_VOID h264e_setInitCfgFixQp(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx);
-CVI_VOID h264e_setInitCfgCbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_VOID h264e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_VOID h264e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
-                     CVI_VOID *pchnctx);
-CVI_VOID h264e_setInitCfgUbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx);
-CVI_S32 h264e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 naluType);
+void h264e_setInitCfgFixQp(InitEncConfig *pInitEncCfg,
+                      void *pchnctx);
+void h264e_setInitCfgCbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+void h264e_setInitCfgVbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+void h264e_setInitCfgAVbr(InitEncConfig *pInitEncCfg,
+                     void *pchnctx);
+void h264e_setInitCfgUbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx);
+int h264e_mapNaluType(venc_pack_s *ppack, int naluType);
 #endif
 
 #endif

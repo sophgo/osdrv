@@ -19,21 +19,21 @@
 #include <linux/spinlock.h>
 
 #ifdef ENV_CVITEST
-void _reg_write_mask(u64 addr, u32 mask, u32 data)
+void _reg_write_mask(unsigned long long addr, unsigned int mask, unsigned int data)
 {
-	u32 value;
+	unsigned int value;
 
 	value = _reg_read(addr) & ~mask;
 	value |= (data & mask);
 	_reg_write(addr, value);
 }
 #elif defined(ENV_EMU)
-static u32 regs_dwa[0x100];
-static u32 regs_cmdq[0x30];
-static u32 regs_vip[0x10];
-static u32 regs_scl[0x10000];
+static unsigned int regs_dwa[0x100];
+static unsigned int regs_cmdq[0x30];
+static unsigned int regs_vip[0x10];
+static unsigned int regs_scl[0x10000];
 
-u32 _reg_read(u64 addr)
+unsigned int _reg_read(unsigned long long addr)
 {
 	if (addr > REG_VIP_SYS_BASE)
 		return regs_vip[(addr - REG_VIP_SYS_BASE) >> 2];
@@ -47,7 +47,7 @@ u32 _reg_read(u64 addr)
 	return 0;
 }
 
-void _reg_write(u64 addr, u32 data)
+void _reg_write(unsigned long long addr, unsigned int data)
 {
 	if (addr > REG_VIP_SYS_BASE)
 		regs_vip[(addr - REG_VIP_SYS_BASE) >> 2] = data;
@@ -59,9 +59,9 @@ void _reg_write(u64 addr, u32 data)
 		regs_scl[(addr - REG_SCL_TOP_BASE) >> 2] = data;
 }
 
-void _reg_write_mask(u64 addr, u32 mask, u32 data)
+void _reg_write_mask(unsigned long long addr, unsigned int mask, unsigned int data)
 {
-	u32 value;
+	unsigned int value;
 
 	value = _reg_read(addr) & ~mask;
 	value |= (data & mask);
@@ -70,10 +70,10 @@ void _reg_write_mask(u64 addr, u32 mask, u32 data)
 #else
 static DEFINE_RAW_SPINLOCK(__io_lock);
 
-void reg_write_mask(u64 addr, u32 mask, u32 data)
+void reg_write_mask(unsigned long long addr, unsigned int mask, unsigned int data)
 {
 	unsigned long flags;
-	u32 value;
+	unsigned int value;
 
 	raw_spin_lock_irqsave(&__io_lock, flags);
 	value = readl_relaxed((void __iomem *)addr) & ~mask;
@@ -82,17 +82,17 @@ void reg_write_mask(u64 addr, u32 mask, u32 data)
 	raw_spin_unlock_irqrestore(&__io_lock, flags);
 }
 
-u32 reg_read_mask(u64 addr, u32 mask,u32 shift)
+unsigned int reg_read_mask(unsigned long long addr, unsigned int mask,unsigned int shift)
 {
 	unsigned long flags;
-	u32 value;
+	unsigned int value;
 	raw_spin_lock_irqsave(&__io_lock, flags);
 	value= ((readl_relaxed((void __iomem *)addr) & mask) >> shift);
 	raw_spin_unlock_irqrestore(&__io_lock, flags);
 	return value;
 }
 
-void write_reg(u64 addr,u32 data)
+void write_reg(unsigned long long addr,unsigned int data)
 {
 	unsigned long flags;
 	raw_spin_lock_irqsave(&__io_lock, flags);
@@ -100,10 +100,10 @@ void write_reg(u64 addr,u32 data)
 	raw_spin_unlock_irqrestore(&__io_lock, flags);
 }
 
-u32 read_reg(u64  addr)
+unsigned int read_reg(unsigned long long  addr)
 {
 	unsigned long flags;
-	u32 value;
+	unsigned int value;
 	raw_spin_lock_irqsave(&__io_lock, flags);
     value =readl_relaxed((void __iomem *)addr);
 	raw_spin_unlock_irqrestore(&__io_lock, flags);

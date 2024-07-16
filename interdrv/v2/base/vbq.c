@@ -1,155 +1,155 @@
 #include <linux/types.h>
 #include <linux/mm.h>
-#include <linux/cvi_buffer.h>
+#include <linux/comm_buffer.h>
 #include <linux/slab.h>
 
 #include "vbq.h"
 #include "vb.h"
 #include "bind.h"
 #include "base_common.h"
+#include "base_debug.h"
 
 
-static VBQ_RECV_CB base_recv_cb[CVI_ID_BUTT];
-//int32_t (*base_qbuf_cb[CVI_ID_BUTT])(struct cvi_buffer *buf, MMF_CHN_S chn) = {0};
-//int32_t (*base_dqbuf_cb[CVI_ID_BUTT])(struct cvi_buffer *buf, MMF_CHN_S chn) = {0};
+static vbq_recv_cb g_base_recv_cb[ID_BUTT];
 
-void base_register_recv_cb(MOD_ID_E enModId, VBQ_RECV_CB cb)
+void base_register_recv_cb(mod_id_e mod_id, vbq_recv_cb cb)
 {
-	if (enModId < 0 || enModId >= CVI_ID_BUTT)
-		pr_err("enModId error.\n");
+	if (mod_id < 0 || mod_id >= ID_BUTT)
+		TRACE_BASE(DBG_ERR, "enmodid error.\n");
 
-	base_recv_cb[enModId] = cb;
+	g_base_recv_cb[mod_id] = cb;
 }
 EXPORT_SYMBOL_GPL(base_register_recv_cb);
 
 
-void base_unregister_recv_cb(MOD_ID_E enModId)
+void base_unregister_recv_cb(mod_id_e mod_id)
 {
-	if (enModId < 0 || enModId >= CVI_ID_BUTT)
-		pr_err("enModId error.\n");
+	if (mod_id < 0 || mod_id >= ID_BUTT)
+		TRACE_BASE(DBG_ERR, "mod_id error.\n");
 
-	base_recv_cb[enModId] = NULL;
+	g_base_recv_cb[mod_id] = NULL;
 }
 EXPORT_SYMBOL_GPL(base_unregister_recv_cb);
 
 
-s32 base_fill_videoframe2buffer(MMF_CHN_S chn, const VIDEO_FRAME_INFO_S *pstVideoFrame,
-	struct cvi_buffer *buf)
+s32 base_fill_videoframe2buffer(mmf_chn_s chn, const video_frame_info_s *frame,
+	struct video_buffer *buf)
 {
 	u32 plane_size;
-	VB_CAL_CONFIG_S stVbCalConfig;
+	vb_cal_config_s vbcalconfig;
 	u8 i = 0;
-	u32 u32Align = pstVideoFrame->stVFrame.u32Align ? pstVideoFrame->stVFrame.u32Align : DEFAULT_ALIGN;
+	u32 align = frame->video_frame.align ? frame->video_frame.align : DEFAULT_ALIGN;
 
-	COMMON_GetPicBufferConfig(pstVideoFrame->stVFrame.u32Width, pstVideoFrame->stVFrame.u32Height,
-		pstVideoFrame->stVFrame.enPixelFormat, DATA_BITWIDTH_8, COMPRESS_MODE_NONE,
-		u32Align, &stVbCalConfig);
+	common_getpicbufferconfig(frame->video_frame.width, frame->video_frame.height,
+		frame->video_frame.pixel_format, DATA_BITWIDTH_8, COMPRESS_MODE_NONE,
+		align, &vbcalconfig);
 
-	buf->size.u32Width = pstVideoFrame->stVFrame.u32Width;
-	buf->size.u32Height = pstVideoFrame->stVFrame.u32Height;
-	buf->enPixelFormat = pstVideoFrame->stVFrame.enPixelFormat;
-	buf->s16OffsetLeft = pstVideoFrame->stVFrame.s16OffsetLeft;
-	buf->s16OffsetTop = pstVideoFrame->stVFrame.s16OffsetTop;
-	buf->s16OffsetRight = pstVideoFrame->stVFrame.s16OffsetRight;
-	buf->s16OffsetBottom = pstVideoFrame->stVFrame.s16OffsetBottom;
-	buf->frm_num = pstVideoFrame->stVFrame.u32TimeRef;
-	buf->u64PTS = pstVideoFrame->stVFrame.u64PTS;
-	buf->enCompressMode = pstVideoFrame->stVFrame.enCompressMode;
-	buf->compress_expand_addr = pstVideoFrame->stVFrame.u64ExtPhyAddr;
+	buf->size.width = frame->video_frame.width;
+	buf->size.height = frame->video_frame.height;
+	buf->pixel_format = frame->video_frame.pixel_format;
+	buf->offset_left = frame->video_frame.offset_left;
+	buf->offset_top = frame->video_frame.offset_top;
+	buf->offset_right = frame->video_frame.offset_right;
+	buf->offset_bottom = frame->video_frame.offset_bottom;
+	buf->frm_num = frame->video_frame.time_ref;
+	buf->pts = frame->video_frame.pts;
+	buf->compress_mode = frame->video_frame.compress_mode;
+	buf->compress_expand_addr = frame->video_frame.ext_phy_addr;
 	memset(&buf->frame_crop, 0, sizeof(buf->frame_crop));
 
 	for (i = 0; i < NUM_OF_PLANES; ++i) {
-		if (i >= stVbCalConfig.plane_num) {
+		if (i >= vbcalconfig.plane_num) {
 			buf->phy_addr[i] = 0;
 			buf->length[i] = 0;
 			buf->stride[i] = 0;
 			continue;
 		}
 
-		plane_size = (i == 0) ? stVbCalConfig.u32MainYSize : stVbCalConfig.u32MainCSize;
-		buf->phy_addr[i] = pstVideoFrame->stVFrame.u64PhyAddr[i];
-		buf->length[i] = pstVideoFrame->stVFrame.u32Length[i];
-		buf->stride[i] = pstVideoFrame->stVFrame.u32Stride[i];
-		if (buf->length[i] < plane_size && (pstVideoFrame->stVFrame.enCompressMode != COMPRESS_MODE_FRAME)) {
-			pr_err("Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
-				, sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId, i);
-			pr_err(" length(%zu) less than expected(%d).\n"
+		plane_size = (i == 0) ? vbcalconfig.main_y_size : vbcalconfig.main_c_size;
+		buf->phy_addr[i] = frame->video_frame.phyaddr[i];
+		buf->length[i] = frame->video_frame.length[i];
+		buf->stride[i] = frame->video_frame.stride[i];
+		if (buf->length[i] < plane_size && (frame->video_frame.compress_mode != COMPRESS_MODE_FRAME)) {
+			TRACE_BASE(DBG_ERR, "Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
+				, sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id, i);
+			TRACE_BASE(DBG_ERR, " length(%zu) less than expected(%d).\n"
 				, buf->length[i], plane_size);
-			return CVI_FAILURE;
+			return -1;
 		}
-		if (buf->stride[i] % u32Align && (pstVideoFrame->stVFrame.enCompressMode != COMPRESS_MODE_FRAME)) {
-			pr_err("Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
-				, sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId, i);
-			pr_err(" stride(%d) not aligned(%d).\n"
-				, buf->stride[i], u32Align);
-			return CVI_FAILURE;
+
+		if (buf->stride[i] % align && (frame->video_frame.compress_mode != COMPRESS_MODE_FRAME)) {
+			TRACE_BASE(DBG_ERR, "Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
+				, sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id, i);
+			TRACE_BASE(DBG_ERR, " stride(%d) not aligned(%d).\n"
+				, buf->stride[i], align);
+			return -1;
 		}
-		if (buf->phy_addr[i] % u32Align) {
-			pr_err("Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
-				, sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId, i);
-			pr_err(" address(%llx) not aligned(%d).\n"
-				, buf->phy_addr[i], u32Align);
-			return CVI_FAILURE;
+		if (buf->phy_addr[i] % align) {
+			TRACE_BASE(DBG_ERR, "Mod(%s) Dev(%d) Chn(%d) Plane[%d]\n"
+				, sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id, i);
+			TRACE_BASE(DBG_ERR, " address(%llx) not aligned(%d).\n"
+				, buf->phy_addr[i], align);
+			return -1;
 		}
 	}
 
 	// [WA-01]
-	if (stVbCalConfig.plane_num > 1) {
-		if (((buf->phy_addr[0] & (stVbCalConfig.u16AddrAlign - 1))
-			!= (buf->phy_addr[1] & (stVbCalConfig.u16AddrAlign - 1)))
-		|| ((buf->phy_addr[0] & (stVbCalConfig.u16AddrAlign - 1))
-			!= (buf->phy_addr[2] & (stVbCalConfig.u16AddrAlign - 1)))) {
-			pr_err("Mod(%s) Dev(%d) Chn(%d)\n"
-				, sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId);
-			pr_err("plane address offset (%llx-%llx-%llx)"
+	if (vbcalconfig.plane_num > 1) {
+		if (((buf->phy_addr[0] & (vbcalconfig.addr_align - 1))
+			!= (buf->phy_addr[1] & (vbcalconfig.addr_align - 1)))
+		|| ((buf->phy_addr[0] & (vbcalconfig.addr_align - 1))
+			!= (buf->phy_addr[2] & (vbcalconfig.addr_align - 1)))) {
+			TRACE_BASE(DBG_ERR, "Mod(%s) Dev(%d) Chn(%d)\n"
+				, sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id);
+			TRACE_BASE(DBG_ERR, "plane address offset (%llx-%llx-%llx)"
 				, buf->phy_addr[0], buf->phy_addr[1], buf->phy_addr[2]);
-			pr_err("not aligned to %#x.\n", stVbCalConfig.u16AddrAlign);
-			return CVI_FAILURE;
+			TRACE_BASE(DBG_ERR, "not aligned to %#x.\n", vbcalconfig.addr_align);
+			return -1;
 		}
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(base_fill_videoframe2buffer);
 
-s32 base_get_chn_buffer(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK *blk, s32 timeout_ms)
+s32 base_get_chn_buffer(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk *blk, s32 timeout_ms)
 {
-	s32 ret = CVI_FAILURE;
+	s32 ret = -1;
 	struct vb_s *vb;
 	struct vbq *doneq;
 	struct snap_s *s;
 
 	if (!jobs) {
-		pr_err("mod(%s), jobs Null.\n", sys_get_modname(chn.enModId));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "mod(%s), jobs Null.\n", sys_get_modname(chn.mod_id));
+		return -1;
 	}
 
 	if (!jobs->inited) {
-		pr_err("mod(%s) get chn buf fail, not inited yet\n", sys_get_modname(chn.enModId));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "mod(%s) get chn buf fail, not inited yet\n", sys_get_modname(chn.mod_id));
+		return -1;
 	}
 	doneq = &jobs->doneq;
 
 	mutex_lock(&jobs->dlock);
 	if (!FIFO_EMPTY(doneq)) {
 		FIFO_POP(doneq, &vb);
-		atomic_long_fetch_and(~BIT(chn.enModId), &vb->mod_ids);
-		atomic_long_fetch_or(BIT(CVI_ID_USER), &vb->mod_ids);
+		atomic_long_fetch_and(~BIT(chn.mod_id), &vb->mod_ids);
+		atomic_long_fetch_or(BIT(ID_USER), &vb->mod_ids);
 		mutex_unlock(&jobs->dlock);
-		*blk = (VB_BLK)vb;
-		return CVI_SUCCESS;
+		*blk = (vb_blk)vb;
+		return 0;
 	}
 
 	s = kmalloc(sizeof(*s), GFP_ATOMIC);
 	if (!s) {
 		mutex_unlock(&jobs->dlock);
-		return CVI_FAILURE;
+		return -1;
 	}
 
 	init_waitqueue_head(&s->cond_queue);
 
 	s->chn = chn;
 	s->blk = VB_INVALID_HANDLE;
-	s->avail = CVI_FALSE;
+	s->avail = 0;
 
 	if (timeout_ms < 0) {
 		TAILQ_INSERT_TAIL(&jobs->snap_jobs, s, tailq);
@@ -177,8 +177,9 @@ s32 base_get_chn_buffer(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK *blk, s32 
 			vb_release_block(s->blk);
 		TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
 		mutex_unlock(&jobs->dlock);
-		pr_err("Mod(%s) Grp(%d) Chn(%d), jobs wait(%d) work(%d) done(%d)\n"
-			, sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId
+
+		TRACE_BASE(DBG_WARN, "Mod(%s) Grp(%d) Chn(%d), jobs wait(%d) work(%d) done(%d)\n"
+			, sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id
 			, FIFO_SIZE(&jobs->waitq), FIFO_SIZE(&jobs->workq), FIFO_SIZE(&jobs->doneq));
 	}
 
@@ -197,12 +198,12 @@ EXPORT_SYMBOL_GPL(base_get_chn_buffer);
 void base_mod_jobs_init(struct vb_jobs_t *jobs, uint8_t waitq_depth, uint8_t workq_depth, uint8_t doneq_depth)
 {
 	if (jobs == NULL) {
-		pr_err("[%p] job init fail, Null parameter\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job init fail, Null parameter\n", __builtin_return_address(0));
 		return;
 	}
 
 	if (jobs->inited) {
-		pr_err("[%p] job init fail, already inited\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job init fail, already inited\n", __builtin_return_address(0));
 		return;
 	}
 
@@ -217,6 +218,48 @@ void base_mod_jobs_init(struct vb_jobs_t *jobs, uint8_t waitq_depth, uint8_t wor
 }
 EXPORT_SYMBOL_GPL(base_mod_jobs_init);
 
+/* base_mod_jobs_clear: clear the jobs.
+ *
+ * @param jobs: vb jobs.
+ */
+void base_mod_jobs_clear(struct vb_jobs_t *jobs)
+{
+	struct vb_s *vb;
+	struct snap_s *s, *s_tmp;
+
+	if (jobs == NULL) {
+		TRACE_BASE(DBG_ERR, "[%p] job reinit fail, Null parameter\n", __builtin_return_address(0));
+		return;
+	}
+
+	if (!(jobs->inited)) {
+		TRACE_BASE(DBG_ERR, "[%p] job reinit fail, not inited\n", __builtin_return_address(0));
+		return;
+	}
+	mutex_lock(&jobs->lock);
+	while (!FIFO_EMPTY(&jobs->waitq)) {
+		FIFO_POP(&jobs->waitq, &vb);
+		vb_release_block((vb_blk)vb);
+	}
+
+	while (!FIFO_EMPTY(&jobs->workq)) {
+		FIFO_POP(&jobs->workq, &vb);
+		vb_release_block((vb_blk)vb);
+	}
+	mutex_unlock(&jobs->lock);
+
+	mutex_lock(&jobs->dlock);
+	while (!FIFO_EMPTY(&jobs->doneq)) {
+		FIFO_POP(&jobs->doneq, &vb);
+		vb_release_block((vb_blk)vb);
+	}
+
+	TAILQ_FOREACH_SAFE(s, &jobs->snap_jobs, tailq, s_tmp)
+	TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
+	mutex_unlock(&jobs->dlock);
+}
+EXPORT_SYMBOL_GPL(base_mod_jobs_clear);
+
 /* mod_jobs_exit: end the jobs and release all resources.
  *
  * @param jobs: vb jobs.
@@ -227,12 +270,12 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	struct snap_s *s, *s_tmp;
 
 	if (jobs == NULL) {
-		pr_err("[%p] job exit fail, Null parameter\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job exit fail, Null parameter\n", __builtin_return_address(0));
 		return;
 	}
 
 	if (!jobs->inited) {
-		pr_err("[%p] job exit fail, not inited yet\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job exit fail, not inited yet\n", __builtin_return_address(0));
 		return;
 	}
 
@@ -240,12 +283,12 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	jobs->inited = false;
 	while (!FIFO_EMPTY(&jobs->waitq)) {
 		FIFO_POP(&jobs->waitq, &vb);
-		vb_release_block((VB_BLK)vb);
+		vb_release_block((vb_blk)vb);
 	}
 	FIFO_EXIT(&jobs->waitq);
 	while (!FIFO_EMPTY(&jobs->workq)) {
 		FIFO_POP(&jobs->workq, &vb);
-		vb_release_block((VB_BLK)vb);
+		vb_release_block((vb_blk)vb);
 	}
 	FIFO_EXIT(&jobs->workq);
 	mutex_unlock(&jobs->lock);
@@ -254,7 +297,7 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	mutex_lock(&jobs->dlock);
 	while (!FIFO_EMPTY(&jobs->doneq)) {
 		FIFO_POP(&jobs->doneq, &vb);
-		vb_release_block((VB_BLK)vb);
+		vb_release_block((vb_blk)vb);
 	}
 	FIFO_EXIT(&jobs->doneq);
 
@@ -269,27 +312,27 @@ EXPORT_SYMBOL_GPL(base_mod_jobs_exit);
  *     Move vb from waitq into workq and put into driver.
  *
  * @param jobs: vb jobs.
- * @return: CVI_SUCCESS if OK.
+ * @return: 0 if OK.
  */
-struct cvi_buffer *base_mod_jobs_enque_work(struct vb_jobs_t *jobs)
+struct video_buffer *base_mod_jobs_enque_work(struct vb_jobs_t *jobs)
 {
 	struct vb_s *vb;
 	int32_t ret = 0;
 
 	if (jobs == NULL) {
-		pr_err("[%p] job is NULL.\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job is NULL.\n", __builtin_return_address(0));
 		return NULL;
 	}
 
 	mutex_lock(&jobs->lock);
 	if (FIFO_EMPTY(&jobs->waitq)) {
 		mutex_unlock(&jobs->lock);
-		pr_err("waitq is empty.\n");
+		TRACE_BASE(DBG_ERR, "waitq is empty.\n");
 		return NULL;
 	}
 	if (FIFO_FULL(&jobs->workq)) {
 		mutex_unlock(&jobs->lock);
-		pr_err("workq is full.\n");
+		TRACE_BASE(DBG_ERR, "workq is full.\n");
 		return NULL;
 	}
 
@@ -297,10 +340,10 @@ struct cvi_buffer *base_mod_jobs_enque_work(struct vb_jobs_t *jobs)
 	FIFO_PUSH(&jobs->workq, vb);
 	mutex_unlock(&jobs->lock);
 
-	pr_debug("phy-addr(%llx).\n", vb->phy_addr);
+	TRACE_BASE(DBG_DEBUG, "phy-addr(%llx).\n", vb->phy_addr);
 
 	if (ret != 0) {
-		pr_err("qbuf error\n");
+		TRACE_BASE(DBG_ERR, "qbuf error\n");
 		return NULL;
 	}
 	return &vb->buf;
@@ -317,7 +360,7 @@ bool base_mod_jobs_waitq_empty(struct vb_jobs_t *jobs)
 	bool is_empty;
 
 	if (jobs == NULL) {
-		pr_err("[%p] job is NULL.\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job is NULL.\n", __builtin_return_address(0));
 		return false;
 	}
 
@@ -339,7 +382,7 @@ bool base_mod_jobs_workq_empty(struct vb_jobs_t *jobs)
 	bool is_empty;
 
 	if (jobs == NULL) {
-		pr_err("[%p] job is NULL.\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job is NULL.\n", __builtin_return_address(0));
 		return false;
 	}
 
@@ -354,77 +397,77 @@ EXPORT_SYMBOL_GPL(base_mod_jobs_workq_empty);
 /* mod_jobs_waitq_pop: pop out from waitq.
  *
  * @param jobs: vb jobs.
- * @return: VB_INVALID_HANDLE is not available; o/w, the VB_BLK.
+ * @return: VB_INVALID_HANDLE is not available; o/w, the vb_blk.
  */
-VB_BLK base_mod_jobs_waitq_pop(struct vb_jobs_t *jobs)
+vb_blk base_mod_jobs_waitq_pop(struct vb_jobs_t *jobs)
 {
 	struct vb_s *p;
 
 	if (jobs == NULL) {
-		pr_err("[%p] job is NULL.\n", __builtin_return_address(0));
+		TRACE_BASE(DBG_ERR, "[%p] job is NULL.\n", __builtin_return_address(0));
 		return VB_INVALID_HANDLE;
 	}
 
 	mutex_lock(&jobs->lock);
 	if (FIFO_EMPTY(&jobs->waitq)) {
 		mutex_unlock(&jobs->lock);
-		pr_err("No more vb in waitq for dequeue.\n");
+		TRACE_BASE(DBG_ERR, "No more vb in waitq for dequeue.\n");
 		return VB_INVALID_HANDLE;
 	}
 	FIFO_POP(&jobs->waitq, &p);
 	mutex_unlock(&jobs->lock);
-	return (VB_BLK)p;
+	return (vb_blk)p;
 }
 EXPORT_SYMBOL_GPL(base_mod_jobs_waitq_pop);
 
 /* mod_jobs_workq_pop: pop out from workq.
  *
  * @param jobs: vb jobs.
- * @return: VB_INVALID_HANDLE is not available; o/w, the VB_BLK.
+ * @return: VB_INVALID_HANDLE is not available; o/w, the vb_blk.
  */
-VB_BLK base_mod_jobs_workq_pop(struct vb_jobs_t *jobs)
+vb_blk base_mod_jobs_workq_pop(struct vb_jobs_t *jobs)
 {
 	struct vb_s *p;
 
 	if (jobs == NULL) {
-		pr_err("Null parameter\n");
+		TRACE_BASE(DBG_ERR, "Null parameter\n");
 		return VB_INVALID_HANDLE;
 	}
 
 	mutex_lock(&jobs->lock);
 	if (FIFO_EMPTY(&jobs->workq)) {
 		mutex_unlock(&jobs->lock);
-		pr_err("No more vb in workq for dequeue.\n");
+		TRACE_BASE(DBG_ERR, "No more vb in workq for dequeue.\n");
 		return VB_INVALID_HANDLE;
 	}
 	FIFO_POP(&jobs->workq, &p);
 	mutex_unlock(&jobs->lock);
-	return (VB_BLK)p;
+	return (vb_blk)p;
 }
 EXPORT_SYMBOL_GPL(base_mod_jobs_workq_pop);
 
-int32_t base_get_frame_info(PIXEL_FORMAT_E fmt, SIZE_S size, struct cvi_buffer *buf, u64 mem_base, u8 align)
+int32_t base_get_frame_info(pixel_format_e fmt, size_s size, struct video_buffer *buf, u64 mem_base, u8 align)
 {
-	VB_CAL_CONFIG_S stVbCalConfig;
+	vb_cal_config_s vbcalconfig;
 	u8 i = 0;
 
-	COMMON_GetPicBufferConfig(size.u32Width, size.u32Height, fmt, DATA_BITWIDTH_8
-		, COMPRESS_MODE_NONE, align, &stVbCalConfig);
+	common_getpicbufferconfig(size.width, size.height, fmt, DATA_BITWIDTH_8
+		, COMPRESS_MODE_NONE, align, &vbcalconfig);
 
 	memset(buf, 0, sizeof(*buf));
 	buf->size = size;
-	buf->enPixelFormat = fmt;
-	for (i = 0; i < stVbCalConfig.plane_num; ++i) {
+	buf->pixel_format = fmt;
+	for (i = 0; i < vbcalconfig.plane_num; ++i) {
 		buf->phy_addr[i] = mem_base;
-		buf->length[i] = ALIGN((i == 0) ? stVbCalConfig.u32MainYSize : stVbCalConfig.u32MainCSize,
-					stVbCalConfig.u16AddrAlign);
-		buf->stride[i] = (i == 0) ? stVbCalConfig.u32MainStride : stVbCalConfig.u32CStride;
+		buf->length[i] = ALIGN((i == 0) ? vbcalconfig.main_y_size : vbcalconfig.main_c_size,
+					vbcalconfig.addr_align);
+		buf->stride[i] = (i == 0) ? vbcalconfig.main_stride : vbcalconfig.c_stride;
 		mem_base += buf->length[i];
 
-		pr_debug("(%llx-%zu-%d)\n", buf->phy_addr[i], buf->length[i], buf->stride[i]);
+		TRACE_BASE(DBG_DEBUG, "(%llx-%zu-%d)\n", buf->phy_addr[i], buf->length[i], buf->stride[i]);
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(base_get_frame_info);
 
@@ -432,21 +475,21 @@ EXPORT_SYMBOL_GPL(base_get_frame_info);
  *
  * @param chn: the channel where the blk is dequeued.
  * @param jobs: vb jobs.
- * @param blk: the VB_BLK to handle.
+ * @param blk: the vb_blk to handle.
  */
-static void _handle_snap(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK blk)
+static void _handle_snap(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk blk)
 {
 	struct vb_s *p = (struct vb_s *)blk;
 	struct vbq *doneq;
 	struct snap_s *s, *s_tmp;
 
 	if (jobs == NULL) {
-		pr_err("handle snap fail, Null parameter\n");
+		TRACE_BASE(DBG_ERR, "handle snap fail, Null parameter\n");
 		return;
 	}
 
 	if (!jobs->inited) {
-		pr_err("handle snap fail, job not inited yet\n");
+		TRACE_BASE(DBG_ERR, "handle snap fail, job not inited yet\n");
 		return;
 	}
 
@@ -456,8 +499,8 @@ static void _handle_snap(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK blk)
 			TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
 			s->blk = blk;
 			atomic_fetch_add(1, &p->usr_cnt);
-			atomic_long_fetch_or(BIT(CVI_ID_USER), &p->mod_ids);
-			s->avail = CVI_TRUE;
+			atomic_long_fetch_or(BIT(ID_USER), &p->mod_ids);
+			s->avail = 1;
 			wake_up(&s->cond_queue);
 			mutex_unlock(&jobs->dlock);
 			return;
@@ -471,11 +514,11 @@ static void _handle_snap(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK blk)
 			struct vb_s *vb = NULL;
 
 			FIFO_POP(doneq, &vb);
-			atomic_long_fetch_and(~BIT(chn.enModId), &vb->mod_ids);
-			vb_release_block((VB_BLK)vb);
+			atomic_long_fetch_and(~BIT(chn.mod_id), &vb->mod_ids);
+			vb_release_block((vb_blk)vb);
 		}
 		atomic_fetch_add(1, &p->usr_cnt);
-		atomic_long_fetch_or(BIT(chn.enModId), &p->mod_ids);
+		atomic_long_fetch_or(BIT(chn.mod_id), &p->mod_ids);
 		FIFO_PUSH(doneq, p);
 	}
 	mutex_unlock(&jobs->dlock);
@@ -488,41 +531,41 @@ static void _handle_snap(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK blk)
  * @param chn: the channel to be queued.
  * @param chn_type: the chn is input(read) or output(write)
  * @param jobs: vb jobs.
- * @param blk: VB_BLK to be queued.
+ * @param blk: vb_blk to be queued.
  */
-int32_t vb_qbuf(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, struct vb_jobs_t *jobs, VB_BLK blk)
+int32_t vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs, vb_blk blk)
 {
 	struct vb_s *vb = (struct vb_s *)blk;
-	s32 ret = CVI_SUCCESS;
+	s32 ret = 0;
 
-	pr_debug("%s dev(%d) chn(%d) chnType(%d): phy-addr(%lld) cnt(%d)\n",
-		     sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId, chn_type,
+	TRACE_BASE(DBG_DEBUG, "%s dev(%d) chn(%d) chnType(%d): phy-addr(%lld) cnt(%d)\n",
+		     sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id, chn_type,
 		     vb->phy_addr, vb->usr_cnt.counter);
 
 	if (!jobs) {
-		pr_err("mod(%s), vb_qbuf fail, error, empty jobs\n", sys_get_modname(chn.enModId));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "mod(%s), vb_qbuf fail, error, empty jobs\n", sys_get_modname(chn.mod_id));
+		return -1;
 	}
 	if (!jobs->inited) {
-		pr_err("mod(%s), vb_qbuf fail, jobs not initialized yet\n", sys_get_modname(chn.enModId));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "mod(%s), vb_qbuf fail, jobs not initialized yet\n", sys_get_modname(chn.mod_id));
+		return -1;
 	}
 
 	mutex_lock(&jobs->lock);
 	if (chn_type == CHN_TYPE_OUT) {
 		if (FIFO_FULL(&jobs->workq)) {
 			mutex_unlock(&jobs->lock);
-			pr_err("%s dev(%d) chn(%d) workq is full. drop new one.\n"
-				     , sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId);
+			TRACE_BASE(DBG_ERR, "%s workq is full. drop new one.\n"
+				     , sys_get_modname(chn.mod_id));
 			return -ENOBUFS;
 		}
-		vb->buf.dev_num = chn.s32ChnId;
+		vb->buf.dev_num = chn.chn_id;
 		FIFO_PUSH(&jobs->workq, vb);
 	} else {
 		if (FIFO_FULL(&jobs->waitq)) {
 			mutex_unlock(&jobs->lock);
-			pr_err("%s dev(%d) chn(%d) waitq is full. drop new one.\n"
-				     , sys_get_modname(chn.enModId), chn.s32DevId, chn.s32ChnId);
+			TRACE_BASE(DBG_ERR, "%s dev(%d) chn(%d) waitq is full. drop new one.\n"
+				     , sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id);
 			return -ENOBUFS;
 		}
 		FIFO_PUSH(&jobs->waitq, vb);
@@ -531,7 +574,7 @@ int32_t vb_qbuf(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, struct vb_jobs_t *jobs,
 	mutex_unlock(&jobs->lock);
 
 	atomic_fetch_add(1, &vb->usr_cnt);
-	atomic_long_fetch_or(BIT(chn.enModId), &vb->mod_ids);
+	atomic_long_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(vb_qbuf);
@@ -540,41 +583,41 @@ EXPORT_SYMBOL_GPL(vb_qbuf);
  *
  * @param chn: the channel to be dequeued.
  * @param jobs: vb jobs.
- * @param blk: the VB_BLK dequeued.
- * @return: status of operation. CVI_SUCCESS if OK.
+ * @param blk: the vb_blk dequeued.
+ * @return: status of operation. 0 if OK.
  */
-int32_t vb_dqbuf(MMF_CHN_S chn, struct vb_jobs_t *jobs, VB_BLK *blk)
+int32_t vb_dqbuf(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk *blk)
 {
 	struct vb_s *p;
 
 	if (blk == NULL) {
-		pr_err("[%p] blk is NULL.\n", __builtin_return_address(0));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "[%p] blk is NULL.\n", __builtin_return_address(0));
+		return -1;
 	}
 	*blk = VB_INVALID_HANDLE;
 	if (jobs == NULL) {
-		pr_err("[%p] job is NULL.\n", __builtin_return_address(0));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "[%p] job is NULL.\n", __builtin_return_address(0));
+		return -1;
 	}
 	if (!jobs->inited) {
-		pr_err("mod(%s), vb_qbuf fail, jobs not initialized yet\n", sys_get_modname(chn.enModId));
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "mod(%s), vb_qbuf fail, jobs not initialized yet\n", sys_get_modname(chn.mod_id));
+		return -1;
 	}
 
 	mutex_lock(&jobs->lock);
 	// get vb from workq which is done.
 	if (FIFO_EMPTY(&jobs->workq)) {
 		mutex_unlock(&jobs->lock);
-		pr_err("%s ChnId(%d) No more vb for dequeue.\n",
-			     sys_get_modname(chn.enModId), chn.s32ChnId);
-		return CVI_FAILURE;
+		TRACE_BASE(DBG_ERR, "%s ChnId(%d) No more vb for dequeue.\n",
+			     sys_get_modname(chn.mod_id), chn.chn_id);
+		return -1;
 	}
 	FIFO_POP(&jobs->workq, &p);
 	mutex_unlock(&jobs->lock);
-	*blk = (VB_BLK)p;
-	atomic_long_fetch_and(~BIT(chn.enModId), &p->mod_ids);
+	*blk = (vb_blk)p;
+	atomic_long_fetch_and(~BIT(chn.mod_id), &p->mod_ids);
 
-	return CVI_SUCCESS;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(vb_dqbuf);
 
@@ -587,45 +630,44 @@ EXPORT_SYMBOL_GPL(vb_dqbuf);
  *                True: module generates(output) vb.
  *                False: module take(input) vb.
  * @param jobs: vb jobs.
- * @param blk: VB_BLK.
- * @return: status of operation. CVI_SUCCESS if OK.
+ * @param blk: vb_blk.
+ * @return: status of operation. 0 if OK.
  */
-int32_t vb_done_handler(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, struct vb_jobs_t *jobs, VB_BLK blk)
+int32_t vb_done_handler(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs, vb_blk blk)
 {
-	MMF_BIND_DEST_S stBindDest;
+	mmf_bind_dest_s bind_dest;
 	s32 ret;
 	u8 i;
-	MOD_ID_E id;
+	mod_id_e id;
 
 	if (chn_type == CHN_TYPE_OUT) {
 		_handle_snap(chn, jobs, blk);
-		if (bind_get_dst(&chn, &stBindDest) == CVI_SUCCESS) {
-			for (i = 0; i < stBindDest.u32Num; ++i) {
-				id = stBindDest.astMmfChn[i].enModId;
-				if (base_recv_cb[id]) {
-					ret = (*base_recv_cb[id])(stBindDest.astMmfChn[i], blk);
-					if (ret != CVI_SUCCESS) {
-						pr_info("%s base_recv_cb fail.",
-							sys_get_modname(stBindDest.astMmfChn[i].enModId));
-						if (chn.enModId == CVI_ID_VDEC)
-							return ret;
+		if (bind_get_dst(&chn, &bind_dest) == 0) {
+			for (i = 0; i < bind_dest.num; ++i) {
+				id = bind_dest.mmf_chn[i].mod_id;
+				if (g_base_recv_cb[id]) {
+					ret = (*g_base_recv_cb[id])(bind_dest.mmf_chn[i], blk);
+					if (ret != 0) {
+						TRACE_BASE(DBG_INFO, "%s g_base_recv_cb fail.",
+							sys_get_modname(bind_dest.mmf_chn[i].mod_id));
+						//return ret;
 					}
 				}
-				//vb_qbuf(stBindDest.astMmfChn[i], CHN_TYPE_IN, jobs, blk);
-				pr_debug(" Mod(%s) chn(%d) dev(%d) -> Mod(%s) chn(%d) dev(%d)\n"
-					     , sys_get_modname(chn.enModId), chn.s32ChnId, chn.s32DevId
-					     , sys_get_modname(stBindDest.astMmfChn[i].enModId)
-					     , stBindDest.astMmfChn[i].s32ChnId
-					     , stBindDest.astMmfChn[i].s32DevId);
+				//vb_qbuf(stBindDest.mmf_chn[i], CHN_TYPE_IN, jobs, blk);
+				TRACE_BASE(DBG_DEBUG, " Mod(%s) chn(%d) dev(%d) -> Mod(%s) chn(%d) dev(%d)\n"
+					     , sys_get_modname(chn.mod_id), chn.chn_id, chn.dev_id
+					     , sys_get_modname(bind_dest.mmf_chn[i].mod_id)
+					     , bind_dest.mmf_chn[i].chn_id
+					     , bind_dest.mmf_chn[i].dev_id);
 			}
 		} else {
 			// release if not found
-			pr_debug("Mod(%s) chn(%d) dev(%d) src no dst release\n"
-				     , sys_get_modname(chn.enModId), chn.s32ChnId, chn.s32DevId);
+			TRACE_BASE(DBG_DEBUG, "Mod(%s) chn(%d) dev(%d) src no dst release\n"
+				     , sys_get_modname(chn.mod_id), chn.chn_id, chn.dev_id);
 		}
 	} else {
-		pr_debug("Mod(%s) chn(%d) dev(%d) dst out release\n"
-			     , sys_get_modname(chn.enModId), chn.s32ChnId, chn.s32DevId);
+		TRACE_BASE(DBG_DEBUG, "Mod(%s) chn(%d) dev(%d) dst out release\n"
+			     , sys_get_modname(chn.mod_id), chn.chn_id, chn.dev_id);
 	}
 	ret = vb_release_block(blk);
 

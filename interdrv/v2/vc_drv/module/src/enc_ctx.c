@@ -1,185 +1,186 @@
 #include "venc.h"
 #include "enc_ctx.h"
 #include "module_common.h"
-#include "cvi_venc.h"
+#include "drv_venc.h"
 #include "main_helper.h"
+#include "datastructure.h"
 
 #define JPEG_STREAM_CNT (2)
 
-static CVI_VOID setSrcInfo(CVIFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
-               const VIDEO_FRAME_INFO_S *pstFrame)
+static void _set_src_info(DRVFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
+               const video_frame_info_s *pstFrame)
 {
     venc_enc_ctx_base *pvecb = &pEncCtx->base;
-    const VIDEO_FRAME_S *pstVFrame;
+    const video_frame_s *pstVFrame;
 
-    pstVFrame = &pstFrame->stVFrame;
+    pstVFrame = &pstFrame->video_frame;
 
-    psi->strideY = pstVFrame->u32Stride[0];
-    psi->strideC = pstVFrame->u32Stride[1];
+    psi->strideY = pstVFrame->stride[0];
+    psi->strideC = pstVFrame->stride[1];
     psi->vbY.phys_addr =
-        pstVFrame->u64PhyAddr[0] + psi->strideY * pvecb->y + pvecb->x;
+        pstVFrame->phyaddr[0] + psi->strideY * pvecb->y + pvecb->x;
 
-    switch (pstVFrame->enPixelFormat) {
+    switch (pstVFrame->pixel_format) {
     case PIXEL_FORMAT_YUV_PLANAR_422:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
-        psi->chromaInterleave = CVI_CBCR_SEPARATED;
-        psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
+        psi->chromaInterleave = DRV_CBCR_SEPARATED;
+        psi->vbCb.phys_addr = pstVFrame->phyaddr[1] +
                       psi->strideC * pvecb->y + pvecb->x / 2;
-        psi->vbCr.phys_addr = pstVFrame->u64PhyAddr[2] +
+        psi->vbCr.phys_addr = pstVFrame->phyaddr[2] +
                       psi->strideC * pvecb->y + pvecb->x / 2;
         break;
     case PIXEL_FORMAT_NV16:
     case PIXEL_FORMAT_NV61:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
-        psi->chromaInterleave = CVI_CBCR_INTERLEAVE;
-        psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
+        psi->chromaInterleave = DRV_CBCR_INTERLEAVE;
+        psi->vbCb.phys_addr = pstVFrame->phyaddr[1] +
                       psi->strideC * pvecb->y + pvecb->x / 2;
-        psi->vbCr.phys_addr = pstVFrame->u64PhyAddr[2] +
+        psi->vbCr.phys_addr = pstVFrame->phyaddr[2] +
                       psi->strideC * pvecb->y + pvecb->x / 2;
         break;
     case PIXEL_FORMAT_YUYV:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_422_YUYV;
-        psi->chromaInterleave = CVI_CBCR_INTERLEAVE;
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_422_YUYV;
+        psi->chromaInterleave = DRV_CBCR_INTERLEAVE;
         psi->vbCb.phys_addr = 0;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_UYVY:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_422_UYVY;
-        psi->chromaInterleave = CVI_CBCR_INTERLEAVE;
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_422_UYVY;
+        psi->chromaInterleave = DRV_CBCR_INTERLEAVE;
         psi->vbCb.phys_addr = 0;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_YVYU:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_422_YVYU;
-        psi->chromaInterleave = CVI_CBCR_INTERLEAVE;
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_422_YVYU;
+        psi->chromaInterleave = DRV_CBCR_INTERLEAVE;
         psi->vbCb.phys_addr = 0;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_VYUY:
-        psi->format = CVI_FORMAT_422;
-        psi->packedFormat = CVI_PACKED_FORMAT_422_VYUY;
-        psi->chromaInterleave = CVI_CBCR_INTERLEAVE;
+        psi->format = DRV_FORMAT_422;
+        psi->packedFormat = DRV_PACKED_FORMAT_422_VYUY;
+        psi->chromaInterleave = DRV_CBCR_INTERLEAVE;
         psi->vbCb.phys_addr = 0;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_NV12:
     case PIXEL_FORMAT_NV21:
-        psi->format = CVI_FORMAT_420;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
+        psi->format = DRV_FORMAT_420;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
         psi->chromaInterleave =
-            (pstVFrame->enPixelFormat == PIXEL_FORMAT_NV12) ?
-                      CVI_CBCR_INTERLEAVE :
-                      CVI_CRCB_INTERLEAVE;
-        psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+            (pstVFrame->pixel_format == PIXEL_FORMAT_NV12) ?
+                      DRV_CBCR_INTERLEAVE :
+                      DRV_CRCB_INTERLEAVE;
+        psi->vbCb.phys_addr = pstVFrame->phyaddr[1] +
                       psi->strideC * pvecb->y / 2 + pvecb->x;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_YUV_PLANAR_444:
-        psi->format = CVI_FORMAT_444;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
-        psi->chromaInterleave = CVI_CBCR_SEPARATED;
-        psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+        psi->format = DRV_FORMAT_444;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
+        psi->chromaInterleave = DRV_CBCR_SEPARATED;
+        psi->vbCb.phys_addr = pstVFrame->phyaddr[1] +
                       psi->strideC * pvecb->y + pvecb->x;
-        psi->vbCr.phys_addr = pstVFrame->u64PhyAddr[2] +
+        psi->vbCr.phys_addr = pstVFrame->phyaddr[2] +
                       psi->strideC * pvecb->y + pvecb->x;
         break;
     case PIXEL_FORMAT_YUV_400:
-        psi->format = CVI_FORMAT_400;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
-        psi->chromaInterleave = CVI_CBCR_SEPARATED;
+        psi->format = DRV_FORMAT_400;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
+        psi->chromaInterleave = DRV_CBCR_SEPARATED;
         psi->vbCb.phys_addr = 0;
         psi->vbCr.phys_addr = 0;
         break;
     case PIXEL_FORMAT_YUV_PLANAR_420:
     default:
-        psi->format = CVI_FORMAT_420;
-        psi->packedFormat = CVI_PACKED_FORMAT_NONE;
-        psi->chromaInterleave = CVI_CBCR_SEPARATED;
-        psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+        psi->format = DRV_FORMAT_420;
+        psi->packedFormat = DRV_PACKED_FORMAT_NONE;
+        psi->chromaInterleave = DRV_CBCR_SEPARATED;
+        psi->vbCb.phys_addr = pstVFrame->phyaddr[1] +
                       psi->strideC * pvecb->y / 2 +
                       pvecb->x / 2;
-        psi->vbCr.phys_addr = pstVFrame->u64PhyAddr[2] +
+        psi->vbCr.phys_addr = pstVFrame->phyaddr[2] +
                       psi->strideC * pvecb->y / 2 +
                       pvecb->x / 2;
         break;
     }
 
-    psi->width = pstVFrame->u32Width;
-    psi->height = pstVFrame->u32Height;
+    psi->width = pstVFrame->width;
+    psi->height = pstVFrame->height;
 
-    psi->vbY.virt_addr = (void *)pstVFrame->pu8VirAddr[0] +
-                 (psi->vbY.phys_addr - pstVFrame->u64PhyAddr[0]);
-    psi->vbCb.virt_addr = (void *)pstVFrame->pu8VirAddr[1] +
-                  (psi->vbCb.phys_addr - pstVFrame->u64PhyAddr[1]);
-    psi->vbCr.virt_addr = (void *)pstVFrame->pu8VirAddr[2] +
-                  (psi->vbCr.phys_addr - pstVFrame->u64PhyAddr[2]);
+    psi->vbY.virt_addr = (void *)pstVFrame->viraddr[0] +
+                 (psi->vbY.phys_addr - pstVFrame->phyaddr[0]);
+    psi->vbCb.virt_addr = (void *)pstVFrame->viraddr[1] +
+                  (psi->vbCb.phys_addr - pstVFrame->phyaddr[1]);
+    psi->vbCr.virt_addr = (void *)pstVFrame->viraddr[2] +
+                  (psi->vbCr.phys_addr - pstVFrame->phyaddr[2]);
 
 }
 
 
 
-static CVI_S32 jpege_init(CVI_VOID)
+static int jpege_init(void *ctx)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
+    venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
-    status = CVIJpgInit();
-    if (status != CVI_SUCCESS) {
-        CVIJpgUninit();
-        CVI_VENC_ERR("CVIJpgUninit\n");
-        return CVI_FAILURE;
+    pEncCtx->ext.jpeg.handle = jpeg_enc_init();
+    if (pEncCtx->ext.jpeg.handle == NULL) {
+        DRV_VENC_ERR("jpeg_init\n");
+        return -1;
     }
 
     return status;
 }
 
-static CVI_S32 jpege_close(CVI_VOID *ctx)
+static int jpege_close(void *ctx)
 {
-    CVI_S32 status = CVI_SUCCESS;
-    CVIJpgHandle *pHandle;
+    int status = 0;
+    drv_jpg_handle *pHandle;
 
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     pHandle = pEncCtx->ext.jpeg.handle;
     if (pHandle != NULL) {
-        CVIJpgClose(pHandle);
+        jpeg_enc_close(pHandle);
+        jpeg_enc_deinit(pHandle);
         pEncCtx->ext.jpeg.handle = NULL;
-        CVIJpgUninit();
     }
 
     return status;
 }
 
 
-static CVI_S32 jpege_open(CVI_VOID *handle, CVI_VOID *pchnctx)
+static int jpege_open(void *handle, void *pchnctx)
 {
     venc_context *pHandle = (venc_context *)handle;
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    CVI_S32 status = CVI_SUCCESS;
-    CVIJpgConfig config;
-    CVIJpgHandle jpghandle = NULL;
-    VENC_RC_ATTR_S *prcatt = NULL;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    int status = 0;
+    drv_jpg_config config;
+    venc_rc_attr_s *prcatt = NULL;
     venc_enc_ctx *pEncCtx = &pChnHandle->encCtx;
 
-    memset(&config, 0, sizeof(CVIJpgConfig));
+    memset(&config, 0, sizeof(drv_jpg_config));
 
     // JPEG marker order
     memcpy(config.u.enc.jpgMarkerOrder,
            pHandle->ModParam.stJpegeModParam.JpegMarkerOrder,
-           CVI_JPG_MARKER_ORDER_BUF_SIZE);
+           DRV_JPG_MARKER_ORDER_BUF_SIZE);
 
-    config.type = CVIJPGCOD_ENC;
+    config.type = JPGCOD_ENC;
     config.u.enc.picWidth = pEncCtx->base.width;
     config.u.enc.picHeight = pEncCtx->base.height;
-    config.u.enc.chromaInterleave = CVI_CBCR_SEPARATED; // CbCr Separated
+    config.u.enc.chromaInterleave = DRV_CBCR_SEPARATED; // CbCr Separated
     config.u.enc.mirDir = pChnAttr->stVencAttr.enMirrorDirextion;
     config.u.enc.src_type = JPEG_MEM_EXTERNAL;
     config.u.enc.rotAngle = pChnAttr->stVencAttr.enRotation;
+    config.u.enc.external_bs_addr = pChnAttr->stVencAttr.u64ExternalBufAddr;
     config.u.enc.singleEsBuffer =
         pHandle->ModParam.stJpegeModParam.bSingleEsBuf;
     if (config.u.enc.singleEsBuffer)
@@ -188,88 +189,94 @@ static CVI_S32 jpege_open(CVI_VOID *handle, CVI_VOID *pchnctx)
     else
         config.u.enc.bitstreamBufSize = pChnAttr->stVencAttr.u32BufSize;
 
-    if(!config.u.enc.bitstreamBufSize)
-        config.u.enc.bitstreamBufSize = CVI_JPG_DEFAULT_BUFSIZE;
+    if(!config.u.enc.bitstreamBufSize) {
+        if(config.u.enc.external_bs_addr){
+            DRV_VENC_ERR("user set external bs buffer, but bs size is 0, check it.\n");
+            return DRV_ERR_VENC_ILLEGAL_PARAM;
+        } else {
+            config.u.enc.bitstreamBufSize = 512 * 1024;
+        }
+    }
 
     switch (pChnAttr->stVencAttr.enPixelFormat) {
     case PIXEL_FORMAT_YUV_PLANAR_422:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
         break;
     case PIXEL_FORMAT_YUYV:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_422_YUYV;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_422_YUYV;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_UYVY:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_422_UYVY;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_422_UYVY;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_YVYU:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_422_YVYU;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_422_YVYU;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_VYUY:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_422_VYUY;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_422_VYUY;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_NV16:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_NV61:
-        config.u.enc.sourceFormat = CVI_FORMAT_422;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
-        config.u.enc.chromaInterleave = CVI_CRCB_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_422;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
+        config.u.enc.chromaInterleave = DRV_CRCB_INTERLEAVE;
         break;
     case PIXEL_FORMAT_NV12:
-        config.u.enc.sourceFormat = CVI_FORMAT_420;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
-        config.u.enc.chromaInterleave = CVI_CBCR_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_420;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
+        config.u.enc.chromaInterleave = DRV_CBCR_INTERLEAVE;
         break;
     case PIXEL_FORMAT_NV21:
-        config.u.enc.sourceFormat = CVI_FORMAT_420;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
-        config.u.enc.chromaInterleave = CVI_CRCB_INTERLEAVE;
+        config.u.enc.sourceFormat = DRV_FORMAT_420;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
+        config.u.enc.chromaInterleave = DRV_CRCB_INTERLEAVE;
         break;
     case PIXEL_FORMAT_YUV_400:
-        config.u.enc.sourceFormat = CVI_FORMAT_400;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
+        config.u.enc.sourceFormat = DRV_FORMAT_400;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
         break;
     case PIXEL_FORMAT_YUV_PLANAR_444:
-        config.u.enc.sourceFormat = CVI_FORMAT_444;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
+        config.u.enc.sourceFormat = DRV_FORMAT_444;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
         break;
     case PIXEL_FORMAT_YUV_PLANAR_420:
-        config.u.enc.sourceFormat = CVI_FORMAT_420;
-        config.u.enc.packedFormat = CVI_PACKED_FORMAT_NONE;
+        config.u.enc.sourceFormat = DRV_FORMAT_420;
+        config.u.enc.packedFormat = DRV_PACKED_FORMAT_NONE;
         break;
     default:
-        CVI_VENC_ERR("jpeg not support fmt:%d\n",pChnAttr->stVencAttr.enPixelFormat);
-        return CVI_ERR_VENC_NOT_SUPPORT;
+        DRV_VENC_ERR("jpeg not support fmt:%d\n",pChnAttr->stVencAttr.enPixelFormat);
+        return DRV_ERR_VENC_NOT_SUPPORT;
     }
 
-    CVI_VENC_WARN("fmt:%d sfmt:%d pfmt:%d\n", pChnAttr->stVencAttr.enPixelFormat,
+    DRV_VENC_WARN("fmt:%d sfmt:%d pfmt:%d\n", pChnAttr->stVencAttr.enPixelFormat,
         config.u.enc.sourceFormat, config.u.enc.packedFormat);
 
     if ((config.u.enc.bitstreamBufSize & 0x3FF) != 0) {
-        CVI_VENC_WARN("%s bitstreamBufSize (0x%x) must align to 1024\n",
+        DRV_VENC_WARN("%s bitstreamBufSize (0x%x) must align to 1024\n",
                  __func__, config.u.enc.bitstreamBufSize);
         config.u.enc.bitstreamBufSize -= config.u.enc.bitstreamBufSize&0x3FF;
-        //return CVI_ERR_VENC_NOT_SUPPORT;
+        //return DRV_ERR_VENC_NOT_SUPPORT;
     }
     prcatt = &pChnAttr->stRcAttr;
 
     if (prcatt->enRcMode == VENC_RC_MODE_MJPEGFIXQP) {
-        VENC_MJPEG_FIXQP_S *pstMJPEGFixQp = &prcatt->stMjpegFixQp;
+        venc_mjpeg_fixqp_s *pstMJPEGFixQp = &prcatt->stMjpegFixQp;
 
         config.u.enc.quality = pstMJPEGFixQp->u32Qfactor;
     } else {
-        VENC_MJPEG_CBR_S *pstMJPEGCbr = &prcatt->stMjpegCbr;
+        venc_mjpeg_cbr_s *pstMJPEGCbr = &prcatt->stMjpegCbr;
         int frameRateDiv, frameRateRes;
 
         config.u.enc.bitrate = pstMJPEGCbr->u32BitRate;
@@ -285,56 +292,52 @@ static CVI_S32 jpege_open(CVI_VOID *handle, CVI_VOID *pchnctx)
     }
 
     config.s32ChnNum = pChnHandle->VeChn;
-    jpghandle = CVIJpgOpen(config);
-    if (jpghandle == NULL) {
-        CVI_VENC_ERR("%s CVIJpgOpen failed !\n", __func__);
-        jpege_close(pEncCtx);
-        return CVI_ERR_VENC_NULL_PTR;
+    status = jpeg_enc_open(pEncCtx->ext.jpeg.handle, config);
+    if (status != 0) {
+        DRV_VENC_ERR("%s jpeg_enc_open failed !\n", __func__);
+        jpeg_enc_close(pEncCtx->ext.jpeg.handle);
+        return DRV_ERR_VENC_NULL_PTR;
     }
-    pEncCtx->ext.jpeg.handle = jpghandle;
 
     return status;
 }
 
-static CVI_S32 jpege_enc_one_pic(CVI_VOID *ctx,
-                 const VIDEO_FRAME_INFO_S *pstFrame,
-                 CVI_S32 s32MIlliSec)
+static int jpege_enc_one_pic(void *ctx,
+                 const video_frame_info_s *pstFrame,
+                 int s32MIlliSec)
 {
-    CVIJpgHandle *pHandle;
-    CVIFRAMEBUF srcInfo, *psi = &srcInfo;
-    CVI_S32 status = CVI_SUCCESS;
+    drv_jpg_handle *pHandle;
+    DRVFRAMEBUF srcInfo, *psi = &srcInfo;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     pHandle = pEncCtx->ext.jpeg.handle;
 
-    setSrcInfo(psi, pEncCtx, pstFrame);
+    _set_src_info(psi, pEncCtx, pstFrame);
 
-    status = CVIJpgSendFrameData(pHandle, (void *)&srcInfo,
-                     JPEG_MEM_EXTERNAL, s32MIlliSec);
-
+    status = jpeg_enc_send_frame(pHandle, &srcInfo);
     if (status == ENC_TIMEOUT) {
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
-        return CVI_ERR_VENC_BUSY;
+        return DRV_ERR_VENC_BUSY;
     }
 
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("Failed to CVIJpgSendFrameData, ret = %x\n",
-                 status);
-        jpege_close(pEncCtx);
-        return CVI_ERR_VENC_BUSY;
+    if (status != 0) {
+        DRV_VENC_ERR("Failed to jpeg_enc_send_frame, ret = %x\n", status);
+        jpeg_enc_close(pHandle);
+        return DRV_ERR_VENC_BUSY;
     }
 
     return status;
 }
 
-static CVI_S32 jpege_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
-                CVI_S32 s32MilliSec)
+static int jpege_get_stream(void *ctx, venc_stream_s *pstStream,
+                int s32MilliSec)
 {
-    SOPHGO_S_USER_BUF sopBuf[2] = { 0 };
-    CVI_S32 status = CVI_SUCCESS;
-    CVIJpgHandle *pHandle;
-    VENC_PACK_S *ppack;
+    JPG_BUF stream_buffer[2] = { 0 };
+    int status = 0;
+    drv_jpg_handle *pHandle;
+    venc_pack_s *ppack;
     int i;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
@@ -342,74 +345,64 @@ static CVI_S32 jpege_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
 
     pHandle = pEncCtx->ext.jpeg.handle;
 
-    status = CVIJpgGetFrameData(
-        pHandle, (void *)sopBuf, sizeof(SOPHGO_S_USER_BUF),
-        (unsigned long int *)&pEncCtx->base.u64EncHwTime);
-#if 0
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("Failed to CVIJpgGetFrameData, ret = %x\n",
-                 status);
-        jpege_close(pEncCtx);
-        return CVI_ERR_VENC_BUSY;
+    status = jpeg_enc_get_stream(
+        pHandle, (void *)stream_buffer, (unsigned long int *)&pEncCtx->base.u64EncHwTime);
+    if (status != 0) {
+        DRV_VENC_ERR("Failed to jpeg_enc_get_stream, ret = %x\n", status);
+        return DRV_ERR_VENC_BUSY;
     }
-#else
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("Failed to CVIJpgGetFrameData, ret = %x\n", status);
-        return CVI_ERR_VENC_BUSY;
-    }
-#endif
 
     pstStream->u32PackCount = JPEG_STREAM_CNT;
     for(i = 0; i < pstStream->u32PackCount; i++) {
         ppack = &pstStream->pstPack[i];
 
-        memset(ppack, 0, sizeof(VENC_PACK_S));
+        memset(ppack, 0, sizeof(venc_pack_s));
 
-        ppack->pu8Addr = (CVI_U8 *)sopBuf[i].virt_addr;
-        ppack->u64PhyAddr = sopBuf[i].phys_addr;
-        ppack->u32Len = sopBuf[i].size;
+        ppack->pu8Addr = (unsigned char *)stream_buffer[i].virt_addr;
+        ppack->u64PhyAddr = stream_buffer[i].phys_addr;
+        ppack->u32Len = stream_buffer[i].size;
         ppack->u64PTS = pEncCtx->base.u64PTS;
     }
 
     return status;
 }
 
-static CVI_S32 jpege_release_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream)
+static int jpege_release_stream(void *ctx, venc_stream_s *pstStream)
 {
-    CVI_S32 status = CVI_SUCCESS;
-    CVIJpgHandle *pHandle;
+    int status = 0;
+    drv_jpg_handle *pHandle;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     UNREFERENCED_PARAM(pstStream);
 
     pHandle = pEncCtx->ext.jpeg.handle;
-    status = CVIJpgReleaseFrameData(pHandle);
+    status = jpeg_enc_release_stream(pHandle);
 
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("Failed to CVIJpgReleaseFrameData, ret = %x\n",
+    if (status != 0) {
+        DRV_VENC_ERR("Failed to jpeg_enc_release_stream, ret = %x\n",
                  status);
-        jpege_close(pEncCtx);
-        return CVI_ERR_VENC_BUSY;
+        jpeg_enc_close(pHandle);
+        return DRV_ERR_VENC_BUSY;
     }
 
-    return CVI_SUCCESS;
+    return 0;
 }
 
-static CVI_S32 jpege_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg)
+static int jpege_ioctl(void *ctx, int op, void *arg)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    CVI_S32 currOp;
+    int currOp;
 
-    currOp = (op & CVI_JPEG_OP_MASK) >> CVI_JPEG_OP_SHIFT;
+    currOp = (op & DRV_JPEG_OP_MASK) >> DRV_JPEG_OP_SHIFT;
     if (currOp == 0) {
-        CVI_VENC_WARN("op = 0x%X, currOp = 0x%X\n", op, currOp);
+        DRV_VENC_WARN("op = 0x%X, currOp = 0x%X\n", op, currOp);
         return 0;
     }
 
-    status = cviJpegIoctl(pEncCtx->ext.jpeg.handle, currOp, arg);
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("cviJpgIoctl, currOp = 0x%X, status = %d\n",
+    status = jpeg_ioctl(pEncCtx->ext.jpeg.handle, currOp, arg);
+    if (status != 0) {
+        DRV_VENC_ERR("jpeg_ioctl, currOp = 0x%X, status = %d\n",
                  currOp, status);
         return status;
     }
@@ -417,26 +410,26 @@ static CVI_S32 jpege_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg)
     return status;
 }
 
-static CVI_S32 vidEnc_init(CVI_VOID)
+static int vid_enc_init(void *ctx)
 {
-    CVI_S32 status = CVI_SUCCESS;
-    cviVencInit();
+    int status = 0;
+    internal_venc_init();
     return status;
 }
 
-static CVI_S32 vidEnc_open(CVI_VOID *handle, CVI_VOID *pchnctx)
+static int vid_enc_open(void *handle, void *pchnctx)
 {
     venc_context *pHandle = (venc_context *)handle;
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    CVI_S32 status = CVI_SUCCESS;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    int status = 0;
     venc_enc_ctx *pEncCtx = &pChnHandle->encCtx;
-    VENC_ATTR_S *pVencAttr = &pChnAttr->stVencAttr;
-    VENC_GOP_EX_ATTR_S *pVencGopExAttr = &pChnAttr->stGopExAttr;
-    cviInitEncConfig initEncCfg, *pInitEncCfg;
+    venc_attr_s *pVencAttr = &pChnAttr->stVencAttr;
+    venc_gop_ex_attr_s *pVencGopExAttr = &pChnAttr->stGopExAttr;
+    InitEncConfig initEncCfg, *pInitEncCfg;
 
     pInitEncCfg = &initEncCfg;
-    memset(pInitEncCfg, 0, sizeof(cviInitEncConfig));
+    memset(pInitEncCfg, 0, sizeof(InitEncConfig));
 
     pInitEncCfg->codec =
         (pVencAttr->enType == PT_H265) ? CODEC_H265 : CODEC_H264;
@@ -499,20 +492,20 @@ static CVI_S32 vidEnc_open(CVI_VOID *handle, CVI_VOID *pchnctx)
         pEncCtx->ext.vid.setInitCfgRc(pInitEncCfg, pChnHandle);
 
 
-    pEncCtx->ext.vid.pHandle = cviVEncOpen(pInitEncCfg);
+    pEncCtx->ext.vid.pHandle = internal_venc_open(pInitEncCfg);
     if (!pEncCtx->ext.vid.pHandle) {
-        CVI_VENC_ERR("cviVEncOpen\n");
-        return CVI_ERR_VENC_NULL_PTR;
+        DRV_VENC_ERR("internal_venc_open\n");
+        return DRV_ERR_VENC_NULL_PTR;
     }
 
     return status;
 }
 
-static CVI_VOID cviSetInitCfgGop(cviInitEncConfig *pInitEncCfg,
+static void set_init_cfg_gop(InitEncConfig *pInitEncCfg,
                  venc_chn_context *pChnHandle)
 {
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_GOP_ATTR_S *pga = &pChnAttr->stGopAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_gop_attr_s *pga = &pChnAttr->stGopAttr;
 
     pInitEncCfg->virtualIPeriod = 0;
 
@@ -527,46 +520,46 @@ static CVI_VOID cviSetInitCfgGop(cviInitEncConfig *pInitEncCfg,
     }
 }
 
-static CVI_VOID h264e_setInitCfgFixQp(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx)
+static void h264e_set_initcfg_fixqp(InitEncConfig *pInitEncCfg,
+                      void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H264_FIXQP_S *pstH264FixQp = &prcatt->stH264FixQp;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h264_fixqp_s *pstH264FixQp = &prcatt->stH264FixQp;
 
     pInitEncCfg->iqp = pstH264FixQp->u32IQp;
     pInitEncCfg->pqp = pstH264FixQp->u32PQp;
     pInitEncCfg->gop = pstH264FixQp->u32Gop;
     pInitEncCfg->framerate = (int)pstH264FixQp->fr32DstFrameRate;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h264e_setInitCfgCbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h264e_set_initcfg_cbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H264_CBR_S *pstH264Cbr = &prcatt->stH264Cbr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h264_cbr_s *pstH264Cbr = &prcatt->stH264Cbr;
 
     pInitEncCfg->statTime = pstH264Cbr->u32StatTime;
     pInitEncCfg->gop = pstH264Cbr->u32Gop;
     pInitEncCfg->bitrate = pstH264Cbr->u32BitRate;
     pInitEncCfg->framerate = (int)pstH264Cbr->fr32DstFrameRate;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h264e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h264e_set_initcfg_vbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H264_VBR_S *pstH264Vbr = &prcatt->stH264Vbr;
-    VENC_RC_PARAM_S *prcparam = &pChnHandle->rcParam;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h264_vbr_s *pstH264Vbr = &prcatt->stH264Vbr;
+    venc_rc_param_s *prcparam = &pChnHandle->rcParam;
 
     pInitEncCfg->statTime = pstH264Vbr->u32StatTime;
     pInitEncCfg->gop = pstH264Vbr->u32Gop;
@@ -575,17 +568,17 @@ static CVI_VOID h264e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
     pInitEncCfg->framerate = (int)pstH264Vbr->fr32DstFrameRate;
     pInitEncCfg->s32ChangePos = prcparam->stParamH264Vbr.s32ChangePos;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h264e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
-                     CVI_VOID *pchnctx)
+static void h264e_set_initcfg_avbr(InitEncConfig *pInitEncCfg,
+                     void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H264_AVBR_S *pstH264AVbr = &prcatt->stH264AVbr;
-    VENC_PARAM_H264_AVBR_S *pprc = &pChnHandle->rcParam.stParamH264AVbr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h264_avbr_s *pstH264AVbr = &prcatt->stH264AVbr;
+    venc_param_h264_avbr_s *pprc = &pChnHandle->rcParam.stParamH264AVbr;
 
     pInitEncCfg->statTime = pstH264AVbr->u32StatTime;
     pInitEncCfg->gop = pstH264AVbr->u32Gop;
@@ -600,26 +593,26 @@ static CVI_VOID h264e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
     pInitEncCfg->s32AvbrFrmGap = pprc->s32AvbrFrmGap;
     pInitEncCfg->s32AvbrPureStillThr = pprc->s32AvbrPureStillThr;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h264e_setInitCfgUbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h264e_set_initcfg_ubr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H264_UBR_S *pstH264Ubr = &prcatt->stH264Ubr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h264_ubr_s *pstH264Ubr = &prcatt->stH264Ubr;
 
     pInitEncCfg->statTime = pstH264Ubr->u32StatTime;
     pInitEncCfg->gop = pstH264Ubr->u32Gop;
     pInitEncCfg->bitrate = pstH264Ubr->u32BitRate;
     pInitEncCfg->framerate = (int)pstH264Ubr->fr32DstFrameRate;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_S32 h264e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 cviNalType)
+static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
 {
     int h264naluType[] = {
         H264E_NALU_ISLICE,
@@ -634,69 +627,69 @@ static CVI_S32 h264e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 cviNalType)
     int naluType;
 
     if (!ppack) {
-        CVI_VENC_ERR("ppack is NULL\n");
+        DRV_VENC_ERR("ppack is NULL\n");
         return -1;
     }
 
     if (!ppack->pu8Addr) {
-        CVI_VENC_ERR("ppack->pu8Addr is NULL\n");
+        DRV_VENC_ERR("ppack->pu8Addr is NULL\n");
         return -1;
     }
 
     naluType = ppack->pu8Addr[4] & 0x1f;
 
-    if (cviNalType < NAL_NONE || cviNalType >= NAL_MAX) {
-        CVI_VENC_ERR("cviNalType = %d\n", cviNalType);
+    if (NalType < NAL_NONE || NalType >= NAL_MAX) {
+        DRV_VENC_ERR("NalType = %d\n", NalType);
         return -1;
     }
 
     if (naluType == H264_NALU_TYPE_IDR)
         ppack->DataType.enH264EType = H264E_NALU_IDRSLICE;
     else
-        ppack->DataType.enH264EType = h264naluType[cviNalType];
+        ppack->DataType.enH264EType = h264naluType[NalType];
 
-    CVI_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
+    DRV_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
     return 0;
 }
 
-static CVI_VOID h265e_setInitCfgFixQp(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx)
+static void h265e_set_initcfg_fixqp(InitEncConfig *pInitEncCfg,
+                      void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     VENC_H265_FIXQP_S *pstH265FixQp = &prcatt->stH265FixQp;
 
     pInitEncCfg->iqp = pstH265FixQp->u32IQp;
     pInitEncCfg->pqp = pstH265FixQp->u32PQp;
     pInitEncCfg->gop = pstH265FixQp->u32Gop;
     pInitEncCfg->framerate = (int)pstH265FixQp->fr32DstFrameRate;
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h265e_setInitCfgCbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h265e_set_initcfg_cbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     VENC_H265_CBR_S *pstH265Cbr = &prcatt->stH265Cbr;
 
     pInitEncCfg->statTime = pstH265Cbr->u32StatTime;
     pInitEncCfg->gop = pstH265Cbr->u32Gop;
     pInitEncCfg->bitrate = pstH265Cbr->u32BitRate;
     pInitEncCfg->framerate = (int)pstH265Cbr->fr32DstFrameRate;
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h265e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h265e_set_initcfg_vbr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     VENC_H265_VBR_S *pstH265Vbr = &prcatt->stH265Vbr;
-    VENC_RC_PARAM_S *prcparam = &pChnHandle->rcParam;
+    venc_rc_param_s *prcparam = &pChnHandle->rcParam;
 
     pInitEncCfg->statTime = pstH265Vbr->u32StatTime;
     pInitEncCfg->gop = pstH265Vbr->u32Gop;
@@ -704,17 +697,17 @@ static CVI_VOID h265e_setInitCfgVbr(cviInitEncConfig *pInitEncCfg,
     pInitEncCfg->maxbitrate = pstH265Vbr->u32MaxBitRate;
     pInitEncCfg->s32ChangePos = prcparam->stParamH265Vbr.s32ChangePos;
     pInitEncCfg->framerate = (int)pstH265Vbr->fr32DstFrameRate;
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h265e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
-                     CVI_VOID *pchnctx)
+static void h265e_set_initcfg_avbr(InitEncConfig *pInitEncCfg,
+                     void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     VENC_H265_AVBR_S *pstH265AVbr = &prcatt->stH265AVbr;
-    VENC_PARAM_H265_AVBR_S *pprc = &pChnHandle->rcParam.stParamH265AVbr;
+    venc_param_h265_avbr_s *pprc = &pChnHandle->rcParam.stParamH265AVbr;
 
     pInitEncCfg->statTime = pstH265AVbr->u32StatTime;
     pInitEncCfg->gop = pstH265AVbr->u32Gop;
@@ -728,31 +721,31 @@ static CVI_VOID h265e_setInitCfgAVbr(cviInitEncConfig *pInitEncCfg,
     pInitEncCfg->s32AvbrFrmLostOpen = pprc->s32AvbrFrmLostOpen;
     pInitEncCfg->s32AvbrFrmGap = pprc->s32AvbrFrmGap;
     pInitEncCfg->s32AvbrPureStillThr = pprc->s32AvbrPureStillThr;
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h265e_setInitCfgQpMap(cviInitEncConfig *pInitEncCfg,
-                      CVI_VOID *pchnctx)
+static void h265e_set_initcfg_qpmap(InitEncConfig *pInitEncCfg,
+                      void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    VENC_H265_QPMAP_S *pstH265QpMap = &prcatt->stH265QpMap;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    venc_h265_qpmap_s *pstH265QpMap = &prcatt->stH265QpMap;
 
     pInitEncCfg->statTime = pstH265QpMap->u32StatTime;
     pInitEncCfg->gop = pstH265QpMap->u32Gop;
     pInitEncCfg->bitrate =
         DEAULT_QP_MAP_BITRATE; // QpMap uses CBR as basic settings
     pInitEncCfg->framerate = (int)pstH265QpMap->fr32DstFrameRate;
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_VOID h265e_setInitCfgUbr(cviInitEncConfig *pInitEncCfg,
-                    CVI_VOID *pchnctx)
+static void h265e_set_initcfg_ubr(InitEncConfig *pInitEncCfg,
+                    void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     VENC_H265_UBR_S *pstH265Ubr = &prcatt->stH265Ubr;
 
     pInitEncCfg->statTime = pstH265Ubr->u32StatTime;
@@ -760,10 +753,10 @@ static CVI_VOID h265e_setInitCfgUbr(cviInitEncConfig *pInitEncCfg,
     pInitEncCfg->bitrate = pstH265Ubr->u32BitRate;
     pInitEncCfg->framerate = (int)pstH265Ubr->fr32DstFrameRate;
 
-    cviSetInitCfgGop(pInitEncCfg, pChnHandle);
+    set_init_cfg_gop(pInitEncCfg, pChnHandle);
 }
 
-static CVI_S32 h265e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 cviNalType)
+static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
 {
     int h265naluType[] = {
         H265E_NALU_ISLICE,
@@ -779,19 +772,19 @@ static CVI_S32 h265e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 cviNalType)
     int naluType;
 
     if (!ppack) {
-        CVI_VENC_ERR("ppack is NULL\n");
+        DRV_VENC_ERR("ppack is NULL\n");
         return -1;
     }
 
     if (!ppack->pu8Addr) {
-        CVI_VENC_ERR("ppack->pu8Addr is NULL\n");
+        DRV_VENC_ERR("ppack->pu8Addr is NULL\n");
         return -1;
     }
 
     naluType = (ppack->pu8Addr[4] & 0x7f) >> 1;
 
-    if (cviNalType < NAL_NONE || cviNalType >= NAL_MAX) {
-        CVI_VENC_ERR("cviNalType = %d\n", cviNalType);
+    if (NalType < NAL_NONE || NalType >= NAL_MAX) {
+        DRV_VENC_ERR("NalType = %d\n", NalType);
         return -1;
     }
 
@@ -799,21 +792,21 @@ static CVI_S32 h265e_mapNaluType(VENC_PACK_S *ppack, CVI_S32 cviNalType)
         naluType == H265_NALU_TYPE_N_LP)
         ppack->DataType.enH265EType = H265E_NALU_IDRSLICE;
     else
-        ppack->DataType.enH265EType = h265naluType[cviNalType];
+        ppack->DataType.enH265EType = h265naluType[NalType];
 
-    CVI_VENC_DBG("enH265EType = %d\n", ppack->DataType.enH265EType);
+    DRV_VENC_DBG("enH265EType = %d\n", ppack->DataType.enH265EType);
     return 0;
 }
 
-static CVI_S32 vidEnc_close(CVI_VOID *ctx)
+static int vid_enc_close(void *ctx)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     if (pEncCtx->ext.vid.pHandle) {
-        status = cviVEncClose(pEncCtx->ext.vid.pHandle);
+        status = internal_venc_close(pEncCtx->ext.vid.pHandle);
         if (status < 0) {
-            CVI_VENC_ERR("cviVEncClose, status = %d\n", status);
+            DRV_VENC_ERR("venc_close, status = %d\n", status);
             return status;
         }
     }
@@ -823,19 +816,19 @@ static CVI_S32 vidEnc_close(CVI_VOID *ctx)
 
 
 
-static CVI_S32 vidEnc_enc_one_pic(CVI_VOID *ctx,
-                  const VIDEO_FRAME_INFO_S *pstFrame,
-                  CVI_S32 s32MilliSec)
+static int vid_enc_enc_one_pic(void *ctx,
+                  const video_frame_info_s *pstFrame,
+                  int s32MilliSec)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    cviEncOnePicCfg encOnePicCfg;
-    CVI_U8 mtable[MO_TBL_SIZE];
-    cviEncOnePicCfg *pPicCfg = &encOnePicCfg;
-    CVIFRAMEBUF srcInfo, *psi = &srcInfo;
-    struct vb_s *blk = (struct vb_s *)pstFrame->stVFrame.pPrivateData;
+    EncOnePicCfg encOnePicCfg;
+    unsigned char mtable[MO_TBL_SIZE];
+    EncOnePicCfg *pPicCfg = &encOnePicCfg;
+    DRVFRAMEBUF srcInfo, *psi = &srcInfo;
+    struct vb_s *blk = (struct vb_s *)pstFrame->video_frame.private_data;
 
-    setSrcInfo(psi, pEncCtx, pstFrame);
+    _set_src_info(psi, pEncCtx, pstFrame);
 
     pPicCfg->addrY = psi->vbY.virt_addr;
     pPicCfg->addrCb = psi->vbCb.virt_addr;
@@ -844,11 +837,11 @@ static CVI_S32 vidEnc_enc_one_pic(CVI_VOID *ctx,
     pPicCfg->phyAddrY = psi->vbY.phys_addr;
     pPicCfg->phyAddrCb = psi->vbCb.phys_addr;
     pPicCfg->phyAddrCr = psi->vbCr.phys_addr;
-    pPicCfg->u64Pts = pstFrame->stVFrame.u64PTS;
-    pPicCfg->src_end = pstFrame->stVFrame.bSrcEnd;
-    pPicCfg->src_idx = pstFrame->stVFrame.s32FrameIdx;
+    pPicCfg->u64Pts = pstFrame->video_frame.pts;
+    pPicCfg->src_end = pstFrame->video_frame.srcend;
+    pPicCfg->src_idx = pstFrame->video_frame.frame_idx;
     pPicCfg->stride = psi->strideY;
-    switch (pstFrame->stVFrame.enPixelFormat) {
+    switch (pstFrame->video_frame.pixel_format) {
     case PIXEL_FORMAT_NV12:
         pPicCfg->cbcrInterleave = 1;
         pPicCfg->nv21 = 0;
@@ -872,52 +865,51 @@ static CVI_S32 vidEnc_enc_one_pic(CVI_VOID *ctx,
             memcpy(mtable, blk->buf.motion_table, MO_TBL_SIZE);
         }
         pPicCfg->picMotionMap = mtable;
-        //cviCopyMotionMap(pEncCtx->ext.vid.pHandle, pPicCfg, pEncCtx->ext.vid.pHandle);
     }
 
-    status = cviVEncEncOnePic(pEncCtx->ext.vid.pHandle, pPicCfg,
+    status = internal_venc_enc_one_pic(pEncCtx->ext.vid.pHandle, pPicCfg,
                   s32MilliSec);
 
     if (status == ENC_TIMEOUT || status == RETCODE_QUEUEING_FAILURE || status == RETCODE_STREAM_BUF_FULL) {
-        CVI_VENC_WARN("cviVEncEncOnePic, status = %d\n", status);
-        return CVI_ERR_VENC_BUSY;
+        DRV_VENC_WARN("internal_venc_enc_one_pic, status = %d\n", status);
+        return DRV_ERR_VENC_BUSY;
     }
 
     return status;
 }
 
-static CVI_S32 vidEnc_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
-                 CVI_S32 s32MilliSec)
+static int vid_enc_get_stream(void *ctx, venc_stream_s *pstStream,
+                 int s32MilliSec)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    cviVEncStreamInfo *pStreamInfo = &pEncCtx->ext.vid.streamInfo;
+    VEncStreamInfo *pStreamInfo = &pEncCtx->ext.vid.streamInfo;
     Queue *psp = NULL;
-    VENC_PACK_S *ppack = NULL;
+    venc_pack_s *ppack = NULL;
     stPack *pqpacks = NULL;
-    CVI_U32 idx = 0;
-    CVI_S32 totalPacks = 0;
-    CVI_U32 encHwTimeus = 0;
+    unsigned int idx = 0;
+    int totalPacks = 0;
+    unsigned int encHwTimeus = 0;
 
-    status = cviVEncGetStream(pEncCtx->ext.vid.pHandle, pStreamInfo,
+    status = internal_venc_get_stream(pEncCtx->ext.vid.pHandle, pStreamInfo,
                   s32MilliSec);
-    CVI_VENC_INFO("cviVEncGetStream status %d\n", status);
+    DRV_VENC_INFO("internal_venc_get_stream status %d\n", status);
     if (status == ENC_TIMEOUT) {
-        return CVI_ERR_VENC_BUSY;
+        return DRV_ERR_VENC_BUSY;
     } else if (status) {
-        CVI_VENC_ERR("get stream failed,status %d\n", status);
-        return CVI_ERR_VENC_INVALILD_RET;
+        DRV_VENC_ERR("get stream failed,status %d\n", status);
+        return DRV_ERR_VENC_INVALILD_RET;
     }
 
     psp = (Queue *)pStreamInfo->psp;
     if (!psp) {
-        CVI_VENC_ERR("psp is null\n");
-        return CVI_ERR_VENC_NULL_PTR;
+        DRV_VENC_ERR("psp is null\n");
+        return DRV_ERR_VENC_NULL_PTR;
     }
 
     totalPacks = Queue_Get_Cnt(psp);
     if (totalPacks == 0) {
-        return CVI_ERR_VENC_GET_STREAM_END;
+        return DRV_ERR_VENC_GET_STREAM_END;
     }
 
     pstStream->u32PackCount = 0;
@@ -925,17 +917,17 @@ static CVI_S32 vidEnc_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
         ppack = &pstStream->pstPack[idx];
 
         if (!ppack) {
-            CVI_VENC_ERR("get NULL pack, uPackCount:%d idx:%d\n", pstStream->u32PackCount, idx);
+            DRV_VENC_ERR("get NULL pack, uPackCount:%d idx:%d\n", pstStream->u32PackCount, idx);
             break;
         }
 
-        memset(ppack, 0, sizeof(VENC_PACK_S));
+        memset(ppack, 0, sizeof(venc_pack_s));
         pqpacks = Queue_Dequeue(psp);
         if (!pqpacks) {
             continue;
         }
 
-        // psp->pack[idx].bUsed = CVI_TRUE;
+        // psp->pack[idx].bUsed = 1;
         ppack->u64PhyAddr = pqpacks->u64PhyAddr;
         ppack->pu8Addr = pqpacks->addr;
         ppack->u32Len = pqpacks->len;
@@ -946,24 +938,24 @@ static CVI_S32 vidEnc_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
         ppack->u32AvgCtuQp = pqpacks->u32AvgCtuQp;
         encHwTimeus = pqpacks->u32EncHwTime;
         status = pEncCtx->ext.vid.mapNaluType(
-            ppack, pqpacks->cviNalType);
+            ppack, pqpacks->NalType);
         if (status) {
-            CVI_VENC_ERR("mapNaluType, status = %d\n", status);
+            DRV_VENC_ERR("mapNaluType, status = %d\n", status);
             return status;
         }
         pstStream->u32PackCount++;
     }
-    pEncCtx->base.u64EncHwTime = (CVI_U64)encHwTimeus;
+    pEncCtx->base.u64EncHwTime = (uint64_t)encHwTimeus;
 
     return status;
 }
 
-static CVI_S32 vidEnc_release_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream)
+static int vid_enc_release_stream(void *ctx, venc_stream_s *pstStream)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
     stPack vencPack[MAX_NUM_PACKS] = {0};
-    CVI_S32 idx = 0;
+    int idx = 0;
 
     for (idx = 0; (idx < pstStream->u32PackCount) && (idx < MAX_NUM_PACKS); idx++) {
         vencPack[idx].u64PhyAddr = pstStream->pstPack[idx].u64PhyAddr;
@@ -971,34 +963,34 @@ static CVI_S32 vidEnc_release_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream)
         vencPack[idx].len = pstStream->pstPack[idx].u32Len;
         if ( pstStream->pstPack[idx].DataType.enH264EType == H264E_NALU_SEI
             || pstStream->pstPack[idx].DataType.enH265EType == H265E_NALU_SEI) {
-            vencPack[idx].cviNalType = NAL_SEI;
+            vencPack[idx].NalType = NAL_SEI;
         }
     }
 
-    status = cviVEncReleaseStream(pEncCtx->ext.vid.pHandle, vencPack, pstStream->u32PackCount);
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("cviVEncReleaseStream, status = %d\n", status);
+    status = internal_venc_release_stream(pEncCtx->ext.vid.pHandle, vencPack, pstStream->u32PackCount);
+    if (status != 0) {
+        DRV_VENC_ERR("internal_venc_release_stream, status = %d\n", status);
         return status;
     }
 
     return status;
 }
 
-static CVI_S32 vidEnc_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg)
+static int vid_enc_ioctl(void *ctx, int op, void *arg)
 {
-    CVI_S32 status = CVI_SUCCESS;
+    int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    CVI_S32 currOp;
+    int currOp;
 
-    currOp = (op & CVI_H26X_OP_MASK) >> CVI_H26X_OP_SHIFT;
+    currOp = (op & DRV_H26X_OP_MASK) >> DRV_H26X_OP_SHIFT;
     if (currOp == 0) {
-        CVI_VENC_WARN("op = 0x%X, currOp = 0x%X\n", op, currOp);
+        DRV_VENC_WARN("op = 0x%X, currOp = 0x%X\n", op, currOp);
         return 0;
     }
 
-    status = cviVEncIoctl(pEncCtx->ext.vid.pHandle, currOp, arg);
-    if (status != CVI_SUCCESS) {
-        CVI_VENC_ERR("cviVEncIoctl, currOp = 0x%X, status = %d\n",
+    status = internal_venc_ioctl(pEncCtx->ext.vid.pHandle, currOp, arg);
+    if (status != 0) {
+        DRV_VENC_ERR("internal_venc_ioctl, currOp = 0x%X, status = %d\n",
                  currOp, status);
         return status;
     }
@@ -1007,13 +999,13 @@ static CVI_S32 vidEnc_ioctl(CVI_VOID *ctx, CVI_S32 op, CVI_VOID *arg)
 }
 
 
-CVI_S32 venc_create_enc_ctx(venc_enc_ctx *pEncCtx, CVI_VOID *pchnctx)
+int venc_create_enc_ctx(venc_enc_ctx *pEncCtx, void *pchnctx)
 {
     venc_chn_context *pChnHandle = (venc_chn_context *)pchnctx;
-    VENC_CHN_ATTR_S *pChnAttr = pChnHandle->pChnAttr;
-    VENC_ATTR_S *pVencAttr = &pChnAttr->stVencAttr;
-    VENC_RC_ATTR_S *prcatt = &pChnAttr->stRcAttr;
-    CVI_S32 status = 0;
+    venc_chn_attr_s *pChnAttr = pChnHandle->pChnAttr;
+    venc_attr_s *pVencAttr = &pChnAttr->stVencAttr;
+    venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
+    int status = 0;
 
     VENC_MEMSET(pEncCtx, 0, sizeof(venc_enc_ctx));
 
@@ -1029,20 +1021,20 @@ CVI_S32 venc_create_enc_ctx(venc_enc_ctx *pEncCtx, CVI_VOID *pchnctx)
         pEncCtx->base.ioctl = &jpege_ioctl;
         break;
     case PT_H264:
-        pEncCtx->base.init = &vidEnc_init;
-        pEncCtx->base.open = &vidEnc_open;
-        pEncCtx->base.close = &vidEnc_close;
-        pEncCtx->base.encOnePic = &vidEnc_enc_one_pic;
-        pEncCtx->base.getStream = &vidEnc_get_stream;
-        pEncCtx->base.releaseStream = &vidEnc_release_stream;
-        pEncCtx->base.ioctl = &vidEnc_ioctl;
+        pEncCtx->base.init = &vid_enc_init;
+        pEncCtx->base.open = &vid_enc_open;
+        pEncCtx->base.close = &vid_enc_close;
+        pEncCtx->base.encOnePic = &vid_enc_enc_one_pic;
+        pEncCtx->base.getStream = &vid_enc_get_stream;
+        pEncCtx->base.releaseStream = &vid_enc_release_stream;
+        pEncCtx->base.ioctl = &vid_enc_ioctl;
 
-        pEncCtx->ext.vid.setInitCfgFixQp = h264e_setInitCfgFixQp;
-        pEncCtx->ext.vid.setInitCfgCbr = h264e_setInitCfgCbr;
-        pEncCtx->ext.vid.setInitCfgVbr = h264e_setInitCfgVbr;
-        pEncCtx->ext.vid.setInitCfgAVbr = h264e_setInitCfgAVbr;
-        pEncCtx->ext.vid.setInitCfgUbr = h264e_setInitCfgUbr;
-        pEncCtx->ext.vid.mapNaluType = h264e_mapNaluType;
+        pEncCtx->ext.vid.setInitCfgFixQp = h264e_set_initcfg_fixqp;
+        pEncCtx->ext.vid.setInitCfgCbr = h264e_set_initcfg_cbr;
+        pEncCtx->ext.vid.setInitCfgVbr = h264e_set_initcfg_vbr;
+        pEncCtx->ext.vid.setInitCfgAVbr = h264e_set_initcfg_avbr;
+        pEncCtx->ext.vid.setInitCfgUbr = h264e_set_initcfg_ubr;
+        pEncCtx->ext.vid.mapNaluType = h264e_map_nalu_type;
 
         pEncCtx->base.u32Profile = pVencAttr->u32Profile;
         pEncCtx->base.rcMode = prcatt->enRcMode - VENC_RC_MODE_H264CBR;
@@ -1072,21 +1064,21 @@ CVI_S32 venc_create_enc_ctx(venc_enc_ctx *pEncCtx, CVI_VOID *pchnctx)
         }
         break;
     case PT_H265:
-        pEncCtx->base.init = &vidEnc_init;
-        pEncCtx->base.open = &vidEnc_open;
-        pEncCtx->base.close = &vidEnc_close;
-        pEncCtx->base.encOnePic = &vidEnc_enc_one_pic;
-        pEncCtx->base.getStream = &vidEnc_get_stream;
-        pEncCtx->base.releaseStream = &vidEnc_release_stream;
-        pEncCtx->base.ioctl = &vidEnc_ioctl;
+        pEncCtx->base.init = &vid_enc_init;
+        pEncCtx->base.open = &vid_enc_open;
+        pEncCtx->base.close = &vid_enc_close;
+        pEncCtx->base.encOnePic = &vid_enc_enc_one_pic;
+        pEncCtx->base.getStream = &vid_enc_get_stream;
+        pEncCtx->base.releaseStream = &vid_enc_release_stream;
+        pEncCtx->base.ioctl = &vid_enc_ioctl;
 
-        pEncCtx->ext.vid.setInitCfgFixQp = h265e_setInitCfgFixQp;
-        pEncCtx->ext.vid.setInitCfgCbr = h265e_setInitCfgCbr;
-        pEncCtx->ext.vid.setInitCfgVbr = h265e_setInitCfgVbr;
-        pEncCtx->ext.vid.setInitCfgAVbr = h265e_setInitCfgAVbr;
-        pEncCtx->ext.vid.setInitCfgQpMap = h265e_setInitCfgQpMap;
-        pEncCtx->ext.vid.setInitCfgUbr = h265e_setInitCfgUbr;
-        pEncCtx->ext.vid.mapNaluType = h265e_mapNaluType;
+        pEncCtx->ext.vid.setInitCfgFixQp = h265e_set_initcfg_fixqp;
+        pEncCtx->ext.vid.setInitCfgCbr = h265e_set_initcfg_cbr;
+        pEncCtx->ext.vid.setInitCfgVbr = h265e_set_initcfg_vbr;
+        pEncCtx->ext.vid.setInitCfgAVbr = h265e_set_initcfg_avbr;
+        pEncCtx->ext.vid.setInitCfgQpMap = h265e_set_initcfg_qpmap;
+        pEncCtx->ext.vid.setInitCfgUbr = h265e_set_initcfg_ubr;
+        pEncCtx->ext.vid.mapNaluType = h265e_map_nalu_type;
 
         pEncCtx->base.u32Profile = pVencAttr->u32Profile;
         pEncCtx->base.rcMode = prcatt->enRcMode - VENC_RC_MODE_H265CBR;
@@ -1121,7 +1113,7 @@ CVI_S32 venc_create_enc_ctx(venc_enc_ctx *pEncCtx, CVI_VOID *pchnctx)
         }
         break;
     default:
-        CVI_VENC_ERR("enType = %d\n", pVencAttr->enType);
+        DRV_VENC_ERR("enType = %d\n", pVencAttr->enType);
         return -1;
     }
 

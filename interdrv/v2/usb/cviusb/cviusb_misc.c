@@ -1,6 +1,7 @@
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/uaccess.h>  /* for put_user */
+#include <linux/compat.h>
 
 #include "cviusb_misc.h"
 #include "cviusb_drd.h"
@@ -159,12 +160,25 @@ static long cviusb_drd_unlocked_ioctl(struct file *file,
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static long cviusb_misc_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations cviusb_drd_file_ops = {
 		.owner = THIS_MODULE,
 		.open = cviusb_drd_open,
 		.read = cviusb_drd_read,
 		.write = cviusb_drd_write,
 		.unlocked_ioctl = cviusb_drd_unlocked_ioctl,
+#ifdef CONFIG_COMPAT
+		.compat_ioctl = cviusb_misc_compat_ptr_ioctl,
+#endif
 };
 
 void cviusb_drd_misc_register(struct cviusb_dev *cviusb, int res_address)
@@ -246,6 +260,9 @@ static const struct file_operations cviusb_dev_file_ops = {
 		.owner = THIS_MODULE,
 		.open = cviusb_dev_open,
 		.unlocked_ioctl = cviusb_dev_unlocked_ioctl,
+#ifdef CONFIG_COMPAT
+		.compat_ioctl = cviusb_misc_compat_ptr_ioctl,
+#endif
 };
 
 void cviusb_dev_misc_register(struct usb_ss_dev *usb_ss, int res_address)

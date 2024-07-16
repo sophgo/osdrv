@@ -3,10 +3,11 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
-#include <linux/cvi_comm_sys.h>
-#include <linux/cvi_errno.h>
+#include <linux/comm_sys.h>
+#include <linux/comm_errno.h>
 #include <linux/base_uapi.h>
 #include <queue.h>
+#include "base_debug.h"
 
 
 #ifndef TAILQ_FOREACH_SAFE
@@ -16,70 +17,70 @@
 		(var) = (tvar))
 #endif
 
-#define CHN_MATCH(x, y) (((x)->enModId == (y)->enModId) && ((x)->s32DevId == (y)->s32DevId)             \
-	&& ((x)->s32ChnId == (y)->s32ChnId))
+#define CHN_MATCH(x, y) (((x)->mod_id == (y)->mod_id) && ((x)->dev_id == (y)->dev_id)             \
+	&& ((x)->chn_id == (y)->chn_id))
 
 struct bind_t {
 	TAILQ_ENTRY(bind_t) tailq;
-	BIND_NODE_S *node;
+	bind_node_s *node;
 };
 
 TAILQ_HEAD(bind_head, bind_t) binds;
 
 static struct mutex bind_lock;
-BIND_NODE_S bind_nodes[BIND_NODE_MAXNUM];
+bind_node_s bind_nodes[BIND_NODE_MAXNUM];
 
 
-static int32_t bind(MMF_CHN_S *pstSrcChn, MMF_CHN_S *pstDestChn)
+static int32_t bind(mmf_chn_s *src_chn, mmf_chn_s *dest_chn)
 {
 	struct bind_t *item, *item_tmp;
 	int32_t ret = 0, i;
 
-	pr_debug("%s: src(mId=%d, dId=%d, cId=%d), dst(mId=%d, dId=%d, cId=%d)\n",
+	TRACE_BASE(DBG_DEBUG, "%s: src(mId=%d, dId=%d, cId=%d), dst(mId=%d, dId=%d, cId=%d)\n",
 		__func__,
-		pstSrcChn->enModId, pstSrcChn->s32DevId, pstSrcChn->s32ChnId,
-		pstDestChn->enModId, pstDestChn->s32DevId, pstDestChn->s32ChnId);
+		src_chn->mod_id, src_chn->dev_id, src_chn->chn_id,
+		dest_chn->mod_id, dest_chn->dev_id, dest_chn->chn_id);
 
 	mutex_lock(&bind_lock);
 	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
-		if (!CHN_MATCH(&item->node->src, pstSrcChn))
+		if (!CHN_MATCH(&item->node->src, src_chn))
 			continue;
 
 		// check if dst already bind to src
-		for (i = 0; i < item->node->dsts.u32Num; ++i) {
-			if (CHN_MATCH(&item->node->dsts.astMmfChn[i], pstDestChn)) {
-				pr_debug("Duplicate Dst(%d-%d-%d) to Src(%d-%d-%d)\n",
-					pstDestChn->enModId, pstDestChn->s32DevId, pstDestChn->s32ChnId,
-					pstSrcChn->enModId, pstSrcChn->s32DevId, pstSrcChn->s32ChnId);
+		for (i = 0; i < item->node->dsts.num; ++i) {
+			if (CHN_MATCH(&item->node->dsts.mmf_chn[i], dest_chn)) {
+				TRACE_BASE(DBG_DEBUG, "Duplicate Dst(%d-%d-%d) to Src(%d-%d-%d)\n",
+					dest_chn->mod_id, dest_chn->dev_id, dest_chn->chn_id,
+					src_chn->mod_id, src_chn->dev_id, src_chn->chn_id);
 				ret = -1;
 				goto BIND_EXIT;
 			}
 		}
 		// check if dsts have enough space for one more bind
-		if (item->node->dsts.u32Num >= BIND_DEST_MAXNUM) {
-			pr_err("Over max bind Dst number\n");
+		if (item->node->dsts.num >= BIND_DEST_MAXNUM) {
+			TRACE_BASE(DBG_ERR, "Over max bind Dst number\n");
 			ret = -1;
 			goto BIND_EXIT;
 		}
-		item->node->dsts.astMmfChn[item->node->dsts.u32Num++] = *pstDestChn;
+		item->node->dsts.mmf_chn[item->node->dsts.num++] = *dest_chn;
 
 		goto BIND_SUCCESS;
 	}
 
 	// if src not found
 	for (i = 0; i < BIND_NODE_MAXNUM; ++i) {
-		if (!bind_nodes[i].bUsed) {
+		if (!bind_nodes[i].used) {
 			memset(&bind_nodes[i], 0, sizeof(bind_nodes[i]));
-			bind_nodes[i].bUsed = true;
-			bind_nodes[i].src = *pstSrcChn;
-			bind_nodes[i].dsts.u32Num = 1;
-			bind_nodes[i].dsts.astMmfChn[0] = *pstDestChn;
+			bind_nodes[i].used = true;
+			bind_nodes[i].src = *src_chn;
+			bind_nodes[i].dsts.num = 1;
+			bind_nodes[i].dsts.mmf_chn[0] = *dest_chn;
 			break;
 		}
 	}
 
 	if (i == BIND_NODE_MAXNUM) {
-		pr_err("No free bind node\n");
+		TRACE_BASE(DBG_ERR, "No free bind node\n");
 		ret = -1;
 		goto BIND_EXIT;
 	}
@@ -87,7 +88,7 @@ static int32_t bind(MMF_CHN_S *pstSrcChn, MMF_CHN_S *pstDestChn)
 	item = vzalloc(sizeof(*item));
 	if (item == NULL) {
 		memset(&bind_nodes[i], 0, sizeof(bind_nodes[i]));
-		ret = CVI_ERR_SYS_NOMEM;
+		ret = ERR_SYS_NOMEM;
 		goto BIND_EXIT;
 	}
 
@@ -102,23 +103,23 @@ BIND_EXIT:
 	return ret;
 }
 
-static int32_t unbind(MMF_CHN_S *pstSrcChn, MMF_CHN_S *pstDestChn)
+static int32_t unbind(mmf_chn_s *src_chn, mmf_chn_s *dest_chn)
 {
 	struct bind_t *item, *item_tmp;
 	uint32_t i;
 
 	mutex_lock(&bind_lock);
 	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
-		if (!CHN_MATCH(&item->node->src, pstSrcChn))
+		if (!CHN_MATCH(&item->node->src, src_chn))
 			continue;
 
-		for (i = 0; i < item->node->dsts.u32Num; ++i) {
-			if (CHN_MATCH(&item->node->dsts.astMmfChn[i], pstDestChn)) {
-				if (--item->node->dsts.u32Num) {
-					for (; i < item->node->dsts.u32Num; i++)
-						item->node->dsts.astMmfChn[i] = item->node->dsts.astMmfChn[i + 1];
+		for (i = 0; i < item->node->dsts.num; ++i) {
+			if (CHN_MATCH(&item->node->dsts.mmf_chn[i], dest_chn)) {
+				if (--item->node->dsts.num) {
+					for (; i < item->node->dsts.num; i++)
+						item->node->dsts.mmf_chn[i] = item->node->dsts.mmf_chn[i + 1];
 				} else {
-					item->node->bUsed = CVI_FALSE;
+					item->node->used = false;
 					TAILQ_REMOVE(&binds, item, tailq);
 					vfree(item);
 				}
@@ -131,20 +132,20 @@ static int32_t unbind(MMF_CHN_S *pstSrcChn, MMF_CHN_S *pstDestChn)
 	return 0;
 }
 
-int32_t bind_get_dst(MMF_CHN_S *pstSrcChn, MMF_BIND_DEST_S *pstBindDest)
+int32_t bind_get_dst(mmf_chn_s *src_chn, mmf_bind_dest_s *bind_dest)
 {
 	struct bind_t *item, *item_tmp;
 	uint32_t i;
 
-	pr_debug("%s: src(.enModId=%d, .s32DevId=%d, .s32ChnId=%d)\n",
-		__func__, pstSrcChn->enModId,
-		pstSrcChn->s32DevId, pstSrcChn->s32ChnId);
+	TRACE_BASE(DBG_DEBUG, "%s: src(.mod_id=%d, .dev_id=%d, .chn_id=%d)\n",
+		__func__, src_chn->mod_id,
+		src_chn->dev_id, src_chn->chn_id);
 
 	mutex_lock(&bind_lock);
 	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
-		for (i = 0; i < item->node->dsts.u32Num; ++i) {
-			if (CHN_MATCH(&item->node->src, pstSrcChn)) {
-				*pstBindDest = item->node->dsts;
+		for (i = 0; i < item->node->dsts.num; ++i) {
+			if (CHN_MATCH(&item->node->src, src_chn)) {
+				*bind_dest = item->node->dsts;
 				mutex_unlock(&bind_lock);
 				return 0;
 			}
@@ -155,20 +156,20 @@ int32_t bind_get_dst(MMF_CHN_S *pstSrcChn, MMF_BIND_DEST_S *pstBindDest)
 }
 EXPORT_SYMBOL_GPL(bind_get_dst);
 
-int32_t bind_get_src(MMF_CHN_S *pstDestChn, MMF_CHN_S *pstSrcChn)
+int32_t bind_get_src(mmf_chn_s *dest_chn, mmf_chn_s *src_chn)
 {
 	struct bind_t *item, *item_tmp;
 	uint32_t i;
 
-	pr_debug("%s: dst(.enModId=%d, .s32DevId=%d, .s32ChnId=%d)\n",
-		__func__, pstDestChn->enModId,
-		pstDestChn->s32DevId, pstDestChn->s32ChnId);
+	TRACE_BASE(DBG_DEBUG, "%s: dst(.mod_id=%d, .dev_id=%d, .chn_id=%d)\n",
+		__func__, dest_chn->mod_id,
+		dest_chn->dev_id, dest_chn->chn_id);
 
 	mutex_lock(&bind_lock);
 	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
-		for (i = 0; i < item->node->dsts.u32Num; ++i) {
-			if (CHN_MATCH(&item->node->dsts.astMmfChn[i], pstDestChn)) {
-				*pstSrcChn = item->node->src;
+		for (i = 0; i < item->node->dsts.num; ++i) {
+			if (CHN_MATCH(&item->node->dsts.mmf_chn[i], dest_chn)) {
+				*src_chn = item->node->src;
 				mutex_unlock(&bind_lock);
 				return 0;
 			}
@@ -209,7 +210,7 @@ int32_t bind_set_cfg_user(unsigned long arg)
 			     (struct sys_bind_cfg __user *)arg,
 			     sizeof(struct sys_bind_cfg));
 	if (ret) {
-		pr_err("copy_from_user failed, sys_set_mod_cfg\n");
+		TRACE_BASE(DBG_ERR, "copy_from_user failed, sys_set_mod_cfg\n");
 		return ret;
 	}
 
@@ -230,7 +231,7 @@ int32_t bind_get_cfg_user(unsigned long arg)
 			     (struct sys_bind_cfg __user *)arg,
 			     sizeof(struct sys_bind_cfg));
 	if (ret) {
-		pr_err("copy_from_user failed, sys_set_mod_cfg\n");
+		TRACE_BASE(DBG_ERR, "copy_from_user failed, sys_set_mod_cfg\n");
 		return ret;
 	}
 
@@ -240,16 +241,14 @@ int32_t bind_get_cfg_user(unsigned long arg)
 		ret = bind_get_src(&ioctl_arg.mmf_chn_dst, &ioctl_arg.mmf_chn_src);
 
 	if (ret)
-		pr_err("sys_ctx_getbind failed\n");
+		TRACE_BASE(DBG_ERR, "sys_ctx_getbind failed\n");
 
 	ret = copy_to_user((struct sys_bind_cfg __user *)arg,
 			     &ioctl_arg,
 			     sizeof(struct sys_bind_cfg));
 
 	if (ret)
-		pr_err("copy_to_user fail, sys_get_bind_cfg\n");
+		TRACE_BASE(DBG_ERR, "copy_to_user fail, sys_get_bind_cfg\n");
 
 	return ret;
 }
-
-

@@ -3,8 +3,8 @@
 
 #define MAX_LINK_NUM		8
 #define MAX_WDR_FRAME_NUM	2
-#define MAX_VC_NUM			4
-#define DBG_MODE 			0
+#define MAX_VC_NUM		4
+#define DBG_MODE 		0
 
 #ifndef _OFST
 #define _OFST(_BLK_T, _REG)       ((uintptr_t)&(((struct _BLK_T *)0)->_REG))
@@ -427,9 +427,9 @@ struct param_btdemux {
 	uint16_t		v_bp;
 	uint16_t		h_bp;
 	uint32_t		clk_inv;
-	uint8_t			sync_code_part_A[3];
+	uint8_t			sync_code_part_a[3];
 	struct cif_btdmux_sync_s
-				sync_code_part_B[MAX_BT_DEMUX_NUM];
+				sync_code_part_b[MAX_BT_DEMUX_NUM];
 	uint8_t			yc_exchg;
 };
 

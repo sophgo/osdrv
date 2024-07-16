@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 #include <linux/version.h>
+#include <linux/compat.h>
 
 #include <linux/init.h>
 #include <linux/dma-buf.h>
@@ -217,6 +218,16 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	return ret;
 }
 
+#ifdef CONFIG_COMPAT
+static long space_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 const struct file_operations spacc_fops = {
 	.owner  =   THIS_MODULE,
 	.open   =   spacc_open,
@@ -224,6 +235,9 @@ const struct file_operations spacc_fops = {
 	.write  =   spacc_write,
 	.release =  spacc_release,
 	.unlocked_ioctl = spacc_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = space_compat_ptr_ioctl,
+#endif
 };
 
 static int cvitek_spacc_drv_probe(struct platform_device *pdev)

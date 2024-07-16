@@ -19,10 +19,9 @@
 #include <uapi/linux/sched/types.h>
 #endif
 
-#include <linux/vi_tun_cfg.h>
-#include <linux/vi_isp.h>
-#include <linux/vi_uapi.h>
-#include <linux/cvi_vi_ctx.h>
+#include <vi_tun_cfg.h>
+#include <vi_isp.h>
+#include <vi_ctx.h>
 #include <vi_common.h>
 #include <vip/vi_drv.h>
 #include <snsr_i2c.h>
@@ -43,20 +42,20 @@
 #define BMDEV_SEND_API	      _IOW('p', 0x20, unsigned long)
 #define BMDEV_THREAD_SYNC_API _IOW('p', 0x21, unsigned long)
 
-enum cvi_isp_state {
+enum sop_isp_state {
 	ISP_STATE_IDLE,
 	ISP_STATE_RUNNING,
 	ISP_STATE_PREPARE,
 };
 
-enum cvi_isp_bw_limit {
+enum sop_isp_bw_limit {
 	ISP_BW_LIMIT_RDMA,
 	ISP_BW_LIMIT_WDMA0,
 	ISP_BW_LIMIT_WDMA1,
 	ISP_BW_LIMIT_MAX,
 };
 
-enum cvi_vi_err {
+enum sop_vi_err {
 	ISP_SUCCESS,
 	ISP_NO_BUFFER,
 	ISP_ERROR,
@@ -71,47 +70,47 @@ enum cvi_vi_err {
  * @byteused: the number of bytes used
  */
 struct _mempool {
-	uint64_t base;
-	uint32_t size;
-	uint32_t byteused;
+	u64 base;
+	u32 size;
+	u32 byteused;
 } isp_mempool;
 
 struct _membuf {
-	uint64_t splt_le[OFFLINE_SPLT_BUF_NUM];
-	uint64_t splt_se[OFFLINE_SPLT_BUF_NUM];
-	uint64_t pre_fe_le[OFFLINE_RAW_BUF_NUM];
-	uint64_t pre_fe_se[OFFLINE_RAW_BUF_NUM];
-	uint64_t pre_be_le[OFFLINE_PRE_BE_BUF_NUM];
-	uint64_t pre_be_se[OFFLINE_PRE_BE_BUF_NUM];
-	uint64_t yuv_yuyv[ISP_FE_CHN_MAX][OFFLINE_YUV_BUF_NUM];//yuv sensor is yuyv format
-	uint64_t manr[2]; //0 for current iir, 1 for ai_isp iir
-	uint64_t manr_rtile[2]; //tile
-	uint64_t rgbmap_le[MAX_RGBMAP_BUF_NUM];
-	uint64_t rgbmap_se[MAX_RGBMAP_BUF_NUM];
-	uint64_t lmap_le;
-	uint64_t lmap_se;
-	uint64_t lsc;
-	uint64_t tdnr[3]; //0 for motion, 1 for y, 2 for uv
-	uint64_t tdnr_rtile[3]; //tile
-	uint64_t tnr_ai_isp[3]; //0 for y, 1 for u, 2 for v
-	uint64_t tnr_ai_isp_rtile[3]; //tile
-	uint64_t ir_le[OFFLINE_PRE_BE_BUF_NUM];
-	uint64_t ir_se[OFFLINE_PRE_BE_BUF_NUM];
-	uint64_t ldci;
-	struct cvi_vip_isp_fswdr_report *fswdr_rpt;
+	u64 splt_le[OFFLINE_SPLT_BUF_NUM];
+	u64 splt_se[OFFLINE_SPLT_BUF_NUM];
+	u64 pre_fe_le[OFFLINE_RAW_BUF_NUM];
+	u64 pre_fe_se[OFFLINE_RAW_BUF_NUM];
+	u64 pre_be_le[OFFLINE_PRE_BE_BUF_NUM];
+	u64 pre_be_se[OFFLINE_PRE_BE_BUF_NUM];
+	u64 yuv_yuyv[ISP_FE_CHN_MAX][OFFLINE_YUV_BUF_NUM];//yuv sensor is yuyv format
+	u64 manr[2]; //0 for current iir, 1 for ai_isp iir
+	u64 manr_rtile[2]; //tile
+	u64 rgbmap_le[MAX_RGBMAP_BUF_NUM];
+	u64 rgbmap_se[MAX_RGBMAP_BUF_NUM];
+	u64 lmap_le;
+	u64 lmap_se;
+	u64 lsc;
+	u64 tdnr[3]; //0 for motion, 1 for y, 2 for uv
+	u64 tdnr_rtile[3]; //tile
+	u64 tnr_ai_isp[3]; //0 for y, 1 for u, 2 for v
+	u64 tnr_ai_isp_rtile[3]; //tile
+	u64 ir_le[OFFLINE_PRE_BE_BUF_NUM];
+	u64 ir_se[OFFLINE_PRE_BE_BUF_NUM];
+	u64 ldci;
+	struct sop_vip_isp_fswdr_report *fswdr_rpt;
 
-	struct cvi_isp_sts_mem sts_mem[2];
-	uint8_t pre_fe_sts_busy_idx;
-	uint8_t pre_be_sts_busy_idx;
-	uint8_t pre_be_ir_busy_idx;
-	uint8_t post_sts_busy_idx;
+	struct sop_isp_sts_mem sts_mem[2];
+	u8 pre_fe_sts_busy_idx;
+	u8 pre_be_sts_busy_idx;
+	u8 pre_be_ir_busy_idx;
+	u8 post_sts_busy_idx;
 
 	spinlock_t pre_fe_sts_lock;
-	uint8_t pre_fe_sts_in_use;
+	u8 pre_fe_sts_in_use;
 	spinlock_t pre_be_sts_lock;
-	uint8_t pre_be_sts_in_use;
+	u8 pre_be_sts_in_use;
 	spinlock_t post_sts_lock;
-	uint8_t post_sts_in_use;
+	u8 post_sts_in_use;
 } isp_bufpool[ISP_PRERAW_MAX] = {0};
 
 /*
@@ -134,7 +133,7 @@ struct _isp_snr_i2c_node {
 
 struct _isp_snr_cfg_queue {
 	struct list_head list;
-	uint32_t num_rdy;
+	u32 num_rdy;
 } isp_snr_i2c_queue[ISP_PRERAW_MAX];
 
 struct _ai_isp_cfg_info {
@@ -142,7 +141,7 @@ struct _ai_isp_cfg_info {
 } ai_isp_cfg_info[ISP_PRERAW_MAX];
 
 struct _isp_raw_num_n {
-	enum cvi_isp_raw raw_num;
+	enum sop_isp_raw raw_num;
 	struct list_head list;
 };
 
@@ -151,7 +150,8 @@ struct _isp_sof_raw_num_q {
 } pre_raw_num_q;
 
 struct _isp_dqbuf_n {
-	u8		chn_id;
+	u8		raw_id; // vi raw_num
+	u8		chn_id; // vi_out buf_chn
 	u32		frm_num;
 	struct timespec64 timestamp;
 	struct list_head list;
@@ -171,7 +171,8 @@ struct _isp_event_q {
 } event_q;
 
 struct _vi_buffer {
-	__u32			chnId;
+	__u32			raw_id; // raw_id
+	__u32			chn_id; // out_buf_chn
 	__u32			sequence;
 	struct timespec64	timestamp;
 	__u32			reserved;
@@ -200,236 +201,236 @@ _timer			usr_pic_timer;
 static atomic_t		dev_open_cnt;
 
 struct ip_info ip_info_list[IP_INFO_ID_MAX] = {
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG0, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG2, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG3, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE0_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG0, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE0_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE0_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG1, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE0_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG0, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG2, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI0_BDG3, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE0_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE0_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG0, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE0_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE0_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG1, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE0_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG1, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG2, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG3, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE1_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG2, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE1_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE1_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG3, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE1_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG1, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG2, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI1_BDG3, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE1_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE1_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG2, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE1_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE1_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG3, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE1_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG2, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI2_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI2_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE2_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG4, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE2_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE2_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG5, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE2_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG2, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI2_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI2_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE2_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE2_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG4, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE2_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE2_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG5, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE2_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG3, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI3_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI3_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE3_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG6, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE3_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE3_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG7, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE3_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG3, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI3_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI3_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE3_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE3_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG6, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE3_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE3_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG7, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE3_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG4, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI4_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI4_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE4_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG8, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE4_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE4_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG9, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE4_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG4, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI4_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI4_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE4_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE4_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG8, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE4_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE4_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG9, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE4_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5, sizeof(struct REG_PRE_RAW_FE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG5, sizeof(struct REG_ISP_CSI_BDG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI5_BDG0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI5_BDG1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE5_LE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG10, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE5_RGBMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE5_SE, sizeof(struct REG_ISP_RGBMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG11, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE5_RGBMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5, sizeof(struct reg_pre_raw_fe_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG5, sizeof(struct reg_isp_csi_bdg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI5_BDG0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_CSI5_BDG1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_FE5_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE5_LE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG10, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE5_RGBMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_FE5_SE, sizeof(struct reg_isp_rgbmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBMAP_WBG11, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_FE5_RGBMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE, sizeof(struct REG_PRE_RAW_BE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BE_CROP_LE, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BE_CROP_SE, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE_BLC0, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE_BLC1, sizeof(struct REG_ISP_BLC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AF, sizeof(struct REG_ISP_AF_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AF_W, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DPC0, sizeof(struct REG_ISP_DPC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_BE_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_BE_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_WDMA, sizeof(struct REG_PRE_WDMA_CTRL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE, sizeof(struct reg_pre_raw_be_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BE_CROP_LE, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BE_CROP_SE, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE_BLC0, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_BE_BLC1, sizeof(struct reg_isp_blc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AF, sizeof(struct reg_isp_af_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AF_W, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DPC0, sizeof(struct reg_isp_dpc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_BE_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_BE_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_WDMA, sizeof(struct reg_pre_wdma_ctrl_t)},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK0, sizeof(struct )},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK1, sizeof(struct )},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBIR0, sizeof(struct REG_ISP_RGBIR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RGBIR_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DPC1, sizeof(struct REG_ISP_DPC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBIR1, sizeof(struct REG_ISP_RGBIR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RGBIR_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBIR0, sizeof(struct reg_isp_rgbir_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RGBIR_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DPC1, sizeof(struct reg_isp_dpc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBIR1, sizeof(struct reg_isp_rgbir_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RGBIR_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE0, sizeof(struct REG_WDMA_CORE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE1, sizeof(struct REG_WDMA_CORE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE2, sizeof(struct REG_WDMA_CORE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE3, sizeof(struct REG_WDMA_CORE_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE0, sizeof(struct reg_wdma_core_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE1, sizeof(struct reg_wdma_core_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE2, sizeof(struct reg_wdma_core_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_WDMA_CORE3, sizeof(struct reg_wdma_core_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_WDMA_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_WDMA_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_WDMA, sizeof(struct REG_PRE_WDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_RDMA_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_RDMA_LE, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_RDMA_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_RDMA_SE, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_WDMA_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_WDMA_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_WDMA, sizeof(struct REG_PRE_WDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_RDMA_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_RDMA_LE, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_RDMA_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_RDMA_SE, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT, sizeof(struct REG_ISP_LINE_SPLITER_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_WDMA_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_WDMA_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_WDMA, sizeof(struct reg_pre_wdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_RDMA_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_RDMA_LE, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE0_RDMA_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE0_RDMA_SE, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_WDMA_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_WDMA_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_WDMA, sizeof(struct reg_pre_wdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_RDMA_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_RDMA_LE, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_SPLT_FE1_RDMA_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT_FE1_RDMA_SE, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_SPLT, sizeof(struct reg_isp_line_spliter_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAWTOP, sizeof(struct REG_RAW_TOP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CFA0, sizeof(struct REG_ISP_CFA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LSC0, sizeof(struct REG_ISP_LSC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LSC_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_GMS, sizeof(struct REG_ISP_GMS_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_GMS, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AE_HIST0, sizeof(struct REG_ISP_AE_HIST_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AE_HIST_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AE_HIST1, sizeof(struct REG_ISP_AE_HIST_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AE_HIST_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RAW_RDMA0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_RDMA0, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RAW_RDMA1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_RDMA1, sizeof(struct REG_RAW_RDMA_CTRL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CFA1, sizeof(struct REG_ISP_CFA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LSC1, sizeof(struct REG_ISP_LSC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LSC_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LMAP1, sizeof(struct REG_ISP_LMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LMAP_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BNR0, sizeof(struct REG_ISP_BNR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BNR1, sizeof(struct REG_ISP_BNR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_CROP_LE, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_CROP_SE, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LMAP0, sizeof(struct REG_ISP_LMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LMAP_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_WBG0, sizeof(struct REG_ISP_WBG_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_WBG1, sizeof(struct REG_ISP_WBG_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAWTOP, sizeof(struct reg_raw_top_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CFA0, sizeof(struct reg_isp_cfa_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LSC0, sizeof(struct reg_isp_lsc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LSC_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_GMS, sizeof(struct reg_isp_gms_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_GMS, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AE_HIST0, sizeof(struct reg_isp_ae_hist_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AE_HIST_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_AE_HIST1, sizeof(struct reg_isp_ae_hist_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AE_HIST_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RAW_RDMA0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_RDMA0, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_RAW_RDMA1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_RDMA1, sizeof(struct reg_raw_rdma_ctrl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CFA1, sizeof(struct reg_isp_cfa_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LSC1, sizeof(struct reg_isp_lsc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LSC_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LMAP1, sizeof(struct reg_isp_lmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LMAP_SE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BNR0, sizeof(struct reg_isp_bnr_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_BNR1, sizeof(struct reg_isp_bnr_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_CROP_LE, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_CROP_SE, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LMAP0, sizeof(struct reg_isp_lmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LMAP_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_WBG0, sizeof(struct reg_isp_wbg_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RAW_WBG1, sizeof(struct reg_isp_wbg_t)},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK2, sizeof(struct )},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK3, sizeof(struct )},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LCAC0, sizeof(struct REG_ISP_LCAC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBCAC0, sizeof(struct REG_ISP_RGBCAC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LCAC1, sizeof(struct REG_ISP_LCAC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBCAC1, sizeof(struct REG_ISP_RGBCAC_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LCAC0, sizeof(struct reg_isp_lcac_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBCAC0, sizeof(struct reg_isp_rgbcac_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LCAC1, sizeof(struct reg_isp_lcac_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBCAC1, sizeof(struct reg_isp_rgbcac_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBTOP, sizeof(struct REG_ISP_RGB_TOP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CCM0, sizeof(struct REG_ISP_CCM_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CCM1, sizeof(struct REG_ISP_CCM_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBGAMMA, sizeof(struct REG_ISP_GAMMA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YGAMMA, sizeof(struct REG_YGAMMA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_MMAP, sizeof(struct REG_ISP_MMAP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_PRE_LE_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_PRE_SE_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_CUR_LE_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_CUR_SE_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_IIR_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_IIR_W, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_AI_ISP, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CLUT, sizeof(struct REG_ISP_CLUT_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DEHAZE, sizeof(struct REG_ISP_DEHAZE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSC, sizeof(struct REG_ISP_CSC_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGB_DITHER, sizeof(struct REG_ISP_RGB_DITHER_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBTOP, sizeof(struct reg_isp_rgb_top_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CCM0, sizeof(struct reg_isp_ccm_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CCM1, sizeof(struct reg_isp_ccm_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGBGAMMA, sizeof(struct reg_isp_gamma_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YGAMMA, sizeof(struct reg_ygamma_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_MMAP, sizeof(struct reg_isp_mmap_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_PRE_LE_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_PRE_SE_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_CUR_LE_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_CUR_SE_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_IIR_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_IIR_W, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_MMAP_AI_ISP, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CLUT, sizeof(struct reg_isp_clut_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DEHAZE, sizeof(struct reg_isp_dehaze_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSC, sizeof(struct reg_isp_csc_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RGB_DITHER, sizeof(struct reg_isp_rgb_dither_t)},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK4, sizeof(struct )},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PCHK5, sizeof(struct )},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_HIST_EDGE_V, sizeof(struct REG_ISP_HIST_EDGE_V_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_HIST_EDGE_V, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FUSION, sizeof(struct REG_FUSION_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LTM, sizeof(struct REG_LTM_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LTM_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LTM_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_HIST_EDGE_V, sizeof(struct reg_isp_hist_edge_v_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_HIST_EDGE_V, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FUSION, sizeof(struct reg_fusion_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LTM, sizeof(struct reg_ltm_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LTM_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LTM_SE, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUVTOP, sizeof(struct REG_YUV_TOP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_TNR, sizeof(struct REG_ISP_444_422_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_MO, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_MO, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_Y, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_C, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FBCE, sizeof(struct REG_FBCE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_Y, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_C, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FBCD, sizeof(struct REG_FBCD_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_DITHER, sizeof(struct REG_ISP_YUV_DITHER_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CA, sizeof(struct REG_CA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CA_LITE, sizeof(struct REG_CA_LITE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YNR, sizeof(struct REG_ISP_YNR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CNR, sizeof(struct REG_ISP_CNR_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_EE_POST, sizeof(struct REG_ISP_EE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YCURVE, sizeof(struct REG_ISP_YCURV_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DCI, sizeof(struct REG_ISP_DCI_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_DCI, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DCI_GAMMA, sizeof(struct REG_ISP_GAMMA_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_CROP_Y, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_YUV_CROP_Y, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_CROP_C, sizeof(struct REG_CROP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_YUV_CROP_C, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LDCI, sizeof(struct REG_ISP_LDCI_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LDCI_W, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LDCI_R, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_EE_PRE, sizeof(struct REG_ISP_PREYEE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_Y, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_U, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_V, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUVTOP, sizeof(struct reg_yuv_top_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_TNR, sizeof(struct reg_isp_444_422_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_MO, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_MO, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_Y, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_ST_C, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FBCE, sizeof(struct reg_fbce_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_Y, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_TNR_LD_C, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_FBCD, sizeof(struct reg_fbcd_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_DITHER, sizeof(struct reg_isp_yuv_dither_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CA, sizeof(struct reg_ca_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CA_LITE, sizeof(struct reg_ca_lite_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YNR, sizeof(struct reg_isp_ynr_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CNR, sizeof(struct reg_isp_cnr_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_EE_POST, sizeof(struct reg_isp_ee_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YCURVE, sizeof(struct reg_isp_ycurv_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DCI, sizeof(struct reg_isp_dci_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_DCI, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DCI_GAMMA, sizeof(struct reg_isp_gamma_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_CROP_Y, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_YUV_CROP_Y, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_YUV_CROP_C, sizeof(struct reg_crop_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_YUV_CROP_C, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_LDCI, sizeof(struct reg_isp_ldci_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LDCI_W, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_LDCI_R, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_EE_PRE, sizeof(struct reg_isp_preyee_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_Y, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_U, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_AI_ISP_RDMA_V, sizeof(struct reg_isp_dma_ctl_t)},
 
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_ISPTOP, sizeof(struct REG_ISP_TOP_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RDMA_CORE0, sizeof(struct REG_RDMA_CORE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RDMA_CORE1, sizeof(struct REG_RDMA_CORE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG0_LITE, sizeof(struct REG_ISP_CSI_BDG_LITE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE2, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE3, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG1_LITE, sizeof(struct REG_ISP_CSI_BDG_LITE_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE0, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE1, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE2, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE3, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_VI_SEL, sizeof(struct REG_PRE_RAW_VI_SEL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_LE, sizeof(struct REG_ISP_DMA_CTL_T)},
-	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_SE, sizeof(struct REG_ISP_DMA_CTL_T)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_ISPTOP, sizeof(struct reg_isp_top_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RDMA_CORE0, sizeof(struct reg_rdma_core_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_RDMA_CORE1, sizeof(struct reg_rdma_core_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG0_LITE, sizeof(struct reg_isp_csi_bdg_lite_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE2, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT0_LITE3, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CSIBDG1_LITE, sizeof(struct reg_isp_csi_bdg_lite_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE0, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE1, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE2, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_BT1_LITE3, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_PRE_RAW_VI_SEL, sizeof(struct reg_pre_raw_vi_sel_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_LE, sizeof(struct reg_isp_dma_ctl_t)},
+	{ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_SE, sizeof(struct reg_isp_dma_ctl_t)},
 	// {ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CMDQ, sizeof(struct )},
 };
 /*************************************************************************
@@ -474,7 +475,7 @@ u16 dci_map_lut_50[] = {
 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50
 };
 
-uint16_t lscr_lut[] = {
+u16 lscr_lut[] = {
 0x300,   0x310,  0x320,  0x330,  0x340,  0x350,  0x360,  0x370,
 0x400,  0x410, 0x420, 0x430, 0x440, 0x450, 0x460, 0x470,
 0x500, 0x510, 0x520, 0x530, 0x540, 4095, 4095, 4095,
@@ -490,7 +491,7 @@ struct isp_ccm_cfg ccm_hw_cfg = {
 		},
 };
 
-uint16_t gamma_data[] = {
+u16 gamma_data[] = {
 0, 120, 220, 310, 390, 470, 540, 610, 670, 730, 786, 842, 894, 944, 994, 1050, 1096, 1138, 1178,
 1218, 1254, 1280, 1314, 1346, 1378, 1408, 1438, 1467, 1493, 1519, 1543, 1568, 1592, 1615, 1638,
 1661, 1683, 1705, 1726, 1748, 1769, 1789, 1810, 1830, 1849, 1869, 1888, 1907, 1926, 1945, 1963,
@@ -509,7 +510,7 @@ uint16_t gamma_data[] = {
 4003, 4010, 4018, 4025, 4032, 4039, 4046, 4054, 4061, 4068, 4075, 4082, 4089, 4095
 };
 
-uint16_t ygamma_data[] = {
+u16 ygamma_data[] = {
 0,        20,   40,     59,    79,    99,   119,   139,   159,   178,   198,   218,   240,   263,   286,   312,
 338,     365,  394,    424,   456,   489,   523,   558,   595,   633,   673,   714,   756,   800,   845,   892,
 940,     990,  1041,  1094,  1148,  1204,  1262,  1320,  1381,  1443,  1507,  1572,  1639,  1708,  1778,  1850,
@@ -529,7 +530,7 @@ uint16_t ygamma_data[] = {
 65535
 };
 
-uint16_t ycur_data[] = {
+u16 ycur_data[] = {
 255,  252,  248,  244,  240,  236,  232,  228,  224,  220,  216,  212,  208,  204,  200,  196,
 192,  188,  184,  180,  176,  172,  168,  164,  160,  156,  152,  148,  144,  140,  136,  132,
 128,  124,  120,  116,  112,  108,  104,  100,  96,   92,   88,   84,   80,   76,   72,   68,
@@ -537,7 +538,7 @@ uint16_t ycur_data[] = {
 0,
 };
 
-uint16_t ltm_d_lut[] = {
+u16 ltm_d_lut[] = {
 0, 256, 512, 768,  1024,  1280,  1536,  1792,  2048,  2304,  2560,  2816,  3072,  3328,  3584,  3840,  4096,
 4352,  4608,  4864,  5120,  5376,  5632,  5888,  6144,  6400,  6656,  6912,  7168,  7424,  7680,  7936,  8192,
 8448,  8704,  8960,  9216,  9472,  9728,  9984, 10240, 10496, 10752, 11008, 11264, 11520, 11776, 12032, 12288,
@@ -556,7 +557,7 @@ uint16_t ltm_d_lut[] = {
 61696, 61952, 62208, 62464, 62720, 62976, 63232, 63488, 63744, 64000, 64256, 64512, 64768, 65024, 65280, 65535
 };
 
-uint16_t ltm_b_lut[] = {
+u16 ltm_b_lut[] = {
 0, 4096, 8192, 12288, 16384, 20480, 24576, 28672, 32768, 36864, 40960, 45056, 49152, 53248, 57344, 61440, 65535,
 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
@@ -591,7 +592,7 @@ uint16_t ltm_b_lut[] = {
 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535
 };
 
-uint16_t ltm_g_lut[] = {
+u16 ltm_g_lut[] = {
 0, 256, 512, 768, 1024, 1280, 1536,  1792,  2048,  2304,  2560,  2816,  3072,  3328,  3584,  3840,  4096,
 4352,  4608,  4864,  5120,  5376,  5632,  5888,  6144,  6400,  6656,  6912,  7168,  7424,  7680,  7936,  8192,
 8448,  8704,  8960,  9216,  9472,  9728,  9984, 10240, 10496, 10752, 11008, 11264, 11520, 11776, 12032, 12288,
@@ -643,7 +644,7 @@ uint16_t ltm_g_lut[] = {
 };
 
 #ifdef PORTING_TEST
-uint16_t c_lut_r_lut[] = {
+u16 c_lut_r_lut[] = {
 1023, 959, 895, 831, 767, 703, 639, 575, 511, 447, 383, 319, 255, 191, 127, 63, 0,
 1023, 959, 895, 831, 767, 703, 639, 575, 511, 447, 383, 319, 255, 191, 127, 63, 0,
 1023, 959, 895, 831, 767, 703, 639, 575, 511, 447, 383, 319, 255, 191, 127, 63, 0,
@@ -935,7 +936,7 @@ uint16_t c_lut_r_lut[] = {
 1023, 959, 895, 831, 767, 703, 639, 575, 511, 447, 383, 319, 255, 191, 127, 63, 0,
 };
 
-uint16_t c_lut_g_lut[] = {
+u16 c_lut_g_lut[] = {
 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023,
 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959, 959,
 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895, 895,
@@ -1227,7 +1228,7 @@ uint16_t c_lut_g_lut[] = {
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-uint16_t c_lut_b_lut[] = {
+u16 c_lut_b_lut[] = {
 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023,
 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023,
 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023,
@@ -1582,14 +1583,6 @@ module_param(tile_en, int, 0644);
 int line_spliter_en;
 module_param(line_spliter_en, int, 0644);
 
-/* Force control ai isp raw dump for debug
- * Ctrl:
- * 1: enable
- * 0: disable
- */
-int bnr_ai_isp_dump;
-module_param(bnr_ai_isp_dump, int, 0644);
-
 /* Choose the ip test cases for FPGA verification
  * Ctrl:
  *	See the vi_ip_test_case.c for detail description of each test cases
@@ -1599,28 +1592,31 @@ int vi_ip_test_case;
 module_param(vi_ip_test_case, int, 0644);
 #endif
 
-s8 _pre_hw_enque(
-	struct cvi_vi_dev *vdev,
-	const enum cvi_isp_raw raw_num,
-	const enum cvi_isp_fe_chn_num chn_num);
-void _isp_fe_be_raw_dump_cfg(
-	struct cvi_vi_dev *vdev,
-	const enum cvi_isp_raw raw_num,
-	const u8 chn_num);
+s8 _pre_hw_enque(struct sop_vi_dev *vdev,
+		 const enum sop_isp_raw raw_num,
+		 const enum sop_isp_fe_chn_num chn_num);
+static void _isp_yuv_bypass_trigger(struct sop_vi_dev *vdev,
+				    const enum sop_isp_raw raw_num,
+				    const u8 hw_chn_num);
+void _isp_fe_be_raw_dump_cfg(struct sop_vi_dev *vdev,
+			     const enum sop_isp_raw raw_num,
+			     const u8 chn_num);
 void isp_post_tasklet(unsigned long data);
-static void _vi_sw_init(struct cvi_vi_dev *vdev);
+static void _vi_sw_init(struct sop_vi_dev *vdev);
 #ifndef FPGA_PORTING
-static int _vi_clk_ctrl(struct cvi_vi_dev *vdev, u8 enable);
+static int _vi_clk_ctrl(struct sop_vi_dev *vdev, u8 enable);
 #endif
-static inline void _post_rgbmap_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num, const u32 frm_num);
-void _postraw_outbuf_enq(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num);
-void isp_fill_rgbmap(struct isp_ctx *ctx, enum cvi_isp_raw raw_num);
+static inline void _post_rgbmap_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num, const u32 frm_num);
+void _postraw_outbuf_enq(struct sop_vi_dev *vdev,
+					const enum sop_isp_raw raw_num,
+					const enum sop_isp_fe_chn_num chn_num);
+void isp_fill_rgbmap(struct isp_ctx *ctx, enum sop_isp_raw raw_num);
 
 static int _vi_preraw_thread(void *arg);
 static int _vi_vblank_handler_thread(void *arg);
 static int _vi_err_handler_thread(void *arg);
 static int _vi_event_handler_thread(void *arg);
-static void _splt_hw_enque(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num);
+static void _splt_hw_enque(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
-#ifndef _CVI_LDC_REG_H_
-#define _CVI_LDC_REG_H_
+#ifndef _LDC_REG_H_
+#define _LDC_REG_H_
 
-#if defined(ENV_CVITEST) || defined(ENV_EMU)
+#if defined(ENVTEST) || defined(ENV_EMU)
 #define REG_LDC_TOP_BASE 0x680b0000//0x680b2000
 #else
 #define REG_LDC_TOP_BASE 0
@@ -79,4 +79,4 @@
 #define REG_CMDQ_DEBUG                  (REG_LDC_CMDQ_BASE + 0x2c)
 #define REG_CMDQ_DUMMY                  (REG_LDC_CMDQ_BASE + 0x30)
 
-#endif  // _CVI_LDC_REG_H_
+#endif  // _LDC_REG_H_

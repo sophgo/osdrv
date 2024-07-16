@@ -65,7 +65,7 @@ static int _isp_proc_show(struct seq_file *m, void *v)
 
 static int _isp_proc_open(struct inode *inode, struct file *file)
 {
-	struct cvi_vi_dev *vdev = PDE_DATA(inode);
+	struct sop_vi_dev *vdev = PDE_DATA(inode);
 
 	isp_prc_unit.isp_prc_int_flag = 0;
 	vi_event_queue(vdev, VI_EVENT_ISP_PROC_READ, 0);
@@ -89,7 +89,7 @@ static const struct file_operations _isp_proc_fops = {
 	.release = single_release,
 };
 #endif
-int isp_proc_init(struct cvi_vi_dev *_vdev)
+int isp_proc_init(struct sop_vi_dev *_vdev)
 {
 	int rc = 0;
 #ifndef NO_PROC_ISP

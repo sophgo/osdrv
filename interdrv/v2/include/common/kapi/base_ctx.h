@@ -1,11 +1,20 @@
 #ifndef __BASE_CTX_H__
 #define __BASE_CTX_H__
 
-#include <linux/cvi_base_ctx.h>
-#include <linux/base_uapi.h>
-
+#include <linux/vmalloc.h>
+#include <linux/mutex.h>
+#include <linux/semaphore.h>
+#include <linux/wait.h>
+#include <linux/version.h>
+#include <linux/common.h>
 #include <queue.h>
 
+#define GDC_SHARE_MEM_SIZE          (0x8000)
+
+#define NUM_OF_PLANES               3
+
+#define CHN_MATCH(x, y) (((x)->mod_id == (y)->mod_id) && ((x)->dev_id == (y)->dev_id)             \
+		&& ((x)->chn_id == (y)->chn_id))
 
 #define FIFO_HEAD(name, type)						\
 	struct name {							\
@@ -72,7 +81,42 @@
 		(var) = (tvar))
 #endif
 
+#define CHECK_IOCTL_CMD(cmd, type) \
+	if (_IOC_SIZE(cmd) != sizeof(type)) { \
+		pr_err("data size error!\n"); \
+		return -EINVAL; \
+	}
+
 #define MO_TBL_SIZE 256
+
+struct vip_rect {
+	__s32 left;
+	__s32 top;
+	__u32 width;
+	__u32 height;
+};
+
+struct vip_point {
+	__u16 x;
+	__u16 y;
+};
+
+struct vip_line {
+	__u16 start;
+	__u16 end;
+};
+
+struct vip_range {
+	__u16 start_x;
+	__u16 start_y;
+	__u16 end_x;
+	__u16 end_y;
+};
+
+struct vip_frmsize {
+	__u32 width;
+	__u32 height;
+};
 
 struct mlv_i_s {
 	u8 mlv_i_level;
@@ -80,62 +124,260 @@ struct mlv_i_s {
 };
 
 struct mod_ctx_s {
-	MOD_ID_E modID;
+	mod_id_e modid;
 	u8 ctx_num;
 	void *ctx_info;
 };
 
-struct cvi_vi_info {
-	CVI_BOOL enable;
+struct vi_info {
+	u8 enable;
 	struct {
-		CVI_U32 blk_idle;
+		u32 blk_idle;
 		struct {
-	       CVI_U32 r_0;
-	       CVI_U32 r_4;
-	       CVI_U32 r_8;
-	       CVI_U32 r_c;
+	       u32 r_0;
+	       u32 r_4;
+	       u32 r_8;
+	       u32 r_c;
 		} dbus_sel[7];
 	} isp_top;
 	struct {
-		CVI_U32 preraw_info;
-		CVI_U32 fe_idle_info;
+		u32 preraw_info;
+		u32 fe_idle_info;
 	} preraw_fe;
 	struct {
-		CVI_U32 preraw_be_info;
-		CVI_U32 be_dma_idle_info;
-		CVI_U32 ip_idle_info;
-		CVI_U32 stvalid_status;
-		CVI_U32 stready_status;
+		u32 preraw_be_info;
+		u32 be_dma_idle_info;
+		u32 ip_idle_info;
+		u32 stvalid_status;
+		u32 stready_status;
 	} preraw_be;
 	struct {
-		CVI_U32 stvalid_status;
-		CVI_U32 stready_status;
-		CVI_U32 dma_idle;
+		u32 stvalid_status;
+		u32 stready_status;
+		u32 dma_idle;
 	} rawtop;
 	struct {
-		CVI_U32 ip_stvalid_status;
-		CVI_U32 ip_stready_status;
-		CVI_U32 dmi_stvalid_status;
-		CVI_U32 dmi_stready_status;
-		CVI_U32 xcnt_rpt;
-		CVI_U32 ycnt_rpt;
+		u32 ip_stvalid_status;
+		u32 ip_stready_status;
+		u32 dmi_stvalid_status;
+		u32 dmi_stready_status;
+		u32 xcnt_rpt;
+		u32 ycnt_rpt;
 	} rgbtop;
 	struct {
-		CVI_U32 debug_state;
-		CVI_U32 stvalid_status;
-		CVI_U32 stready_status;
-		CVI_U32 xcnt_rpt;
-		CVI_U32 ycnt_rpt;
+		u32 debug_state;
+		u32 stvalid_status;
+		u32 stready_status;
+		u32 xcnt_rpt;
+		u32 ycnt_rpt;
 	} yuvtop;
 	struct {
-		CVI_U32 dbg_sel;
-		CVI_U32 status;
+		u32 dbg_sel;
+		u32 status;
 	} rdma28[2];
 };
 
+enum chn_type_e {
+	CHN_TYPE_IN = 0,
+	CHN_TYPE_OUT,
+	CHN_TYPE_MAX
+};
 
-struct cvi_overflow_info {
-	struct cvi_vi_info vi_info;
+// start point is included.
+// end point is excluded.
+struct crop_size {
+	uint16_t  start_x;
+	uint16_t  start_y;
+	uint16_t  end_x;
+	uint16_t  end_y;
+};
+
+struct gdc_mesh {
+	u64 paddr;
+	void *vaddr;
+	u32 meshSize;
+	struct mutex lock;
+};
+
+enum gdc_job_state {
+	GDC_JOB_SUCCESS = 0,
+	GDC_JOB_FAIL,
+	GDC_JOB_WORKING,
+};
+
+struct gdc_job_info {
+	int64_t handle;
+	mod_id_e mod_id; // the module submitted gdc job
+	uint32_t task_num; // number of tasks
+	enum gdc_job_state state; // job state
+	uint32_t in_size;
+	uint32_t out_size;
+	uint32_t cost_time; // from job submitted to job done
+	uint32_t hw_time; // hw cost time
+	uint32_t busy_time; // from job submitted to job commit to driver
+	uint64_t submit_time; // us
+};
+
+struct gdc_job_status {
+	uint32_t success;
+	uint32_t fail;
+	uint32_t cancel;
+	uint32_t begin_num;
+	uint32_t busy_num;
+	uint32_t procing_num;
+};
+
+struct gdc_task_status {
+	uint32_t success;
+	uint32_t fail;
+	uint32_t cancel;
+	uint32_t busy_num;
+};
+
+struct gdc_operation_status {
+	uint32_t add_task_suc;
+	uint32_t add_task_fail;
+	uint32_t end_suc;
+	uint32_t end_fail;
+	uint32_t cb_cnt;
+};
+
+struct gdc_proc_ctx {
+	struct gdc_job_info job_info[GDC_PROC_JOB_INFO_NUM];
+	uint16_t job_info_idx; // latest job submitted
+	struct gdc_job_status job_status;
+	struct gdc_task_status task_status;
+	struct gdc_operation_status fisheye_status;
+};
+
+struct csc_cfg {
+	__u16 coef[3][3];
+	__u8 sub[3];
+	__u8 add[3];
+};
+
+enum vip_input_type {
+	VIP_INPUT_ISP = 0,
+	VIP_INPUT_LDC,
+	VIP_INPUT_SHARE,
+	VIP_INPUT_MEM,
+	VIP_INPUT_ISP_POST,
+	VIP_INPUT_MAX,
+};
+
+struct rgn_canvas_ctx {
+	u64 phy_addr;
+	u8 *virt_addr;
+	u32 len;
+};
+
+struct rgn_canvas_q {
+	struct rgn_canvas_ctx **fifo;
+	int  front, tail, capacity;
+};
+
+enum vip_pattern {
+	VIP_PAT_OFF = 0,
+	VIP_PAT_SNOW,
+	VIP_PAT_AUTO,
+	VIP_PAT_RED,
+	VIP_PAT_GREEN,
+	VIP_PAT_BLUE,
+	VIP_PAT_COLORBAR,
+	VIP_PAT_GRAY_GRAD_H,
+	VIP_PAT_GRAY_GRAD_V,
+	VIP_PAT_BLACK,
+	VIP_PAT_MAX,
+};
+
+enum rgn_format {
+	RGN_FMT_ARGB8888,
+	RGN_FMT_ARGB4444,
+	RGN_FMT_ARGB1555,
+	RGN_FMT_256LUT,
+	RGN_FMT_16LUT,
+	RGN_FMT_FONT,
+	RGN_FMT_MAX
+};
+struct rgn_param {
+	enum rgn_format fmt;
+	struct vip_rect rect;
+	__u32 stride;
+	__u64 phy_addr;
+};
+
+struct rgn_odec {
+	__u8 enable;
+	__u8 attached_ow;
+	__u8 canvas_updated;
+	__u32 bso_sz;
+	__u64 canvas_mutex_lock;
+	__u64 rgn_canvas_waitq;
+	__u64 rgn_canvas_doneq;
+};
+
+struct rgn_lut_cfg {
+	__u16 lut_length;
+	__u16 lut_addr[256];
+	__u8 lut_layer;
+	// __u8 rgnex_en;
+	__u8 is_updated;
+};
+struct rgn_cfg {
+	struct rgn_param param[8];
+	struct rgn_lut_cfg rgn_lut_cfg;
+	struct rgn_odec odec;
+	__u8 num_of_rgn;
+	__u8 hscale_x2;
+	__u8 vscale_x2;
+	__u8 colorkey_en;
+	__u32 colorkey;
+};
+
+struct rgn_ex_cfg {
+	struct rgn_param rgn_ex_param[16];
+	struct rgn_odec odec;
+	__u8 num_of_rgn_ex;
+	__u8 hscale_x2;
+	__u8 vscale_x2;
+	__u8 colorkey_en;
+	__u32 colorkey;
+};
+
+struct rgn_coverex_param {
+	struct vip_rect rect;
+	__u32 color;
+	__u8 enable;
+};
+
+struct rgn_coverex_cfg {
+	struct rgn_coverex_param rgn_coverex_param[4];
+};
+
+struct rgn_mosaic_cfg {
+	__u8 enable;
+	__u8 blk_size;	//0: 8x8   1:16x16
+	__u16 start_x;
+	__u16 start_y;
+	__u16 end_x;
+	__u16 end_y;
+	__u64 phy_addr;
+};
+
+struct vpss_rgnex_cfg {
+	struct rgn_ex_cfg cfg;
+	__u32 pixelformat;
+	__u32 bytesperline[2];
+	__u64 addr[3];
+};
+
+struct vip_plane {
+	__u32 length;
+	__u64 addr;
+};
+
+struct overflow_info {
+	struct vi_info vi_info;
 };
 
 #endif  /* __CVI_BASE_CTX_H__ */

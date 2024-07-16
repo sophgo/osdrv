@@ -1,19 +1,20 @@
 #include <vo_core.h>
 #include <base_cb.h>
+#include <linux/compat.h>
 #include "vo_sys.h"
+#include "vo.h"
 
-#define CVI_VO_DEV_NAME            "soph-vo"
-#define CVI_VO_CLASS_NAME          "soph-vo"
+#define VO_DEV_NAME            "soph-vo"
+#define VO_CLASS_NAME          "soph-vo"
 
-static const char *const disp_irq_name[DISP_MAX_INST] = {"disp0", "disp1"};
+const char *const disp_irq_name[DISP_MAX_INST] = {"disp0", "disp1"};
 static const char *const clk_sys_name[] = {
 	"clk_vo_mipimpll0", "clk_vo_mipimpll1"
 };
 static const char *const clk_vo_name[] = {
-	"clk_vo_disp0", "clk_vo_mac0", "clk_vo_dsi_mac0",
-	"clk_vo_disp1", "clk_vo_mac1", "clk_vo_dsi_mac1"
+	"clk_vo_disp0", "clk_vo_mac0",
+	"clk_vo_disp1", "clk_vo_mac1"
 };
-
 
 static long vo_core_ioctl(struct file *filp, u_int cmd, u_long arg)
 {
@@ -38,18 +39,28 @@ static unsigned int vo_core_poll(struct file *filp, struct poll_table_struct *wa
 	return vo_poll(filp, wait);
 }
 
+#ifdef CONFIG_COMPAT
+static long vo_core_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 const struct file_operations vo_fops = {
 	.owner = THIS_MODULE,
 	.open = vo_core_open,
 	.unlocked_ioctl = vo_core_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = vo_core_ioctl,
+	.compat_ioctl = vo_core_compat_ptr_ioctl,
 #endif
 	.release = vo_core_release,
 	.poll = vo_core_poll,
 };
 
-int vo_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int vo_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	return vo_cb(dev, caller, cmd, arg);
 }
@@ -59,7 +70,7 @@ static int vo_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_VO);
 }
 
-static int vo_core_register_cb(struct cvi_vo_dev *dev)
+static int vo_core_register_cb(struct vo_core_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -70,19 +81,19 @@ static int vo_core_register_cb(struct cvi_vo_dev *dev)
 	return base_reg_module_cb(&reg_cb);
 }
 
-static int vo_core_register_cdev(struct cvi_vo_dev *dev)
+static int vo_core_register_cdev(struct vo_core_dev *dev)
 {
 	struct device *dev_t;
 	int err = 0;
 
-	dev->vo_class = class_create(THIS_MODULE, CVI_VO_CLASS_NAME);
+	dev->vo_class = class_create(THIS_MODULE, VO_CLASS_NAME);
 	if (IS_ERR(dev->vo_class)) {
 		dev_err(dev->dev, "create class failed\n");
 		return PTR_ERR(dev->vo_class);
 	}
 
 	/* get the major number of the character device */
-	if ((alloc_chrdev_region(&dev->cdev_id, 0, 1, CVI_VO_DEV_NAME)) < 0) {
+	if ((alloc_chrdev_region(&dev->cdev_id, 0, 1, VO_DEV_NAME)) < 0) {
 		err = -EBUSY;
 		dev_err(dev->dev, "allocate chrdev failed\n");
 		goto alloc_chrdev_region_err;
@@ -98,7 +109,7 @@ static int vo_core_register_cdev(struct cvi_vo_dev *dev)
 		goto cdev_add_err;
 	}
 
-	dev_t = device_create(dev->vo_class, dev->dev, dev->cdev_id, NULL, "%s", CVI_VO_DEV_NAME);
+	dev_t = device_create(dev->vo_class, dev->dev, dev->cdev_id, NULL, "%s", VO_DEV_NAME);
 	if (IS_ERR(dev_t)) {
 		dev_err(dev->dev, "device create failed error code(%ld)\n", PTR_ERR(dev_t));
 		err = PTR_ERR(dev_t);
@@ -116,7 +127,7 @@ alloc_chrdev_region_err:
 	return err;
 }
 
-static int vo_core_unregister_cdev(struct cvi_vo_dev *dev)
+static int vo_core_unregister_cdev(struct vo_core_dev *dev)
 {
 	device_destroy(dev->vo_class, dev->cdev_id);
 	cdev_del(&dev->cdev);
@@ -129,7 +140,7 @@ static int vo_core_unregister_cdev(struct cvi_vo_dev *dev)
 
 static int vo_core_clk_init(struct platform_device *pdev)
 {
-	struct cvi_vo_dev *dev;
+	struct vo_core_dev *dev;
 	u8 i = 0;
 
 	dev = dev_get_drvdata(&pdev->dev);
@@ -162,7 +173,7 @@ static int vo_core_clk_init(struct platform_device *pdev)
 static int _init_resources(struct platform_device *pdev)
 {
 	int ret = 0, i;
-	struct cvi_vo_dev *dev;
+	struct vo_core_dev *dev;
 	struct resource *res;
 
 	dev = dev_get_drvdata(&pdev->dev);
@@ -171,8 +182,8 @@ static int _init_resources(struct platform_device *pdev)
 	for (i = 0; i < 10; ++i) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i);
 		dev->reg_base[i] = devm_ioremap_resource(&pdev->dev, res);
-		CVI_TRACE_VO(CVI_DBG_INFO, "res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%px).\n",
-				res->start, res->end, dev->reg_base[i]);
+		TRACE_VO(DBG_INFO, "res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%px).\n",
+			 res->start, res->end, dev->reg_base[i]);
 
 		if (IS_ERR(dev->reg_base[i])) {
 			ret = PTR_ERR(dev->reg_base[i]);
@@ -204,22 +215,25 @@ static int _init_resources(struct platform_device *pdev)
 	return ret;
 }
 
-static void _init_parameters(struct cvi_vo_dev *dev)
+static void _init_parameters(struct vo_core_dev *dev)
 {
 	int i;
-	struct cvi_vo_core *pCore;
+	struct vo_core *core;
 
 	for (i = 0; i < DISP_MAX_INST; ++i) {
-		pCore = &dev->vo_core[i];
+		core = &dev->vo_core[i];
 
-		pCore->core_id = i;
-		pCore->disp_online = false;
+		core->core_id = i;
+		core->disp_online = false;
 	}
 }
 
 static int vo_core_probe(struct platform_device *pdev)
 {
-	struct cvi_vo_dev *dev;
+	struct vo_core_dev *dev;
+	union vo_sys_reset vo_ip_reset;
+	union vo_sys_reset_apb vo_apb_reset;
+
 	int ret = 0;
 	int i;
 
@@ -239,6 +253,7 @@ static int vo_core_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Get resources failed, err %d\n", ret);
 		return ret;
 	}
+
 	_init_parameters(dev);
 
 	/* tgen should be turn off before reset disp */
@@ -246,7 +261,22 @@ static int vo_core_probe(struct platform_device *pdev)
 		disp_tgen_enable(i, false);
 	}
 
-	reset_disp();
+	vo_ip_reset = vo_sys_get_reset();
+	vo_apb_reset = vo_sys_get_reset_apb();
+	vo_ip_reset.b.disp0 = true;
+	vo_ip_reset.b.disp1 = true;
+	vo_apb_reset.b.disp0 = true;
+	vo_apb_reset.b.disp1 = true;
+	vo_sys_set_reset(vo_ip_reset);
+	vo_sys_set_reset_apb(vo_apb_reset);
+	udelay(10);
+	vo_ip_reset.b.disp0 = false;
+	vo_ip_reset.b.disp1 = false;
+	vo_apb_reset.b.disp0 = false;
+	vo_apb_reset.b.disp1 = false;
+	vo_sys_set_reset(vo_ip_reset);
+	vo_sys_set_reset_apb(vo_apb_reset);
+
 	disp_ctrl_init(false);
 
 	ret = vo_core_register_cdev(dev);
@@ -294,7 +324,7 @@ static int vo_core_remove(struct platform_device *pdev)
 {
 	int ret = 0, i;
 
-	struct cvi_vo_dev *dev = dev_get_drvdata(&pdev->dev);
+	struct vo_core_dev *dev = dev_get_drvdata(&pdev->dev);
 
 	ret = vo_destroy_instance(pdev);
 	if (ret) {
@@ -323,11 +353,108 @@ static int vo_core_remove(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, NULL);
 
 err_destroy_instance:
-	CVI_TRACE_VO(CVI_DBG_INFO, "%s -\n", __func__);
+	TRACE_VO(DBG_INFO, "%s -\n", __func__);
 
 	return ret;
 }
 
+#if defined(CONFIG_PM)
+int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	int ret = -1;
+	int i;
+	vo_wbc wbc_dev;
+	vo_layer layer;
+	vo_dev dev = 0;
+	struct vo_core_dev *vdev = dev_get_drvdata(&pdev->dev);
+
+	g_vo_ctx->suspend = true;
+
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+		if (g_vo_ctx->layer_ctx[layer].is_layer_enable) {
+			ret = vo_destroy_thread(layer);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo destory thread\n");
+			}
+		}
+
+	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev)
+		if (g_vo_ctx->wbc_ctx[wbc_dev].is_wbc_enable) {
+			ret = vo_wbc_destroy_thread(wbc_dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to wbc destory thread\n");
+			}
+		}
+
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+		if (g_vo_ctx->dev_ctx[dev].is_dev_enable) {
+			ret = vo_stop_streaming(dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo stop streaming\n");
+			}
+		}
+
+	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
+		devm_free_irq(vdev->dev, vdev->vo_core[i].irq_num, (void *)&vdev->vo_core[i]);
+
+	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
+		if ((vdev->clk_vo[i]) && __clk_is_enabled(vdev->clk_vo[i]))
+			clk_disable_unprepare(vdev->clk_vo[i]);
+	}
+
+	TRACE_VO(DBG_WARN, "vo suspended\n");
+
+	return 0;
+}
+
+int vo_core_resume(struct platform_device *pdev)
+{
+	int ret = -1;
+	int i;
+	vo_wbc wbc_dev;
+	vo_layer layer;
+	vo_dev dev = 0;
+	struct vo_core_dev *vdev = dev_get_drvdata(&pdev->dev);
+
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+		if (g_vo_ctx->layer_ctx[layer].is_layer_enable && g_vo_ctx->suspend) {
+			ret = vo_create_thread(layer);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo create thread\n");
+			}
+		}
+
+	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev)
+		if (g_vo_ctx->wbc_ctx[wbc_dev].is_wbc_enable && g_vo_ctx->suspend) {
+			ret = vo_wbc_create_thread(wbc_dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to wbc create thread\n");
+			}
+		}
+
+	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
+		if ((vdev->clk_vo[i]) && (!__clk_is_enabled(vdev->clk_vo[i])))
+			clk_prepare_enable(vdev->clk_vo[i]);
+	}
+
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
+			ret = vo_start_streaming(dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo start streaming\n");
+			}
+		}
+
+	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
+		ret = devm_request_irq(vdev->dev, vdev->vo_core[i].irq_num, vo_irq_handler, 0,
+				       disp_irq_name[i], (void *)&vdev->vo_core[i]);
+
+	g_vo_ctx->suspend = false;
+	TRACE_VO(DBG_WARN, "vo resumed\n");
+
+	return 0;
+}
+#endif
 
 static const struct of_device_id vo_core_match[] = {
 	{
@@ -343,9 +470,13 @@ static struct platform_driver vo_core_driver = {
 	.probe = vo_core_probe,
 	.remove = vo_core_remove,
 	.driver = {
-		.name = CVI_VO_DEV_NAME,
+		.name = VO_DEV_NAME,
 		.of_match_table = vo_core_match,
 	},
+#if defined(CONFIG_PM)
+	.suspend = vo_core_suspend,
+	.resume = vo_core_resume,
+#endif
 };
 
 module_platform_driver(vo_core_driver);

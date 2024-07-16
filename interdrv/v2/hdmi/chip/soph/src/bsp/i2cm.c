@@ -4,12 +4,12 @@
 #include "core/hdmi_reg.h"
 #include <linux/unistd.h>
 
-#define I2CM_OPERATION_READ		0x01
-#define I2CM_OPERATION_READ_EXT		0x02
-#define I2CM_OPERATION_READ_SEQ		0x04
-#define I2CM_OPERATION_READ_SEQ_EXT     0x08
-#define I2CM_OPERATION_WRITE		0x10
-#define I2C_DIV_FACTOR	 100000
+#define I2CM_OPERATION_READ        0x01
+#define I2CM_OPERATION_READ_EXT    0x02
+#define I2CM_OPERATION_READ_SEQ    0x04
+#define I2CM_OPERATION_READ_SEQ_EXT 0x08
+#define I2CM_OPERATION_WRITE       0x10
+#define I2C_DIV_FACTOR   100000
 #define I2C_CLK_RATE_KHZ 25000
 
 /*********************  PRIVATE FUNCTIONS ***********************/
@@ -21,7 +21,8 @@ u16 _scl_calc(u16 sfrClock, u16 sclMinTime)
 {
 	unsigned long tmp_scl_period = 0;
 	if (((sfrClock * sclMinTime) % I2C_DIV_FACTOR) != 0) {
-		tmp_scl_period = (unsigned long)((sfrClock * sclMinTime) + (I2C_DIV_FACTOR - ((sfrClock * sclMinTime) % I2C_DIV_FACTOR))) / I2C_DIV_FACTOR;
+		tmp_scl_period = (unsigned long)((sfrClock * sclMinTime) +
+				(I2C_DIV_FACTOR - ((sfrClock * sclMinTime) % I2C_DIV_FACTOR))) / I2C_DIV_FACTOR;
 	}
 	else {
 		tmp_scl_period = (unsigned long)(sfrClock * sclMinTime) / I2C_DIV_FACTOR;
@@ -53,23 +54,25 @@ void _standard_speed_low_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
 	dev_write(I2CM_SS_SCL_LCNT_0_ADDR, (u8) (value >> 0));
 }
 
-int _write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 data)
+int _write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 data)
 {
 	int timeout = I2CDDC_TIMEOUT;
 	u32 status = 0;
 
-	dev_write_mask(I2CM_SLAVE, I2CM_SLAVE_SLAVEADDR_MASK, i2cAddr);
+	dev_write_mask(I2CM_SLAVE, I2CM_SLAVE_SLAVEADDR_MASK, i2c_addr);
 	dev_write(I2CM_ADDRESS, addr);
 	dev_write(I2CM_DATAO, data);
 	dev_write(I2CM_OPERATION, I2CM_OPERATION_WRITE);
 	do {
 		if (!phy_hot_plug_state(dev)) {
-			pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+			pr_debug("%s:%d Hot Plug = %s\n",
+				__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 			return -2;
 		}
 		udelay(10);
-		status = dev_read_mask(IH_I2CM_STAT0, IH_I2CM_STAT0_I2CMASTERERROR_MASK |
-							   IH_I2CM_STAT0_I2CMASTERDONE_MASK);
+		status = dev_read_mask(IH_I2CM_STAT0,
+				IH_I2CM_STAT0_I2CMASTERERROR_MASK |
+				IH_I2CM_STAT0_I2CMASTERDONE_MASK);
 	} while (status == 0 && (timeout--));
 
 	dev_write(IH_I2CM_STAT0, status); //clear read status
@@ -104,12 +107,14 @@ int _read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr,   u8
 
 	do {
 		if (!phy_hot_plug_state(dev)) {
-			pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+			pr_debug("%s:%d Hot Plug = %s\n",
+				__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 			return -2;
 		}
 		udelay(1500);
-		status = dev_read_mask(IH_I2CM_STAT0, IH_I2CM_STAT0_I2CMASTERERROR_MASK |
-							   IH_I2CM_STAT0_I2CMASTERDONE_MASK);
+		status = dev_read_mask(IH_I2CM_STAT0,
+					IH_I2CM_STAT0_I2CMASTERERROR_MASK |
+					IH_I2CM_STAT0_I2CMASTERDONE_MASK);
 	} while (status == 0 && (timeout--));
 
 	dev_write(IH_I2CM_STAT0, status); //clear read status
@@ -129,12 +134,12 @@ int _read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr,   u8
 	return -1;
 }
 
-int _read8(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u8 * value)
+int _read8(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 segment, u8 pointer, u8 addr, u8 * value)
 {
 	int timeout = I2CDDC_TIMEOUT;
 	u32 status = 0;
 
-	dev_write_mask(I2CM_SLAVE, I2CM_SLAVE_SLAVEADDR_MASK, i2cAddr);
+	dev_write_mask(I2CM_SLAVE, I2CM_SLAVE_SLAVEADDR_MASK, i2c_addr);
 	dev_write(I2CM_SEGADDR, segment);
 	dev_write(I2CM_SEGPTR, pointer);
 	dev_write(I2CM_ADDRESS, addr);
@@ -146,19 +151,21 @@ int _read8(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u8 
 
 	do {
 		if (!phy_hot_plug_state(dev)) {
-			pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+			pr_debug("%s:%d Hot Plug = %s\n",
+				__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 			return -2;
 		}
 		udelay(1500);
-		status = dev_read_mask(IH_I2CM_STAT0, IH_I2CM_STAT0_I2CMASTERERROR_MASK |
-							   IH_I2CM_STAT0_I2CMASTERDONE_MASK);
+		status = dev_read_mask(IH_I2CM_STAT0,
+				IH_I2CM_STAT0_I2CMASTERERROR_MASK |
+				IH_I2CM_STAT0_I2CMASTERDONE_MASK);
 	} while (status == 0 && (timeout--));
 
 	dev_write(IH_I2CM_STAT0, status); //clear read status
 
 	if(status & IH_I2CM_STAT0_I2CMASTERERROR_MASK){
 		pr_debug("%s: I2C DDC Read8 extended failed for i2cAddr 0x%x seg 0x%x pointer 0x%x addr 0x%x",__func__,
-				i2cAddr, segment, pointer, addr);
+				i2c_addr, segment, pointer, addr);
 		return -1;
 	}
 
@@ -177,12 +184,13 @@ int _read8(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u8 
 
 /*********************  PUBLIC FUNCTIONS ***********************/
 
-void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfrClock, u16 ss_low_ckl, u16 ss_high_ckl, u16 fs_low_ckl, u16 fs_high_ckl)
+void i2cddc_clk_config(hdmi_tx_dev_t * dev, u16 sfr_clock,
+			u16 ss_low_ckl, u16 ss_high_ckl, u16 fs_low_ckl, u16 fs_high_ckl)
 {
-	_standard_speed_low_clk_ctrl(dev, _scl_calc(sfrClock, ss_low_ckl));
-	_standard_speed_high_clk_ctrl(dev, _scl_calc(sfrClock, ss_high_ckl));
-	_fast_speed_low_clk_ctrl(dev, _scl_calc(sfrClock, fs_low_ckl));
-	_fast_speed_high_clk_ctrl(dev, _scl_calc(sfrClock, fs_high_ckl));
+	_standard_speed_low_clk_ctrl(dev, _scl_calc(sfr_clock, ss_low_ckl));
+	_standard_speed_high_clk_ctrl(dev, _scl_calc(sfr_clock, ss_high_ckl));
+	_fast_speed_low_clk_ctrl(dev, _scl_calc(sfr_clock, fs_low_ckl));
+	_fast_speed_high_clk_ctrl(dev, _scl_calc(sfr_clock, fs_high_ckl));
 }
 
 void i2cddc_clk_set_divs(hdmi_tx_dev_t * dev)
@@ -235,13 +243,12 @@ void i2cddc_fast_mode(hdmi_tx_dev_t * dev, u8 value)
 
 void i2cddc_mask_interrupts(hdmi_tx_dev_t * dev, u8 mask)
 {
-
 	dev_write_mask(I2CM_INT, I2CM_INT_DONE_MASK, mask ? 1 : 0);
 	dev_write_mask(I2CM_CTLINT, I2CM_CTLINT_ARBITRATION_MASK, mask ? 1 : 0);
 	dev_write_mask(I2CM_CTLINT, I2CM_CTLINT_NACK_MASK, mask ? 1 : 0);
 }
 
-int ddc_write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 len, u8 * data)
+int ddc_write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 len, u8 * data)
 {
 	int i, status = 0;
 
@@ -249,10 +256,11 @@ int ddc_write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 len, u8 * data)
 		int tries = 3;
 		do {
 			if (!phy_hot_plug_state(dev)) {
-				pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+				pr_debug("%s:%d Hot Plug = %s\n",
+					__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 				return -2;
 			}
-			status = _write(dev, i2cAddr, addr, data[i]);
+			status = _write(dev, i2c_addr, addr, data[i]);
 		} while (status && tries--);
 
 		if(status) //Error after 3 failed writes
@@ -261,7 +269,7 @@ int ddc_write(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 addr, u8 len, u8 * data)
 	return 0;
 }
 
-int ddc_read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u8 len, u8 * data)
+int ddc_read(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 segment, u8 pointer, u8 addr, u8 len, u8 * data)
 {
 	int i, status = 0;
 
@@ -270,10 +278,11 @@ int ddc_read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u
 		if ((len - i) >= 8){
 			do {
 				if (!phy_hot_plug_state(dev)) {
-					pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+					pr_debug("%s:%d Hot Plug = %s\n",
+						__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 					return -2;
 				}
-				status = _read8(dev, i2cAddr, segment, pointer, addr + i,  &(data[i]));
+				status = _read8(dev, i2c_addr, segment, pointer, addr + i,  &(data[i]));
 			} while (status && tries--);
 
 			if(status) //Error after 3 failed writes
@@ -282,10 +291,11 @@ int ddc_read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr, u
 		} else {
 			do {
 				if (!phy_hot_plug_state(dev)) {
-					pr_debug("%s:%d Hot Plug = %s\n", __FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
+					pr_debug("%s:%d Hot Plug = %s\n",
+						__FUNCTION__, __LINE__, phy_hot_plug_state(dev) ? "ON" : "OFF");
 					return -2;
 				}
-				status = _read(dev, i2cAddr, segment, pointer, addr + i,  &(data[i]));
+				status = _read(dev, i2c_addr, segment, pointer, addr + i,  &(data[i]));
 			} while (status && tries--);
 
 			if(status) //Error after 3 failed writes
@@ -309,5 +319,3 @@ int i2c_reset(hdmi_tx_dev_t * dev)
 
 	return 0;
 }
-
-

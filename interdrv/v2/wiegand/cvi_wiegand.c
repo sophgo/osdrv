@@ -34,6 +34,7 @@
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/compat.h>
 
 #include "cvi_wiegand.h"
 #include "cvi_wiegand_ioctl.h"
@@ -369,6 +370,16 @@ static int cvi_wiegand_close(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static long cvi_wiegand_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations wiegand_fops = {
 	.owner = THIS_MODULE,
 	.open = cvi_wiegand_open,
@@ -376,7 +387,9 @@ static const struct file_operations wiegand_fops = {
 	.read = cvi_wiegand_read,
 	// .write = cvi_wiegand_write,
 	.unlocked_ioctl = cvi_wiegand_ioctl,
-	.compat_ioctl = cvi_wiegand_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = cvi_wiegand_compat_ptr_ioctl,
+#endif
 };
 
 int cvi_wiegand_register_cdev(struct cvi_wiegand_device *ndev)

@@ -6,7 +6,7 @@
 #endif
 #include <ldc_cb.h>
 
-enum VO_CB_CMD {
+enum vo_cb_cmd {
 	VO_CB_IRQ_HANDLER,
 	VO_CB_GET_RGN_HDLS,
 	VO_CB_SET_RGN_HDLS,
@@ -20,9 +20,9 @@ enum VO_CB_CMD {
 };
 
 struct vo_get_chnrotation_cfg {
-	u8 VoLayer;
-	u8 VoChn;
-	u8 enRotation;
+	u8 layer;
+	u8 chn;
+	u8 rotation;
 };
 
 #ifdef __cplusplus

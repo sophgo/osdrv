@@ -316,14 +316,14 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     VpuWriteReg(coreIdx, W5_COMMAND,              W5_INIT_VPU);
     VpuWriteReg(coreIdx, W5_VPU_REMAP_CORE_START, 1);
     if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
-        VLOG(ERR, "VPU init(W5_VPU_REMAP_CORE_START) timeout\n");
+        VLOG(INFO, "VPU init(W5_VPU_REMAP_CORE_START) timeout\n");
         return RETCODE_VPU_RESPONSE_TIMEOUT;
     }
 
     regVal = VpuReadReg(coreIdx, W5_RET_SUCCESS);
     if (regVal == 0) {
         Uint32 reasonCode = VpuReadReg(coreIdx, W5_RET_FAIL_REASON);
-        VLOG(ERR, "VPU init(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
+        VLOG(INFO, "VPU init(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
         return RETCODE_FAILURE;
     }
 
@@ -361,6 +361,7 @@ RetCode Wave5VpuBuildUpDecParam(CodecInst* instance, DecOpenParam* param)
         pDecInfo->seqChangeMask = SEQ_CHANGE_ENABLE_ALL_AV1;
         break;
     default:
+        VLOG(ERR, "Invalid bitstreamFormat:%d\n", param->bitstreamFormat);
         return RETCODE_NOT_SUPPORTED_FEATURE;
     }
 
@@ -1447,7 +1448,7 @@ RetCode Wave5VpuReInit(Uint32 coreIdx, void* firmware, Uint32 size)
     oldCodeBase = VPU_MapToAddr40Bit(coreIdx, oldCodeBase);
 
     //if (oldCodeBase != codeBase + W_REMAP_INDEX1*W_REMAP_MAX_SIZE) {
-    if (vdi_get_instance_count(coreIdx) == 0) {
+    if (vdi_get_instance_num(coreIdx) == 0) {
         Uint32 hwOption = 0;
 
         VpuWriteMem(coreIdx, codeBase, (unsigned char*)firmware, size*2, VDI_128BIT_LITTLE_ENDIAN);
@@ -1517,14 +1518,14 @@ RetCode Wave5VpuReInit(Uint32 coreIdx, void* firmware, Uint32 size)
         VpuWriteReg(coreIdx, W5_VPU_REMAP_CORE_START, 1);
 
         if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
-            VLOG(ERR, "VPU reinit(W5_VPU_REMAP_CORE_START) timeout\n");
+            VLOG(INFO, "VPU reinit(W5_VPU_REMAP_CORE_START) timeout\n");
             return RETCODE_VPU_RESPONSE_TIMEOUT;
         }
 
         regVal = VpuReadReg(coreIdx, W5_RET_SUCCESS);
         if (regVal == 0) {
             Uint32 reasonCode = VpuReadReg(coreIdx, W5_RET_FAIL_REASON);
-            VLOG(ERR, "VPU reinit(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
+            VLOG(INFO, "VPU reinit(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
             return RETCODE_FAILURE;
         }
     }
@@ -2818,7 +2819,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
 
     // todo mark: remap feature
     // if (pEncInfo->addrRemapEn) {
-    //     cviInitAddrRemapFb(inst);
+    //     InitAddrRemapFb(inst);
     // }
 
     remain = count;

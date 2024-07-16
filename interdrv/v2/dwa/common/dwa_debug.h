@@ -3,26 +3,26 @@
 
 #include <linux/debugfs.h>
 
-extern u32 dwa_log_lv;
+extern unsigned int dwa_log_lv;
 
-#define CVI_DBG_ERR        1   /* error conditions                     */
-#define CVI_DBG_WARN       2   /* warning conditions                   */
-#define CVI_DBG_NOTICE     3   /* normal but significant condition     */
-#define CVI_DBG_INFO       4   /* informational                        */
-#define CVI_DBG_DEBUG      5   /* debug-level messages                 */
+#define DBG_ERR        1   /* error conditions                     */
+#define DBG_WARN       2   /* warning conditions                   */
+#define DBG_NOTICE     3   /* normal but significant condition     */
+#define DBG_INFO       4   /* informational                        */
+#define DBG_DEBUG      5   /* debug-level messages                 */
 
-#define CVI_TRACE_DWA(level, fmt, ...) \
+#define TRACE_DWA(level, fmt, ...) \
 	do { \
 		if (level <= dwa_log_lv) { \
-			if (level == CVI_DBG_ERR) \
+			if (level == DBG_ERR) \
 				pr_err("%s:%d(): " fmt, __func__, __LINE__, ##__VA_ARGS__); \
-			else if (level == CVI_DBG_WARN) \
+			else if (level == DBG_WARN) \
 				pr_warn("%s:%d(): " fmt, __func__, __LINE__, ##__VA_ARGS__); \
-			else if (level == CVI_DBG_NOTICE) \
+			else if (level == DBG_NOTICE) \
 				pr_notice("%s:%d(): " fmt, __func__, __LINE__, ##__VA_ARGS__); \
-			else if (level == CVI_DBG_INFO) \
+			else if (level == DBG_INFO) \
 				pr_info("%s:%d(): " fmt, __func__, __LINE__, ##__VA_ARGS__); \
-			else if (level == CVI_DBG_DEBUG) \
+			else if (level == DBG_DEBUG) \
 				printk(KERN_DEBUG "%s:%d(): " fmt, __func__, __LINE__, ##__VA_ARGS__); \
 		} \
 	} while (0)

@@ -9,12 +9,13 @@
 #include <linux/dma-map-ops.h>
 #endif
 
-#include <linux/cvi_defines.h>
-#include "linux/base_uapi.h"
+#include <linux/defines.h>
+#include <linux/base_uapi.h>
 #include "ion.h"
 #include "ion/ion.h"
 #include "ion/cvitek/cvitek_ion_alloc.h"
 #include <linux/dma-mapping.h>
+#include "base_debug.h"
 
 struct mem_mapping {
 	uint64_t phy_addr;
@@ -44,7 +45,7 @@ static int32_t mem_put(struct mem_mapping *mem_info)
 		if (ctx_mem_mgr[i].phy_addr == 0) {
 			memcpy(&ctx_mem_mgr[i], mem_info, sizeof(struct mem_mapping));
 
-			pr_debug("sys_ctx_mem_put() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
+			TRACE_BASE(DBG_DEBUG, "sys_ctx_mem_put() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
 							ctx_mem_mgr[i].phy_addr,
 							ctx_mem_mgr[i].dmabuf_fd,
 							ctx_mem_mgr[i].vir_addr,
@@ -57,7 +58,7 @@ static int32_t mem_put(struct mem_mapping *mem_info)
 	spin_unlock(&mem_lock);
 
 	if (!find_hit) {
-		pr_err("sys_ctx_mem_put() overflow\n");
+		TRACE_BASE(DBG_ERR, "sys_ctx_mem_put() overflow\n");
 		return -1;
 	}
 	return 0;
@@ -72,7 +73,7 @@ static int32_t mem_get(struct mem_mapping *mem_info)
 	for (i = 0; i < MEM_MAPPING_MAX; i++) {
 		if (ctx_mem_mgr[i].phy_addr == mem_info->phy_addr) {
 			memcpy(mem_info, &ctx_mem_mgr[i], sizeof(struct mem_mapping));
-			pr_debug("sys_ctx_mem_get() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
+			TRACE_BASE(DBG_DEBUG, "sys_ctx_mem_get() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
 							ctx_mem_mgr[i].phy_addr,
 							ctx_mem_mgr[i].dmabuf_fd,
 							ctx_mem_mgr[i].vir_addr,
@@ -87,7 +88,7 @@ static int32_t mem_get(struct mem_mapping *mem_info)
 	spin_unlock(&mem_lock);
 
 	if (!find_hit) {
-		pr_err("sys_ctx_mem_get() can't find it\n");
+		TRACE_BASE(DBG_ERR, "sys_ctx_mem_get() can't find it\n");
 		return -1;
 	}
 
@@ -101,18 +102,18 @@ static int32_t mem_dump(void)
 	spin_lock(&mem_lock);
 	for (i = 0; i < MEM_MAPPING_MAX; i++) {
 		if (ctx_mem_mgr[i].phy_addr) {
-			pr_err("p_addr=0x%llx, dmabuf_fd=%d\n",
+			TRACE_BASE(DBG_ERR, "p_addr=0x%llx, dmabuf_fd=%d\n",
 				ctx_mem_mgr[i].phy_addr, ctx_mem_mgr[i].dmabuf_fd);
 			cnt++;
 		}
 	}
 	spin_unlock(&mem_lock);
 
-	pr_err("sys_ctx_mem_dump() total=%d\n", cnt);
+	TRACE_BASE(DBG_ERR, "sys_ctx_mem_dump() total=%d\n", cnt);
 	return cnt;
 }
 
-static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t u32Len,
+static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t len,
 	uint32_t is_cached, uint8_t *name)
 {
 	int32_t dmabuf_fd = 0, ret = 0;
@@ -123,15 +124,15 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t u32Len,
 	struct mem_mapping mem_info;
 
 	//vpp heap
-	dmabuf_fd = bm_ion_alloc(0x1, u32Len, is_cached);
+	dmabuf_fd = bm_ion_alloc(0x1, len, is_cached);
 	if (dmabuf_fd < 0) {
-		pr_err("bm_ion_alloc len=0x%x failed\n", u32Len);
+		TRACE_BASE(DBG_ERR, "bm_ion_alloc len=0x%x failed\n", len);
 		return -ENOMEM;
 	}
 
 	dmabuf = dma_buf_get(dmabuf_fd);
 	if (!dmabuf) {
-		pr_err("allocated get dmabuf failed\n");
+		TRACE_BASE(DBG_ERR, "allocated get dmabuf failed\n");
 		return -ENOMEM;
 	}
 
@@ -146,7 +147,7 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t u32Len,
 
 	ret = dma_buf_begin_cpu_access(dmabuf, DMA_TO_DEVICE);
 	if (ret < 0) {
-		pr_err("cvi_ion_alloc() dma_buf_begin_cpu_access failed\n");
+		TRACE_BASE(DBG_ERR, "dma_buf_begin_cpu_access failed\n");
 		dma_buf_put(dmabuf);
 		return ret;
 	}
@@ -162,21 +163,22 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t u32Len,
 	mem_info.dmabuf_fd = dmabuf_fd;
 	mem_info.vir_addr = vmap_addr;
 	mem_info.phy_addr = ionbuf->paddr;
+	mem_info.size = len;
 	mem_info.fd_pid = current->pid;
 	if (mem_put(&mem_info)) {
-		pr_err("allocate mm put failed\n");
+		TRACE_BASE(DBG_ERR, "allocate mm put failed\n");
 		return -ENOMEM;
 	}
 
 	if (ion_debug_alloc_free) {
-		pr_info("%s: ion alloc: name=%s\n", __func__, ionbuf->name);
-		pr_info("%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
-		pr_info("%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
-		pr_info("%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
-		pr_info("%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
-		pr_info("%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
-		pr_info("%s: current->pid=%d\n", __func__, current->pid);
-		pr_info("%s: current->comm=%s\n", __func__, current->comm);
+		TRACE_BASE(DBG_INFO, "%s: ion alloc: name=%s\n", __func__, ionbuf->name);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
+		TRACE_BASE(DBG_INFO, "%s: current->pid=%d\n", __func__, current->pid);
+		TRACE_BASE(DBG_INFO, "%s: current->comm=%s\n", __func__, current->comm);
 	}
 	*addr_p = ionbuf->paddr;
 	*addr_v = vmap_addr;
@@ -184,48 +186,52 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t u32Len,
 	return ret;
 }
 
-static int32_t _base_ion_free(uint64_t addr_p)
+static int32_t _base_ion_free(uint64_t addr_p, int32_t *size)
 {
 	struct mem_mapping mem_info;
 	struct ion_buffer *ionbuf;
 	struct dma_buf *dmabuf;
-	int ret = 0;
 
 	//get from memory manager
 	memset(&mem_info, 0, sizeof(struct mem_mapping));
 	mem_info.phy_addr = addr_p;
 	if (mem_get(&mem_info)) {
-		pr_err("dmabuf_fd get failed, addr:0x%llx\n", addr_p);
+		TRACE_BASE(DBG_ERR, "dmabuf_fd get failed, addr:0x%llx\n", addr_p);
 		return -ENOMEM;
-	} else {
-		ret = mem_info.size;
 	}
 
 	dmabuf = (struct dma_buf *)(mem_info.dmabuf);
 	ionbuf = (struct ion_buffer *)dmabuf->priv;
 
 	if (ion_debug_alloc_free) {
-		pr_info("%s: ion free: name=%s\n", __func__, ionbuf->name);
-		pr_info("%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
-		pr_info("%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
-		pr_info("%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
-		pr_info("%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
-		pr_info("%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
-		pr_info("%s: current->pid=%d\n", __func__, current->pid);
-		pr_info("%s: current->comm=%s\n", __func__, current->comm);
+		TRACE_BASE(DBG_INFO, "%s: ion free: name=%s\n", __func__, ionbuf->name);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
+		TRACE_BASE(DBG_INFO, "%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
+		TRACE_BASE(DBG_INFO, "%s: current->pid=%d\n", __func__, current->pid);
+		TRACE_BASE(DBG_INFO, "%s: current->comm=%s\n", __func__, current->comm);
 	}
 
 	dma_buf_end_cpu_access(dmabuf, DMA_TO_DEVICE);
 	dma_buf_put(dmabuf);
-
 	bm_ion_free(mem_info.dmabuf_fd);
 
-	return ret;
+	if (size)
+		*size = mem_info.size;
+
+	return 0;
 }
 
-int32_t base_ion_free(uint64_t u64PhyAddr)
+int32_t base_ion_free2(uint64_t phy_addr, int32_t *size)
 {
-	return _base_ion_free(u64PhyAddr);
+	return _base_ion_free(phy_addr, size);
+}
+
+int32_t base_ion_free(uint64_t phy_addr)
+{
+	return _base_ion_free(phy_addr, NULL);
 }
 EXPORT_SYMBOL_GPL(base_ion_free);
 
@@ -235,12 +241,12 @@ int32_t base_ion_alloc(uint64_t *p_paddr, void **pp_vaddr, uint8_t *buf_name, ui
 }
 EXPORT_SYMBOL_GPL(base_ion_alloc);
 
-int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t u32Len)
+int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t len)
 {
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE) && defined(__riscv)
-	arch_sync_dma_for_device(addr_p, u32Len, DMA_FROM_DEVICE);
+	arch_sync_dma_for_device(addr_p, len, DMA_FROM_DEVICE);
 #else
-	__dma_map_area(phys_to_virt(addr_p), u32Len, DMA_FROM_DEVICE);
+	__dma_map_area(phys_to_virt(addr_p), len, DMA_FROM_DEVICE);
 #endif
 
 	/*	*/
@@ -249,12 +255,12 @@ int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t u32Len
 }
 EXPORT_SYMBOL_GPL(base_ion_cache_invalidate);
 
-int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t u32Len)
+int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t len)
 {
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE) && defined(__riscv)
-	arch_sync_dma_for_device(addr_p, u32Len, DMA_TO_DEVICE);
+	arch_sync_dma_for_device(addr_p, len, DMA_TO_DEVICE);
 #else
-	__dma_map_area(phys_to_virt(addr_p), u32Len, DMA_TO_DEVICE);
+	__dma_map_area(phys_to_virt(addr_p), len, DMA_TO_DEVICE);
 #endif
 
 	/*	*/
@@ -268,4 +274,3 @@ int32_t base_ion_dump(void)
 	return mem_dump();
 }
 EXPORT_SYMBOL_GPL(base_ion_dump);
-

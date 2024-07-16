@@ -1,6 +1,6 @@
 #include <proc/vi_proc.h>
 #include <linux/version.h>
-#include <linux/cvi_vi_ctx.h>
+#include <vi_ctx.h>
 
 #define VI_PRC_NAME	"soph/vi"
 
@@ -11,23 +11,23 @@ static void *vi_shared_mem;
 
 static int _vi_proc_show(struct seq_file *m, void *v)
 {
-	struct cvi_vi_dev *vdev = m->private;
-	struct cvi_vi_ctx *pviProcCtx = NULL;
+	struct sop_vi_dev *vdev = m->private;
+	struct sop_vi_ctx *vi_proc_ctx = NULL;
 	u8 i = 0, j = 0, chn = 0;
 	char o[8], p[8];
-	u8 isRGB = 0;
+	u8 is_rgb = 0;
 	u8 raw_num = 0;
 
-	pviProcCtx = (struct cvi_vi_ctx *)(vi_shared_mem);
+	vi_proc_ctx = (struct sop_vi_ctx *)(vi_shared_mem);
 
 	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------------\n");
 	seq_puts(m, "\tDetectErrFrame\tDropErrFrame\n");
-	seq_printf(m, "\t\t%d\t\t%d\n", pviProcCtx->modParam.s32DetectErrFrame, pviProcCtx->modParam.u32DropErrFrame);
+	seq_printf(m, "\t\t%d\t\t%d\n", vi_proc_ctx->mod_param.detect_err_frame, vi_proc_ctx->mod_param.drop_err_frame);
 
 	seq_puts(m, "\n-------------------------------VI MODE------------------------------------------\n");
 	seq_puts(m, "\tDevID\tPrerawFE\tPrerawBE\tPostraw\t\tScaler\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			raw_num = vi_get_raw_num_by_dev(&vdev->ctx, i);
 
 			seq_printf(m, "\t%3d\t%7s\t\t%7s\t\t%7s\t\t%7s\n", i,
@@ -43,70 +43,70 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI DEV ATTR1-------------------------------------\n");
 	seq_puts(m, "\tDevID\tDevEn\tBindPipe\tWidth\tHeight\tIntfM\tWkM\tScanM\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			seq_printf(m, "\t%3d\t%3s\t%4s\t\t%4d\t%4d", i,
-				(pviProcCtx->isDevEnable[i] ? "Y" : "N"), "Y",
-				pviProcCtx->devAttr[i].stSize.u32Width,
-				pviProcCtx->devAttr[i].stSize.u32Height);
+				(vi_proc_ctx->is_dev_enable[i] ? "Y" : "N"), "Y",
+				vi_proc_ctx->dev_attr[i].size.width,
+				vi_proc_ctx->dev_attr[i].size.height);
 
 			memset(o, 0, 8);
-			if (pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT656 ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT601 ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT1120_STANDARD ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT1120_INTERLEAVED)
+			if (vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_BT656 ||
+			    vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_BT601 ||
+			    vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_BT1120_STANDARD ||
+			    vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_BT1120_INTERLEAVED)
 				memcpy(o, "BT", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV420_NORMAL ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV420_LEGACY ||
-				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV422)
+			else if (vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_MIPI ||
+				 vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_MIPI_YUV420_NORMAL ||
+				 vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_MIPI_YUV420_LEGACY ||
+				 vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_MIPI_YUV422)
 				memcpy(o, "MIPI", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enIntfMode == VI_MODE_LVDS)
+			else if (vi_proc_ctx->dev_attr[i].intf_mode == VI_MODE_LVDS)
 				memcpy(o, "LVDS", sizeof(o));
 
 			memset(p, 0, 8);
-			if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_1Multiplex)
+			if (vi_proc_ctx->dev_attr[i].work_mode == VI_WORK_MODE_1MULTIPLEX)
 				memcpy(p, "1MUX", sizeof(p));
-			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_2Multiplex)
+			else if (vi_proc_ctx->dev_attr[i].work_mode == VI_WORK_MODE_2MULTIPLEX)
 				memcpy(p, "2MUX", sizeof(p));
-			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_3Multiplex)
+			else if (vi_proc_ctx->dev_attr[i].work_mode == VI_WORK_MODE_3MULTIPLEX)
 				memcpy(p, "3MUX", sizeof(p));
-			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_4Multiplex)
+			else if (vi_proc_ctx->dev_attr[i].work_mode == VI_WORK_MODE_4MULTIPLEX)
 				memcpy(p, "4MUX", sizeof(p));
 			else
 				memcpy(p, "Other", sizeof(p));
 
 			seq_printf(m, "\t%4s\t%4s\t%3s\n", o, p,
-				(pviProcCtx->devAttr[i].enScanMode == VI_SCAN_INTERLACED) ? "I" : "P");
+				(vi_proc_ctx->dev_attr[i].scan_mode == VI_SCAN_INTERLACED) ? "I" : "P");
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------VI DEV ATTR2-------------------------------------\n");
 	seq_puts(m, "\tDevID\tAD0\tAD1\tAD2\tAD3\tSeq\tDataType\tWDRMode\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			memset(o, 0, 8);
-			if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_VUVU)
+			if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_VUVU)
 				memcpy(o, "VUVU", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_UVUV)
+			else if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_UVUV)
 				memcpy(o, "UVUV", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_UYVY)
+			else if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_UYVY)
 				memcpy(o, "UYVY", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_VYUY)
+			else if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_VYUY)
 				memcpy(o, "VYUY", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_YUYV)
+			else if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_YUYV)
 				memcpy(o, "YUYV", sizeof(o));
-			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_YVYU)
+			else if (vi_proc_ctx->dev_attr[i].data_seq == VI_DATA_SEQ_YVYU)
 				memcpy(o, "YVYU", sizeof(o));
 
-			isRGB = (pviProcCtx->devAttr[i].enInputDataType == VI_DATA_TYPE_RGB);
+			is_rgb = (vi_proc_ctx->dev_attr[i].input_data_type == VI_DATA_TYPE_RGB);
 			raw_num = vi_get_raw_num_by_dev(&vdev->ctx, i);
 
 			seq_printf(m, "\t%3d\t%1d\t%1d\t%1d\t%1d\t%3s\t%4s\t\t%3s\n", i,
-				pviProcCtx->devAttr[i].as32AdChnId[0],
-				pviProcCtx->devAttr[i].as32AdChnId[1],
-				pviProcCtx->devAttr[i].as32AdChnId[2],
-				pviProcCtx->devAttr[i].as32AdChnId[3],
-				(isRGB) ? "N/A" : o, (isRGB) ? "RGB" : "YUV",
+				vi_proc_ctx->dev_attr[i].ad_chn_id[0],
+				vi_proc_ctx->dev_attr[i].ad_chn_id[1],
+				vi_proc_ctx->dev_attr[i].ad_chn_id[2],
+				vi_proc_ctx->dev_attr[i].ad_chn_id[3],
+				(is_rgb) ? "N/A" : o, (is_rgb) ? "RGB" : "YUV",
 				(vdev->ctx.isp_pipe_cfg[raw_num].is_hdr_on) ? "WDR_2F1" : "None");
 		}
 	}
@@ -114,57 +114,57 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI BIND ATTR-------------------------------------\n");
 	seq_puts(m, "\tDevID\tPipeNum\t\tPipeId\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			seq_printf(m, "\t%3d\t%3d\t\t%3d\n", i,
-				pviProcCtx->devBindPipeAttr[i].u32Num,
-				pviProcCtx->devBindPipeAttr[i].PipeId[0]);
+				vi_proc_ctx->bind_pipe_attr[i].num,
+				vi_proc_ctx->bind_pipe_attr[i].pipe_id[0]);
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------VI DEV TIMING ATTR-------------------------------\n");
 	seq_puts(m, "\tDevID\tDevTimingEn\tDevFrmRate\tDevWidth\tDevHeight\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			seq_printf(m, "\t%3d\t%5s\t\t%4d\t\t%5d\t\t%5d\n", i,
-				(pviProcCtx->stTimingAttr[i].bEnable) ? "Y" : "N",
-				pviProcCtx->stTimingAttr[i].s32FrmRate,
-				pviProcCtx->devAttr[i].stSize.u32Width,
-				pviProcCtx->devAttr[i].stSize.u32Height);
+				(vi_proc_ctx->timing_attr[i].enable) ? "Y" : "N",
+				vi_proc_ctx->timing_attr[i].frm_rate,
+				vi_proc_ctx->dev_attr[i].size.width,
+				vi_proc_ctx->dev_attr[i].size.height);
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------VI CHN ATTR1-------------------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tWidth\tHeight\tMirror\tFlip\tSrcFRate\tDstFRate\tPixFmt\tVideoFmt\tBindPool\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				memset(o, 0, 8);
-				if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_422)
+				if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_422)
 					memcpy(o, "422P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_420)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_420)
 					memcpy(o, "420P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_444)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_444)
 					memcpy(o, "444P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV12)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_NV12)
 					memcpy(o, "NV12", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV21)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_NV21)
 					memcpy(o, "NV21", sizeof(o));
 
 				seq_printf(m, "\t%3d\t%3d\t%4d\t%4d\t%3s\t%2s\t%4d\t\t%4d\t\t%3s\t%6s\t\t%4d\n", i, j,
-					pviProcCtx->chnAttr[chn].stSize.u32Width,
-					pviProcCtx->chnAttr[chn].stSize.u32Height,
-					(pviProcCtx->chnAttr[chn].bMirror) ? "Y" : "N",
-					(pviProcCtx->chnAttr[chn].bFlip) ? "Y" : "N",
-					pviProcCtx->chnAttr[chn].stFrameRate.s32SrcFrameRate,
-					pviProcCtx->chnAttr[chn].stFrameRate.s32DstFrameRate,
-					o, "SDR8", pviProcCtx->chnAttr[chn].u32BindVbPool);
+					vi_proc_ctx->chn_attr[chn].size.width,
+					vi_proc_ctx->chn_attr[chn].size.height,
+					(vi_proc_ctx->chn_attr[chn].mirror) ? "Y" : "N",
+					(vi_proc_ctx->chn_attr[chn].flip) ? "Y" : "N",
+					vi_proc_ctx->chn_attr[chn].frame_rate.src_frame_rate,
+					vi_proc_ctx->chn_attr[chn].frame_rate.dst_frame_rate,
+					o, "SDR8", vi_proc_ctx->chn_attr[chn].bind_vb_pool);
 			}
 		}
 	}
@@ -172,22 +172,22 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN ATT2--------------------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tCompressMode\tDepth\tAlign\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 				memset(o, 0, 8);
-				if (pviProcCtx->chnAttr[chn].enCompressMode == COMPRESS_MODE_NONE)
+				if (vi_proc_ctx->chn_attr[chn].compress_mode == COMPRESS_MODE_NONE)
 					memcpy(o, "None", sizeof(o));
 				else
 					memcpy(o, "Y", sizeof(o));
 
 				seq_printf(m, "\t%3d\t%3d\t%4s\t\t%3d\t%3d\n", i, j,
-					o, pviProcCtx->chnAttr[chn].u32Depth, 32);
+					o, vi_proc_ctx->chn_attr[chn].depth, 32);
 			}
 		}
 	}
@@ -195,40 +195,40 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN OUTPUT RESOLUTION-------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tMirror\tFlip\tWidth\tHeight\tPixFmt\tVideoFmt\tCompressMode\tFrameRate\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				memset(o, 0, 8);
-				if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_422)
+				if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_422)
 					memcpy(o, "422P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_420)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_420)
 					memcpy(o, "420P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_444)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_YUV_PLANAR_444)
 					memcpy(o, "444P", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV12)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_NV12)
 					memcpy(o, "NV12", sizeof(o));
-				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV21)
+				else if (vi_proc_ctx->chn_attr[chn].pixel_format == PIXEL_FORMAT_NV21)
 					memcpy(o, "NV21", sizeof(o));
 
 				memset(p, 0, 8);
-				if (pviProcCtx->chnAttr[chn].enCompressMode == COMPRESS_MODE_NONE)
+				if (vi_proc_ctx->chn_attr[chn].compress_mode == COMPRESS_MODE_NONE)
 					memcpy(p, "None", sizeof(p));
 				else
 					memcpy(p, "Y", sizeof(p));
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%2s\t%4d\t%4d\t%3s\t%6s\t\t%6s\t\t%5d\n", i, j,
-					(pviProcCtx->chnAttr[chn].bMirror) ? "Y" : "N",
-					(pviProcCtx->chnAttr[chn].bFlip) ? "Y" : "N",
-					pviProcCtx->chnAttr[chn].stSize.u32Width,
-					pviProcCtx->chnAttr[chn].stSize.u32Height,
+					(vi_proc_ctx->chn_attr[chn].mirror) ? "Y" : "N",
+					(vi_proc_ctx->chn_attr[chn].flip) ? "Y" : "N",
+					vi_proc_ctx->chn_attr[chn].size.width,
+					vi_proc_ctx->chn_attr[chn].size.height,
 					o, "SDR8", p,
-					pviProcCtx->chnAttr[chn].stFrameRate.s32DstFrameRate);
+					vi_proc_ctx->chn_attr[chn].frame_rate.dst_frame_rate);
 			}
 		}
 	}
@@ -237,23 +237,23 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN ROTATE INFO-------------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tRotate\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				memset(o, 0, 8);
-				if (pviProcCtx->enRotation[chn] == ROTATION_0)
+				if (vi_proc_ctx->rotation[chn] == ROTATION_0)
 					memcpy(o, "0", sizeof(o));
-				else if (pviProcCtx->enRotation[chn] == ROTATION_90)
+				else if (vi_proc_ctx->rotation[chn] == ROTATION_90)
 					memcpy(o, "90", sizeof(o));
-				else if (pviProcCtx->enRotation[chn] == ROTATION_180)
+				else if (vi_proc_ctx->rotation[chn] == ROTATION_180)
 					memcpy(o, "180", sizeof(o));
-				else if (pviProcCtx->enRotation[chn] == ROTATION_270)
+				else if (vi_proc_ctx->rotation[chn] == ROTATION_270)
 					memcpy(o, "270", sizeof(o));
 				else
 					memcpy(o, "Invalid", sizeof(o));
@@ -266,18 +266,18 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN EARLY INTERRUPT INFO----------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tEnable\tLineCnt\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%4d\n", i, j,
-					pviProcCtx->enEalyInt[chn].bEnable ? "Y" : "N",
-					pviProcCtx->enEalyInt[chn].u32LineCnt);
+					vi_proc_ctx->ealy_int[chn].enable ? "Y" : "N",
+					vi_proc_ctx->ealy_int[chn].line_cnt);
 			}
 		}
 	}
@@ -285,31 +285,31 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN CROP INFO---------------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tCropEn\tCoorType\tCoorX\tCoorY\tWidth\tHeight\tTrimX\tTrimY\tTrimWid\tTrimHgt\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				memset(o, 0, 8);
-				if (pviProcCtx->chnCrop[chn].enCropCoordinate == VI_CROP_RATIO_COOR)
+				if (vi_proc_ctx->chn_crop[chn].crop_coordinate == VI_CROP_RATIO_COOR)
 					memcpy(o, "RAT", sizeof(o));
 				else
 					memcpy(o, "ABS", sizeof(o));
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%5s\t\t%4d\t%4d\t%4d\t%4d\t%4d\t%3d\t%3d\t%4d\n", i, j,
-					pviProcCtx->chnCrop[chn].bEnable ? "Y" : "N", o,
-					pviProcCtx->chnCrop[chn].stCropRect.s32X,
-					pviProcCtx->chnCrop[chn].stCropRect.s32Y,
-					pviProcCtx->chnCrop[chn].stCropRect.u32Width,
-					pviProcCtx->chnCrop[chn].stCropRect.u32Height,
-					pviProcCtx->chnCrop[chn].stCropRect.s32X,
-					pviProcCtx->chnCrop[chn].stCropRect.s32Y,
-					pviProcCtx->chnCrop[chn].stCropRect.u32Width,
-					pviProcCtx->chnCrop[chn].stCropRect.u32Height);
+					vi_proc_ctx->chn_crop[chn].enable ? "Y" : "N", o,
+					vi_proc_ctx->chn_crop[chn].crop_rect.x,
+					vi_proc_ctx->chn_crop[chn].crop_rect.y,
+					vi_proc_ctx->chn_crop[chn].crop_rect.width,
+					vi_proc_ctx->chn_crop[chn].crop_rect.height,
+					vi_proc_ctx->chn_crop[chn].crop_rect.x,
+					vi_proc_ctx->chn_crop[chn].crop_rect.y,
+					vi_proc_ctx->chn_crop[chn].crop_rect.width,
+					vi_proc_ctx->chn_crop[chn].crop_rect.height);
 			}
 		}
 	}
@@ -317,24 +317,24 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VI CHN STATUS------------------------------------\n");
 	seq_puts(m, "\tDevID\tChnID\tEnable\tFrameRate\tIntCnt\tRecvPic\tLostFrame\tVbFail\tWidth\tHeight\n");
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (pviProcCtx->isDevEnable[i]) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
 			for (chn = 0, j = 0; j < i; j++) {
-				chn += pviProcCtx->devAttr[j].chn_num;
+				chn += vi_proc_ctx->dev_attr[j].chn_num;
 			}
 
-			for (j = 0; j < pviProcCtx->devAttr[i].chn_num; j++, chn++) {
-				if (chn >= pviProcCtx->total_chn_num)
+			for (j = 0; j < vi_proc_ctx->dev_attr[i].chn_num; j++, chn++) {
+				if (chn >= vi_proc_ctx->total_chn_num)
 					break;
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%5d\t\t%5d\t%5d\t%5d\t\t%5d\t%4d\t%4d\n", i, j,
-					pviProcCtx->chnStatus[chn].bEnable ? "Y" : "N",
-					pviProcCtx->chnStatus[chn].u32FrameRate,
-					pviProcCtx->chnStatus[chn].u32IntCnt,
-					pviProcCtx->chnStatus[chn].u32RecvPic,
-					pviProcCtx->chnStatus[chn].u32LostFrame,
-					pviProcCtx->chnStatus[chn].u32VbFail,
-					pviProcCtx->chnStatus[chn].stSize.u32Width,
-					pviProcCtx->chnStatus[chn].stSize.u32Height);
+					vi_proc_ctx->chn_status[chn].enable ? "Y" : "N",
+					vi_proc_ctx->chn_status[chn].frame_rate,
+					vi_proc_ctx->chn_status[chn].int_cnt,
+					vi_proc_ctx->chn_status[chn].recv_pic,
+					vi_proc_ctx->chn_status[chn].lost_frame,
+					vi_proc_ctx->chn_status[chn].vb_fail,
+					vi_proc_ctx->chn_status[chn].size.width,
+					vi_proc_ctx->chn_status[chn].size.height);
 			}
 		}
 	}
@@ -363,7 +363,7 @@ static const struct file_operations _vi_proc_fops = {
 };
 #endif
 
-int vi_proc_init(struct cvi_vi_dev *_vdev, void *shm)
+int vi_proc_init(struct sop_vi_dev *_vdev, void *shm)
 {
 	int rc = 0;
 

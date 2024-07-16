@@ -1,24 +1,19 @@
 #include <proc/vo_proc.h>
 #include <linux/version.h>
-#include <linux/cvi_vip.h>
-#include "cvi_vo_ctx.h"
 
 #define VO_PRC_NAME	"soph/vo"
 
 /*************************************************************************
  *	VO proc functions
  *************************************************************************/
-static void _intf_type_to_string(uint32_t intfType, char *str, int len)
+static void intf_type_to_string(vo_intf_type_e intf_type, char *str, int len)
 {
-	switch (intfType) {
-	case VO_INTF_CVBS:
-		strncpy(str, "CVBS", len);
+	switch (intf_type) {
+	case VO_INTF_MIPI:
+		strncpy(str, "MIPI", len);
 		break;
-	case VO_INTF_YPBPR:
-		strncpy(str, "YPBPR", len);
-		break;
-	case VO_INTF_VGA:
-		strncpy(str, "VGA", len);
+	case VO_INTF_LVDS:
+		strncpy(str, "LVDS", len);
 		break;
 	case VO_INTF_BT656:
 		strncpy(str, "BT656", len);
@@ -26,29 +21,20 @@ static void _intf_type_to_string(uint32_t intfType, char *str, int len)
 	case VO_INTF_BT1120:
 		strncpy(str, "BT1120", len);
 		break;
-	case VO_INTF_LCD:
-		strncpy(str, "LCD", len);
+	case VO_INTF_PARALLEL_RGB:
+		strncpy(str, "PARALLEL_RGB", len);
 		break;
-	case VO_INTF_LCD_18BIT:
-		strncpy(str, "LCD_18BIT", len);
-		break;
-	case VO_INTF_LCD_24BIT:
-		strncpy(str, "LCD_24BIT", len);
-		break;
-	case VO_INTF_LCD_30BIT:
-		strncpy(str, "LCD_30BIT", len);
-		break;
-	case VO_INTF_MIPI:
-		strncpy(str, "MIPI", len);
-		break;
-	case VO_INTF_MIPI_SLAVE:
-		strncpy(str, "MIPI_SLAVE", len);
-		break;
-	case VO_INTF_HDMI:
-		strncpy(str, "HDMI", len);
+	case VO_INTF_SERIAL_RGB:
+		strncpy(str, "SERIAL_RGB", len);
 		break;
 	case VO_INTF_I80:
 		strncpy(str, "I80", len);
+		break;
+	case VO_INTF_HW_MCU:
+		strncpy(str, "HW_MCU", len);
+		break;
+	case VO_INTF_HDMI:
+		strncpy(str, "HDMI", len);
 		break;
 	default:
 		strncpy(str, "Unknown Type", len);
@@ -56,9 +42,9 @@ static void _intf_type_to_string(uint32_t intfType, char *str, int len)
 	}
 }
 
-static void _intf_sync_to_string(enum _VO_INTF_SYNC_E intfSync, char *str, int len)
+static void intf_sync_to_string(vo_intf_sync_e intf_sync, char *str, int len)
 {
-	switch (intfSync) {
+	switch (intf_sync) {
 	case VO_OUTPUT_PAL:
 		strncpy(str, "PAL", len);
 		break;
@@ -143,9 +129,9 @@ static void _intf_sync_to_string(enum _VO_INTF_SYNC_E intfSync, char *str, int l
 	}
 }
 
-static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
+static void pix_fmt_to_string(pixel_format_e pixfmt, char *str, int len)
 {
-	switch (PixFmt) {
+	switch (pixfmt) {
 	case PIXEL_FORMAT_RGB_888:
 		strncpy(str, "RGB_888", len);
 		break;
@@ -278,9 +264,9 @@ static void _pix_fmt_to_string(enum _PIXEL_FORMAT_E PixFmt, char *str, int len)
 	}
 }
 
-static void _wbcSrc_to_String(VO_WBC_SRC_TYPE_E enSrcType, char *str, int len)
+static void wbc_src_to_string(vo_wbc_src_type_e src_type, char *str, int len)
 {
-	switch (enSrcType) {
+	switch (src_type) {
 	case VO_WBC_SRC_DEV:
 		strncpy(str, "DEV", len);
 		break;
@@ -293,9 +279,9 @@ static void _wbcSrc_to_String(VO_WBC_SRC_TYPE_E enSrcType, char *str, int len)
 	}
 }
 
-static void _wbcMode_to_String(VO_WBC_MODE_E enWbcMode, char *str, int len)
+static void wbc_mode_to_string(vo_wbc_mode_e wbc_mode, char *str, int len)
 {
-	switch (enWbcMode) {
+	switch (wbc_mode) {
 	case VO_WBC_MODE_NORM:
 		strncpy(str, "NORM", len);
 		break;
@@ -311,9 +297,9 @@ static void _wbcMode_to_String(VO_WBC_MODE_E enWbcMode, char *str, int len)
 	}
 }
 
-static void _chnAspectRatio_to_String(ASPECT_RATIO_E enMode, char *str, int len)
+static void chn_aspect_ratio_to_string(aspect_ratio_e mode, char *str, int len)
 {
-	switch (enMode) {
+	switch (mode) {
 	case ASPECT_RATIO_NONE:
 		strncpy(str, "NONE", len);
 		break;
@@ -329,9 +315,9 @@ static void _chnAspectRatio_to_String(ASPECT_RATIO_E enMode, char *str, int len)
 	}
 }
 
-static void _chnZoomType_to_String(VO_CHN_ZOOM_TYPE enZoomType, char *str, int len)
+static void chn_zoom_type_to_string(vo_chn_zoom_type_e zoom_type, char *str, int len)
 {
-	switch (enZoomType) {
+	switch (zoom_type) {
 	case VO_CHN_ZOOM_IN_RECT:
 		strncpy(str, "RECT", len);
 		break;
@@ -344,9 +330,9 @@ static void _chnZoomType_to_String(VO_CHN_ZOOM_TYPE enZoomType, char *str, int l
 	}
 }
 
-static void _chnMirror_to_String(VO_CHN_MIRROR_TYPE enMirror, char *str, int len)
+static void chn_mirror_to_string(vo_chn_mirror_type_e mirror, char *str, int len)
 {
-	switch (enMirror) {
+	switch (mirror) {
 	case VO_CHN_MIRROR_NONE:
 		strncpy(str, "NONE", len);
 		break;
@@ -365,133 +351,133 @@ static void _chnMirror_to_String(VO_CHN_MIRROR_TYPE enMirror, char *str, int len
 	}
 }
 
-static int _vo_proc_show(struct seq_file *m, void *v)
+static int vo_proc_show(struct seq_file *m, void *v)
 {
 	int i, j, cnt;
 	char c[32], d[32];
-	struct cvi_vo_ctx *pvoCtx = (struct cvi_vo_ctx *)m->private;
+	struct vo_ctx *vo_ctx_p = (struct vo_ctx *)m->private;
 
 #if 0//TODO: UTS_VERSION
 	seq_printf(m, "\nModule: [VO], Build Time[%s]\n", UTS_VERSION);
 #endif
 	// Device Config
 	seq_puts(m, "\n-------------------------------DEVICE CONFIG------------------------------\n");
-	seq_printf(m, "%10s%10s%20s%20s%10s%10s\n", "DevID", "DevEn", "IntfType", "IntfSync", "BkClr", "DevFrt");
+	seq_printf(m, "%10s%10s%20s%20s%10s%10s\n", "DevID", "DevEn", "intf_type", "IntfSync", "BkClr", "DevFrt");
 	for (i = 0; i < VO_MAX_DEV_NUM; ++i) {
 		memset(c, 0, sizeof(c));
-		_intf_type_to_string(pvoCtx->astDevCtx[i].stPubAttr.enIntfType, c, sizeof(c));
+		intf_type_to_string(vo_ctx_p->dev_ctx[i].pub_attr.intf_type, c, sizeof(c));
 
 		memset(d, 0, sizeof(d));
-		_intf_sync_to_string(pvoCtx->astDevCtx[i].stPubAttr.enIntfSync, d, sizeof(d));
+		intf_sync_to_string(vo_ctx_p->dev_ctx[i].pub_attr.intf_sync, d, sizeof(d));
 		seq_printf(m, "%8s%2d%10s%20s%20s%10X%10d\n",
 				"#",
 				i,
-				(pvoCtx->astDevCtx[i].is_dev_enable) ? "Y" : "N",
+				(vo_ctx_p->dev_ctx[i].is_dev_enable) ? "Y" : "N",
 				c,
 				d,
-				pvoCtx->astDevCtx[i].stPubAttr.u32BgColor,
-				pvoCtx->astDevCtx[i].stPubAttr.stSyncInfo.u16FrameRate);
+				vo_ctx_p->dev_ctx[i].pub_attr.bgcolor,
+				vo_ctx_p->dev_ctx[i].pub_attr.sync_info.frame_rate);
 	}
 
 	// video layer status 1
 	seq_puts(m, "\n-------------------------------VIDEO LAYER STATUS 1-----------------------\n");
 	seq_printf(m, "%10s%10s%20s%10s%10s%10s%10s%10s%10s\n",
-		"LayerId", "VideoEn", "PixFmt", "ImgW", "ImgH", "DispX", "DispY", "DispW", "DispH");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+		"LayerId", "VideoEn", "pixfmt", "ImgW", "ImgH", "DispX", "DispY", "DispW", "DispH");
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		memset(c, 0, sizeof(c));
-		_pix_fmt_to_string(pvoCtx->astLayerCtx[i].stLayerAttr.enPixFormat, c, sizeof(c));
+		pix_fmt_to_string(vo_ctx_p->layer_ctx[i].layer_attr.pixformat, c, sizeof(c));
 
 		seq_printf(m, "%8s%2d%10s%20s%10d%10d%10d%10d%10d%10d\n",
 				"#",
 				i,
-				(pvoCtx->astLayerCtx[i].is_layer_enable) ? "Y" : "N",
+				(vo_ctx_p->layer_ctx[i].is_layer_enable) ? "Y" : "N",
 				c,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stImageSize.u32Width,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stImageSize.u32Height,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stDispRect.s32X,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stDispRect.s32Y,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stDispRect.u32Width,
-				pvoCtx->astLayerCtx[i].stLayerAttr.stDispRect.u32Height);
+				vo_ctx_p->layer_ctx[i].layer_attr.img_size.width,
+				vo_ctx_p->layer_ctx[i].layer_attr.img_size.height,
+				vo_ctx_p->layer_ctx[i].layer_attr.disp_rect.x,
+				vo_ctx_p->layer_ctx[i].layer_attr.disp_rect.y,
+				vo_ctx_p->layer_ctx[i].layer_attr.disp_rect.width,
+				vo_ctx_p->layer_ctx[i].layer_attr.disp_rect.height);
 	}
 
 	// video layer status 2
 	seq_puts(m, "\n-------------------------------VIDEO LAYER STATUS 2 (continue)------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%15s%20s%20s\n",
 		"LayerId", "BindDevId", "EnChNum", "Luma", "Cont", "Hue", "Satu", "Toleration", "DispalyPts", "PreDonePts");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 
 		cnt = 0;
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				cnt++;
 		}
 
 		seq_printf(m, "%8s%2d%10d%10d%10d%10d%10d%10d%15d%20lld%20lld\n",
 				"#",
 				i,
-				pvoCtx->astLayerCtx[i].s32BindDevId,
+				vo_ctx_p->layer_ctx[i].bind_dev_id,
 				cnt,
-				pvoCtx->astLayerCtx[i].proc_amp[PROC_AMP_BRIGHTNESS],
-				pvoCtx->astLayerCtx[i].proc_amp[PROC_AMP_CONTRAST],
-				pvoCtx->astLayerCtx[i].proc_amp[PROC_AMP_HUE],
-				pvoCtx->astLayerCtx[i].proc_amp[PROC_AMP_SATURATION],
-				pvoCtx->astLayerCtx[i].u32Toleration,
-				pvoCtx->astLayerCtx[i].u64DisplayPts,
-				pvoCtx->astLayerCtx[i].u64PreDonePts);
+				vo_ctx_p->layer_ctx[i].proc_amp[PROC_AMP_BRIGHTNESS],
+				vo_ctx_p->layer_ctx[i].proc_amp[PROC_AMP_CONTRAST],
+				vo_ctx_p->layer_ctx[i].proc_amp[PROC_AMP_HUE],
+				vo_ctx_p->layer_ctx[i].proc_amp[PROC_AMP_SATURATION],
+				vo_ctx_p->layer_ctx[i].toleration,
+				vo_ctx_p->layer_ctx[i].display_pts,
+				vo_ctx_p->layer_ctx[i].predone_pts);
 	}
 
 	// video layer status 3
 	seq_puts(m, "\n-------------------------------VIDEO LAYER STATUS 3 (continue)------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s\n",
 		"LayerId", "BufLen", "Depth", "SrcFrt", "RealFrt", "BwFail", "OsdBwFail");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 
 		cnt = 0;
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				cnt++;
 		}
 
 		seq_printf(m, "%8s%2d%10d%10d%10d%10d%10d%10d\n",
 				"#",
 				i,
-				pvoCtx->astLayerCtx[i].u32DisBufLen,
-				pvoCtx->astLayerCtx[i].stLayerAttr.u32Depth,
-				pvoCtx->astLayerCtx[i].u32LayerSrcFrameRate,
-				pvoCtx->astLayerCtx[i].u32LayerFrameRate,
-				pvoCtx->astLayerCtx[i].u32BwFail,
-				pvoCtx->astLayerCtx[i].u32OsdBwFail);
+				vo_ctx_p->layer_ctx[i].display_buflen,
+				vo_ctx_p->layer_ctx[i].layer_attr.depth,
+				vo_ctx_p->layer_ctx[i].src_frame_rate,
+				vo_ctx_p->layer_ctx[i].frame_rate,
+				vo_ctx_p->layer_ctx[i].bw_fail,
+				vo_ctx_p->layer_ctx[i].vgop_bw_fail);
 	}
 
 	// gragphic layer status 1
 	seq_puts(m, "\n-------------------------------GRAPHIC LAYER STATUS 1-----------------------\n");
 	seq_printf(m, "%10s%10s%10s\n",
 		"LayerId", "BindDevId", "Prio");
-	for (i = VO_MAX_LAYER_NUM; i < VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM; ++i) {
+	for (i = VO_MAX_VIDEO_LAYER_NUM; i < VO_MAX_LAYER_NUM; ++i) {
 
 		seq_printf(m, "%8s%2d%10d%10d\n",
 				"#",
 				i,
-				pvoCtx->astOverlayCtx[i - VO_MAX_LAYER_NUM].s32BindDevId,
-				pvoCtx->astOverlayCtx[i - VO_MAX_LAYER_NUM].u32Priority);
+				vo_ctx_p->overlay_ctx[i - VO_MAX_VIDEO_LAYER_NUM].bind_dev_id,
+				vo_ctx_p->overlay_ctx[i - VO_MAX_VIDEO_LAYER_NUM].priority);
 	}
 
 	// chn basic info
 	seq_puts(m, "\n-------------------------------CHN BASIC INFO 1---------------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s\n",
 		"LayerId", "ChnId", "ChnEn", "Prio", "SrcW", "SrcH", "ChnX", "ChnY", "ChnW", "ChnH", "RotAngle", "Thrshd", "Depth");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (!pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (!vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				continue;
 			memset(c, 0, sizeof(c));
-			if (pvoCtx->astLayerCtx[i].astChnCtx[j].enRotation == ROTATION_0)
+			if (vo_ctx_p->layer_ctx[i].chn_ctx[j].rotation == ROTATION_0)
 				strncpy(c, "0", sizeof(c));
-			else if (pvoCtx->astLayerCtx[i].astChnCtx[j].enRotation == ROTATION_90)
+			else if (vo_ctx_p->layer_ctx[i].chn_ctx[j].rotation == ROTATION_90)
 				strncpy(c, "90", sizeof(c));
-			else if (pvoCtx->astLayerCtx[i].astChnCtx[j].enRotation == ROTATION_180)
+			else if (vo_ctx_p->layer_ctx[i].chn_ctx[j].rotation == ROTATION_180)
 				strncpy(c, "180", sizeof(c));
-			else if (pvoCtx->astLayerCtx[i].astChnCtx[j].enRotation == ROTATION_270)
+			else if (vo_ctx_p->layer_ctx[i].chn_ctx[j].rotation == ROTATION_270)
 				strncpy(c, "270", sizeof(c));
 			else
 				strncpy(c, "Invalid", sizeof(c));
@@ -501,29 +487,30 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 				i,
 				"#",
 				j,
-				(pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable) ? "Y" : "N",
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.u32Priority,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u32SrcWidth,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u32SrcHeight,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.stRect.s32X,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.stRect.s32Y,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.stRect.u32Width,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.stRect.u32Height,
+				(vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable) ? "Y" : "N",
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.priority,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].src_width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].src_height,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.rect.x,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.rect.y,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.rect.width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.rect.height,
 				c,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u32Threshold,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnAttr.u32Depth);
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].threshold,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_attr.depth);
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------CHN ZOOM INFO-----------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s\n",
 		"LayerId", "ChnId", "ZoomType", "RectX", "RectY", "RectW", "RectH", "Xratio", "Yratio", "WRatio", "HRatio");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (!pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (!vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				continue;
 			memset(c, 0, sizeof(c));
-			_chnZoomType_to_String(pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType, c, sizeof(c));
+			chn_zoom_type_to_string(vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type,
+						c, sizeof(c));
 
 			seq_printf(m, "%8s%2d%8s%2d%10s%10d%10d%10d%10d%10d%10d%10d%10d\n",
 				"#",
@@ -531,36 +518,37 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 				"#",
 				j,
 				c,
-				(!pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType) ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stRect.s32X : 0,
-				(!pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType) ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stRect.s32Y : 0,
-				(!pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType) ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stRect.u32Width : 0,
-				(!pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType) ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stRect.u32Height : 0,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stZoomRatio.u32Xratio : 0,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stZoomRatio.u32Yratio : 0,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stZoomRatio.u32WidthRatio : 0,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.enZoomType ?
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnZoomAttr.stZoomRatio.u32HeightRatio : 0);
+				(!vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type) ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.rect.x : 0,
+				(!vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type) ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.rect.y : 0,
+				(!vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type) ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.rect.width : 0,
+				(!vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type) ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.rect.height : 0,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_ratio.x_ratio : 0,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_ratio.y_ratio : 0,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_ratio.width_ratio : 0,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_type ?
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_zoom_attr.zoom_ratio.height_ratio : 0);
 		}
 	}
 
 	seq_puts(m, "\n-------------------------------CHN ASPECTRATIO INFO-----------------------\n");
 	seq_printf(m, "%10s%10s%15s%10s%10s%10s%10s%10s%10s%10s\n",
 		"LayerId", "ChnId", "AspectRatio", "BkClrEn", "BkClr", "RectX", "RectY", "RectW", "RectH", "Mirror");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (!pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (!vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				continue;
 			memset(c, 0, sizeof(c));
-			_chnAspectRatio_to_String(pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.enMode, c, sizeof(c));
+			chn_aspect_ratio_to_string(vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.mode,
+						   c, sizeof(c));
 			memset(d, 0, sizeof(d));
-			_chnMirror_to_String(pvoCtx->astLayerCtx[i].astChnCtx[j].enChnMirror, d, sizeof(d));
+			chn_mirror_to_string(vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_mirror, d, sizeof(d));
 
 			seq_printf(m, "%8s%2d%8s%2d%15s%10s%10X%10d%10d%10d%10d%10s\n",
 				"#",
@@ -568,12 +556,12 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 				"#",
 				j,
 				c,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.bEnableBgColor ? "Y" : "N",
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.u32BgColor,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.stVideoRect.s32X,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.stVideoRect.s32Y,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.stVideoRect.u32Width,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnParam.stAspectRatio.stVideoRect.u32Height,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.enable_bgcolor ? "Y" : "N",
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.bgcolor,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.video_rect.x,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.video_rect.y,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.video_rect.width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_param.aspect_ratio.video_rect.height,
 				d);
 		}
 	}
@@ -581,9 +569,9 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------CHN BORDER INFO----------------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s\n",
 		"LayerId", "ChnId", "BorderEn", "TopW", "BottomW", "LeftW", "RightW", "Color");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (!pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (!vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				continue;
 
 			seq_printf(m, "%8s%2d%8s%2d%10s%10d%10d%10d%10d%10X\n",
@@ -591,12 +579,12 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 				i,
 				"#",
 				j,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.enable ? "Y" : "N",
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.stBorder.u32TopWidth,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.stBorder.u32BottomWidth,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.stBorder.u32LeftWidth,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.stBorder.u32RightWidth,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].stChnBorder.stBorder.u32Color);
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.enable ? "Y" : "N",
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.border.top_width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.border.bottom_width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.border.left_width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.border.right_width,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].chn_border_attr.border.color);
 		}
 	}
 
@@ -604,47 +592,47 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------CHN PLAY INFO------------------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%20s%20s%20s\n",
 		"LayerId", "ChnId", "Show", "Pause", "Step", "ChnSrcFrt", "ChnFrt", "ChnGap(us)", "DispalyPts", "PreDonePts");
-	for (i = 0; i < VO_MAX_LAYER_NUM; ++i) {
+	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 		for (j = 0; j < VO_MAX_CHN_NUM; ++j) {
-			if (!pvoCtx->astLayerCtx[i].astChnCtx[j].is_chn_enable)
+			if (!vo_ctx_p->layer_ctx[i].chn_ctx[j].is_chn_enable)
 				continue;
 			seq_printf(m, "%8s%2d%8s%2d%10s%10s%10s%10d%10d%20d%20lld%20lld\n",
 				"#",
 				i,
 				"#",
 				j,
-				(pvoCtx->astLayerCtx[i].astChnCtx[j].bHide) ? "N" : "Y",
-				(pvoCtx->astLayerCtx[i].astChnCtx[j].bPause) ? "Y" : "N",
-				(pvoCtx->astLayerCtx[i].astChnCtx[j].bStep) ? "Y" : "N",
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u32ChnSrcFrameRate,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u32ChnFrameRate,
-				(pvoCtx->astLayerCtx[i].astChnCtx[j].u32ChnFrameRate == 0) ?
-				0 : (1000000 / pvoCtx->astLayerCtx[i].astChnCtx[j].u32ChnFrameRate),
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u64DisplayPts,
-				pvoCtx->astLayerCtx[i].astChnCtx[j].u64PreDonePts);
+				(vo_ctx_p->layer_ctx[i].chn_ctx[j].hide) ? "N" : "Y",
+				(vo_ctx_p->layer_ctx[i].chn_ctx[j].pause) ? "Y" : "N",
+				(vo_ctx_p->layer_ctx[i].chn_ctx[j].step) ? "Y" : "N",
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].src_frame_rate,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].frame_rate,
+				(vo_ctx_p->layer_ctx[i].chn_ctx[j].frame_rate == 0) ?
+				0 : (1000000 / vo_ctx_p->layer_ctx[i].chn_ctx[j].frame_rate),
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].display_pts,
+				vo_ctx_p->layer_ctx[i].chn_ctx[j].predone_pts);
 		}
 	}
 
 	// wbc info
 	seq_puts(m, "\n-------------------------------WBC INFO 1---------------------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%15s%10s\n",
-		"WbcId", "WbcEn",  "SrcType", "SrcId", "WbcW", "WbcH", "PixFmt", "Depth");
+		"WbcId", "WbcEn",  "SrcType", "SrcId", "WbcW", "WbcH", "pixfmt", "Depth");
 	for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
 		memset(c, 0, sizeof(c));
-		_wbcSrc_to_String(pvoCtx->astWbcCtx[i].stWbcSrc.enSrcType, c, sizeof(c));
+		wbc_src_to_string(vo_ctx_p->wbc_ctx[i].wbc_src.src_type, c, sizeof(c));
 		memset(d, 0, sizeof(d));
-		_pix_fmt_to_string(pvoCtx->astWbcCtx[i].stWbcAttr.enPixFormat, d, sizeof(d));
+		pix_fmt_to_string(vo_ctx_p->wbc_ctx[i].wbc_attr.pixformat, d, sizeof(d));
 
 		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d%15s%10d\n",
 				"#",
 				i,
-				(pvoCtx->astWbcCtx[i].is_wbc_enable) ? "Y" : "N",
+				(vo_ctx_p->wbc_ctx[i].is_wbc_enable) ? "Y" : "N",
 				c,
-				(pvoCtx->astWbcCtx[i].stWbcSrc.u32SrcId),
-				pvoCtx->astWbcCtx[i].stWbcAttr.stTargetSize.u32Width,
-				pvoCtx->astWbcCtx[i].stWbcAttr.stTargetSize.u32Height,
+				(vo_ctx_p->wbc_ctx[i].wbc_src.src_id),
+				vo_ctx_p->wbc_ctx[i].wbc_attr.target_size.width,
+				vo_ctx_p->wbc_ctx[i].wbc_attr.target_size.height,
 				d,
-				pvoCtx->astWbcCtx[i].u32Depth);
+				vo_ctx_p->wbc_ctx[i].depth);
 	}
 
 	seq_puts(m, "\n-------------------------------WBC INFO 2 (continue)----------------------\n");
@@ -652,28 +640,28 @@ static int _vo_proc_show(struct seq_file *m, void *v)
 		"WbcId", "WbcMode", "WbcFrt", "RealFrt", "OdmafifoFullCnt");
 	for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
 		memset(c, 0, sizeof(c));
-		_wbcMode_to_String(pvoCtx->astWbcCtx[i].enWbcMode, c, sizeof(c));
+		wbc_mode_to_string(vo_ctx_p->wbc_ctx[i].wbc_mode, c, sizeof(c));
 
 		seq_printf(m, "%8s%2d%10s%10d%10d%20d\n",
 				"#",
 				i,
 				c,
-				pvoCtx->astWbcCtx[i].stWbcAttr.u32FrameRate,
-				pvoCtx->astWbcCtx[i].u32WbcFrameRate,
-				pvoCtx->astWbcCtx[i].u32OdmaFifoFull);
+				vo_ctx_p->wbc_ctx[i].wbc_attr.frame_rate,
+				vo_ctx_p->wbc_ctx[i].frame_rate,
+				vo_ctx_p->wbc_ctx[i].odma_fifofull);
 	}
 
 	return 0;
 }
 
-static int _vo_proc_open(struct inode *inode, struct file *file)
+static int vo_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, _vo_proc_show, PDE_DATA(inode));
+	return single_open(file, vo_proc_show, PDE_DATA(inode));
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 static const struct proc_ops _vo_proc_fops = {
-	.proc_open = _vo_proc_open,
+	.proc_open = vo_proc_open,
 	.proc_read = seq_read,
 	.proc_lseek = seq_lseek,
 	.proc_release = single_release,
@@ -681,7 +669,7 @@ static const struct proc_ops _vo_proc_fops = {
 #else
 static const struct file_operations _vo_proc_fops = {
 	.owner = THIS_MODULE,
-	.open = _vo_proc_open,
+	.open = vo_proc_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = single_release,
@@ -689,7 +677,7 @@ static const struct file_operations _vo_proc_fops = {
 #endif
 
 
-int vo_proc_init(struct cvi_vo_ctx *ctx)
+int vo_proc_init(struct vo_ctx *ctx)
 {
 	int rc = 0;
 

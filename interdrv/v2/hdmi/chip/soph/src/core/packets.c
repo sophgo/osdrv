@@ -15,36 +15,36 @@ int packets_initialize(hdmi_tx_dev_t *dev)
 	return TRUE;
 }
 
-int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
+int packets_configure(hdmi_tx_dev_t *dev, video_params_t * video)
 {
-	if (video->mHdmiVideoFormat == HDMI_3D_FORMAT) {
+	if (video->mhdmi_video_format == HDMI_3D_FORMAT) {
 		pr_debug("%s:3D packet configuration", __func__);
 		fc_packets_auto_send(dev,  0, VSD_TX);	/* prevent sending half the info. */
 		// frame packing || tab || sbs
-		if ((video->m3dStructure == FRAME_PACKING_3D)  ||
-		    (video->m3dStructure == TOP_AND_BOTTOM_3D) ||
-		    (video->m3dStructure == SIDE_BY_SIDE_3D)) {
+		if ((video->m3d_structure == FRAME_PACKING_3D)  ||
+		    (video->m3d_structure == TOP_AND_BOTTOM_3D) ||
+		    (video->m3d_structure == SIDE_BY_SIDE_3D)) {
 			u8 packet_data[3] = {0,0,0}; //PB4-PB6
-			packet_data[0] = set8(0, PACKET_HDMIVIDEOFORMAT_MASK, video->mHdmiVideoFormat);
-			packet_data[1] = set8(0, PACKET_3D_STRUCTURE_MASK, video->m3dStructure);
-			packet_data[2] = set8(0, PACKET_3D_EXT_DATA_MASK,  video->m3dExtData);
+			packet_data[0] = set8(0, PACKET_HDMIVIDEOFORMAT_MASK, video->mhdmi_video_format);
+			packet_data[1] = set8(0, PACKET_3D_STRUCTURE_MASK, video->m3d_structure);
+			packet_data[2] = set8(0, PACKET_3D_EXT_DATA_MASK,  video->m3d_ext_data);
 
 			packets_vendor_specific_info_frame(dev, HDMI_LICENSING_LLC_OUI, packet_data, sizeof(packet_data), 1);
 			//send3d = TRUE;
 		}
 		else {
-			pr_err("%s:3D structure not supported %d", __func__, video->m3dStructure);
-			return CVI_ERR_HDMI_3DSTRUCTURE_NOT_SUPPORT;
+			pr_err("%s:3D structure not supported %d", __func__, video->m3d_structure);
+			return HDMI_ERR_3DSTRUCTURE_NOT_SUPPORT;
 		}
 		fc_packets_auto_send(dev, 1, VSD_TX);
-	} else if (video->mHdmiVideoFormat == HDMI_EXT_RES_FORMAT ) {
+	} else if (video->mhdmi_video_format == HDMI_EXT_RES_FORMAT ) {
 		u8 packet_data[3] = {0,0,0}; //PB4-PB6
 		pr_debug("%s:4k packet configuration", __func__);
 		fc_packets_auto_send(dev,  0, VSD_TX);	/* prevent sending half the info. */
 
-		packet_data[0] = set8(0, PACKET_HDMIVIDEOFORMAT_MASK, video->mHdmiVideoFormat);
+		packet_data[0] = set8(0, PACKET_HDMIVIDEOFORMAT_MASK, video->mhdmi_video_format);
 		//TODO: correct this - use the hdmivic information instead
-		packet_data[1] = set8(0, PACKET_HDMI_VIC_MASK, video_params_get_hhdmi_vic_code(video->mDtd.mCode));
+		packet_data[1] = set8(0, PACKET_HDMI_VIC_MASK, video_params_get_hhdmi_vic_code(video->mdtd.m_code));
 		packet_data[2] = 0;
 
 		packets_vendor_specific_info_frame(dev, HDMI_LICENSING_LLC_OUI, packet_data, sizeof(packet_data), 1);
@@ -57,12 +57,12 @@ int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 	/*
 	if (prod != 0) {
 		fc_spd_info_t spd_data;
-		spd_data.vName    = prod->mVendorName;
-		spd_data.vLength  = prod->mVendorNameLength;
-		spd_data.pName    = prod->mProductName;
-		spd_data.pLength  = prod->mProductNameLength;
+		spd_data.vname    = prod->mVendorName;
+		spd_data.vlength  = prod->mVendorNameLength;
+		spd_data.pname    = prod->mProductName;
+		spd_data.plength  = prod->mProductNameLength;
 		spd_data.code     = prod->mSourceType;
-		spd_data.autoSend = 1;
+		spd_data.auto_send = 1;
 
 		u32 oui = prod->mOUI;
 		u8 *vendor_payload = prod->mVendorPayload;
@@ -79,7 +79,7 @@ int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 	fc_packets_metadata_config(dev);
 
 	// default phase 1 = true
-	dev_write_mask(FC_GCP, FC_GCP_DEFAULT_PHASE_MASK, ((video->mPixelPackingDefaultPhase == 1) ? 1 : 0));
+	dev_write_mask(FC_GCP, FC_GCP_DEFAULT_PHASE_MASK, ((video->mpixel_packing_defaultphase == 1) ? 1 : 0));
 
 	fc_gamut_config(dev);
 
@@ -91,64 +91,64 @@ int packets_configure(hdmi_tx_dev_t *dev, videoParams_t * video)
 	return 0;
 }
 
-void packets_audio_content_protection(hdmi_tx_dev_t *dev, u8 type, const u8 * fields, u8 length, u8 autoSend)
+void packets_audio_content_protection(hdmi_tx_dev_t *dev, u8 type, const u8 * fields, u8 length, u8 auto_send)
 {
-	u8 newFields[ACP_PACKET_SIZE];
+	u8 new_fields[ACP_PACKET_SIZE];
 	u16 i = 0;
 
 	fc_packets_auto_send(dev, 0, ACP_TX);
 	fc_acp_type(dev, type);
 
 	for (i = 0; i < length; i++) {
-		newFields[i] = fields[i];
+		new_fields[i] = fields[i];
 	}
 	if (length < ACP_PACKET_SIZE) {
 		for (i = length; i < ACP_PACKET_SIZE; i++) {
-			newFields[i] = 0;	/* Padding */
+			new_fields[i] = 0;	/* Padding */
 		}
 		length = ACP_PACKET_SIZE;
 	}
-	fc_acp_type_dependent_fields(dev, newFields, length);
-	if (!autoSend) {
+	fc_acp_type_dependent_fields(dev, new_fields, length);
+	if (!auto_send) {
 		fc_packets_manual_send(dev, ACP_TX);
 	} else {
-		fc_packets_auto_send(dev, autoSend, ACP_TX);
+		fc_packets_auto_send(dev, auto_send, ACP_TX);
 	}
 
 }
 
-void packets_isrc_packets(hdmi_tx_dev_t *dev, u8 initStatus, const u8 * codes, u8 length, u8 autoSend)
+void packets_isrc_packets(hdmi_tx_dev_t *dev, u8 init_status, const u8 * codes, u8 length, u8 auto_send)
 {
 	u16 i = 0;
-	u8 newCodes[ISRC_PACKET_SIZE * 2];
+	u8 new_codes[ISRC_PACKET_SIZE * 2];
 
 	fc_packets_auto_send(dev, 0, ISRC1_TX);
 	fc_packets_auto_send(dev, 0, ISRC2_TX);
 
-	fc_isrc_status(dev, initStatus);
+	fc_isrc_status(dev, init_status);
 
 	for (i = 0; i < length; i++) {
-		newCodes[i] = codes[i];
+		new_codes[i] = codes[i];
 	}
 
 	if (length > ISRC_PACKET_SIZE) {
 		for (i = length; i < (ISRC_PACKET_SIZE * 2); i++) {
-			newCodes[i] = 0;	/* Padding */
+			new_codes[i] = 0;	/* Padding */
 		}
 		length = (ISRC_PACKET_SIZE * 2);
 
-		fc_isrc_isrc2_codes(dev, newCodes + (ISRC_PACKET_SIZE * sizeof(u8)), length - ISRC_PACKET_SIZE);
+		fc_isrc_isrc2_codes(dev, new_codes + (ISRC_PACKET_SIZE * sizeof(u8)), length - ISRC_PACKET_SIZE);
 		fc_isrc_cont(dev, 1);
 
-		fc_packets_auto_send(dev, autoSend, ISRC2_TX);
+		fc_packets_auto_send(dev, auto_send, ISRC2_TX);
 
-		if (!autoSend) {
+		if (!auto_send) {
 			fc_packets_manual_send(dev, ISRC2_TX);
 		}
 	}
 	if (length < ISRC_PACKET_SIZE) {
 		for (i = length; i < ISRC_PACKET_SIZE; i++) {
-			newCodes[i] = 0;	/* Padding */
+			new_codes[i] = 0;	/* Padding */
 		}
 
 		length = ISRC_PACKET_SIZE;
@@ -156,11 +156,11 @@ void packets_isrc_packets(hdmi_tx_dev_t *dev, u8 initStatus, const u8 * codes, u
 		fc_isrc_cont(dev, 0);
 	}
 
-	fc_isrc_isrc1_codes(dev, newCodes, length);	/* first part only */
+	fc_isrc_isrc1_codes(dev, new_codes, length);	/* first part only */
 	fc_isrc_valid(dev, 1);
-	fc_packets_auto_send(dev, autoSend, ISRC1_TX);
+	fc_packets_auto_send(dev, auto_send, ISRC1_TX);
 
-	if (!autoSend) {
+	if (!auto_send) {
 		fc_packets_manual_send(dev, ISRC1_TX);
 	}
 }
@@ -208,47 +208,47 @@ void packets_disable_all_packets(hdmi_tx_dev_t *dev)
 	fc_packets_disable_all(dev);
 }
 
-int packets_vendor_specific_info_frame(hdmi_tx_dev_t *dev, u32 oui, const u8 * payload, u8 length, u8 autoSend)
+int packets_vendor_specific_info_frame(hdmi_tx_dev_t *dev, u32 oui, const u8 * payload, u8 length, u8 auto_send)
 {
 	fc_packets_auto_send(dev,  0, VSD_TX);	/* prevent sending half the info. */
 	fc_vsd_vendor_oui(dev, oui);
 	if (fc_vsd_vendor_payload(dev, payload, length)) {
 		return FALSE;	/* DEFINE ERROR */
 	}
-	if (autoSend) {
-		fc_packets_auto_send(dev, autoSend, VSD_TX);
+	if (auto_send) {
+		fc_packets_auto_send(dev, auto_send, VSD_TX);
 	} else {
 		fc_packets_manual_send(dev, VSD_TX);
 	}
 	return TRUE;
 }
 
-void packets_colorimetry_config(hdmi_tx_dev_t *dev, videoParams_t * video)
+void packets_colorimetry_config(hdmi_tx_dev_t *dev, video_params_t * video)
 {
 	u8 gamut_metadata[28] = {0};
 	int gdb_color_space = 0;
 
 	fc_gamut_enable_tx(dev, 0);
 
-	if(video->mColorimetry == EXTENDED_COLORIMETRY){
-		if(video->mExtColorimetry == XV_YCC601){
+	if(video->mcolorimetry == EXTENDED_COLORIMETRY){
+		if(video->mext_colorimetry == XV_YCC601){
 			gdb_color_space = 1;
 		}
-		else if(video->mExtColorimetry == XV_YCC709){
+		else if(video->mext_colorimetry == XV_YCC709){
 			gdb_color_space = 2;
 			pr_debug("xv ycc709");
 		}
-		else if(video->mExtColorimetry == S_YCC601){
+		else if(video->mext_colorimetry == S_YCC601){
 			gdb_color_space = 3;
 		}
-		else if(video->mExtColorimetry == ADOBE_YCC601){
+		else if(video->mext_colorimetry == ADOBE_YCC601){
 			gdb_color_space = 3;
 		}
-		else if(video->mExtColorimetry == ADOBE_RGB){
+		else if(video->mext_colorimetry == ADOBE_RGB){
 			gdb_color_space = 3;
 		}
 
-		if(video->mColorimetryDataBlock == TRUE){
+		if(video->mcolorimetry_datablock == TRUE){
 			gamut_metadata[0] = (1 << 7) | gdb_color_space;
 			fc_gamut_packet_config(dev, gamut_metadata, (sizeof(gamut_metadata) / sizeof(u8)));
 		}

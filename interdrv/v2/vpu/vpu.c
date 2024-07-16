@@ -39,6 +39,7 @@
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/clk.h>
+#include <linux/compat.h>
 
 #include "vpuconfig.h"
 #include "vpuerror.h"
@@ -55,7 +56,6 @@ static unsigned long ve_virt_top;
 static u32 devid;
 
 static struct device *vpu_dev;
-
 
 //#define ENABLE_DEBUG_MSG
 #ifdef ENABLE_DEBUG_MSG
@@ -1369,6 +1369,16 @@ static int vpu_mmap(struct file *fp, struct vm_area_struct *vm)
 	return vpu_map_to_physical_memory(fp, vm);
 }
 
+#ifdef CONFIG_COMPAT
+static long vpu_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 struct file_operations vpu_fops = {
 	.owner = THIS_MODULE,
 	.open = vpu_open,
@@ -1376,6 +1386,9 @@ struct file_operations vpu_fops = {
 	.write = vpu_write,
 	/*.ioctl = vpu_ioctl, // for kernel 2.6.9 of C&M*/
 	.unlocked_ioctl = vpu_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = vpu_compat_ptr_ioctl,
+#endif
 	.release = vpu_release,
 	.fasync = vpu_fasync,
 	.mmap = vpu_mmap,

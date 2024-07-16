@@ -1,5 +1,5 @@
-#ifndef _CVI_LDC_H_
-#define _CVI_LDC_H_
+#ifndef _LDC_H_
+#define _LDC_H_
 
 #include "ldc_cfg.h"
 
@@ -46,15 +46,15 @@ void ldc_engine(const struct ldc_cfg *cfg, int top_id);
  * @param cfg: settings for cmdq
  * @param cmdq_addr: memory-address to put cmdq
  */
-void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, u8 cnt);
+void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, unsigned char cnt);
 
-u8 ldc_cmdq_intr_status(u8 top_id);
+unsigned char ldc_cmdq_intr_status(unsigned char top_id);
 
-void ldc_cmdq_intr_clr(u8 top_id, u8 intr_status);
+void ldc_cmdq_intr_clr(unsigned char top_id, unsigned char intr_status);
 
-void ldc_cmdq_sw_restart(u8 top_id);
+void ldc_cmdq_sw_restart(unsigned char top_id);
 
-bool ldc_cmdq_is_sw_restart(u8 top_id);
+bool ldc_cmdq_is_sw_restart(unsigned char top_id);
 
 /**
  * ldc_intr_ctrl - ldc's interrupt on(1)/off(0)
@@ -63,7 +63,7 @@ bool ldc_cmdq_is_sw_restart(u8 top_id);
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void ldc_intr_ctrl(u8 intr_mask, int top_id);
+void ldc_intr_ctrl(unsigned char intr_mask, int top_id);
 
 /**
  * ldc_intr_ctrl - clear ldc's interrupt
@@ -72,7 +72,7 @@ void ldc_intr_ctrl(u8 intr_mask, int top_id);
  *
  * @param intr_mask: On/Off ctrl of the interrupt.
  */
-void ldc_intr_clr(u8 intr_mask, int top_id);
+void ldc_intr_clr(unsigned char intr_mask, int top_id);
 
 /**
  * ldc_intr_status - ldc's interrupt status
@@ -81,7 +81,7 @@ void ldc_intr_clr(u8 intr_mask, int top_id);
  *
  * @return: The interrupt's status. 1 if active.
  */
-u8 ldc_intr_status(int top_id);
+unsigned char ldc_intr_status(int top_id);
 
 /**
  * ldc_intr_sel - ldc's interrupt selection
@@ -90,7 +90,7 @@ u8 ldc_intr_status(int top_id);
  *      0: ldc_interrupt
  *      1: cmdq interrupt
  */
-void ldc_intr_sel(u8 sel, int top_id);
+void ldc_intr_sel(unsigned char sel, int top_id);
 
 /**
  * ldc_is_busy - check if ldc's operation is finished.
@@ -100,6 +100,6 @@ void ldc_intr_sel(u8 sel, int top_id);
 bool ldc_is_finish(int top_id);
 
 void ldc_dump_register(int top_id);
-void ldc_dump_cmdq(u64 cmdq_addr, u32 num_cmd);
+void ldc_dump_cmdq(unsigned long long cmdq_addr, unsigned int num_cmd);
 
-#endif // _CVI_LDC_H_
+#endif // _LDC_H_

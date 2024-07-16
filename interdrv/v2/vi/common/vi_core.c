@@ -1,9 +1,10 @@
 #include <vi_core.h>
 #include <base_cb.h>
 #include <linux/compat.h>
-#define CVI_VI_IRQ_NAME            "isp"
-#define CVI_VI_CLASS_NAME          "soph-vi"
-#define CVI_VI_DEV_NAME            "soph-vi"
+
+#define VI_IRQ_NAME            "isp"
+#define VI_CLASS_NAME          "soph-vi"
+#define VI_DEV_NAME            "soph-vi"
 
 /* Runtime to enable vi write reg info
  * Ctrl:
@@ -20,7 +21,15 @@ static long vi_core_ioctl(struct file *filp, u_int cmd, u_long arg)
 	return vi_ioctl(filp, cmd, arg);
 }
 
+#ifdef CONFIG_COMPAT
+static long vi_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
 
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
 
 static int vi_core_open(struct inode *inode, struct file *filp)
 {
@@ -47,14 +56,14 @@ const struct file_operations vi_fops = {
 	.open = vi_core_open,
 	.unlocked_ioctl = vi_core_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = vi_compat_ptr_ioctl,
 #endif
 	.release = vi_core_release,
 	.mmap = vi_core_mmap,
 	.poll = vi_core_poll,
 };
 
-int vi_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int vi_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	return vi_cb(dev, caller, cmd, arg);
 }
@@ -64,7 +73,7 @@ static int vi_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_VI);
 }
 
-static int vi_core_register_cb(struct cvi_vi_dev *dev)
+static int vi_core_register_cb(struct sop_vi_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -77,26 +86,26 @@ static int vi_core_register_cb(struct cvi_vi_dev *dev)
 
 static irqreturn_t vi_core_isr(int irq, void *priv)
 {
-	struct cvi_vi_dev *vdev = priv;
+	struct sop_vi_dev *vdev = priv;
 
 	vi_irq_handler(vdev);
 
 	return IRQ_HANDLED;
 }
 
-static int vi_core_register_cdev(struct cvi_vi_dev *dev)
+static int vi_core_register_cdev(struct sop_vi_dev *dev)
 {
 	struct device *dev_t;
 	int err = 0;
 
-	dev->vi_class = class_create(THIS_MODULE, CVI_VI_CLASS_NAME);
+	dev->vi_class = class_create(THIS_MODULE, VI_CLASS_NAME);
 	if (IS_ERR(dev->vi_class)) {
 		dev_err(dev->dev, "create class failed\n");
 		return PTR_ERR(dev->vi_class);
 	}
 
 	/* get the major number of the character device */
-	if ((alloc_chrdev_region(&dev->cdev_id, 0, 1, CVI_VI_DEV_NAME)) < 0) {
+	if ((alloc_chrdev_region(&dev->cdev_id, 0, 1, VI_DEV_NAME)) < 0) {
 		err = -EBUSY;
 		dev_err(dev->dev, "allocate chrdev failed\n");
 		return err;
@@ -112,7 +121,7 @@ static int vi_core_register_cdev(struct cvi_vi_dev *dev)
 		return err;
 	}
 
-	dev_t = device_create(dev->vi_class, dev->dev, dev->cdev_id, NULL, "%s", CVI_VI_DEV_NAME);
+	dev_t = device_create(dev->vi_class, dev->dev, dev->cdev_id, NULL, "%s", VI_DEV_NAME);
 	if (IS_ERR(dev_t)) {
 		dev_err(dev->dev, "device create failed error code(%ld)\n", PTR_ERR(dev_t));
 		err = PTR_ERR(dev_t);
@@ -125,12 +134,12 @@ static int vi_core_register_cdev(struct cvi_vi_dev *dev)
 #ifndef FPGA_PORTING
 static int vi_core_clk_init(struct platform_device *pdev)
 {
-	struct cvi_vi_dev *dev;
+	struct sop_vi_dev *dev;
 	u8 i = 0;
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_vi drvdata\n");
+		dev_err(&pdev->dev, "Can not get sop_vi drvdata\n");
 		return -EINVAL;
 	}
 
@@ -164,7 +173,7 @@ static int vi_core_clk_init(struct platform_device *pdev)
 
 static int vi_core_probe(struct platform_device *pdev)
 {
-	struct cvi_vi_dev *dev;
+	struct sop_vi_dev *dev;
 	struct resource *res;
 	int ret = 0;
 
@@ -186,13 +195,13 @@ static int vi_core_probe(struct platform_device *pdev)
 	}
 
 	/* Interrupt */
-	dev->irq_num = platform_get_irq_byname(pdev, CVI_VI_IRQ_NAME);
+	dev->irq_num = platform_get_irq_byname(pdev, VI_IRQ_NAME);
 	if (dev->irq_num < 0) {
-		dev_err(&pdev->dev, "No IRQ resource for %s\n", CVI_VI_IRQ_NAME);
+		dev_err(&pdev->dev, "No IRQ resource for %s\n", VI_IRQ_NAME);
 		return -ENODEV;
 	}
 	vi_pr(VI_INFO, "irq(%d) for %s get from platform driver.\n",
-			dev->irq_num, CVI_VI_IRQ_NAME);
+			dev->irq_num, VI_IRQ_NAME);
 #ifndef FPGA_PORTING
 	ret = vi_core_clk_init(pdev);
 	if (ret) {
@@ -227,7 +236,7 @@ static int vi_core_probe(struct platform_device *pdev)
 		goto err_create_instance;
 	}
 
-	vi_pr(VI_INFO, "isp registered as %s\n", CVI_VI_DEV_NAME);
+	vi_pr(VI_INFO, "isp registered as %s\n", VI_DEV_NAME);
 
 err_create_instance:
 
@@ -245,7 +254,7 @@ static int vi_core_remove(struct platform_device *pdev)
 {
 	int ret = 0;
 
-	struct cvi_vi_dev *dev = dev_get_drvdata(&pdev->dev);
+	struct sop_vi_dev *dev = dev_get_drvdata(&pdev->dev);
 
 	ret = vi_destroy_instance(pdev);
 	if (ret) {
@@ -271,6 +280,26 @@ err_destroy_instance:
 	return ret;
 }
 
+static int vi_core_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct sop_vi_dev *vdev = dev_get_drvdata(&pdev->dev);
+	dev_info(&pdev->dev, "vi suspend start\n");
+	vi_suspend(vdev);
+	dev_info(&pdev->dev, "vi suspend end\n");
+
+	return 0;
+}
+
+static int vi_core_resume(struct platform_device *pdev)
+{
+	struct sop_vi_dev *vdev = dev_get_drvdata(&pdev->dev);
+	dev_info(&pdev->dev, "vi resume start\n");
+	vi_resume(vdev);
+	dev_info(&pdev->dev, "vi resume end\n");
+
+	return 0;
+}
+
 static const struct of_device_id vi_core_match[] = {
 	{
 		.compatible = "cvitek,vi",
@@ -284,8 +313,10 @@ MODULE_DEVICE_TABLE(of, vi_core_match);
 static struct platform_driver vi_core_driver = {
 	.probe = vi_core_probe,
 	.remove = vi_core_remove,
+	.suspend = vi_core_suspend,
+	.resume = vi_core_resume,
 	.driver = {
-		.name = CVI_VI_DEV_NAME,
+		.name = VI_DEV_NAME,
 		.of_match_table = vi_core_match,
 	},
 };

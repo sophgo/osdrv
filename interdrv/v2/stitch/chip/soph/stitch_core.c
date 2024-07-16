@@ -10,10 +10,10 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/of_device.h>
+#include <linux/compat.h>
 
-#include <linux/cvi_vip.h>
-#include <linux/cvi_base_ctx.h>
-#include <linux/cvi_comm_stitch.h>
+#include <base_ctx.h>
+#include "comm_stitch.h"
 
 #include <base_cb.h>
 #include <base_ctx.h>
@@ -31,35 +31,40 @@
 
 static atomic_t stitch_open_count = ATOMIC_INIT(0);
 static atomic_t suspend_flag = ATOMIC_INIT(0);
-static struct cvi_stitch_dev *g_stitch_dev;
+static struct stitch_dev *g_stitch_dev;
 
-bool gStitchDumpReg;
-module_param(gStitchDumpReg, bool, 0644);
+int gStitchDumpReg;
+module_param(gStitchDumpReg, int, 0644);
 MODULE_PARM_DESC(gStitchDumpReg, "Stitch Dump reg");
 
 bool gStitchDumpDmaCfg;
 module_param(gStitchDumpDmaCfg, bool, 0644);
 MODULE_PARM_DESC(gStitchDumpDmaCfg, "Stitch Dump DMA cfg");
 
-u32 stitch_log_lv = CVI_DBG_WARN;
+unsigned int stitch_log_lv = DBG_WARN;
 module_param(stitch_log_lv, int, 0644);
 MODULE_PARM_DESC(stitch_log_lv, "Stitch Debug Log Level");
 
-u32 clk_sys_freq = 0;
+unsigned int clk_sys_freq = 0;
 module_param(clk_sys_freq, int, 0644);
 MODULE_PARM_DESC(clk_sys_freq, "clk_sys_freq setting by user");
 
-struct cvi_stitch_dev * stitch_get_dev(void)
+atomic_t * stitch_get_open_count(void)
+{
+	return &stitch_open_count;
+}
+
+struct stitch_dev * stitch_get_dev(void)
 {
 	return g_stitch_dev;
 }
 
 void stitch_enable_dev_clk(bool en)
 {
-	struct cvi_stitch_dev *dev = stitch_get_dev();
+	struct stitch_dev *dev = stitch_get_dev();
 
 	if (!dev || !dev->clk_stitch) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "null dev or null clk_stitch\n");
+		TRACE_STITCH(DBG_ERR, "null dev or null clk_stitch\n");
 		return;
 	}
 
@@ -72,9 +77,9 @@ void stitch_enable_dev_clk(bool en)
 	}
 }
 
-int stitch_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int stitch_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
-	struct cvi_stitch_dev *vdev = (struct cvi_stitch_dev *)dev;
+	struct stitch_dev *vdev = (struct stitch_dev *)dev;
 	int rc = -1;
 	(void)caller;
 	(void)vdev;
@@ -96,7 +101,7 @@ static int stitch_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_STITCH);
 }
 
-static int stitch_core_register_cb(struct cvi_stitch_dev *dev)
+static int stitch_core_register_cb(struct stitch_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -107,27 +112,26 @@ static int stitch_core_register_cb(struct cvi_stitch_dev *dev)
 	return base_reg_module_cb(&reg_cb);
 }
 
-static void stitch_job_finish(struct cvi_stitch_job *job, struct cvi_stitch_dev *dev)
+static void stitch_job_finish(struct stitch_job *job, struct stitch_dev *dev)
 {
 	if (atomic_read(&dev->state) != STITCH_DEV_STATE_END)
 		return;
 
 	atomic_set(&dev->state, STITCH_DEV_STATE_IDLE);
 
-	if (atomic_read(&job->enJobState) == STITCH_JOB_WORKING) {
-		if (job->pfnJobCB)
-			job->pfnJobCB(job->data);
+	if (atomic_read(&job->job_state) == STITCH_JOB_WORKING) {
+		if (job->fn_job_cb)
+			job->fn_job_cb(job->data);
 	}
-	atomic_set(&job->enJobState, STITCH_JOB_END);
 }
 
-static void stitch_irq_handler(u8 intr_status, struct cvi_stitch_dev *dev)
+static void stitch_irq_handler(unsigned char intr_status, struct stitch_dev *dev)
 {
-	struct cvi_stitch_job *job = dev->job;
+	struct stitch_job *job = dev->job;
 	(void)(intr_status);
 
 	if (!job) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "job is NULL\n");
+		TRACE_STITCH(DBG_ERR, "job is NULL\n");
 		return;
 	}
 
@@ -138,13 +142,13 @@ static void stitch_irq_handler(u8 intr_status, struct cvi_stitch_dev *dev)
 
 static irqreturn_t stitch_isr(int irq, void *_dev)
 {
-	u8 intr_status;
-	struct cvi_stitch_dev *dev = (struct cvi_stitch_dev *)_dev;
-	struct cvi_stitch_ctx *p_stitch_ctx = stitch_get_ctx();
+	unsigned char intr_status;
+	struct stitch_dev *dev = (struct stitch_dev *)_dev;
+	struct __stitch_ctx *p_stitch_ctx = stitch_get_ctx();
 
 	if (dev && (dev->irq_num == irq)) {
 		intr_status = stitch_intr_status();
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "irq(%d), status(0x%x)\n", irq, intr_status);
+		TRACE_STITCH(DBG_DEBUG, "irq(%d), status(0x%x)\n", irq, intr_status);
 
 		stitch_intr_clr();
 		stitch_disable();
@@ -162,10 +166,10 @@ static irqreturn_t stitch_isr(int irq, void *_dev)
 	return IRQ_HANDLED;
 }
 
-static void stitch_dev_init(struct cvi_stitch_dev *dev)
+static void stitch_dev_init(struct stitch_dev *dev)
 {
 	if (!dev) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "null dev.\n");
+		TRACE_STITCH(DBG_ERR, "null dev.\n");
 		return;
 	}
 
@@ -186,10 +190,10 @@ static void stitch_dev_init(struct cvi_stitch_dev *dev)
 		dev->clk_sys_freq = clk_sys_freq;
 }
 
-static void stitch_dev_deinit(struct cvi_stitch_dev *dev)
+static void stitch_dev_deinit(struct stitch_dev *dev)
 {
 	if (!dev) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "null dev.\n");
+		TRACE_STITCH(DBG_ERR, "null dev.\n");
 		return;
 	}
 
@@ -216,7 +220,7 @@ static int _init_resources(struct platform_device *pdev)
 	const char stitch_clk_sys_name[16] = {"clk_sys_3"};
 	int irq_num = -1;
 	struct resource *res = NULL;
-	struct cvi_stitch_dev *dev = NULL;
+	struct stitch_dev *dev = NULL;
 	void *reg_base = NULL;
 
 	dev = dev_get_drvdata(&pdev->dev);
@@ -228,7 +232,7 @@ static int _init_resources(struct platform_device *pdev)
 	//init res
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (unlikely(!res)) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to get stitch res\n");
+		TRACE_STITCH(DBG_ERR, "Failed to get stitch res\n");
 		return -EINVAL;
 	}
 
@@ -241,10 +245,10 @@ static int _init_resources(struct platform_device *pdev)
 					    res->end - res->start);
 #endif
 
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%px).\n"
+	TRACE_STITCH(DBG_INFO, "res-reg: start: 0x%llx, end: 0x%llx, virt-addr(%px).\n"
 		, res->start, res->end, reg_base);
 	if (!reg_base) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to get reg_base for stitch\n");
+		TRACE_STITCH(DBG_ERR, "Failed to get reg_base for stitch\n");
 		return -EINVAL;
 	}
 
@@ -256,22 +260,22 @@ static int _init_resources(struct platform_device *pdev)
 		dev_err(&pdev->dev, "No IRQ resource for irq_num[%d] %s\n", irq_num, stitch_name);
 		return -ENODEV;
 	}
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "irq(%d) for %s get from platform driver.\n", irq_num, stitch_name);
+	TRACE_STITCH(DBG_INFO, "irq(%d) for %s get from platform driver.\n", irq_num, stitch_name);
 	dev->irq_num = irq_num;
 
 	//clk res
 	dev->clk_src = devm_clk_get(&pdev->dev, stitch_clk_sys_name);
 	if (IS_ERR(dev->clk_src)) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Cannot get clk for clk_sys_3 for stitch\n");
+		TRACE_STITCH(DBG_ERR, "Cannot get clk for clk_sys_3 for stitch\n");
 		dev->clk_src = NULL;
 	}
 	dev->clk_stitch = devm_clk_get(&pdev->dev, stitch_clk_name);
 	if (IS_ERR(dev->clk_stitch)) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Cannot get clk for clk_stitch\n");
+		TRACE_STITCH(DBG_ERR, "Cannot get clk for clk_stitch\n");
 		dev->clk_stitch = NULL;
 	}
 #else
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "cannot get res for stitch\n");
+	TRACE_STITCH(DBG_INFO, "cannot get res for stitch\n");
 	rc = -1;
 #endif
 	return rc;
@@ -279,8 +283,8 @@ static int _init_resources(struct platform_device *pdev)
 
 static int stitch_open(struct inode *inode, struct file *filep)
 {
-	struct cvi_stitch_dev *dev
-		= container_of(filep->private_data, struct cvi_stitch_dev, miscdev);
+	struct stitch_dev *dev
+		= container_of(filep->private_data, struct stitch_dev, miscdev);
 	int i;
 
 	pr_info("stitch_open\n");
@@ -307,8 +311,8 @@ static int stitch_open(struct inode *inode, struct file *filep)
 
 static int stitch_release(struct inode *inode, struct file *filep)
 {
-	struct cvi_stitch_dev *dev
-		= container_of(filep->private_data, struct cvi_stitch_dev, miscdev);
+	struct stitch_dev *dev
+		= container_of(filep->private_data, struct stitch_dev, miscdev);
 	int i;
 
 	pr_info("stitch_release\n");
@@ -333,14 +337,27 @@ static int stitch_release(struct inode *inode, struct file *filep)
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static long stitch_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations stitch_fops = {
 	.owner = THIS_MODULE,
 	.open = stitch_open,
 	.release = stitch_release,
 	.unlocked_ioctl = stitch_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = stitch_compat_ptr_ioctl,
+#endif
 };
 
-static int register_stitch_dev(struct device *dev, struct cvi_stitch_dev *bdev)
+static int register_stitch_dev(struct device *dev, struct stitch_dev *bdev)
 {
 	int rc;
 
@@ -355,24 +372,24 @@ static int register_stitch_dev(struct device *dev, struct cvi_stitch_dev *bdev)
 	return rc;
 }
 
-static const struct of_device_id cvi_stitch_dt_match[] = {
+static const struct of_device_id stitch_dt_match[] = {
 	{.compatible = "cvitek,stitch"},
 	{}
 };
 
-static int cvi_stitch_probe(struct platform_device *pdev)
+static int stitch_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-	struct cvi_stitch_dev *dev;
+	struct stitch_dev *dev;
 	const struct of_device_id * match;
 
-	match = of_match_device(cvi_stitch_dt_match, &pdev->dev);
+	match = of_match_device(stitch_dt_match, &pdev->dev);
 	if (!match)
 		return ENODEV;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to allocate resource\n");
+		TRACE_STITCH(DBG_ERR, "Failed to allocate resource\n");
 		return -ENOMEM;
 	}
 
@@ -381,19 +398,19 @@ static int cvi_stitch_probe(struct platform_device *pdev)
 	g_stitch_dev = dev;
 	rc = _init_resources(pdev);
 	if (rc) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to init resource\n");
+		TRACE_STITCH(DBG_ERR, "Failed to init resource\n");
 		goto err_dev;
 	}
 
 	rc = register_stitch_dev(&pdev->dev, dev);
 	if (rc) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to register dev\n");
+		TRACE_STITCH(DBG_ERR, "Failed to register dev\n");
 		goto err_dev;
 	}
 
 	rc = stitch_proc_init(dev);
 	if (rc) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "Failed to init proc\n");
+		TRACE_STITCH(DBG_ERR, "Failed to init proc\n");
 		goto err_proc;
 	}
 
@@ -414,7 +431,7 @@ static int cvi_stitch_probe(struct platform_device *pdev)
 
 	stitch_dev_init(dev);
 
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "stitch init done\n");
+	TRACE_STITCH(DBG_INFO, "stitch init done\n");
 	return rc;
 
 err_kthread:
@@ -424,13 +441,13 @@ err_proc:
 	misc_deregister(&dev->miscdev);
 err_dev:
 	dev_set_drvdata(&pdev->dev, NULL);
-	CVI_TRACE_STITCH(CVI_DBG_ERR, "failed with rc(%d).\n", rc);
+	TRACE_STITCH(DBG_ERR, "failed with rc(%d).\n", rc);
 	return rc;
 }
 
-static int cvi_stitch_remove(struct platform_device *pdev)
+static int stitch_remove(struct platform_device *pdev)
 {
-	struct cvi_stitch_dev *dev;
+	struct stitch_dev *dev;
 
 	stitch_thread_deinit();
 
@@ -441,7 +458,7 @@ static int cvi_stitch_remove(struct platform_device *pdev)
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_stitch drvdata");
+		dev_err(&pdev->dev, "Can not get stitch drvdata");
 		return -EINVAL;
 	}
 
@@ -453,7 +470,7 @@ static int cvi_stitch_remove(struct platform_device *pdev)
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
-		dev_err(&pdev->dev, "Can not get cvi_stitch drvdata");
+		dev_err(&pdev->dev, "Can not get stitch drvdata");
 		return -EINVAL;
 	}
 
@@ -468,41 +485,41 @@ static int cvi_stitch_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM_SLEEP
 int stitch_suspend(struct device *dev)
 {
-	s32 ret = 0;
-	struct cvi_stitch_dev * stitch_dev = stitch_get_dev();
+	int ret = 0;
+	struct stitch_dev *stit_dev = stitch_get_dev();
 
 	/*step 1 suspend envent_handlers*/
 	ret = stitch_suspend_handler();
 	if (ret) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "fail to suspend stitch thread, err=%d\n", ret);
+		TRACE_STITCH(DBG_ERR, "fail to suspend stitch thread, err=%d\n", ret);
 		return -1;
 	}
 
 	/*step 2 turn off clock*/
-	stitch_dev_deinit(stitch_dev);
+	stitch_dev_deinit(stit_dev);
 	atomic_set(&suspend_flag, 1);
 
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "stitch suspend+\n");
+	TRACE_STITCH(DBG_WARN, "stitch suspend+\n");
 	return 0;
 }
 
 int stitch_resume(struct device *dev)
 {
-	s32 ret = 0;
-	struct cvi_stitch_dev * stitch_dev = stitch_get_dev();
+	int ret = 0;
+	struct stitch_dev *stit_dev = stitch_get_dev();
 
 	/*step 1 turn on clock*/
-	stitch_dev_init(stitch_dev);
+	stitch_dev_init(stit_dev);
 
 	/*step 3 resume envent_handlers*/
 	ret = stitch_resume_handler();
 	if (ret) {
-		CVI_TRACE_STITCH(CVI_DBG_ERR, "fail to resume stitch thread, err=%d\n", ret);
+		TRACE_STITCH(DBG_ERR, "fail to resume stitch thread, err=%d\n", ret);
 		return -1;
 	}
 	atomic_set(&suspend_flag, 0);
 
-	CVI_TRACE_STITCH(CVI_DBG_INFO, "stitch resume+\n");
+	TRACE_STITCH(DBG_WARN, "stitch resume+\n");
 	return 0;
 }
 
@@ -517,62 +534,62 @@ static SIMPLE_DEV_PM_OPS(stitch_pm_ops, NULL, NULL);
 #endif
 
 #if (!DEVICE_FROM_DTS)
-static void cvi_stitch_pdev_release(struct device *dev)
+static void stitch_pdev_release(struct device *dev)
 {
 }
 
-static struct platform_device cvi_stitch_pdev = {
+static struct platform_device stitch_pdev = {
 	.name		= "stitch",
-	.dev.release	= cvi_stitch_pdev_release,
+	.dev.release	= stitch_pdev_release,
 };
 #endif
 
-static struct platform_driver cvi_stitch_pdrv = {
-	.probe      = cvi_stitch_probe,
-	.remove     = cvi_stitch_remove,
+static struct platform_driver stitch_pdrv = {
+	.probe      = stitch_probe,
+	.remove     = stitch_remove,
 	.driver     = {
 		.name		= "stitch",
 		.owner		= THIS_MODULE,
 #if (DEVICE_FROM_DTS)
-		.of_match_table	= of_match_ptr(cvi_stitch_dt_match),
+		.of_match_table	= of_match_ptr(stitch_dt_match),
 #endif
 		.pm		= &stitch_pm_ops,
 	},
 };
 
 #if 1
-static int __init cvi_stitch_init(void)
+static int __init __stitch_init(void)
 {
 	int rc;
 
-	CVI_TRACE_STITCH(CVI_DBG_INFO, " +\n");
+	TRACE_STITCH(DBG_INFO, " +\n");
 	#if (DEVICE_FROM_DTS)
-	rc = platform_driver_register(&cvi_stitch_pdrv);
+	rc = platform_driver_register(&stitch_pdrv);
 	#else
-	rc = platform_device_register(&cvi_stitch_pdev);
+	rc = platform_device_register(&stitch_pdev);
 	if (rc)
 		return rc;
 
-	rc = platform_driver_register(&cvi_stitch_pdrv);
+	rc = platform_driver_register(&stitch_pdrv);
 	if (rc)
-		platform_device_unregister(&cvi_stitch_pdev);
+		platform_device_unregister(&stitch_pdev);
 	#endif
 
 	return rc;
 }
 
-static void __exit cvi_stitch_exit(void)
+static void __exit __stitch_exit(void)
 {
-	CVI_TRACE_STITCH(CVI_DBG_INFO, " +\n");
-	platform_driver_unregister(&cvi_stitch_pdrv);
+	TRACE_STITCH(DBG_INFO, " +\n");
+	platform_driver_unregister(&stitch_pdrv);
 	#if (!DEVICE_FROM_DTS)
-	platform_device_unregister(&cvi_stitch_pdev);
+	platform_device_unregister(&stitch_pdev);
 	#endif
 }
-module_init(cvi_stitch_init);
-module_exit(cvi_stitch_exit);
+module_init(__stitch_init);
+module_exit(__stitch_exit);
 #else
-module_platform_driver(cvi_stitch_pdrv);
+module_platform_driver(stitch_pdrv);
 #endif
 
 MODULE_DESCRIPTION("Cvitek Video Driver For Stitch");

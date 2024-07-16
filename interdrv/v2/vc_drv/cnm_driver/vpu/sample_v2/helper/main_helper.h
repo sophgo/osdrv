@@ -935,82 +935,6 @@ extern Uint8* GetYUVFromFrameBuffer(
     );
 
 /************************************************************************/
-/* Queue                                                                */
-/************************************************************************/
-typedef struct {
-    void*   data;
-} QueueData;
-typedef struct {
-    Uint8*          buffer;
-    Uint32          size;
-    Uint32          itemSize;
-    Uint32          count;
-    Uint32          front;
-    Uint32          rear;
-    osal_mutex_t    lock;
-} Queue;
-
-extern Queue* Queue_Create(
-    Uint32    itemCount,
-    Uint32    itemSize
-    );
-
-extern Queue* Queue_Create_With_Lock(
-    Uint32    itemCount,
-    Uint32    itemSize
-    );
-
-extern void Queue_Destroy(
-    Queue*      queue
-    );
-
-/**
- * \brief       Enqueue with deep copy
- */
-extern BOOL Queue_Enqueue(
-    Queue*      queue,
-    void*       data
-    );
-
-/**
- * \brief       Caller has responsibility for releasing the returned data
- */
-extern void* Queue_Dequeue(
-    Queue*      queue
-    );
-
-extern void* Queue_Dequeue_From_Rear(
-    Queue*      queue
-    );
-
-extern void Queue_Flush(
-    Queue*      queue
-    );
-
-extern void* Queue_Peek(
-    Queue*      queue
-    );
-
-extern Uint32 Queue_Get_Cnt(
-    Queue*      queue
-    );
-
-/**
- * \brief       @dstQ is NULL, it allocates Queue structure and then copy from @srcQ.
- */
-extern Queue* Queue_Copy(
-    Queue*  dstQ,
-    Queue*  srcQ
-    );
-
-/**
- * \brief       Check the queue is full or not.
- */
-extern BOOL Queue_IsFull(
-    Queue*      queue
-    );
-
-/************************************************************************/
 /* linked list                                                          */
 /************************************************************************/
 typedef struct list_node {
@@ -1521,109 +1445,6 @@ typedef struct {
     Int32           displayed_num;
 } RendererOutInfo;
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-extern void SetDefaultDecTestConfig(
-    TestDecConfig* testConfig
-    );
-
-extern void Coda9SetDefaultDecTestConfig(
-    TestDecConfig* testConfig
-    );
-
-extern struct option* ConvertOptions(
-    struct OptionExt*   cnmOpt,
-    Uint32              nItems
-    );
-
-extern void ReleaseVideoMemory(
-    DecHandle   handle,
-    vpu_buffer_t*   memoryArr,
-    Uint32        count
-    );
-
-extern BOOL AllocateDecFrameBuffer(
-    DecHandle       decHandle,
-    TestDecConfig*  config,
-    Uint32          tiledFbCount,
-    Uint32          linearFbCount,
-    FrameBuffer*    retFbArray,
-    vpu_buffer_t*   retFbAddrs,
-    Uint32*         retStride
-    );
-
-extern BOOL AllocFBMemory(Uint32 coreIdx, vpu_buffer_t *pFbMem, FrameBuffer* pFb, Uint32 memSize, Uint32 memNum, Int32 memTypes, Int32 stride, Int32 instIndex);
-
-
-extern BOOL Coda9AllocateDecPPUFrameBuffer(
-    BOOL*           pEnablePPU,
-    DecHandle       decHandle,
-    TestDecConfig*  config,
-    FrameBuffer*    retFbArray,
-    vpu_buffer_t*   retFbAddrs,
-    Queue*          ppuQ
-    );
-
-extern RetCode SetUpDecoderOpenParam(
-    DecOpenParam*   param,
-    TestDecConfig*  config
-    );
-
-#define OUTPUT_FP_NUMBER 4
-extern BOOL OpenDisplayBufferFile(
-    CodStd  codec,
-    char *outputPath,
-    VpuRect rcDisplay,
-    TiledMapType mapType,
-    osal_file_t fp[]
-    );
-
-extern void CloseDisplayBufferFile(
-    osal_file_t fp[]
-    );
-
-extern void ProcessVc1MultiResolution(
-    Uint8* image,
-    Int32 width,
-    Int32 height,
-    BOOL horz_half,
-    BOOL vert_half
-    );
-
-extern void SaveDisplayBufferToFile(
-    DecHandle handle,
-    CodStd codStd,
-    RendererOutInfo* rendererOutInfo,
-    FrameBuffer dispFrame,
-    VpuRect rcDisplay,
-    osal_file_t fp[],
-    BOOL crop_enabled
-    );
-
-
-
-extern void GetUserData(
-    Int32 coreIdx,
-    Uint8* pBase,
-    vpu_buffer_t vbUserData,
-    DecOutputInfo outputInfo
-    );
-
-
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-
-
-
-
-
-
-
 typedef struct TestEncConfig_struct {
     char    yuvSourceBaseDir[MAX_FILE_PATH];
     char    yuvFileName[MAX_FILE_PATH];
@@ -1774,7 +1595,7 @@ typedef struct TestEncConfig_struct {
     int fixed_qp;
     int fixed_qp_value;
 
-    int cviApiMode;
+    int api_mode;
 } TestEncConfig;
 
 extern BOOL SaveEncNalSizeReport(EncHandle handle, CodStd codecstd, char *nalSizeDataPath, EncOutputInfo encOutputInfo, int frameIdx);

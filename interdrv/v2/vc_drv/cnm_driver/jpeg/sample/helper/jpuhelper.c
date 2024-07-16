@@ -15,7 +15,7 @@
 #include "../jpuapi/jputable.h"
 #include "jpulog.h"
 #include "jpu_helper.h"
-#include "cvi_vc_getopt.h"
+#include "vc_getopt.h"
 
 static fb_context s_fb[MAX_JPEG_NUM_INSTANCE];
 
@@ -1257,7 +1257,7 @@ BOOL ParseDecTestLongArgs(void* config, const char* argName, char* value)
     }
     else if (strcmp(argName, "roi") == 0) {
         char* val;
-        val = cvi_strtok(value, ",");
+        val = drv_strtok(value, ",");
         if (val == NULL) {
             JLOG(ERR, "Invalid ROI option: %s\n", value);
             ret = FALSE;
@@ -1265,7 +1265,7 @@ BOOL ParseDecTestLongArgs(void* config, const char* argName, char* value)
         else {
             dec->roiOffsetX = atoi(val);
         }
-        val = cvi_strtok(NULL, ",");
+        val = drv_strtok(NULL, ",");
         if (val == NULL) {
             JLOG(ERR, "Invalid ROI option: %s\n", value);
             ret = FALSE;
@@ -1273,7 +1273,7 @@ BOOL ParseDecTestLongArgs(void* config, const char* argName, char* value)
         else {
             dec->roiOffsetY = atoi(val);
         }
-        val = cvi_strtok(NULL, ",");
+        val = drv_strtok(NULL, ",");
         if (val == NULL) {
             JLOG(ERR, "Invalid ROI option: %s\n", value);
             ret = FALSE;
@@ -1281,7 +1281,7 @@ BOOL ParseDecTestLongArgs(void* config, const char* argName, char* value)
         else {
             dec->roiWidth = atoi(val);
         }
-        val = cvi_strtok(NULL, ",");
+        val = drv_strtok(NULL, ",");
         if (val == NULL) {
             JLOG(ERR, "Invalid ROI option: %s\n", value);
             ret = FALSE;
@@ -1461,12 +1461,12 @@ static BOOL ParseMultipleTestArgs(TestMultiConfig* config, const char* argName, 
         ParseNoneTestLongArgs,
     };
 
-    tempArg = cvi_strtok(value, ",");
+    tempArg = drv_strtok(value, ",");
     for(i = 0; i < MAX_JPEG_NUM_INSTANCE; i++) {
         if (parsers[config->type[i]]((void*)&config->u[i], argName, tempArg) == FALSE) {
             return FALSE;
         }
-        tempArg = cvi_strtok(NULL, ",");
+        tempArg = drv_strtok(NULL, ",");
         if (tempArg == NULL) {
             break;
         }
@@ -1517,7 +1517,7 @@ BOOL ParseMultiLongOptions(TestMultiConfig* config, const char* argName, char* v
         }
     }
     else if (strcmp(argName, "slice-height") == 0) {
-        tempArg = cvi_strtok(value, ",");
+        tempArg = drv_strtok(value, ",");
         for(i = 0; i < MAX_JPEG_NUM_INSTANCE; i++) {
             if (config->type[i] == JPU_ENCODER) {
                 ParseEncTestLongArgs((void*)&config->u[i], argName, tempArg);
@@ -1525,13 +1525,13 @@ BOOL ParseMultiLongOptions(TestMultiConfig* config, const char* argName, char* v
             else {
                 ParseDecTestLongArgs((void*)&config->u[i], argName, tempArg);
             }
-            tempArg = cvi_strtok(NULL, ",");
+            tempArg = drv_strtok(NULL, ",");
             if (tempArg == NULL)
                 break;
         }
     }
     else if (strcmp(argName, "enable-slice-intr") == 0) {
-        tempArg = cvi_strtok(value, ",");
+        tempArg = drv_strtok(value, ",");
         for(i = 0; i < MAX_JPEG_NUM_INSTANCE; i++) {
             if (config->type[i] == JPU_ENCODER) {
                 ParseEncTestLongArgs((void*)&config->u[i], argName, tempArg);
@@ -1539,42 +1539,22 @@ BOOL ParseMultiLongOptions(TestMultiConfig* config, const char* argName, char* v
             else {
                 ParseDecTestLongArgs((void*)&config->u[i], argName, tempArg);
             }
-            tempArg = cvi_strtok(NULL, ",");
+            tempArg = drv_strtok(NULL, ",");
             if (tempArg == NULL)
                 break;
         }
     }
     else if (strcmp(argName, "enable-tiledMode") == 0) {
-        tempArg = cvi_strtok(value, ",");
+        tempArg = drv_strtok(value, ",");
         for(i = 0; i < MAX_JPEG_NUM_INSTANCE; i++) {
             if (config->type[i] == JPU_ENCODER) {
                 ParseEncTestLongArgs((void*)&config->u[i], argName, tempArg);
             }
-            tempArg = cvi_strtok(NULL, ",");
+            tempArg = drv_strtok(NULL, ",");
             if (tempArg == NULL)
                 break;
         }
     }
-#if defined(CNM_FPGA_PLATFORM)
-    else if (strcmp(argName, "aclk") == 0) {
-        config->devConfig.aclk = atoi(value);
-    }
-    else if (strcmp(argName, "cclk") == 0) {
-        config->devConfig.cclk = atoi(value);
-    }
-    else if (strcmp(argName, "aclk_div") == 0) {
-        config->devConfig.aclk_div = atoi(value);
-    }
-    else if (strcmp(argName, "cclk_div") == 0) {
-        config->devConfig.cclk_div = atoi(value);
-    }
-    else if (strcmp(argName, "rdelay") == 0) {
-        config->devConfig.readDelay = atoi(value);
-    }
-    else if (strcmp(argName, "wdelay") == 0) {
-        config->devConfig.writeDelay = atoi(value);
-    }
-#endif
     else {
         JLOG(ERR, "Not defined option: %s\n", argName);
         ret = FALSE;

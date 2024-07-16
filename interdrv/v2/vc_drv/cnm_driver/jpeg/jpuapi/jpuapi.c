@@ -15,10 +15,7 @@
 #include "jpulog.h"
 
 static JPUCap   g_JpuAttributes;
-int is_jpu_init = 0;
-static DEFINE_MUTEX(__jdi_mutex);
 extern int jpu_enable_irq(int coreidx);
-
 
 
 int JPU_IsBusy(JpgHandle handle)
@@ -33,7 +30,7 @@ int JPU_IsBusy(JpgHandle handle)
     else {
         instRegIndex = 0;
     }
-    val = JpuReadInstReg(instRegIndex, MJPEG_PIC_STATUS_REG);
+    val = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG);
 
     if ((val & (1<<INT_JPU_DONE)) ||
         (val & (1<<INT_JPU_ERROR)))
@@ -54,7 +51,7 @@ void JPU_ClrStatus(JpgHandle handle, Uint32 val)
         instRegIndex = 0;
     }
     if (val != 0)
-        JpuWriteInstReg(instRegIndex, MJPEG_PIC_STATUS_REG, val);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG, val);
 }
 Uint32 JPU_GetStatus(JpgHandle handle)
 {
@@ -68,7 +65,7 @@ Uint32 JPU_GetStatus(JpgHandle handle)
         instRegIndex = 0;
     }
 
-    return JpuReadInstReg(instRegIndex, MJPEG_PIC_STATUS_REG);
+    return JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG);
 }
 
 
@@ -76,11 +73,15 @@ Uint32 JPU_IsInit()
 {
     jpu_instance_pool_t *pjip;
 
+    JpgEnterLockEx();
     pjip = (jpu_instance_pool_t *)jdi_get_instance_pool();
 
-    if (!pjip)
+    if (!pjip) {
+        JpgLeaveLockEx();
         return 0;
+    }
 
+    JpgLeaveLockEx();
     return 1;
 }
 
@@ -90,7 +91,6 @@ Int32 JPU_WaitInterrupt(JpgHandle handle, int timeout)
     Uint32 val;
     Int32 instRegIndex;
     Int32 reason = 0;
-
     JpgInst *pJpgInst = (JpgInst *)handle;
 
     if (pJpgInst->sliceInstMode == TRUE) {
@@ -101,11 +101,11 @@ Int32 JPU_WaitInterrupt(JpgHandle handle, int timeout)
     }
 
     reason = jdi_wait_interrupt(pJpgInst->coreIndex, timeout, instRegIndex);
-    if (reason == -1) {
+    if (reason == -1)
         return -1;
-    }
+
     if (reason & (1<<INT_JPU_DONE) || reason & (1<<INT_JPU_SLICE_DONE)) {
-        val = JpuReadReg(MJPEG_INST_CTRL_STATUS_REG);
+        val = JpuReadReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_STATUS_REG);
         if ((((val & 0xf) >> instRegIndex) & 0x01) == 0) {
             jpu_enable_irq(pJpgInst->coreIndex);
             return -2;
@@ -114,8 +114,6 @@ Int32 JPU_WaitInterrupt(JpgHandle handle, int timeout)
 
     return reason;
 }
-
-
 
 int JPU_GetOpenInstanceNum(void)
 {
@@ -128,47 +126,44 @@ int JPU_GetOpenInstanceNum(void)
     return pjip->jpu_instance_num;
 }
 
-
 JpgRet JPU_Init(void)
 {
     jpu_instance_pool_t *pjip;
     Uint32 val = 0;
-    int coreidx = 0;
+    int core_idx = 0;
 
+    JpgEnterLockEx();
     //only init once
-    mutex_lock(&__jdi_mutex);
     if (jdi_init() < 0) {
-        mutex_unlock(&__jdi_mutex);
+        JpgLeaveLockEx();
         return JPG_RET_FAILURE;
     }
-    mutex_unlock(&__jdi_mutex);
 
     if (jdi_get_task_num() > 1) {
+        JpgLeaveLockEx();
         return JPG_RET_CALLED_BEFORE;
     }
 
-    JpgEnterLockEx();
     pjip = (jpu_instance_pool_t *)jdi_get_instance_pool();
     if (!pjip) {
         JpgLeaveLockEx();
         return JPG_RET_FAILURE;
     }
 
-    //jdi_log(JDI_LOG_CMD_INIT, 1, 0);
+    //jdi_log(core_idx, JDI_LOG_CMD_INIT, 1, 0);
+    for (core_idx = 0; core_idx < MAX_NUM_JPU_CORE; core_idx++) {
+        JPU_SWTopReset(core_idx);
+        JPU_SWReset(core_idx, NULL);
+        JpuWriteRegExt(core_idx,MJPEG_INST_CTRL_START_REG, (1<<0));
 
-    for (coreidx = 0; coreidx < MAX_NUM_JPU_CORE; coreidx++) {
-        JPU_SWReset(coreidx, NULL);
-        JpuWriteRegExt(coreidx,MJPEG_INST_CTRL_START_REG, (1<<0));
-
-        val = JpuReadInstRegExt(coreidx, 0, MJPEG_VERSION_INFO_REG);
+        val = JpuReadInstRegExt(core_idx, 0, MJPEG_VERSION_INFO_REG);
         // JPU Capabilities
         g_JpuAttributes.productId    = (val>>24) & 0xf;
         g_JpuAttributes.revisoin     = (val & 0xffffff);
         g_JpuAttributes.support12bit = (val>>28) & 0x01;
-        is_jpu_init = 1;
 
         JLOG(INFO, "JPU core:%d, Version API_VERSION=0x%x, HW_REVISION=%d, HW_PRODUCT_ID=0x%x\n"
-            , coreidx, API_VERSION, g_JpuAttributes.revisoin, g_JpuAttributes.productId);
+            , core_idx, API_VERSION, g_JpuAttributes.revisoin, g_JpuAttributes.productId);
     }
 
     // jdi_log(JDI_LOG_CMD_INIT, 0, 0);
@@ -178,21 +173,22 @@ JpgRet JPU_Init(void)
 
 void JPU_DeInit(void)
 {
-    int coreidx;
+    int core_idx;
 
-    JpgEnterLock();
+    JpgEnterLockEx();
     if (jdi_get_task_num() == 1) {
-        for (coreidx = 0; coreidx < MAX_NUM_JPU_CORE; coreidx++) {
-            JpuWriteRegExt(coreidx,MJPEG_INST_CTRL_START_REG, 0);
-            if (jdi_wait_inst_ctrl_busy(coreidx, JPU_INST_CTRL_TIMEOUT_MS, MJPEG_INST_CTRL_STATUS_REG, INST_CTRL_IDLE) == -1) {// wait for INST_CTRL become IDLE
-                JLOG(WARN, "coreidx:%d inst_ctrl_busy fail", coreidx);
+        for (core_idx = 0; core_idx < MAX_NUM_JPU_CORE; core_idx++) {
+            JpuWriteRegExt(core_idx,MJPEG_INST_CTRL_START_REG, 0);
+            if (jdi_wait_inst_ctrl_busy(core_idx, JPU_INST_CTRL_TIMEOUT_MS, MJPEG_INST_CTRL_STATUS_REG, INST_CTRL_IDLE) == -1) {// wait for INST_CTRL become IDLE
+                JLOG(WARN, "coreidx:%d inst_ctrl_busy fail", core_idx);
             } else {
-                JLOG(INFO, "coreidx:%d inst_ctrl_busy ok", coreidx);
+                JLOG(INFO, "coreidx:%d inst_ctrl_busy ok", core_idx);
             }
         }
     }
+
     jdi_release();
-    JpgLeaveLock();
+    JpgLeaveLockEx();
 }
 
 JpgRet JPU_GetVersionInfo(Uint32 *apiVersion, Uint32 *hwRevision, Uint32 *hwProductId)
@@ -215,23 +211,25 @@ JpgRet JPU_GetVersionInfo(Uint32 *apiVersion, Uint32 *hwRevision, Uint32 *hwProd
     return JPG_RET_SUCCESS;
 }
 
-JpgRet JPU_GetExtAddr(int coreidx, Uint32 *extAddr)
+JpgRet JPU_GetExtAddr(int core_idx, Uint32 *extAddr)
 {
     if (extAddr) {
-        *extAddr = jdi_get_extension_address(coreidx);
+        *extAddr = jdi_get_extension_address(core_idx);
     }
 
     return JPG_RET_SUCCESS;
 }
 
-void JPU_SetExtAddr(int coreidx, Uint32 extAddr)
+void JPU_SetExtAddr(int core_idx, Uint32 extAddr)
 {
-    jdi_set_extension_address(coreidx, extAddr);
+    JpgEnterLockEx();
+    jdi_set_extension_address(core_idx, extAddr);
+    JpgLeaveLockEx();
 }
 
-void JPU_SWTopReset(int coreidx)
+void JPU_SWTopReset(int core_idx)
 {
-    jdi_sw_top_reset(coreidx);
+    jdi_sw_top_reset(core_idx);
 }
 
 JpgRet JPU_DecOpen(JpgDecHandle * pHandle, JpgDecOpenParam * pop)
@@ -300,19 +298,17 @@ JpgRet JPU_DecOpen(JpgDecHandle * pHandle, JpgDecOpenParam * pop)
 
 JpgRet JPU_DecClose(JpgDecHandle handle)
 {
-    JpgInst * pJpgInst;
     JpgRet ret;
+    JpgInst * pJpgInst = handle;;
 
     ret = CheckJpgInstValidity(handle);
     if (ret != JPG_RET_SUCCESS) {
         return ret;
     }
 
-    pJpgInst = handle;
-
     JpgEnterLockEx();
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLockEx();
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
@@ -325,10 +321,14 @@ JpgRet JPU_DecClose(JpgDecHandle handle)
 
 JpgRet JPU_DecGetInitialInfo(JpgDecHandle handle, JpgDecInitialInfo * info)
 {
-    JpgInst*    pJpgInst;
+    JpgInst*    pJpgInst = handle;
     JpgDecInfo* pDecInfo;
     JpgRet      ret;
     int         err;
+
+    if (pJpgInst == NULL) {
+        return JPG_RET_INVALID_PARAM;
+    }
 
     ret = CheckJpgInstValidity(handle);
     if (ret != JPG_RET_SUCCESS)
@@ -337,7 +337,7 @@ JpgRet JPU_DecGetInitialInfo(JpgDecHandle handle, JpgDecInitialInfo * info)
     if (info == 0) {
         return JPG_RET_INVALID_PARAM;
     }
-    pJpgInst = handle;
+
     pDecInfo = &pJpgInst->JpgInfo->decInfo;
 
     if (0 >= (err=JpegDecodeHeader(pJpgInst, pDecInfo))) {
@@ -479,8 +479,8 @@ JpgRet JPU_DecGetBitstreamBuffer(JpgDecHandle handle,
         instRegIndex = 0;
     }
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
-        rdPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG);
+    if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
+        rdPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG);
     }
     else {
         rdPtr = pDecInfo->streamRdPtr;
@@ -540,8 +540,8 @@ JpgRet JPU_DecUpdateBitstreamBuffer(JpgDecHandle handle, int size)
 
     if (size == 0)
     {
-        if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
-            val = JpuReadInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG);
+        if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
+            val = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG);
             strmCntOfEos = (wrPtr-pDecInfo->streamBufStartAddr) / 256;
             if ((wrPtr-pDecInfo->streamBufStartAddr) % 256) {
                 strmCntOfEos = strmCntOfEos + 1;
@@ -549,7 +549,7 @@ JpgRet JPU_DecUpdateBitstreamBuffer(JpgDecHandle handle, int size)
             val |= (1UL << 31);
             val &= ~(0xffffff);
             val |= (strmCntOfEos&0xffffff);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG, val);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG, val);
         }
         pDecInfo->streamEndflag = 1;
         JLOG(INFO,"JPU_DecUpdateBitstreamBuffer end \n");
@@ -565,20 +565,20 @@ JpgRet JPU_DecUpdateBitstreamBuffer(JpgDecHandle handle, int size)
 
     pDecInfo->streamWrPtr = wrPtr;
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
-        rdPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG);
+    if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
+        rdPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG);
 
         if (rdPtr >= pDecInfo->streamBufEndAddr) {
             JLOG(INFO, "inst=%d !!!!! WRAP-AROUND !!!!!\n", pJpgInst->instIndex);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
         }
 
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG, wrPtr);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG, wrPtr);
         if (wrPtr == pDecInfo->streamBufStartAddr) {
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, pDecInfo->streamBufEndAddr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, pDecInfo->streamBufEndAddr);
         }
         else {
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, wrPtr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, wrPtr);
         }
     }
     else {
@@ -593,48 +593,47 @@ JpgRet JPU_DecUpdateBitstreamBuffer(JpgDecHandle handle, int size)
     return JPG_RET_SUCCESS;
 }
 
-JpgRet JPU_SWReset(int coreidx, JpgHandle handle)
+JpgRet JPU_SWReset(int core_idx, JpgHandle handle)
 {
     Uint32 val;
-    int inst_idx = 0;
     int clock_state;
     JpgInst *pJpgInst;
 
     pJpgInst = ((JpgInst *)handle);
-    clock_state = jdi_get_clock_gate();
+    clock_state = jdi_get_clock_gate(core_idx);
 
     if (clock_state == 0)
-        jdi_set_clock_gate(1);
+        jdi_set_clock_gate(core_idx, 1);
 
     if (handle)
-        jdi_log(JDI_LOG_CMD_RESET, 1, inst_idx);
+        jdi_log(core_idx, JDI_LOG_CMD_RESET, 1, pJpgInst->instIndex);
 
-    val = JpuReadRegExt(coreidx, MJPEG_INST_CTRL_START_REG);
+    val = JpuReadRegExt(core_idx, MJPEG_INST_CTRL_START_REG);
     val |= (1<<2);
-    JpuWriteRegExt(coreidx, MJPEG_INST_CTRL_START_REG, val);
-    if (jdi_wait_inst_ctrl_busy(coreidx, JPU_INST_CTRL_TIMEOUT_MS, MJPEG_INST_CTRL_STATUS_REG, INST_CTRL_IDLE) == -1) {// wait for INST_CTRL become IDLE
+    JpuWriteRegExt(core_idx, MJPEG_INST_CTRL_START_REG, val);
+    if (jdi_wait_inst_ctrl_busy(core_idx, JPU_INST_CTRL_TIMEOUT_MS, MJPEG_INST_CTRL_STATUS_REG, INST_CTRL_IDLE) == -1) {// wait for INST_CTRL become IDLE
         if (handle)
-            jdi_log(JDI_LOG_CMD_RESET, 0, inst_idx);
+            jdi_log(core_idx, JDI_LOG_CMD_RESET, 0, pJpgInst->instIndex);
         val &= ~(1<<2);
-        JpuWriteRegExt(coreidx, MJPEG_INST_CTRL_START_REG, val);
+        JpuWriteRegExt(core_idx, MJPEG_INST_CTRL_START_REG, val);
         if (clock_state == 0)
-            jdi_set_clock_gate(0);
+            jdi_set_clock_gate(core_idx, 0);
         return JPG_RET_INST_CTRL_ERROR;
     }
     val = 0x00;
-    JpuWriteRegExt(coreidx, MJPEG_INST_CTRL_START_REG, val);
+    JpuWriteRegExt(core_idx, MJPEG_INST_CTRL_START_REG, val);
 
     if (handle)
-        jdi_log(JDI_LOG_CMD_RESET, 0, inst_idx);
+        jdi_log(core_idx, JDI_LOG_CMD_RESET, 0, pJpgInst->instIndex);
 
     if (clock_state == 0)
-        jdi_set_clock_gate(0);
+        jdi_set_clock_gate(core_idx, 0);
 
     return JPG_RET_SUCCESS;
 }
-JpgRet JPU_HWReset(void)
+JpgRet JPU_HWReset(int core_idx)
 {
-    if (jdi_hw_reset() < 0 )
+    if (jdi_hw_reset(core_idx) < 0 )
         return JPG_RET_FAILURE;
 
     return JPG_RET_SUCCESS;
@@ -655,7 +654,7 @@ JpgRet JPU_DecSetRdPtr(JpgDecHandle handle, PhysicalAddress addr, BOOL updateWrP
 
     JpgEnterLock();
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLock();
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
@@ -666,7 +665,7 @@ JpgRet JPU_DecSetRdPtr(JpgDecHandle handle, PhysicalAddress addr, BOOL updateWrP
     pDecInfo->frameOffset = addr - pDecInfo->streamBufStartAddr;
     pDecInfo->consumeByte = 0;
 
-    JpuWriteReg(MJPEG_BBC_RD_PTR_REG, pDecInfo->streamRdPtr);
+    JpuWriteReg(pJpgInst->coreIndex, MJPEG_BBC_RD_PTR_REG, pDecInfo->streamRdPtr);
 
     JpgLeaveLock();
 
@@ -688,7 +687,7 @@ JpgRet JPU_DecSetRdPtrEx(JpgDecHandle handle, PhysicalAddress addr, BOOL updateW
 
     JpgEnterLock();
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLock();
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
@@ -700,7 +699,7 @@ JpgRet JPU_DecSetRdPtrEx(JpgDecHandle handle, PhysicalAddress addr, BOOL updateW
     pDecInfo->frameOffset = 0;
     pDecInfo->consumeByte = 0;
 
-    JpuWriteReg(MJPEG_BBC_RD_PTR_REG, pDecInfo->streamRdPtr);
+    JpuWriteReg(pJpgInst->coreIndex, MJPEG_BBC_RD_PTR_REG, pDecInfo->streamRdPtr);
 
     JpgLeaveLock();
 
@@ -741,11 +740,10 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
     }
 
     JpgEnterLock();
-    if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
+    if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
         JpgLeaveLock();
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
-
 
     if (pDecInfo->frameOffset < 0) {
         SetJpgPendingInstEx(0, pJpgInst->instIndex);
@@ -812,50 +810,41 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
         }
     }
 
-#if 0
-    coreIdx = jpu_ioctl_GET_INSTANCE_CORE_INDEX();
-    if(coreIdx < 0) {
-        JLOG(ERR,"no valid jpu core.\n");
-        return JPG_RET_FAILURE;
-    }
-    pJpgInst->coreIndex = coreIdx;
-    jdi_core_hash_table_set_value(task_pid_nr(current), coreIdx);
-#endif
 
-    JpuWriteInstReg(instRegIndex, MJPEG_INTR_MASK_REG, ((~pDecInfo->intrEnableBit) & 0x3ff));
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_INTR_MASK_REG, ((~pDecInfo->intrEnableBit) & 0x3ff));
     /* The registers related to the slice encoding should be clear */
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_INFO_REG,    pDecInfo->alignedHeight);
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_DPB_POS_REG, pDecInfo->alignedHeight);
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_POS_REG,     0);
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_SETMB_REG,     0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_INFO_REG,    pDecInfo->alignedHeight);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_DPB_POS_REG, pDecInfo->alignedHeight);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_POS_REG,     0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_SETMB_REG,     0);
 
     if (pDecInfo->streamRdPtr == pDecInfo->streamBufEndAddr) {
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
-        JpuWriteInstReg(instRegIndex, MJPEG_GBU_TCNT_REG, 0);
-        JpuWriteInstReg(instRegIndex, (MJPEG_GBU_TCNT_REG+4), 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_TCNT_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, (MJPEG_GBU_TCNT_REG+4), 0);
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG, pDecInfo->streamWrPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG, pDecInfo->streamWrPtr);
     if (pDecInfo->streamWrPtr == pDecInfo->streamBufStartAddr) {
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, pDecInfo->streamBufEndAddr);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, pDecInfo->streamBufEndAddr);
     }
     else {
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, JPU_CEIL(256, pDecInfo->streamWrPtr));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, JPU_CEIL(256, pDecInfo->streamWrPtr));
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pDecInfo->streamBufStartAddr);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_TCNT_REG, 0);
-    JpuWriteInstReg(instRegIndex, (MJPEG_GBU_TCNT_REG+4), 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_ERRMB_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pDecInfo->streamBufStartAddr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_TCNT_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, (MJPEG_GBU_TCNT_REG+4), 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_ERRMB_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_CTRL_REG, is12Bit << 31 | pDecInfo->q_prec0 << 30 | pDecInfo->q_prec1 << 29 | pDecInfo->q_prec2 << 28 | pDecInfo->q_prec3 << 27 |
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_CTRL_REG, is12Bit << 31 | pDecInfo->q_prec0 << 30 | pDecInfo->q_prec1 << 29 | pDecInfo->q_prec2 << 28 | pDecInfo->q_prec3 << 27 |
                                                        pDecInfo->huffAcIdx << 13 | pDecInfo->huffDcIdx << 7 | pDecInfo->userHuffTab << 6 |
                                                        (JPU_CHECK_WRITE_RESPONSE_BVALID_SIGNAL << 2) | 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_SIZE_REG, (pDecInfo->alignedWidth << 16) | pDecInfo->alignedHeight);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_SIZE_REG, (pDecInfo->alignedWidth << 16) | pDecInfo->alignedHeight);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_OP_INFO_REG,  pDecInfo->busReqNum);
-    JpuWriteInstReg(instRegIndex, MJPEG_MCU_INFO_REG, (pDecInfo->mcuBlockNum&0x0f) << 17 | (pDecInfo->compNum&0x07) << 14    |
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_OP_INFO_REG,  pDecInfo->busReqNum);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_MCU_INFO_REG, (pDecInfo->mcuBlockNum&0x0f) << 17 | (pDecInfo->compNum&0x07) << 14    |
                                                       (pDecInfo->compInfo[0]&0x3f) << 8  | (pDecInfo->compInfo[1]&0x0f) << 4 |
                                                       (pDecInfo->compInfo[2]&0x0f));
 
@@ -875,8 +864,8 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
         val |= (0<<5) | (1<<4) | ((pDecInfo->packedFormat-1)<<2);
     }
     val |= (pDecInfo->pixelJustification << 11);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_CONFIG_REG, val);
-    JpuWriteInstReg(instRegIndex, MJPEG_RST_INTVAL_REG, pDecInfo->rstIntval);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_CONFIG_REG, val);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_RST_INTVAL_REG, pDecInfo->rstIntval);
 
     if (param) {
         if (param->scaleDownRatioWidth > 0 )
@@ -889,7 +878,7 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
     else {
         val = 0;
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_SCL_INFO_REG, val);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SCL_INFO_REG, val);
 
     bTableInfoUpdate = FALSE;
     if (pDecInfo->userHuffTab) {
@@ -924,7 +913,7 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
     }
 
     if (pDecInfo->streamEndflag == 1) {
-        val = JpuReadInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG);
+        val = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG);
         if ((val & (1UL << 31)) == 0 ) {
 
             strmCntOfEos = (pDecInfo->streamWrPtr-pDecInfo->streamBufStartAddr) / 256;
@@ -934,53 +923,53 @@ JpgRet JPU_DecStartOneFrame(JpgDecHandle handle, JpgDecParam *param)
             val |= (1UL << 31);
             val &= ~(0xffffff);
             val |= (strmCntOfEos&0xffffff);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG, val);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG, val);
         }
     }
     else {
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG, 0);
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_RST_INDEX_REG, 0);    // RST index at the beginning.
-    JpuWriteInstReg(instRegIndex, MJPEG_RST_COUNT_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_RST_INDEX_REG, 0);    // RST index at the beginning.
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_RST_COUNT_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_DPCM_DIFF_Y_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPCM_DIFF_CB_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPCM_DIFF_CR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPCM_DIFF_Y_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPCM_DIFF_CB_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPCM_DIFF_CR_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_FF_RPTR_REG, pDecInfo->bitPtr);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_CTRL_REG, 3);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_FF_RPTR_REG, pDecInfo->bitPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_CTRL_REG, 3);
 
     ppuEnable = (pDecInfo->rotationIndex > 0) || (pDecInfo->mirrorIndex > 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_ROT_INFO_REG, (ppuEnable<<4) | (pDecInfo->mirrorIndex<<2) | pDecInfo->rotationIndex);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_ROT_INFO_REG, (ppuEnable<<4) | (pDecInfo->mirrorIndex<<2) | pDecInfo->rotationIndex);
 
     val = (pDecInfo->frameIdx % pDecInfo->numFrameBuffers);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE00_REG, pDecInfo->frameBufPool[val].bufY);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE01_REG, pDecInfo->frameBufPool[val].bufCb);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE02_REG, pDecInfo->frameBufPool[val].bufCr);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_YSTRIDE_REG, pDecInfo->stride);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_CSTRIDE_REG, pDecInfo->stride_c);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE00_REG, pDecInfo->frameBufPool[val].bufY);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE01_REG, pDecInfo->frameBufPool[val].bufCb);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE02_REG, pDecInfo->frameBufPool[val].bufCr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_YSTRIDE_REG, pDecInfo->stride);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_CSTRIDE_REG, pDecInfo->stride_c);
 
     if (pDecInfo->roiEnable) {
-        JpuWriteInstReg(instRegIndex, MJPEG_CLP_INFO_REG, 1);
-        JpuWriteInstReg(instRegIndex, MJPEG_CLP_BASE_REG, pDecInfo->roiOffsetX << 16 | pDecInfo->roiOffsetY);    // pixel unit
-        JpuWriteInstReg(instRegIndex, MJPEG_CLP_SIZE_REG, (pDecInfo->roiFrameWidth << 16) | pDecInfo->roiFrameHeight); // pixel Unit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CLP_INFO_REG, 1);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CLP_BASE_REG, pDecInfo->roiOffsetX << 16 | pDecInfo->roiOffsetY);    // pixel unit
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CLP_SIZE_REG, (pDecInfo->roiFrameWidth << 16) | pDecInfo->roiFrameHeight); // pixel Unit
     }
     else {
-        JpuWriteInstReg(instRegIndex, MJPEG_CLP_INFO_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CLP_INFO_REG, 0);
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_STATUS_REG, 0x3ff);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG, 0x3ff);
 
     if (pJpgInst->loggingEnable)
-        jdi_log(JDI_LOG_CMD_PICRUN, 1, instRegIndex);
+        jdi_log(pJpgInst->coreIndex, JDI_LOG_CMD_PICRUN, 1, instRegIndex);
 
     jpu_enable_irq(pJpgInst->coreIndex);
     if (pJpgInst->sliceInstMode == TRUE) {
-        JpuWriteInstReg(instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_DEC_SLICE_ENABLE_START_PIC));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_DEC_SLICE_ENABLE_START_PIC));
     }
     else {
-        JpuWriteInstReg(instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_ENABLE_START_PIC));
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_ENABLE_START_PIC));
     }
 
     pDecInfo->decIdx++;
@@ -1015,6 +1004,7 @@ JpgRet JPU_DecGetOutputInfo(JpgDecHandle handle, JpgDecOutputInfo * info)
     Uint32      val = 0;
     Int32       instRegIndex;
     Uint32 reason;
+
     ret = CheckJpgInstValidity(handle);
     if (ret != JPG_RET_SUCCESS) {
         return ret;
@@ -1038,7 +1028,7 @@ JpgRet JPU_DecGetOutputInfo(JpgDecHandle handle, JpgDecOutputInfo * info)
         JpgEnterLock();
     }
 
-    if (pJpgInst != GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (pJpgInst != GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLock();
         return JPG_RET_WRONG_CALL_SEQUENCE;
     }
@@ -1068,47 +1058,47 @@ JpgRet JPU_DecGetOutputInfo(JpgDecHandle handle, JpgDecOutputInfo * info)
     info->decPicHeight >>= pDecInfo->iVerScaleMode;
 
     info->indexFrameDisplay = (pDecInfo->frameIdx%pDecInfo->numFrameBuffers);
-    info->consumedByte = (JpuReadInstReg(instRegIndex, MJPEG_GBU_TCNT_REG))/8;
-    pDecInfo->streamRdPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG);
+    info->consumedByte = (JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_TCNT_REG))/8;
+    pDecInfo->streamRdPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG);
     pDecInfo->consumeByte = info->consumedByte + pDecInfo->ecsPtr - 16;
     info->bytePosFrameStart = pDecInfo->frameOffset;
     info->ecsPtr = pDecInfo->ecsPtr;
     info->rdPtr  = pDecInfo->streamRdPtr;
-    info->wrPtr  = JpuReadInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG);
+    info->wrPtr  = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG);
 
     pDecInfo->ecsPtr = 0;
     pDecInfo->headerSize = 0;
     pDecInfo->frameIdx++;
 
-    val = JpuReadInstReg(instRegIndex, MJPEG_PIC_STATUS_REG);
+    val = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG);
     reason = val;
     if (reason & (1<<INT_JPU_DONE)) {
         info->decodingSuccess  = 1;
         info->numOfErrMBs      = 0;
     }
     else if (reason & (1<<INT_JPU_ERROR)){
-        info->numOfErrMBs = JpuReadInstReg(instRegIndex, MJPEG_PIC_ERRMB_REG);
+        info->numOfErrMBs = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_ERRMB_REG);
         info->decodingSuccess = 0;
         // + make fsm of instance controller to IDLE
-        JpuWriteInstReg(instRegIndex, MJPEG_PIC_START_REG, 0);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_START_REG, 0);
         JPU_SWTopReset(pJpgInst->coreIndex);
         JPU_SWReset(pJpgInst->coreIndex, NULL);
-        JpuWriteReg(MJPEG_INST_CTRL_START_REG, (1<<0));
+        JpuWriteReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_START_REG, (1<<0));
         reason = 0;
     }
 
     if (reason != 0)
-        JpuWriteInstReg(instRegIndex, MJPEG_PIC_STATUS_REG, reason);
-    info->frameCycle = JpuReadInstReg(instRegIndex, MJPEG_CYCLE_INFO_REG);
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_STATUS_REG, reason);
+    info->frameCycle = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CYCLE_INFO_REG);
     if (pJpgInst->loggingEnable)
-        jdi_log(JDI_LOG_CMD_PICRUN, 0, instRegIndex);
+        jdi_log(pJpgInst->coreIndex, JDI_LOG_CMD_PICRUN, 0, instRegIndex);
 
     JLOG(INFO, "decode jpeg hw Cycles:%d cost_time_us:%d\n", info->frameCycle, info->frameCycle/650);
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_START_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_START_REG, 0);
 
-    val = JpuReadReg(MJPEG_INST_CTRL_STATUS_REG);
+    val = JpuReadReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_STATUS_REG);
     val &= ~(1UL<<instRegIndex);
-    JpuWriteReg(MJPEG_INST_CTRL_STATUS_REG, val);
+    JpuWriteReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_STATUS_REG, val);
 
     SetJpgPendingInstEx(0, pJpgInst->instIndex);
     // jpu_enable_irq(pJpgInst->coreIndex);
@@ -1200,6 +1190,8 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
         JLOG(ERR,"GetJpgInstance failed.\n");
         return JPG_RET_FAILURE;
     }
+    JpgLeaveLockEx();
+
     pJpgInst->isDecoder = FALSE;
     *pHandle = pJpgInst;
     pEncInfo = &pJpgInst->JpgInfo->encInfo;
@@ -1267,7 +1259,6 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
     if (pop->sliceInstMode == TRUE) {
         Uint32 ppuHeight = ((pop->rotation == 90 || pop->rotation == 270) == TRUE) ? pEncInfo->alignedWidth : pEncInfo->alignedHeight;
         if (pop->sliceHeight % pEncInfo->mcuHeight) {
-            JpgLeaveLockEx();
             JLOG(ERR,"JPU_EncOpen  sliceHeight:%d mcuHeigth:%d.\n",pop->sliceHeight, pEncInfo->mcuHeight);
             return JPG_RET_INVALID_PARAM;
         }
@@ -1279,7 +1270,6 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
         }
 
         if (pop->sliceHeight < pEncInfo->mcuHeight) {
-            JpgLeaveLockEx();
             JLOG(ERR,"JPU_EncOpen 2 sliceHeight:%d mcuHeigth:%d.\n",pop->sliceHeight, pEncInfo->mcuHeight);
             return JPG_RET_INVALID_PARAM;
         }
@@ -1311,7 +1301,6 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
     pEncInfo->pCInfoTab[3] = pEncInfo->pCInfoTab[2] + 6;
 
     if (pop->packedFormat == PACKED_FORMAT_444 && pEncInfo->format != FORMAT_444) {
-        JpgLeaveLockEx();
         JLOG(ERR,"JPU_EncOpen packedFormat:%d.\n", pop->packedFormat);
         return JPG_RET_INVALID_PARAM;
     }
@@ -1366,7 +1355,6 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
     pEncInfo->encSlicePosY = 0;
     pEncInfo->rotationIndex = pop->rotation/90;
     pEncInfo->mirrorIndex   = pop->mirror;
-    JpgLeaveLockEx();
 
     return JPG_RET_SUCCESS;
 
@@ -1374,18 +1362,16 @@ JpgRet JPU_EncOpen(JpgEncHandle * pHandle, JpgEncOpenParam * pop)
 
 JpgRet JPU_EncClose(JpgEncHandle handle)
 {
-    JpgInst * pJpgInst;
     JpgRet ret;
+    JpgInst * pJpgInst = handle;
 
     ret = CheckJpgInstValidity(handle);
-    if (ret != JPG_RET_SUCCESS) {
+    if (ret != JPG_RET_SUCCESS)
         return ret;
-    }
 
     JpgEnterLockEx();
 
-    pJpgInst = handle;
-    if (GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLockEx();
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
@@ -1426,8 +1412,8 @@ JpgRet JPU_EncGetBitstreamBuffer( JpgEncHandle handle,
     }
 
 
-    *pwrPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG);
-    *prdPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG);
+    *pwrPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG);
+    *prdPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG);
 
     *size = *pwrPtr - *prdPtr;
 
@@ -1451,7 +1437,7 @@ JpgRet JPU_EncUpdateBitstreamBuffer(
     pJpgInst = handle;
 
     pEncInfo = &pJpgInst->JpgInfo->encInfo;
-    if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
+    if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
         if (pJpgInst->sliceInstMode == TRUE) {
             instRegIndex = pJpgInst->instIndex;
         }
@@ -1459,17 +1445,17 @@ JpgRet JPU_EncUpdateBitstreamBuffer(
             instRegIndex = 0;
         }
 
-        pEncInfo->streamWrPtr = JpuReadInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG);
+        pEncInfo->streamWrPtr = JpuReadInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG);
         pEncInfo->streamRdPtr += size;
         if ((pEncInfo->streamWrPtr >= pEncInfo->streamBufEndAddr) || (size == 0)) {    //Full Interrupt case. wrap to the start address
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamBufStartAddr);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamBufStartAddr);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, pEncInfo->streamBufEndAddr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamBufStartAddr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamBufStartAddr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, pEncInfo->streamBufEndAddr);
             pEncInfo->streamRdPtr = pEncInfo->streamBufStartAddr;
             pEncInfo->streamWrPtr = pEncInfo->streamBufStartAddr;
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG, pEncInfo->streamRdPtr);
-            JpuWriteInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG, pEncInfo->streamWrPtr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG, pEncInfo->streamRdPtr);
+            JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG, pEncInfo->streamWrPtr);
         }
     }
     else {
@@ -1497,11 +1483,8 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
     if (ret != JPG_RET_SUCCESS)
         return ret;
 
-
     pJpgInst = handle;
     pEncInfo = &pJpgInst->JpgInfo->encInfo;
-
-
     ret = CheckJpgEncParam(handle, param);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR,"JPU_EncStartOneFrame CheckJpgEncParam err ret:%x.\n",ret);
@@ -1512,12 +1495,11 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
 
     JpgEnterLock();
 
-    if (GetJpgPendingInstEx(pJpgInst->instIndex) == pJpgInst) {
+    if (GetJpgPendingInstEx(pJpgInst) == pJpgInst) {
         JpgLeaveLock();
         JLOG(ERR,"JPU_EncStartOneFrame GetJpgPendingInstEx err.\n");
         return JPG_RET_FRAME_NOT_COMPLETE;
     }
-
 
     if (pJpgInst->sliceInstMode == TRUE) {
         instRegIndex = pJpgInst->instIndex;
@@ -1526,41 +1508,41 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
         instRegIndex = 0;
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_INTR_MASK_REG, ((~pEncInfo->intrEnableBit) & 0x3ff));
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_INFO_REG, pEncInfo->sliceHeight);
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_DPB_POS_REG, pEncInfo->picHeight); // assume that the all of source buffer is available
-    JpuWriteInstReg(instRegIndex, MJPEG_SLICE_POS_REG, pEncInfo->encSlicePosY);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_INTR_MASK_REG, ((~pEncInfo->intrEnableBit) & 0x3ff));
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_INFO_REG, pEncInfo->sliceHeight);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_DPB_POS_REG, pEncInfo->picHeight); // assume that the all of source buffer is available
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_POS_REG, pEncInfo->encSlicePosY);
     val = (0 << 16) | (pEncInfo->encSlicePosY / pEncInfo->mcuHeight);
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_SETMB_REG,val);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_SETMB_REG,val);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_CLP_INFO_REG, 0);    //off ROI enable due to not supported feature for encoder.
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_CLP_INFO_REG, 0);    //off ROI enable due to not supported feature for encoder.
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamBufStartAddr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_END_ADDR_REG, pEncInfo->streamBufEndAddr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_WR_PTR_REG, pEncInfo->streamWrPtr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_RD_PTR_REG, pEncInfo->streamRdPtr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamBufStartAddr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_INT_ADDR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamBufStartAddr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_END_ADDR_REG, pEncInfo->streamBufEndAddr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_WR_PTR_REG, pEncInfo->streamWrPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_RD_PTR_REG, pEncInfo->streamRdPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamBufStartAddr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_INT_ADDR_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamWrPtr);
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamWrPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_BAS_ADDR_REG, pEncInfo->streamWrPtr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, pEncInfo->streamWrPtr);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BPTR_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_WPTR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BPTR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_WPTR_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBSR_REG, 0);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_CTRL_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBSR_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_CTRL_REG, 0);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBER_REG, ((JPU_GBU_SIZE / 4) * 2) - 1);
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBIR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_BBHR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBER_REG, ((JPU_GBU_SIZE / 4) * 2) - 1);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBIR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_BBHR_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
 
 #define DEFAULT_TDI_TAI_DATA 0x055
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_CTRL_REG, (pEncInfo->jpg12bit<<31) | (pEncInfo->q_prec0<<30) | (pEncInfo->q_prec1<<29) | (pEncInfo->tiledModeEnable<<19) |
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_CTRL_REG, (pEncInfo->jpg12bit<<31) | (pEncInfo->q_prec0<<30) | (pEncInfo->q_prec1<<29) | (pEncInfo->tiledModeEnable<<19) |
                                                       (DEFAULT_TDI_TAI_DATA<<7) | 0x18 | (1<<6) |  (1<<4) | (1<<3) |(JPU_CHECK_WRITE_RESPONSE_BVALID_SIGNAL<<2));
-    JpuWriteInstReg(instRegIndex, MJPEG_SCL_INFO_REG, 0);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SCL_INFO_REG, 0);
 
     val = 0;
     //PackMode[3:0]: 0(NONE), 8(PACK444), 4,5,6,7(YUYV => VYUY)
@@ -1576,16 +1558,16 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
     }
     val |= (pEncInfo->pixelJustification << 11);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_CONFIG_REG, val);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_CONFIG_REG, val);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_RST_INTVAL_REG, pEncInfo->rstIntval);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_RST_INTVAL_REG, pEncInfo->rstIntval);
     if (pEncInfo->encSlicePosY == 0) {
-        JpuWriteInstReg(instRegIndex, MJPEG_RST_INDEX_REG, 0);// RST index from 0.
-        JpuWriteInstReg(instRegIndex, MJPEG_BBC_STRM_CTRL_REG, 0);// clear BBC ctrl status.
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_RST_INDEX_REG, 0);// RST index from 0.
+        JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_STRM_CTRL_REG, 0);// clear BBC ctrl status.
     }
 
-    JpuWriteInstReg(instRegIndex, MJPEG_BBC_CTRL_REG, (pEncInfo->streamEndian << 1) | 1);
-    JpuWriteInstReg(instRegIndex, MJPEG_OP_INFO_REG, pEncInfo->busReqNum);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CTRL_REG, (pEncInfo->streamEndian << 1) | 1);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_OP_INFO_REG, pEncInfo->busReqNum);
 
 
     bTableInfoUpdate = FALSE;
@@ -1629,35 +1611,33 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
         }
     }
 
-
-
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_SIZE_REG, pEncInfo->alignedWidth<<16 | pEncInfo->alignedHeight);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_SIZE_REG, pEncInfo->alignedWidth<<16 | pEncInfo->alignedHeight);
 
     if (pEncInfo->rotationIndex || pEncInfo->mirrorIndex) {
         rotMirEnable = 0x10;
         rotMirMode   = (pEncInfo->mirrorIndex << 2) | pEncInfo->rotationIndex;
     }
-    JpuWriteInstReg(instRegIndex, MJPEG_ROT_INFO_REG, rotMirEnable | rotMirMode);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_ROT_INFO_REG, rotMirEnable | rotMirMode);
 
-    JpuWriteInstReg(instRegIndex, MJPEG_MCU_INFO_REG, (pEncInfo->mcuBlockNum&0x0f) << 17 | (pEncInfo->compNum&0x07) << 14    |
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_MCU_INFO_REG, (pEncInfo->mcuBlockNum&0x0f) << 17 | (pEncInfo->compNum&0x07) << 14    |
                                                       (pEncInfo->compInfo[0]&0x3f) << 8  | (pEncInfo->compInfo[1]&0x0f) << 4 |
                                                       (pEncInfo->compInfo[2]&0x0f));
 
     //JpgEncGbuResetReg
-    JpuWriteInstReg(instRegIndex, MJPEG_GBU_CTRL_REG, pEncInfo->stuffByteEnable<<3);     // stuffing "FF" data where frame end
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_GBU_CTRL_REG, pEncInfo->stuffByteEnable<<3);     // stuffing "FF" data where frame end
 
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE00_REG,  pBasFrame->bufY);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE01_REG,  pBasFrame->bufCb);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_BASE02_REG,  pBasFrame->bufCr);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_YSTRIDE_REG, pBasFrame->stride);
-    JpuWriteInstReg(instRegIndex, MJPEG_DPB_CSTRIDE_REG, pBasFrame->strideC);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE00_REG,  pBasFrame->bufY);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE01_REG,  pBasFrame->bufCb);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_BASE02_REG,  pBasFrame->bufCr);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_YSTRIDE_REG, pBasFrame->stride);
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_DPB_CSTRIDE_REG, pBasFrame->strideC);
 
 
     if (pJpgInst->loggingEnable)
-        jdi_log(JDI_LOG_CMD_PICRUN, 1, instRegIndex);
+        jdi_log(pJpgInst->coreIndex, JDI_LOG_CMD_PICRUN, 1, instRegIndex);
 
     jpu_enable_irq(pJpgInst->coreIndex);
-    JpuWriteInstReg(instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_ENABLE_START_PIC));
+    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_PIC_START_REG, (1<<JPG_ENABLE_START_PIC));
 
     pEncInfo->encIdx++;
 
@@ -1712,7 +1692,7 @@ JpgRet JPU_EncGetOutputInfo(
     }
 
 
-    if (pJpgInst != GetJpgPendingInstEx(pJpgInst->instIndex)) {
+    if (pJpgInst != GetJpgPendingInstEx(pJpgInst)) {
         JpgLeaveLock();
         return JPG_RET_WRONG_CALL_SEQUENCE;
     }
@@ -1756,7 +1736,7 @@ JpgRet JPU_EncGetOutputInfo(
         pEncInfo->encDoneIdx ++;
     }
     if (pJpgInst->loggingEnable)
-        jdi_log(JDI_LOG_CMD_PICRUN, 0, instRegIndex);
+        jdi_log(pJpgInst->coreIndex, JDI_LOG_CMD_PICRUN, 0, instRegIndex);
 
     JLOG(INFO, "encode jpeg hw Cycles:%d cost_time_us:%d\n", info->frameCycle, info->frameCycle/650);
     JpuWriteInstRegExt(coreIndex, instRegIndex, MJPEG_PIC_START_REG, 0);
@@ -1841,5 +1821,75 @@ JpgRet JPU_EncGiveCommand(
         return JPG_RET_INVALID_COMMAND;
     }
     return JPG_RET_SUCCESS;
+}
+
+int JPU_RequestCore(int timeout)
+{
+    return jdi_request_core(timeout);
+}
+
+int JPU_ReleaseCore(int core_idx)
+{
+    jdi_release_core(core_idx);
+    return 0;
+}
+
+JpgRet JPU_DecSetParam(JpgDecHandle pHandle, JpgDecOpenParam * pop)
+{
+    JpgInst*    pJpgInst;
+    JpgDecInfo* pDecInfo;
+    JpgRet      ret;
+
+    if (!pHandle)
+        return JPG_RET_FAILURE;
+
+    ret = CheckJpgDecOpenParam(pop);
+    if (ret != JPG_RET_SUCCESS) {
+        return ret;
+    }
+
+    JpgEnterLock();
+    pJpgInst = pHandle;
+    pDecInfo = &pJpgInst->JpgInfo->decInfo;
+
+    pDecInfo->streamWrPtr = pop->bitstreamBuffer;
+    pDecInfo->streamRdPtr = pop->bitstreamBuffer;
+
+    pDecInfo->streamBufStartAddr = pop->bitstreamBuffer;
+    pDecInfo->streamBufSize     = pop->bitstreamBufferSize;
+    pDecInfo->streamBufEndAddr  = pop->bitstreamBuffer + pop->bitstreamBufferSize;
+    pDecInfo->pBitStream        = pop->pBitStream;
+    pDecInfo->streamEndian      = pop->streamEndian;
+    pDecInfo->frameEndian       = pop->frameEndian;
+    pDecInfo->chromaInterleave  = pop->chromaInterleave;
+    pDecInfo->packedFormat      = pop->packedFormat;
+    pDecInfo->roiEnable         = pop->roiEnable;
+    pDecInfo->roiWidth          = pop->roiWidth;
+    pDecInfo->roiHeight         = pop->roiHeight;
+    pDecInfo->roiOffsetX        = pop->roiOffsetX;
+    pDecInfo->roiOffsetY        = pop->roiOffsetY;
+    pDecInfo->pixelJustification = pop->pixelJustification;
+    pDecInfo->intrEnableBit     = pop->intrEnableBit;
+    pJpgInst->sliceInstMode     = 0;    /* The decoder does not support the slice-decoding */
+    pDecInfo->rotationIndex     = pop->rotation / 90;
+    pDecInfo->mirrorIndex       = pop->mirror;
+
+    /* convert output format */
+    switch (pop->outputFormat) {
+    case FORMAT_400: ret = JPG_RET_INVALID_PARAM; break;
+    case FORMAT_420: pDecInfo->ofmt = O_FMT_420;  break;
+    case FORMAT_422: pDecInfo->ofmt = O_FMT_422;  break;
+    case FORMAT_440: ret = JPG_RET_INVALID_PARAM; break;
+    case FORMAT_444: pDecInfo->ofmt = O_FMT_444;  break;
+    case FORMAT_MAX: pDecInfo->ofmt = O_FMT_NONE; break;
+    default:         ret = JPG_RET_INVALID_PARAM; break;
+    }
+
+    pDecInfo->userqMatTab = 0;
+    pDecInfo->decIdx = 0;
+
+    JpgLeaveLock();
+
+    return ret;
 }
 

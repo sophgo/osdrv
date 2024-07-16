@@ -1,5 +1,5 @@
-#ifndef _CVI_STITCH_CFG_H_
-#define _CVI_STITCH_CFG_H_
+#ifndef _STITCH_CFG_H_
+#define _STITCH_CFG_H_
 
 //#define STITCH_MAX_WIDTH 4608
 //#define STITCH_MAX_HEIGHT 4320
@@ -98,14 +98,14 @@ enum stitch_dma_id {
 };
 
 struct stitch_bj_size_param {
-	u32 bld_w_str_left;
-	u32 bld_w_end_left;
-	u32 nbld_w_str_left;
-	u32 nbld_w_end_left;
-	u32 bld_w_str_right;
-	u32 bld_w_end_right;
-	u32 nbld_w_str_right;
-	u32 nbld_w_end_right;
+	unsigned int bld_w_str_left;
+	unsigned int bld_w_end_left;
+	unsigned int nbld_w_str_left;
+	unsigned int nbld_w_end_left;
+	unsigned int bld_w_str_right;
+	unsigned int bld_w_end_right;
+	unsigned int nbld_w_str_right;
+	unsigned int nbld_w_end_right;
 };
 
 //rdma chn size cfg: y/uv/wgh
@@ -113,63 +113,63 @@ struct stitch_bj_size_param {
 //cfg[1] :uv rdma channel
 //cfg[2] :wgt rdma channel
 struct stitch_rdma_size_param {
-	u32 crop_h_str_r_left;
-	u32 crop_h_end_r_left;
-	u32 crop_h_str_r_right;
-	u32 crop_h_end_r_right;
-	u32 crop_w_str_r_left;
-	u32 crop_w_end_r_left;
-	u32 crop_w_str_r_right;
-	u32 crop_w_end_r_right;
-	u32 img_height_r_left;
-	u32 img_width_r_left;
-	u32 img_height_r_right;
-	u32 img_width_r_right;
+	unsigned int crop_h_str_r_left;
+	unsigned int crop_h_end_r_left;
+	unsigned int crop_h_str_r_right;
+	unsigned int crop_h_end_r_right;
+	unsigned int crop_w_str_r_left;
+	unsigned int crop_w_end_r_left;
+	unsigned int crop_w_str_r_right;
+	unsigned int crop_w_end_r_right;
+	unsigned int img_height_r_left;
+	unsigned int img_width_r_left;
+	unsigned int img_height_r_right;
+	unsigned int img_width_r_right;
 };
 
 //wdma nbld chn size cfg: y/uv
 //cfg[0] :y wdma channel
 //cfg[1] :uv wdma channel
 struct stitch_wdma_nbld_size_param {
-	u32 crop_h_str_w_left;
-	u32 crop_h_end_w_left;
-	u32 crop_h_str_w_right;
-	u32 crop_h_end_w_right;
-	u32 crop_w_str_w_left;
-	u32 crop_w_end_w_left;
-	u32 crop_w_str_w_right;
-	u32 crop_w_end_w_right;
-	u32 img_height_w_left;
-	u32 img_width_w_left;
-	u32 img_height_w_right;
-	u32 img_width_w_right;
+	unsigned int crop_h_str_w_left;
+	unsigned int crop_h_end_w_left;
+	unsigned int crop_h_str_w_right;
+	unsigned int crop_h_end_w_right;
+	unsigned int crop_w_str_w_left;
+	unsigned int crop_w_end_w_left;
+	unsigned int crop_w_str_w_right;
+	unsigned int crop_w_end_w_right;
+	unsigned int img_height_w_left;
+	unsigned int img_width_w_left;
+	unsigned int img_height_w_right;
+	unsigned int img_width_w_right;
 };
 
 //wdma bld chn size cfg: y/uv
 //cfg[0] :y wdma channel
 //cfg[1] :uv wdma channel
 struct stitch_wdma_bld_size_param {
-	u32 crop_h_str_w_bld;
-	u32 crop_h_end_w_bld;
-	u32 crop_w_str_w_bld;
-	u32 crop_w_end_w_bld;
-	u32 img_height_w_bld;
-	u32 img_width_w_bld;
+	unsigned int crop_h_str_w_bld;
+	unsigned int crop_h_end_w_bld;
+	unsigned int crop_w_str_w_bld;
+	unsigned int crop_w_end_w_bld;
+	unsigned int img_height_w_bld;
+	unsigned int img_width_w_bld;
 };
 
 struct stitch_crop2bj_param {
-	u32 left_img_height;
-	u32 left_img_width;
-	u32 right_img_height;
-	u32 right_img_width;
-	u32 left_crop_h_str;
-	u32 left_crop_h_end;
-	u32 right_crop_h_str;
-	u32 right_crop_h_end;
-	u32 left_crop_w_str;
-	u32 left_crop_w_end;
-	u32 right_crop_w_str;
-	u32 right_crop_w_end;
+	unsigned int left_img_height;
+	unsigned int left_img_width;
+	unsigned int right_img_height;
+	unsigned int right_img_width;
+	unsigned int left_crop_h_str;
+	unsigned int left_crop_h_end;
+	unsigned int right_crop_h_str;
+	unsigned int right_crop_h_end;
+	unsigned int left_crop_w_str;
+	unsigned int left_crop_w_end;
+	unsigned int right_crop_w_str;
+	unsigned int right_crop_w_end;
 };
 
 /******************************************/
@@ -177,10 +177,10 @@ struct stitch_crop2bj_param {
 /******************************************/
 struct stitch_dma_ctl {
 	enum stitch_dma_id dma_id;
-	u64 addr;
-	u32 width;
-	u32 stride;
-	u32 height;
+	unsigned long long addr;
+	unsigned int width;
+	unsigned int stride;
+	unsigned int height;
 };
 
-#endif // _CVI_STITCH_CFG_H_
+#endif // _STITCH_CFG_H_

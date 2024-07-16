@@ -1,8 +1,8 @@
-#ifndef _CVI_DWA_REG_H_
-#define _CVI_DWA_REG_H_
+#ifndef _DWA_REG_H_
+#define _DWA_REG_H_
 
 
-#if defined(ENV_CVITEST) || defined(ENV_EMU)
+#if defined(ENVTEST) || defined(ENV_EMU)
 #define REG_DWA_BASE 0x680b4000//0x680b6000
 #else
 #define REG_DWA_BASE 0
@@ -146,5 +146,5 @@
 #define REG_DWA_INTERP_VCOEFF_PHASE31		(REG_DWA_BASE + 0x37c)
 
 
-#endif // _CVI_DWA_REG_H_
+#endif // _DWA_REG_H_
 

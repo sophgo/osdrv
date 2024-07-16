@@ -18,6 +18,8 @@ ccflags-y += -I$(PWD)/../base/chip/$(CVIARCH_L)
 ccflags-y += -I$(PWD)/../sys/common/ -I$(PWD)/../sys/common/uapi
 ccflags-y += -I$(srctree)/drivers/tee
 ccflags-y += -I$(srctree)/drivers/staging/android
+ccflags-y += -I$(PWD)/../include/chip/soph/kapi/
+ccflags-y += -I$(PWD)/../include/chip/soph/uapi/
 
 ccflags-y +=-Wall -Wextra -Werror -Werror -Wno-unused-parameter -Wno-sign-compare
 
@@ -29,7 +31,7 @@ all:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:
-	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c
+	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod *.mod.c
 	@rm -rf .tmp_versions
 	@find . -name \*.o* -type f -delete
 endif

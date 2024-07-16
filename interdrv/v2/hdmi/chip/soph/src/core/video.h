@@ -82,36 +82,36 @@ typedef enum {
 } hdmi_vic_t;
 
 typedef struct {
-	video_mode_t mHdmi;
-	encoding_t mEncodingOut;
-	encoding_t mEncodingIn;
-	u8 mColorResolution;
-	u8 mPixelRepetitionFactor;
-	dtd_t mDtd;
-	u8 mRgbQuantizationRange;
-	u8 mPixelPackingDefaultPhase;
-	u8 mColorimetry;
-	u8 mScanInfo;
-	u8 mActiveFormatAspectRatio;
-	u8 mNonUniformScaling;
-	ext_colorimetry_t mExtColorimetry;
-	u8 mColorimetryDataBlock;
-	u8 mItContent;
-	u16 mEndTopBar;
-	u16 mStartBottomBar;
-	u16 mEndLeftBar;
-	u16 mStartRightBar;
-	u16 mCscFilter;
-	u16 mCscA[4];
-	u16 mCscC[4];
-	u16 mCscB[4];
-	u16 mCscScale;
-	u8 mHdmiVideoFormat;
-	u8 m3dStructure;
-	u8 m3dExtData;
-	u8 mHdmiVic;
-	u8 mHdmi20;
-} videoParams_t;
+	video_mode_t mhdmi;
+	encoding_t mencodingout;
+	encoding_t mencodingin;
+	u8 mcolor_resolution;
+	u8 mpixel_repetition_factor;
+	dtd_t mdtd;
+	u8 mrgb_quantization_range;
+	u8 mpixel_packing_defaultphase;
+	u8 mcolorimetry;
+	u8 mscaninfo;
+	u8 mactive_format_aspect_ratio;
+	u8 mnon_uniform_scaling;
+	ext_colorimetry_t mext_colorimetry;
+	u8 mcolorimetry_datablock;
+	u8 mitcontent;
+	u16 mend_top_bar;
+	u16 mstart_bottom_bar;
+	u16 mend_left_bar;
+	u16 mstart_right_bar;
+	u16 mcsc_filter;
+	u16 mcsc_a[4];
+	u16 mcsc_c[4];
+	u16 mcsc_b[4];
+	u16 mcsc_scale;
+	u8 mhdmi_video_format;
+	u8 m3d_structure;
+	u8 m3d_ext_data;
+	u8 mhdmi_vic;
+	u8 mhdmi20;
+} video_params_t;
 
 int video_params_get_cea_vic_code(int hdmi_vic_code);
 
@@ -122,81 +122,81 @@ int video_params_get_hhdmi_vic_code(int cea_code);
  * to put the state of the strucutre to default
  * @param params pointer to the video parameters structure
  */
-void video_params_reset(hdmi_tx_dev_t *dev,videoParams_t * params);
+void video_params_reset(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return the custom csc coefficients A
  */
-u16 *video_params_get_csc_a(hdmi_tx_dev_t *dev, videoParams_t * params);
+u16 *video_params_get_csc_a(hdmi_tx_dev_t *dev, video_params_t * params);
 
-void video_params_set_csc_a(hdmi_tx_dev_t *dev, videoParams_t * params, u16 value[4]);
+void video_params_set_csc_a(hdmi_tx_dev_t *dev, video_params_t * params, u16 value[4]);
 
 /**
  * @param params pointer to the video parameters structure
  * @return the custom csc coefficients B
  */
-u16 *video_params_get_csc_b(hdmi_tx_dev_t *dev, videoParams_t * params);
+u16 *video_params_get_csc_b(hdmi_tx_dev_t *dev, video_params_t * params);
 
-void video_params_set_csc_b(hdmi_tx_dev_t *dev, videoParams_t * params, u16 value[4]);
+void video_params_set_csc_b(hdmi_tx_dev_t *dev, video_params_t * params, u16 value[4]);
 
 /**
  * @param params pointer to the video parameters structure
  * @return the custom csc coefficients C
  */
-u16 *video_params_get_csc_c(hdmi_tx_dev_t *dev, videoParams_t * params);
+u16 *video_params_get_csc_c(hdmi_tx_dev_t *dev, video_params_t * params);
 
-void video_params_set_csc_c(hdmi_tx_dev_t *dev, videoParams_t * params, u16 value[4]);
+void video_params_set_csc_c(hdmi_tx_dev_t *dev, video_params_t * params, u16 value[4]);
 
-void video_params_set_csc_scale(hdmi_tx_dev_t *dev, videoParams_t * params, u16 value);
+void video_params_set_csc_scale(hdmi_tx_dev_t *dev, video_params_t * params, u16 value);
 
 /**
  * @param params pointer to the video parameters structure
  * @return Video PixelClock in [0.01 MHz]
  */
-u32 video_params_get_pixel_clock(hdmi_tx_dev_t *dev, videoParams_t * params);
+u32 video_params_get_pixel_clock(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return TMDS Clock in [0.01 MHz]
  */
-u16 videoParams_GetTmdsClock(hdmi_tx_dev_t *dev, videoParams_t * params);
+u16 videoParams_GetTmdsClock(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return Ration clock x 100 (hdmi_tx_dev_t *dev, should be multiplied by x 0.01 afterwards)
  */
-u32 video_params_get_ratio_clock(hdmi_tx_dev_t *dev, videoParams_t * params);
+u32 video_params_get_ratio_clock(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return TRUE if csc is needed
  */
-int video_params_is_color_space_conversion(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_params_is_color_space_conversion(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return TRUE if color space decimation is needed
  */
-int video_params_is_color_space_decimation(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_params_is_color_space_decimation(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return TRUE if if video is interpolated
  */
-int video_params_is_color_space_interpolation(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_params_is_color_space_interpolation(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * @param params pointer to the video parameters structure
  * @return TRUE if if video has pixel repetition
  */
-int video_params_is_pixel_repetition(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_params_is_pixel_repetition(hdmi_tx_dev_t *dev, video_params_t * params);
 
-void video_params_update_csc_coefficients(hdmi_tx_dev_t *dev, videoParams_t * params);
+void video_params_update_csc_coefficients(hdmi_tx_dev_t *dev, video_params_t * params);
 
-u8 videoParams_IsLimitedToYcc420(hdmi_tx_dev_t *dev, videoParams_t * params);
+u8 videoParams_IsLimitedToYcc420(hdmi_tx_dev_t *dev, video_params_t * params);
 
-void video_params_set_ycc420_support(hdmi_tx_dev_t *dev, dtd_t * paramsDtd, shortVideoDesc_t * paramsSvd);
+void video_params_set_ycc420_support(hdmi_tx_dev_t *dev, dtd_t * params_dtd, short_video_desc_t * params_svd);
 
 char * get_encoding_string(encoding_t encoding);
 
@@ -207,8 +207,8 @@ char * get_encoding_string(encoding_t encoding);
  * @param dataEnablePolarity data enable polarity (1 = enable, 0 not)
  * @return TRUE if successful
  */
-int video_initialize(hdmi_tx_dev_t *dev, videoParams_t * params,
-		     u8 dataEnablePolarity);
+int video_initialize(hdmi_tx_dev_t *dev, video_params_t * params,
+			u8 data_enable_polarity);
 
 /**
  * Configures the video blocks to do any video processing and to
@@ -219,7 +219,7 @@ int video_initialize(hdmi_tx_dev_t *dev, videoParams_t * params,
  * @param params VideoParams
  * @return TRUE if successful
  */
-int video_configure(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_configure(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * Set up color space converter to video requirements
@@ -228,7 +228,7 @@ int video_configure(hdmi_tx_dev_t *dev, videoParams_t * params);
  * @param params VideoParams
  * @return TRUE if successful
  */
-int video_color_space_converter(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_color_space_converter(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * Set up video packetizer which "packetizes" pixel transmission
@@ -237,7 +237,7 @@ int video_color_space_converter(hdmi_tx_dev_t *dev, videoParams_t * params);
  * @param params VideoParams
  * @return TRUE if successful
  */
-int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_video_packetizer(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * Set up video mapping and stuffing
@@ -245,7 +245,7 @@ int video_video_packetizer(hdmi_tx_dev_t *dev, videoParams_t * params);
  * @param params VideoParams
  * @return TRUE if successful
  */
-int video_video_sampler(hdmi_tx_dev_t *dev, videoParams_t * params);
+int video_video_sampler(hdmi_tx_dev_t *dev, video_params_t * params);
 
 /**
  * A test only method that is used for a test module
@@ -254,8 +254,8 @@ int video_video_sampler(hdmi_tx_dev_t *dev, videoParams_t * params);
  * @param dataEnablePolarity
  * @return TRUE if successful
  */
-int video_VideoGenerator(hdmi_tx_dev_t *dev, videoParams_t * params,
-			 u8 dataEnablePolarity);
+int video_VideoGenerator(hdmi_tx_dev_t *dev, video_params_t * params,
+			 u8 data_enable_polarity);
 
 void video_sampler_config(hdmi_tx_dev_t *dev, u8 map_code);
 #endif	/* _VIDEO_H_ */

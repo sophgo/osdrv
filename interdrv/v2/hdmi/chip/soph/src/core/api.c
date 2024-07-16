@@ -11,41 +11,41 @@
 #include "util/util.h"
 #include "identification/identification.h"
 
-void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, videoParams_t * video, hdcpParams_t * hdcp)
+void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, video_params_t * video, hdcp_params_t * hdcp)
 {
 	struct hdmi_tx_ctrl *tx_ctrl = &dev->snps_hdmi_ctrl;
 	tx_ctrl->data_enable_polarity = 1;
 
-	if (video->mEncodingOut == YCC422)
+	if (video->mencodingout == YCC422)
 		tx_ctrl->color_resolution = 8;
 	else
-		tx_ctrl->color_resolution = video->mColorResolution;
-	tx_ctrl->encoding = video->mEncodingOut;
+		tx_ctrl->color_resolution = video->mcolor_resolution;
+	tx_ctrl->encoding = video->mencodingout;
 
 }
 
-int api_configure(hdmi_tx_dev_t *dev, videoParams_t * video, audioParams_t * audio, hdcpParams_t * hdcp)
+int api_configure(hdmi_tx_dev_t *dev, video_params_t * video, audio_params_t * audio, hdcp_params_t * hdcp)
 {
 	int res = 0;
 
 	if (!dev) {
 		pr_err("%s: Device pointer invalid", __func__);
-		return CVI_ERR_HDMI_DEV_POINTER_INVALID;
+		return HDMI_ERR_DEV_POINTER_INVALID;
 	}
 
 	if (!video || !audio || !hdcp) {
 		pr_err("%s: Argument Invalid received", __func__);
-		return CVI_ERR_HDMI_ARG_INVALID;
+		return HDMI_ERR_ARG_INVALID;
 	}
 
 	api_set_hdmi_ctrl(dev, video, hdcp);
 
 	if(!dev->snps_hdmi_ctrl.pixel_clock) {
-		dev->snps_hdmi_ctrl.pixel_clock = video->mDtd.mPixelClock;
+		dev->snps_hdmi_ctrl.pixel_clock = video->mdtd.m_pixel_clock;
 	}
 
 	cvitek_hdmi_clk_set(dev->snps_hdmi_ctrl.pixel_clock);
-	disp_hdmi_gen(&(video->mDtd));
+	disp_hdmi_gen(&(video->mdtd));
 	udelay(10);
 
 	phy_standby(dev);

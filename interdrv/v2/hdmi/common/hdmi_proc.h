@@ -3,7 +3,7 @@
 #include "core/hdmi_core.h"
 #include <linux/seq_file.h>
 #include <generated/compile.h>
-#include <linux/cvi_base_ctx.h>
+#include <base_ctx.h>
 
 int hdmi_proc_init(struct hdmitx_dev *dev);
 

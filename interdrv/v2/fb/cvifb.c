@@ -1,6 +1,4 @@
 /*
- * linux/drivers/video/cvifb.c
- *
  * Frame Buffer Device for CVITEK.
  *
  * Copyright (C) 2020 cvitek
@@ -26,7 +24,7 @@
 #include <linux/dma-map-ops.h>
 #endif
 
-#include <linux/cvi_comm_vo.h>
+#include <linux/comm_vo.h>
 
 #include "disp.h"
 #include "ion/ion.h"
@@ -77,22 +75,22 @@ struct cvifb_par {
 	pid_t ion_fd_pid;
 	struct dma_buf *dmabuf;
 	u64 reg_base, mem_base;
-	u32 reg_len, mem_len, mem_offset;
+	unsigned int reg_len, mem_len, mem_offset;
 	int irq_num;
-	u32 pseudo_palette[MAX_PALETTES];
+	unsigned int pseudo_palette[MAX_PALETTES];
 	atomic_t ref_count;
 
 	/* cvitek specific registers */
 	enum disp_gop_format fmt;
-	u32 colorkey;       // RGB888
-	u16 font_fg_color;  // ARGB4444
-	u16 font_bg_color;  // ARGB4444
-	u8 vo_inst;
+	unsigned int colorkey;       // RGB888
+	unsigned short font_fg_color;  // ARGB4444
+	unsigned short font_bg_color;  // ARGB4444
+	unsigned char vo_inst;
 };
 
-static void _fb_enable(bool enable, u8 vo_inst)
+static void _fb_enable(bool enable, unsigned char vo_inst)
 {
-	u8 layer = 1;
+	unsigned char layer = 1;
 
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
 
@@ -104,8 +102,8 @@ static void _fb_enable(bool enable, u8 vo_inst)
 static void _fb_update_mode(struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u8 layer = 1, ow_number;
-	u8 vo_inst = par->vo_inst;
+	unsigned char layer = 1, ow_number;
+	unsigned char vo_inst = par->vo_inst;
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
 	struct disp_gop_ow_cfg ow_cfg;
 
@@ -137,7 +135,7 @@ static void _fb_update_mode(struct fb_info *info)
 static void _fb_activate_var(struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
+	unsigned char vo_inst = par->vo_inst;
 	bool fb_on_sc = (vo_inst == 0) ? fb0_on_sc : fb1_on_sc;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
@@ -151,7 +149,7 @@ static void _fb_activate_var(struct fb_info *info)
 static int cvifb_open(struct fb_info *info, int user)
 {
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
+	unsigned char vo_inst = par->vo_inst;
 	bool *pfb_on_sc;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
@@ -170,7 +168,7 @@ static int cvifb_open(struct fb_info *info, int user)
 static int cvifb_release(struct fb_info *info, int user)
 {
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
+	unsigned char vo_inst = par->vo_inst;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
@@ -188,10 +186,10 @@ static int _cvifb_decode_var(const struct fb_var_screeninfo *var,
 	 * If it's too big, return -EINVAL.
 	 */
 
-	u32 xres, right, hslen, left, xtotal;
-	u32 yres, lower, vslen, upper, ytotal;
-	u32 vxres, xoffset, vyres, yoffset;
-	u32 bpp, mem_size, pitch;
+	unsigned int xres, right, hslen, left, xtotal;
+	unsigned int yres, lower, vslen, upper, ytotal;
+	unsigned int vxres, xoffset, vyres, yoffset;
+	unsigned int bpp, mem_size, pitch;
 
 	fb_dbg(info, "fb%d %s+\n", par->vo_inst, __func__);
 
@@ -305,9 +303,9 @@ static int _cvifb_decode_var(const struct fb_var_screeninfo *var,
 static int cvifb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u32 mem_size, pitch;
-	u32 max_vyres;
-	u8 inst = par->vo_inst;
+	unsigned int mem_size, pitch;
+	unsigned int max_vyres;
+	unsigned char inst = par->vo_inst;
 	bool double_buffer = (inst == 0) ? double_buffer0 : double_buffer1;
 
 	fb_dbg(info, "fb%d %s+\n", par->vo_inst, __func__);
@@ -452,9 +450,9 @@ static void _cvifb_release_ion(struct fb_info *info)
 static int cvifb_set_par(struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u32 len, pitch;
+	unsigned int len, pitch;
 	int rc;
-	u8 vo_inst = par->vo_inst;
+	unsigned char vo_inst = par->vo_inst;
 	bool double_buffer = (vo_inst == 0) ? double_buffer0 : double_buffer1;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
@@ -500,23 +498,23 @@ static int cvifb_set_par(struct fb_info *info)
 	return 0;
 }
 
-static int _fb_dosetcolreg(u16 regno, u16 red, u16 green, u16 blue, u16 transp, u8 vo_inst)
+static int _fb_dosetcolreg(unsigned short regno, unsigned short red, unsigned short green, unsigned short blue, unsigned short transp, unsigned char vo_inst)
 {
-	u16 data;
+	unsigned short data;
 
 	// ARGB4444 only
 	data = ((transp >> 12) << 12) | ((red >> 12) << 8) | ((green >> 12) << 4) | blue >> 12;
 	return disp_gop_update_256LUT(vo_inst, 1, regno, data);
 }
 
-static int cvifb_setcolreg(u32 regno, u32 red, u32 green,
-		u32 blue, u32 transp, struct fb_info *info)
+static int cvifb_setcolreg(unsigned int regno, unsigned int red, unsigned int green,
+		unsigned int blue, unsigned int transp, struct fb_info *info)
 {
-	u8 layer = 1;
+	unsigned char layer = 1;
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
+	unsigned char vo_inst = par->vo_inst;
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
-	u32 r, g, b;
+	unsigned int r, g, b;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
@@ -544,7 +542,7 @@ static int cvifb_setcolreg(u32 regno, u32 red, u32 green,
 		r = (red >> (16 - info->var.red.length)) << info->var.red.offset;
 		b = (blue >> (16 - info->var.blue.length)) << info->var.blue.offset;
 		g = (green >> (16 - info->var.green.length)) << info->var.green.offset;
-		((u32 *)info->pseudo_palette)[regno] = r | g | b;
+		((unsigned int *)info->pseudo_palette)[regno] = r | g | b;
 		break;
 	default:
 		return -EINVAL;
@@ -555,11 +553,11 @@ static int cvifb_setcolreg(u32 regno, u32 red, u32 green,
 static int cvifb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
-	u8 layer = 1;
+	unsigned char vo_inst = par->vo_inst;
+	unsigned char layer = 1;
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
-	u16 *red, *green, *blue, *transp;
-	u16 trans = 0xffff;
+	unsigned short *red, *green, *blue, *transp;
+	unsigned short trans = 0xffff;
 	int i, index;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
@@ -585,10 +583,10 @@ static int cvifb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 static int cvifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
-	u8 vo_inst = par->vo_inst;
-	u8 layer = 1;
+	unsigned char vo_inst = par->vo_inst;
+	unsigned char layer = 1;
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
-	u8 ow_number;
+	unsigned char ow_number;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
@@ -615,13 +613,13 @@ static int cvifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info
 	return 0;
 }
 
-static int cvifb_ioctl(struct fb_info *info, u32 cmd, unsigned long arg)
+static int cvifb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 {
 	return 0;
 }
 
 #ifdef CONFIG_COMPAT
-static int cvifb_compat_ioctl(struct fb_info *info, u32 cmd, unsigned long arg)
+static int cvifb_compat_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 {
 	return 0;
 }
@@ -668,8 +666,8 @@ int cvifb_probe(struct platform_device *pdev)
 	int ret;
 	static struct fb_info *info[DISP_MAX_INST];
 	struct cvifb_par *par[DISP_MAX_INST];
-	u32 len, pitch;
-	u8 vo_inst;
+	unsigned int len, pitch;
+	unsigned char vo_inst;
 	bool double_buffer;
 	char *mode_option;
 
@@ -824,7 +822,7 @@ err_dts:
 static int cvifb_remove(struct platform_device *pdev)
 {
 	struct fb_info **info = platform_get_drvdata(pdev);
-	u8 vo_inst;
+	unsigned char vo_inst;
 
 	fb_dbg(*info, "%s+\n", __func__);
 
@@ -840,7 +838,7 @@ static int cvifb_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id cvi_fb_dt_match[] = {
+static const struct of_device_id fb_dt_match[] = {
 	{.compatible = "cvitek,fb"},
 	{}
 };
@@ -851,7 +849,7 @@ static struct platform_driver cvifb_driver = {
 	.driver     = {
 		.name		= "sophfb",
 		.owner		= THIS_MODULE,
-		.of_match_table = cvi_fb_dt_match,
+		.of_match_table = fb_dt_match,
 	}
 };
 

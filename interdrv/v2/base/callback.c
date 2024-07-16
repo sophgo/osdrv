@@ -1,6 +1,7 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <base_cb.h>
+#include "base_debug.h"
 
 
 static struct base_m_cb_info base_m_cb[E_MODULE_BUTT];
@@ -11,10 +12,10 @@ const char * const CB_MOD_STR[] = CB_FOREACH_MOD(CB_GENERATE_STRING);
 
 
 
-int base_rm_module_cb(enum ENUM_MODULES_ID module_id)
+int base_rm_module_cb(enum enum_modules_id module_id)
 {
 	if (module_id < 0 || module_id >= E_MODULE_BUTT) {
-		pr_err("base rm cb error: wrong module_id\n");
+		TRACE_BASE(DBG_ERR, "base rm cb error: wrong module_id\n");
 		return -1;
 	}
 
@@ -28,12 +29,12 @@ EXPORT_SYMBOL_GPL(base_rm_module_cb);
 int base_reg_module_cb(struct base_m_cb_info *cb_info)
 {
 	if (!cb_info || !cb_info->dev || !cb_info->cb) {
-		pr_err("base reg cb error: no data\n");
+		TRACE_BASE(DBG_ERR, "base reg cb error: no data\n");
 		return -1;
 	}
 
 	if (cb_info->module_id < 0 || cb_info->module_id >= E_MODULE_BUTT) {
-		pr_err("base reg cb error: wrong module_id\n");
+		TRACE_BASE(DBG_ERR, "base reg cb error: wrong module_id\n");
 		return -1;
 	}
 
@@ -48,19 +49,19 @@ int base_exe_module_cb(struct base_exe_m_cb *exe_cb)
 	struct base_m_cb_info *cb_info;
 
 	if (exe_cb->caller < 0 || exe_cb->caller >= E_MODULE_BUTT) {
-		pr_err("base exe cb error: wrong caller\n");
+		TRACE_BASE(DBG_ERR, "base exe cb error: wrong caller\n");
 		return -1;
 	}
 
 	if (exe_cb->callee < 0 || exe_cb->callee >= E_MODULE_BUTT) {
-		pr_err("base exe cb error: wrong callee\n");
+		TRACE_BASE(DBG_ERR, "base exe cb error: wrong callee\n");
 		return -1;
 	}
 
 	cb_info = &base_m_cb[exe_cb->callee];
 
 	if (!cb_info->cb) {
-		pr_err("base exe cb error: cb of callee(%s) is null, caller(%s)\n",
+		TRACE_BASE(DBG_ERR, "base exe cb error: cb of callee(%s) is null, caller(%s)\n",
 			IDTOSTR(exe_cb->callee), IDTOSTR(exe_cb->caller));
 		return -1;
 	}

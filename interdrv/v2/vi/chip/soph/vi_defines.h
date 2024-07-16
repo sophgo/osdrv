@@ -12,9 +12,10 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
-#include <linux/cvi_defines.h>
-#include <linux/vi_tun_cfg.h>
-#include <linux/vi_isp.h>
+#include <linux/defines.h>
+#include <linux/vi_uapi.h>
+#include <vi_tun_cfg.h>
+#include <vi_isp.h>
 #include <vip/vi_drv.h>
 
 enum E_VI_TH {
@@ -37,32 +38,34 @@ struct vi_thread_attr {
 };
 
 /**
- * struct cvi_vi - VI IP abstraction
+ * struct sop_vi - VI IP abstraction
  */
-struct cvi_vi_dev {
+struct sop_vi_dev {
 	struct device			*dev;
 	struct class			*vi_class;
 	struct cdev			cdev;
 	dev_t				cdev_id;
 	void __iomem			*reg_base;
+	void __iomem			*ddr_retrain_reg;
 	int				irq_num;
 	struct clk			*clk_sys[6];
 	struct clk			*clk_isp[3];
 	struct clk			*clk_mac[8];
 	void				*shared_mem;
 	struct isp_ctx			ctx;
-	struct cvi_isp_mbus_framefmt	usr_fmt;
-	struct cvi_isp_rect		usr_crop;
+	struct sop_isp_mbus_framefmt	usr_fmt;
+	struct sop_isp_rect		usr_crop;
 	struct list_head		rdy_queue[ISP_PRERAW_MAX];
 	spinlock_t			rdy_lock;
 	u8				num_rdy[ISP_PRERAW_MAX];
 	u8				chn_id;
 	u64				usr_pic_phy_addr[ISP_RAW_PATH_MAX];
 	unsigned long			usr_pic_delay;
-	enum cvi_isp_source		isp_source;
-	struct cvi_isp_snr_info		snr_info[ISP_PRERAW_MAX];
+	enum sop_isp_source		isp_source;
+	struct sop_isp_snr_info		snr_info[ISP_PRERAW_MAX];
 	atomic_t			isp_raw_dump_en[ISP_PRERAW_MAX];
 	atomic_t			isp_smooth_raw_dump_en[ISP_PRERAW_MAX];
+	atomic_t			isp_err_times[ISP_PRERAW_MAX];
 	u32				isp_int_flag[ISP_PRERAW_MAX];
 	wait_queue_head_t		isp_int_wait_q[ISP_PRERAW_MAX];
 	wait_queue_head_t		isp_dq_wait_q;
@@ -70,11 +73,11 @@ struct cvi_vi_dev {
 	wait_queue_head_t		isp_dbg_wait_q;
 	atomic_t			isp_dbg_flag;
 	atomic_t			isp_err_handle_flag;
-	enum cvi_isp_raw		offline_raw_num;
+	enum sop_isp_raw		offline_raw_num;
 	struct tasklet_struct		job_work;
-	struct list_head		qbuf_list[VI_MAX_CHN_NUM];
+	struct list_head		qbuf_list[VI_MAX_CHN_NUM][VI_MAX_CHN_NUM];
 	spinlock_t			qbuf_lock;
-	u8				qbuf_num[VI_MAX_CHN_NUM];
+	u8				qbuf_num[VI_MAX_CHN_NUM][VI_MAX_CHN_NUM];
 	u32				splt_wdma_frm_num[ISP_SPLT_MAX][ISP_SPLT_CHN_MAX];
 	u32				splt_rdma_frm_num[ISP_SPLT_MAX][ISP_SPLT_CHN_MAX];
 	u32				pre_fe_sof_cnt[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];

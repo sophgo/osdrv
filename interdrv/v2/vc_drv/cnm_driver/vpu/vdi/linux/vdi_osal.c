@@ -42,7 +42,7 @@ static osal_file_t fpLog  = NULL;
 static pthread_mutex_t s_log_mutex;
 #endif
 
-struct cvi_osal_file {
+struct vdi_osal_file {
     struct file *filep;
     mm_segment_t old_fs;
 };
@@ -217,76 +217,76 @@ int osal_feof(osal_file_t fp)
 
 osal_file_t osal_fopen(const char * file_name, const char * mode)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)vmalloc(sizeof(struct cvi_osal_file));
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)vmalloc(sizeof(struct vdi_osal_file));
 
-    if (!cvi_fp)
+    if (!vdi_fp)
         return NULL;
 
     if (!strncmp(mode, "rb", 2)) {
-        cvi_fp->filep = filp_open(file_name, O_RDONLY/*|O_NONBLOCK*/, 0644);
+        vdi_fp->filep = filp_open(file_name, O_RDONLY/*|O_NONBLOCK*/, 0644);
     } else if (!strncmp(mode, "wb", 2)) {
-        cvi_fp->filep = filp_open(file_name, O_RDWR | O_CREAT, 0644);
+        vdi_fp->filep = filp_open(file_name, O_RDWR | O_CREAT, 0644);
     }
 
-    if (IS_ERR(cvi_fp->filep)) {
-        vfree(cvi_fp);
+    if (IS_ERR(vdi_fp->filep)) {
+        vfree(vdi_fp);
         return NULL;
     }
 
-    cvi_fp->old_fs = get_fs();
-    return cvi_fp;
+    vdi_fp->old_fs = get_fs();
+    return vdi_fp;
 }
 size_t osal_fwrite(const void * p, int size, int count, osal_file_t fp)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)fp;
-    struct file *filep = cvi_fp->filep;
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)fp;
+    struct file *filep = vdi_fp->filep;
     size_t write_size;
 
     set_fs(KERNEL_DS);
     write_size = kernel_write(filep, p, size * count, &filep->f_pos);
-    set_fs(cvi_fp->old_fs);
+    set_fs(vdi_fp->old_fs);
 
     return write_size;
 }
 size_t osal_fread(void *p, int size, int count, osal_file_t fp)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)fp;
-    struct file *filep = cvi_fp->filep;
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)fp;
+    struct file *filep = vdi_fp->filep;
     size_t read_size;
 
     set_fs(KERNEL_DS);
     read_size = kernel_read(filep, p, size * count, &filep->f_pos);
-    set_fs(cvi_fp->old_fs);
+    set_fs(vdi_fp->old_fs);
 
     return read_size;
 }
 
 long osal_ftell(osal_file_t fp)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)fp;
-    struct file *filep = cvi_fp->filep;
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)fp;
+    struct file *filep = vdi_fp->filep;
 
     return filep->f_pos;
 }
 
 int osal_fseek(osal_file_t fp, long offset, int origin)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)fp;
-    struct file *filep = cvi_fp->filep;
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)fp;
+    struct file *filep = vdi_fp->filep;
 
     return default_llseek(filep, offset, origin);
 }
 int osal_fclose(osal_file_t fp)
 {
-    struct cvi_osal_file *cvi_fp = (struct cvi_osal_file *)fp;
-    struct file *filep = cvi_fp->filep;
+    struct vdi_osal_file *vdi_fp = (struct vdi_osal_file *)fp;
+    struct file *filep = vdi_fp->filep;
 
     if (!fp)
         return -1;
 
     filp_close(filep, 0);
-    set_fs(cvi_fp->old_fs);
-    vfree(cvi_fp);
+    set_fs(vdi_fp->old_fs);
+    vfree(vdi_fp);
     return 0;
 }
 

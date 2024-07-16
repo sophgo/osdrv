@@ -2,8 +2,8 @@ include $(PWD)/../Makefile.interdrv.param
 
 ifneq ($(KERNELRELEASE),)
 include $(PWD)/chip/$(CVIARCH_L)/chip.mk
-$(CVIARCH_L)_dwa-y += common/cvi_vip_dwa_proc.o
-$(CVIARCH_L)_dwa-y += common/cvi_vip_dwa.o
+$(CVIARCH_L)_dwa-y += common/dwa_proc.o
+$(CVIARCH_L)_dwa-y += common/dwa_core.o
 
 obj-m += $(CVIARCH_L)_dwa.o
 #ccflags-y += -DPORTING_TEST

@@ -5,7 +5,6 @@
 /****************************************************************************
  * Global parameters
  ****************************************************************************/
-extern uint8_t g_w_bit[ISP_PRERAW_MAX], g_h_bit[ISP_PRERAW_MAX];
 extern struct lmap_cfg g_lmp_cfg[ISP_PRERAW_MAX];
 
 #if defined(__CV180X__)
@@ -22,273 +21,273 @@ extern struct lmap_cfg g_lmp_cfg[ISP_PRERAW_MAX];
  *	RGB IPs config
  ******************************************************************************/
 
-void ispblk_ccm_config(struct isp_ctx *ctx, enum ISP_BLK_ID_T blk_id, bool en, struct isp_ccm_cfg *cfg)
+void ispblk_ccm_config(struct isp_ctx *ctx, enum isp_blk_id_t blk_id, bool en, struct isp_ccm_cfg *cfg)
 {
 	uintptr_t ccm = ctx->phys_regs[blk_id];
 
-	ISP_WR_BITS(ccm, REG_ISP_CCM_T, CCM_CTRL, CCM_SHDW_SEL, 1);
-	ISP_WR_BITS(ccm, REG_ISP_CCM_T, CCM_CTRL, CCM_ENABLE, en);
+	ISP_WR_BITS(ccm, reg_isp_ccm_t, ccm_ctrl, ccm_shdw_sel, 1);
+	ISP_WR_BITS(ccm, reg_isp_ccm_t, ccm_ctrl, ccm_enable, en);
 
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_00, cfg->coef[0][0]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_01, cfg->coef[0][1]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_02, cfg->coef[0][2]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_10, cfg->coef[1][0]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_11, cfg->coef[1][1]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_12, cfg->coef[1][2]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_20, cfg->coef[2][0]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_21, cfg->coef[2][1]);
-	ISP_WR_REG(ccm, REG_ISP_CCM_T, CCM_22, cfg->coef[2][2]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_00, cfg->coef[0][0]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_01, cfg->coef[0][1]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_02, cfg->coef[0][2]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_10, cfg->coef[1][0]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_11, cfg->coef[1][1]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_12, cfg->coef[1][2]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_20, cfg->coef[2][0]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_21, cfg->coef[2][1]);
+	ISP_WR_REG(ccm, reg_isp_ccm_t, ccm_22, cfg->coef[2][2]);
 }
 
-void ispblk_fusion_hdr_cfg(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
+void ispblk_fusion_hdr_cfg(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t fusion = ctx->phys_regs[ISP_BLK_ID_FUSION];
 
 	if (!ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
-		ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_ENABLE, false);
-		ISP_WR_BITS(fusion, REG_FUSION_T, FS_SE_GAIN, FS_OUT_SEL, ISP_FS_OUT_LONG);
+		ISP_WR_BITS(fusion, reg_fusion_t, fs_ctrl_0, fs_enable, false);
+		ISP_WR_BITS(fusion, reg_fusion_t, fs_se_gain, fs_out_sel, ISP_FS_OUT_LONG);
 	} else
-		ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_ENABLE, true);
+		ISP_WR_BITS(fusion, reg_fusion_t, fs_ctrl_0, fs_enable, true);
 }
 
-void ispblk_fusion_config(struct isp_ctx *ctx, bool enable, bool mc_enable, enum ISP_FS_OUT out_sel)
+void ispblk_fusion_config(struct isp_ctx *ctx, bool enable, bool mc_enable, enum isp_fs_out_e out_sel)
 {
 	uintptr_t fusion = ctx->phys_regs[ISP_BLK_ID_FUSION];
-	union REG_FUSION_FS_CTRL_0 reg_ctrl;
-	union REG_FUSION_FS_SE_GAIN reg_se_gain;
+	union reg_fusion_fs_ctrl_0 reg_ctrl;
+	union reg_fusion_fs_se_gain reg_se_gain;
 
-	reg_ctrl.raw = ISP_RD_REG(fusion, REG_FUSION_T, FS_CTRL_0);
-	reg_ctrl.bits.FS_ENABLE = enable;
-	reg_ctrl.bits.FS_MC_ENABLE = mc_enable;
-	reg_ctrl.bits.FS_S_MAX = 65535;
-	ISP_WR_REG(fusion, REG_FUSION_T, FS_CTRL_0, reg_ctrl.raw);
+	reg_ctrl.raw = ISP_RD_REG(fusion, reg_fusion_t, fs_ctrl_0);
+	reg_ctrl.bits.fs_enable = enable;
+	reg_ctrl.bits.fs_mc_enable = mc_enable;
+	reg_ctrl.bits.fs_s_max = 65535;
+	ISP_WR_REG(fusion, reg_fusion_t, fs_ctrl_0, reg_ctrl.raw);
 
-	reg_se_gain.raw = ISP_RD_REG(fusion, REG_FUSION_T, FS_SE_GAIN);
-	reg_se_gain.bits.FS_LS_GAIN = 64;
-	reg_se_gain.bits.FS_OUT_SEL = out_sel;
-	ISP_WR_REG(fusion, REG_FUSION_T, FS_SE_GAIN, reg_se_gain.raw);
+	reg_se_gain.raw = ISP_RD_REG(fusion, reg_fusion_t, fs_se_gain);
+	reg_se_gain.bits.fs_ls_gain = 64;
+	reg_se_gain.bits.fs_out_sel = out_sel;
+	ISP_WR_REG(fusion, reg_fusion_t, fs_se_gain, reg_se_gain.raw);
 
-	ISP_WR_BITS(fusion, REG_FUSION_T, FS_LUMA_THD, FS_LUMA_THD_L, 2048);
-	ISP_WR_BITS(fusion, REG_FUSION_T, FS_LUMA_THD, FS_LUMA_THD_H, 2048);
-	ISP_WR_BITS(fusion, REG_FUSION_T, FS_WGT, FS_WGT_MAX, 128);
-	ISP_WR_BITS(fusion, REG_FUSION_T, FS_WGT, FS_WGT_MIN, 128);
-	ISP_WR_REG(fusion, REG_FUSION_T, FS_WGT_SLOPE, 0);
+	ISP_WR_BITS(fusion, reg_fusion_t, fs_luma_thd, fs_luma_thd_l, 2048);
+	ISP_WR_BITS(fusion, reg_fusion_t, fs_luma_thd, fs_luma_thd_h, 2048);
+	ISP_WR_BITS(fusion, reg_fusion_t, fs_wgt, fs_wgt_max, 128);
+	ISP_WR_BITS(fusion, reg_fusion_t, fs_wgt, fs_wgt_min, 128);
+	ISP_WR_REG(fusion, reg_fusion_t, fs_wgt_slope, 0);
 }
 
-void ispblk_hist_v_config(struct isp_ctx *ctx, bool en, uint8_t test_case)
+void ispblk_hist_v_config(struct isp_ctx *ctx, bool en, u8 test_case)
 {
 	uintptr_t hist_v = ctx->phys_regs[ISP_BLK_ID_HIST_EDGE_V];
 
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_ENABLE, en);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_LUMA_MODE, en);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_enable, en);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_luma_mode, en);
 
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, HIST_EDGE_V_OFFSETX, HIST_EDGE_V_OFFSETX, 0);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, HIST_EDGE_V_OFFSETY, HIST_EDGE_V_OFFSETY, 0);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, hist_edge_v_offsetx, hist_edge_v_offsetx, 0);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, hist_edge_v_offsety, hist_edge_v_offsety, 0);
 
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, DMI_ENABLE, DMI_ENABLE, 1);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, DMI_ENABLE, FORCE_DMA_DISABLE, 0);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, BYPASS, FORCE_CLK_ENABLE, 1);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, BYPASS, BYPASS, 0);
-	ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, SW_CTL, TILE_NM, 0);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, dmi_enable, dmi_enable, 1);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, dmi_enable, force_dma_disable, 0);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, bypass, force_clk_enable, 1);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, bypass, bypass, 0);
+	ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, sw_ctl, tile_nm, 0);
 
 	// when test_case == 0
 	//   en == 1, case_luma
 	//   en == 0, case_disable
 	if (test_case == 1) {
 		/* case_0 and case_all_ff */
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_ENABLE, 1);
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_LUMA_MODE, 0);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_enable, 1);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_luma_mode, 0);
 	} else if (test_case == 2) {
 		/* case_offx64_offy32 */
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_ENABLE, 1);
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, IP_CONFIG, HIST_EDGE_V_LUMA_MODE, 0);
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, HIST_EDGE_V_OFFSETX, HIST_EDGE_V_OFFSETX, 64);
-		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, HIST_EDGE_V_OFFSETY, HIST_EDGE_V_OFFSETY, 32);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_enable, 1);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, ip_config, hist_edge_v_luma_mode, 0);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, hist_edge_v_offsetx, hist_edge_v_offsetx, 64);
+		ISP_WR_BITS(hist_v, reg_isp_hist_edge_v_t, hist_edge_v_offsety, hist_edge_v_offsety, 32);
 	}
 }
 
-void ispblk_ltm_d_lut(struct isp_ctx *ctx, uint8_t sel, uint16_t *data)
+void ispblk_ltm_d_lut(struct isp_ctx *ctx, u8 sel, u16 *data)
 {
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_LTM];
-	union REG_LTM_H34 reg_34;
-	union REG_LTM_H3C reg_3c;
+	union reg_ltm_h34 reg_34;
+	union reg_ltm_h3c reg_3c;
 	u16 i = 0;
 	u32 val = 0;
 
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H44, data[LTM_DARK_TONE_LUT_SIZE]);
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h44, data[LTM_DARK_TONE_LUT_SIZE]);
 
-	reg_34.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H34);
+	reg_34.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h34);
 	//reg_34.bits.LUT_DBG_RSEL = sel;
-	reg_34.bits.LUT_PROG_EN_DARK = 1;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H34, reg_34.raw);
+	reg_34.bits.lut_prog_en_dark = 1;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h34, reg_34.raw);
 
-	reg_3c.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H3C);
-	reg_3c.bits.LUT_WSEL = sel;
-	reg_3c.bits.LUT_WSTADDR = 0;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H3C, reg_3c.raw);
+	reg_3c.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h3c);
+	reg_3c.bits.lut_wsel = sel;
+	reg_3c.bits.lut_wstaddr = 0;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h3c, reg_3c.raw);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR, 0);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
 
 	for (i = 0; i < LTM_DARK_TONE_LUT_SIZE; i += 2) {
 		val = (data[i] | (data[i + 1] << 16));
-		ISP_WR_REG(ltm, REG_LTM_T, REG_H38, val);
-		ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+		ISP_WR_REG(ltm, reg_ltm_t, reg_h38, val);
+		ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 	}
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H34, LUT_PROG_EN_DARK, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h34, lut_prog_en_dark, 0);
 }
 
-void ispblk_ltm_b_lut(struct isp_ctx *ctx, uint8_t sel, uint16_t *data)
+void ispblk_ltm_b_lut(struct isp_ctx *ctx, u8 sel, u16 *data)
 {
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_LTM];
-	union REG_LTM_H34 reg_34;
-	union REG_LTM_H3C reg_3c;
+	union reg_ltm_h34 reg_34;
+	union reg_ltm_h3c reg_3c;
 	u16 i = 0;
 	u32 val = 0;
 
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H40, data[LTM_BRIGHT_TONE_LUT_SIZE]);
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h40, data[LTM_BRIGHT_TONE_LUT_SIZE]);
 
-	reg_34.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H34);
-	//reg_34.bits.LUT_DBG_RSEL = sel;
-	reg_34.bits.LUT_PROG_EN_BRIGHT = 1;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H34, reg_34.raw);
+	reg_34.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h34);
+	//reg_34.bits.lut_dbg_rsel = sel;
+	reg_34.bits.lut_prog_en_bright = 1;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h34, reg_34.raw);
 
-	reg_3c.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H3C);
-	reg_3c.bits.LUT_WSEL = sel;
-	reg_3c.bits.LUT_WSTADDR = 0;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H3C, reg_3c.raw);
+	reg_3c.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h3c);
+	reg_3c.bits.lut_wsel = sel;
+	reg_3c.bits.lut_wstaddr = 0;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h3c, reg_3c.raw);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR, 0);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
 
 	for (i = 0; i < LTM_BRIGHT_TONE_LUT_SIZE; i += 2) {
 		val = (data[i] | (data[i + 1] << 16));
-		ISP_WR_REG(ltm, REG_LTM_T, REG_H38, val);
-		ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+		ISP_WR_REG(ltm, reg_ltm_t, reg_h38, val);
+		ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 	}
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H34, LUT_PROG_EN_BRIGHT, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h34, lut_prog_en_bright, 0);
 }
 
-void ispblk_ltm_g_lut(struct isp_ctx *ctx, uint8_t sel, uint16_t *data)
+void ispblk_ltm_g_lut(struct isp_ctx *ctx, u8 sel, u16 *data)
 {
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_LTM];
-	union REG_LTM_H34 reg_34;
-	union REG_LTM_H3C reg_3c;
+	union reg_ltm_h34 reg_34;
+	union reg_ltm_h3c reg_3c;
 	u16 i = 0;
 	u32 val = 0;
 
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H48, data[LTM_GLOBAL_LUT_SIZE]);
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h48, data[LTM_GLOBAL_LUT_SIZE]);
 
-	reg_34.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H34);
-	//reg_34.bits.LUT_DBG_RSEL = sel;
-	reg_34.bits.LUT_PROG_EN_GLOBAL = 1;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H34, reg_34.raw);
+	reg_34.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h34);
+	//reg_34.bits.lut_dbg_rsel = sel;
+	reg_34.bits.lut_prog_en_global = 1;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h34, reg_34.raw);
 
-	reg_3c.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H3C);
-	reg_3c.bits.LUT_WSEL = sel;
-	reg_3c.bits.LUT_WSTADDR = 0;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H3C, reg_3c.raw);
+	reg_3c.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h3c);
+	reg_3c.bits.lut_wsel = sel;
+	reg_3c.bits.lut_wstaddr = 0;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h3c, reg_3c.raw);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR, 0);
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WSTADDR_TRIG_1T, 1);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wstaddr_trig_1t, 1);
 
 	for (i = 0; i < LTM_GLOBAL_LUT_SIZE; i += 2) {
 		val = (data[i] | (data[i + 1] << 16));
-		ISP_WR_REG(ltm, REG_LTM_T, REG_H38, val);
-		ISP_WR_BITS(ltm, REG_LTM_T, REG_H3C, LUT_WDATA_TRIG_1T, 1);
+		ISP_WR_REG(ltm, reg_ltm_t, reg_h38, val);
+		ISP_WR_BITS(ltm, reg_ltm_t, reg_h3c, lut_wdata_trig_1t, 1);
 	}
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H34, LUT_PROG_EN_GLOBAL, 0);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h34, lut_prog_en_global, 0);
 }
 
 void ispblk_ltm_config(struct isp_ctx *ctx, u8 ltm_en, u8 dehn_en, u8 behn_en, u8 ee_en)
 {
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_LTM];
-	union REG_LTM_H00 reg_00;
-	union REG_LTM_H8C reg_8c;
+	union reg_ltm_h00 reg_00;
+	union reg_ltm_h8c reg_8c;
 
-	reg_00.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H00);
-	reg_00.bits.LTM_ENABLE          = ltm_en;
-	reg_00.bits.LTM_DARK_ENH_ENABLE = dehn_en;
-	reg_00.bits.LTM_BRIT_ENH_ENABLE = behn_en;
-	reg_00.bits.FORCE_DMA_DISABLE   = ((!dehn_en) | (!behn_en << 1));
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H00, reg_00.raw);
+	reg_00.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h00);
+	reg_00.bits.ltm_enable          = ltm_en;
+	reg_00.bits.ltm_dark_enh_enable = dehn_en;
+	reg_00.bits.ltm_brit_enh_enable = behn_en;
+	reg_00.bits.force_dma_disable   = ((!dehn_en) | (!behn_en << 1));
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h00, reg_00.raw);
 
-	ISP_WR_BITS(ltm, REG_LTM_T, REG_H64, LTM_EE_ENABLE, ee_en);
+	ISP_WR_BITS(ltm, reg_ltm_t, reg_h64, ltm_ee_enable, ee_en);
 
-	reg_8c.raw = ISP_RD_REG(ltm, REG_LTM_T, REG_H8C);
-	reg_8c.bits.LMAP_W_BIT = g_lmp_cfg[ISP_PRERAW0].post_w_bit;
-	reg_8c.bits.LMAP_H_BIT = g_lmp_cfg[ISP_PRERAW0].post_h_bit;
-	ISP_WR_REG(ltm, REG_LTM_T, REG_H8C, reg_8c.raw);
+	reg_8c.raw = ISP_RD_REG(ltm, reg_ltm_t, reg_h8c);
+	reg_8c.bits.lmap_w_bit = g_lmp_cfg[ISP_PRERAW0].post_w_bit;
+	reg_8c.bits.lmap_h_bit = g_lmp_cfg[ISP_PRERAW0].post_h_bit;
+	ISP_WR_REG(ltm, reg_ltm_t, reg_h8c, reg_8c.raw);
 }
 
 void ispblk_ygamma_config(struct isp_ctx *ctx, bool en,
-				uint8_t sel, uint16_t *data, uint8_t inv, uint8_t test_case)
+				u8 sel, u16 *data, u8 inv, u8 test_case)
 {
 	uintptr_t ygamma = ctx->phys_regs[ISP_BLK_ID_YGAMMA];
 	int16_t i;
 	bool lut_check_pass;
-	union REG_YGAMMA_GAMMA_PROG_DATA reg_data;
-	union REG_YGAMMA_GAMMA_PROG_CTRL prog_ctrl;
-	union REG_YGAMMA_GAMMA_MEM_SW_RADDR sw_raddr;
-	union REG_YGAMMA_GAMMA_MEM_SW_RDATA sw_rdata;
+	union reg_ygamma_gamma_prog_data reg_data;
+	union reg_ygamma_gamma_prog_ctrl prog_ctrl;
+	union reg_ygamma_gamma_mem_sw_raddr sw_raddr;
+	union reg_ygamma_gamma_mem_sw_rdata sw_rdata;
 
-	prog_ctrl.raw = ISP_RD_REG(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL);
-	prog_ctrl.bits.GAMMA_WSEL    = sel;
-	prog_ctrl.bits.GAMMA_PROG_EN = 1;
-	//prog_ctrl.bits.GAMMA_PROG_1TO3_EN = 1;
-	ISP_WR_REG(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, prog_ctrl.raw);
+	prog_ctrl.raw = ISP_RD_REG(ygamma, reg_ygamma_t, gamma_prog_ctrl);
+	prog_ctrl.bits.gamma_wsel    = sel;
+	prog_ctrl.bits.gamma_prog_en = 1;
+	//prog_ctrl.bits.gamma_prog_1to3_en = 1;
+	ISP_WR_REG(ygamma, reg_ygamma_t, gamma_prog_ctrl, prog_ctrl.raw);
 
-	ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_ST_ADDR, GAMMA_ST_ADDR, 0);
-	ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_ST_ADDR, GAMMA_ST_W, 1);
+	ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_st_addr, gamma_st_addr, 0);
+	ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_st_addr, gamma_st_w, 1);
 
 	if (inv) {
 		for (i = 255; i >= 0; i -= 2) {
 			reg_data.raw = 0;
-			reg_data.bits.GAMMA_DATA_E = data[i];
-			reg_data.bits.GAMMA_DATA_O = data[i + 1];
-			ISP_WR_REG(ygamma, REG_YGAMMA_T, GAMMA_PROG_DATA, reg_data.raw);
-			ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_W, 1);
+			reg_data.bits.gamma_data_e = data[i];
+			reg_data.bits.gamma_data_o = data[i + 1];
+			ISP_WR_REG(ygamma, reg_ygamma_t, gamma_prog_data, reg_data.raw);
+			ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_w, 1);
 		}
 
 		// set max to 0
-		ISP_WR_REG(ygamma, REG_YGAMMA_T, GAMMA_PROG_MAX, 0);
+		ISP_WR_REG(ygamma, reg_ygamma_t, gamma_prog_max, 0);
 	} else {
 		for (i = 0; i < 256; i += 2) {
 			reg_data.raw = 0;
-			reg_data.bits.GAMMA_DATA_E = data[i];
-			reg_data.bits.GAMMA_DATA_O = data[i + 1];
-			ISP_WR_REG(ygamma, REG_YGAMMA_T, GAMMA_PROG_DATA, reg_data.raw);
-			ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_W, 1);
+			reg_data.bits.gamma_data_e = data[i];
+			reg_data.bits.gamma_data_o = data[i + 1];
+			ISP_WR_REG(ygamma, reg_ygamma_t, gamma_prog_data, reg_data.raw);
+			ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_w, 1);
 		}
 	}
 
-	ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_RSEL, sel);
-	ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_PROG_EN, 0);
+	ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_rsel, sel);
+	ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_prog_en, 0);
 
 	// sw read mem0/mem1, check value
 	if (test_case == 1) {
 		lut_check_pass = true;
-		ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_PROG_EN, 1);
-		sw_raddr.raw = ISP_RD_REG(ygamma, REG_YGAMMA_T, GAMMA_SW_RADDR);
+		ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_prog_en, 1);
+		sw_raddr.raw = ISP_RD_REG(ygamma, reg_ygamma_t, gamma_sw_raddr);
 		for (i = 0; i < 256; i++) {
-			sw_raddr.bits.GAMMA_SW_R_MEM_SEL = sel;
-			sw_raddr.bits.GAMMA_SW_RADDR = i;
-			ISP_WR_REG(ygamma, REG_YGAMMA_T, GAMMA_SW_RADDR, sw_raddr.raw);
-			ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_SW_RDATA, GAMMA_SW_R, 1);
+			sw_raddr.bits.gamma_sw_r_mem_sel = sel;
+			sw_raddr.bits.gamma_sw_raddr = i;
+			ISP_WR_REG(ygamma, reg_ygamma_t, gamma_sw_raddr, sw_raddr.raw);
+			ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_sw_rdata, gamma_sw_r, 1);
 
-			sw_rdata.raw = ISP_RD_REG(ygamma, REG_YGAMMA_T, GAMMA_SW_RDATA);
+			sw_rdata.raw = ISP_RD_REG(ygamma, reg_ygamma_t, gamma_sw_rdata);
 			if ((sw_rdata.raw & 0xFFFF) != data[i]) {
 				lut_check_pass = false;
 				vi_pr(VI_DBG, "Ygamma LUT Check failed, lut[%d] = %d, should be %d\n",
@@ -296,7 +295,7 @@ void ispblk_ygamma_config(struct isp_ctx *ctx, bool en,
 				break;
 			}
 		}
-		ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_PROG_CTRL, GAMMA_PROG_EN, 0);
+		ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_prog_ctrl, gamma_prog_en, 0);
 
 		if (lut_check_pass)
 			vi_pr(VI_WARN, "Ygamma LUT Check passed\n");
@@ -307,63 +306,63 @@ void ispblk_ygamma_enable(struct isp_ctx *ctx, bool enable)
 {
 	uintptr_t ygamma = ctx->phys_regs[ISP_BLK_ID_YGAMMA];
 
-	ISP_WR_BITS(ygamma, REG_YGAMMA_T, GAMMA_CTRL, YGAMMA_ENABLE, enable);
+	ISP_WR_BITS(ygamma, reg_ygamma_t, gamma_ctrl, ygamma_enable, enable);
 }
 
-void ispblk_gamma_config(struct isp_ctx *ctx, bool en, uint8_t sel, uint16_t *data, uint8_t inv)
+void ispblk_gamma_config(struct isp_ctx *ctx, bool en, u8 sel, u16 *data, u8 inv)
 {
 	uintptr_t gamma = ctx->phys_regs[ISP_BLK_ID_RGBGAMMA];
 	int16_t i;
-	union REG_ISP_GAMMA_PROG_DATA reg_data;
-	union REG_ISP_GAMMA_PROG_CTRL prog_ctrl;
+	union reg_isp_gamma_prog_data reg_data;
+	union reg_isp_gamma_prog_ctrl prog_ctrl;
 
-	prog_ctrl.raw = ISP_RD_REG(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_CTRL);
-	prog_ctrl.bits.GAMMA_WSEL    = sel;
-	prog_ctrl.bits.GAMMA_PROG_EN = 1;
-	prog_ctrl.bits.GAMMA_PROG_1TO3_EN = 1;
-	ISP_WR_REG(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_CTRL, prog_ctrl.raw);
+	prog_ctrl.raw = ISP_RD_REG(gamma, reg_isp_gamma_t, gamma_prog_ctrl);
+	prog_ctrl.bits.gamma_wsel    = sel;
+	prog_ctrl.bits.gamma_prog_en = 1;
+	prog_ctrl.bits.gamma_prog_1to3_en = 1;
+	ISP_WR_REG(gamma, reg_isp_gamma_t, gamma_prog_ctrl, prog_ctrl.raw);
 
-	ISP_WR_BITS(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_ST_ADDR, GAMMA_ST_ADDR, 0);
-	ISP_WR_BITS(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_ST_ADDR, GAMMA_ST_W, 1);
+	ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_prog_st_addr, gamma_st_addr, 0);
+	ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_prog_st_addr, gamma_st_w, 1);
 
 	if (inv) {
 		for (i = 255; i >= 0; i -= 2) {
 			reg_data.raw = 0;
-			reg_data.bits.GAMMA_DATA_E = data[i];
-			reg_data.bits.GAMMA_DATA_O = data[i + 1];
-			reg_data.bits.GAMMA_W = 1;
-			ISP_WR_REG(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_DATA, reg_data.raw);
+			reg_data.bits.gamma_data_e = data[i];
+			reg_data.bits.gamma_data_o = data[i + 1];
+			reg_data.bits.gamma_w = 1;
+			ISP_WR_REG(gamma, reg_isp_gamma_t, gamma_prog_data, reg_data.raw);
 		}
 
 		// set max to 0
-		ISP_WR_REG(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_MAX, 0);
+		ISP_WR_REG(gamma, reg_isp_gamma_t, gamma_prog_max, 0);
 	} else {
 		for (i = 0; i < 256; i += 2) {
 			reg_data.raw = 0;
-			reg_data.bits.GAMMA_DATA_E = data[i];
-			reg_data.bits.GAMMA_DATA_O = data[i + 1];
-			reg_data.bits.GAMMA_W = 1;
-			ISP_WR_REG(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_DATA, reg_data.raw);
+			reg_data.bits.gamma_data_e = data[i];
+			reg_data.bits.gamma_data_o = data[i + 1];
+			reg_data.bits.gamma_w = 1;
+			ISP_WR_REG(gamma, reg_isp_gamma_t, gamma_prog_data, reg_data.raw);
 		}
 	}
 
-	ISP_WR_BITS(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_CTRL, GAMMA_RSEL, sel);
-	ISP_WR_BITS(gamma, REG_ISP_GAMMA_T, GAMMA_PROG_CTRL, GAMMA_PROG_EN, 0);
+	ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_prog_ctrl, gamma_rsel, sel);
+	ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_prog_ctrl, gamma_prog_en, 0);
 }
 
 void ispblk_gamma_enable(struct isp_ctx *ctx, bool enable)
 {
 	uintptr_t gamma = ctx->phys_regs[ISP_BLK_ID_RGBGAMMA];
 
-	ISP_WR_BITS(gamma, REG_ISP_GAMMA_T, GAMMA_CTRL, GAMMA_ENABLE, enable);
+	ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_ctrl, gamma_enable, enable);
 }
 
 void ispblk_dhz_config(struct isp_ctx *ctx, bool en)
 {
 	uintptr_t dhz = ctx->phys_regs[ISP_BLK_ID_DEHAZE];
 
-	ISP_WR_BITS(dhz, REG_ISP_DEHAZE_T, DHZ_BYPASS, DEHAZE_ENABLE, en);
-	ISP_WR_BITS(dhz, REG_ISP_DEHAZE_T, DHZ_BYPASS, DEHAZE_SKIN_LUT_ENABLE, 1);
+	ISP_WR_BITS(dhz, reg_isp_dehaze_t, dhz_bypass, dehaze_enable, en);
+	ISP_WR_BITS(dhz, reg_isp_dehaze_t, dhz_bypass, dehaze_skin_lut_enable, 1);
 }
 
 /**
@@ -379,28 +378,28 @@ void ispblk_rgbdither_config(struct isp_ctx *ctx, bool en, bool mod_en,
 			    bool histidx_en, bool fmnum_en)
 {
 	uintptr_t rgbdither = ctx->phys_regs[ISP_BLK_ID_RGB_DITHER];
-	union REG_ISP_RGB_DITHER_RGB_DITHER reg;
+	union reg_isp_rgb_dither_rgb_dither reg;
 
 	reg.raw = 0;
-	reg.bits.RGB_DITHER_ENABLE = en;
-	reg.bits.RGB_DITHER_MOD_EN = mod_en;
-	reg.bits.RGB_DITHER_HISTIDX_EN = histidx_en;
-	reg.bits.RGB_DITHER_FMNUM_EN = fmnum_en;
-	reg.bits.RGB_DITHER_SHDW_SEL = 1;
-	reg.bits.CROP_WIDTHM1 = ctx->img_width - 1;
-	reg.bits.CROP_HEIGHTM1 = ctx->img_height - 1;
+	reg.bits.rgb_dither_enable = en;
+	reg.bits.rgb_dither_mod_en = mod_en;
+	reg.bits.rgb_dither_histidx_en = histidx_en;
+	reg.bits.rgb_dither_fmnum_en = fmnum_en;
+	reg.bits.rgb_dither_shdw_sel = 1;
+	reg.bits.crop_widthm1 = ctx->img_width - 1;
+	reg.bits.crop_heightm1 = ctx->img_height - 1;
 
-	ISP_WR_REG(rgbdither, REG_ISP_RGB_DITHER_T, RGB_DITHER, reg.raw);
+	ISP_WR_REG(rgbdither, reg_isp_rgb_dither_t, rgb_dither, reg.raw);
 }
 
-void ispblk_clut_cmdq_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num, bool en,
+void ispblk_clut_cmdq_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num, bool en,
 			int16_t *r_lut, int16_t *g_lut, int16_t *b_lut)
 {
 	uintptr_t clut = ctx->phys_regs[ISP_BLK_ID_CLUT];
-	uint16_t r_idx, g_idx, b_idx;
-	union REG_ISP_CLUT_CTRL      ctrl;
-	union REG_ISP_CLUT_PROG_ADDR prog_addr;
-	union REG_ISP_CLUT_PROG_DATA prog_data;
+	u16 r_idx, g_idx, b_idx;
+	union reg_isp_clut_ctrl      ctrl;
+	union reg_isp_clut_prog_addr prog_addr;
+	union reg_isp_clut_prog_data prog_data;
 	u32 clut_phy_reg = ISP_TOP_PHY_REG_BASE + ISP_BLK_BA_CLUT;
 	u32 idx = 0;
 	u16 cmd_idx = 0;
@@ -411,11 +410,11 @@ void ispblk_clut_cmdq_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num
 				  ctx->isp_pipe_cfg[raw_num].cmdq_buf.vir_addr,
 				  ctx->isp_pipe_cfg[raw_num].cmdq_buf.buf_size);
 
-	ctrl.raw = ISP_RD_REG(clut, REG_ISP_CLUT_T, CLUT_CTRL);
-	ctrl.bits.PROG_EN = 1;
+	ctrl.raw = ISP_RD_REG(clut, reg_isp_clut_t, clut_ctrl);
+	ctrl.bits.prog_en = 1;
 
 	cmdq_set_package(&cmd_start[cmd_idx++].reg,
-			 clut_phy_reg + _OFST(REG_ISP_CLUT_T, CLUT_CTRL),
+			 clut_phy_reg + _OFST(reg_isp_clut_t, clut_ctrl),
 			 ctrl.raw);
 
 	for (b_idx = 0; b_idx < 17; b_idx++) {
@@ -424,27 +423,27 @@ void ispblk_clut_cmdq_config(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num
 				idx = b_idx * 289 + g_idx * 17 + r_idx;
 
 				prog_addr.raw = 0;
-				prog_addr.bits.SRAM_R_IDX = r_idx;
-				prog_addr.bits.SRAM_G_IDX = g_idx;
-				prog_addr.bits.SRAM_B_IDX = b_idx;
+				prog_addr.bits.sram_r_idx = r_idx;
+				prog_addr.bits.sram_g_idx = g_idx;
+				prog_addr.bits.sram_b_idx = b_idx;
 				cmdq_set_package(&cmd_start[cmd_idx++].reg,
-						 clut_phy_reg + _OFST(REG_ISP_CLUT_T, CLUT_PROG_ADDR),
+						 clut_phy_reg + _OFST(reg_isp_clut_t, clut_prog_addr),
 						 prog_addr.raw);
 
 				prog_data.raw = 0;
-				prog_data.bits.SRAM_WDATA = b_lut[idx] + (g_lut[idx] << 10) + (r_lut[idx] << 20);
-				prog_data.bits.SRAM_WR = 1;
+				prog_data.bits.sram_wdata = b_lut[idx] + (g_lut[idx] << 10) + (r_lut[idx] << 20);
+				prog_data.bits.sram_wr = 1;
 				cmdq_set_package(&cmd_start[cmd_idx++].reg,
-						 clut_phy_reg + _OFST(REG_ISP_CLUT_T, CLUT_PROG_DATA),
+						 clut_phy_reg + _OFST(reg_isp_clut_t, clut_prog_data),
 						 prog_data.raw);
 			}
 		}
 	}
 
-	ctrl.bits.CLUT_ENABLE = en;
-	ctrl.bits.PROG_EN = 0;
+	ctrl.bits.clut_enable = en;
+	ctrl.bits.prog_en = 0;
 	cmdq_set_package(&cmd_start[cmd_idx++].reg,
-			clut_phy_reg + _OFST(REG_ISP_CLUT_T, CLUT_CTRL),
+			clut_phy_reg + _OFST(reg_isp_clut_t, clut_ctrl),
 			ctrl.raw);
 
 	base_ion_cache_flush(ctx->isp_pipe_cfg[raw_num].cmdq_buf.phy_addr,
@@ -458,15 +457,15 @@ void ispblk_clut_config(struct isp_ctx *ctx, bool en,
 				int16_t *r_lut, int16_t *g_lut, int16_t *b_lut)
 {
 	uintptr_t clut = ctx->phys_regs[ISP_BLK_ID_CLUT];
-	uint16_t r_idx, g_idx, b_idx;
-	union REG_ISP_CLUT_CTRL      ctrl;
-	union REG_ISP_CLUT_PROG_ADDR prog_addr;
-	union REG_ISP_CLUT_PROG_DATA prog_data;
+	u16 r_idx, g_idx, b_idx;
+	union reg_isp_clut_ctrl      ctrl;
+	union reg_isp_clut_prog_addr prog_addr;
+	union reg_isp_clut_prog_data prog_data;
 	u32 idx = 0;
 
-	ctrl.raw = ISP_RD_REG(clut, REG_ISP_CLUT_T, CLUT_CTRL);
-	ctrl.bits.PROG_EN = 1;
-	ISP_WR_REG(clut, REG_ISP_CLUT_T, CLUT_CTRL, ctrl.raw);
+	ctrl.raw = ISP_RD_REG(clut, reg_isp_clut_t, clut_ctrl);
+	ctrl.bits.prog_en = 1;
+	ISP_WR_REG(clut, reg_isp_clut_t, clut_ctrl, ctrl.raw);
 
 	for (b_idx = 0; b_idx < 17; b_idx++) {
 		for (g_idx = 0; g_idx < 17; g_idx++) {
@@ -474,39 +473,39 @@ void ispblk_clut_config(struct isp_ctx *ctx, bool en,
 				idx = b_idx * 289 + g_idx * 17 + r_idx;
 
 				prog_addr.raw = 0;
-				prog_addr.bits.SRAM_R_IDX = r_idx;
-				prog_addr.bits.SRAM_G_IDX = g_idx;
-				prog_addr.bits.SRAM_B_IDX = b_idx;
-				ISP_WR_REG(clut, REG_ISP_CLUT_T, CLUT_PROG_ADDR, prog_addr.raw);
+				prog_addr.bits.sram_r_idx = r_idx;
+				prog_addr.bits.sram_g_idx = g_idx;
+				prog_addr.bits.sram_b_idx = b_idx;
+				ISP_WR_REG(clut, reg_isp_clut_t, clut_prog_addr, prog_addr.raw);
 
 				prog_data.raw		  = 0;
-				prog_data.bits.SRAM_WDATA = b_lut[idx] + (g_lut[idx] << 10) + (r_lut[idx] << 20);
-				prog_data.bits.SRAM_WR	  = 1;
-				ISP_WR_REG(clut, REG_ISP_CLUT_T, CLUT_PROG_DATA, prog_data.raw);
+				prog_data.bits.sram_wdata = b_lut[idx] + (g_lut[idx] << 10) + (r_lut[idx] << 20);
+				prog_data.bits.sram_wr	  = 1;
+				ISP_WR_REG(clut, reg_isp_clut_t, clut_prog_data, prog_data.raw);
 			}
 		}
 	}
 
-	ctrl.bits.CLUT_ENABLE = en;
-	ctrl.bits.PROG_EN = 0;
-	ISP_WR_REG(clut, REG_ISP_CLUT_T, CLUT_CTRL, ctrl.raw);
+	ctrl.bits.clut_enable = en;
+	ctrl.bits.prog_en = 0;
+	ISP_WR_REG(clut, reg_isp_clut_t, clut_ctrl, ctrl.raw);
 }
 
 void ispblk_csc_config(struct isp_ctx *ctx)
 {
 	uintptr_t csc = ctx->phys_regs[ISP_BLK_ID_CSC];
 
-	ISP_WR_BITS(csc, REG_ISP_CSC_T, REG_0, CSC_ENABLE, 1);
+	ISP_WR_BITS(csc, reg_isp_csc_t, reg_0, csc_enable, 1);
 }
 
 static void _manr_init(struct isp_ctx *ctx)
 {
 	uintptr_t manr = ctx->phys_regs[ISP_BLK_ID_MMAP];
-	union REG_ISP_MMAP_04 reg_04;
-	union REG_ISP_MMAP_08 reg_08;
-	union REG_ISP_MMAP_38 reg_38;
+	union reg_isp_mmap_04 reg_04;
+	union reg_isp_mmap_08 reg_08;
+	union reg_isp_mmap_38 reg_38;
 
-	uint16_t data[] = {
+	u16 data[] = {
 		264,  436,  264,   60,	262,  436,  266,   60,	260,  435,  268,   61,	258,  435,  270,   61,
 		255,  434,  272,   63,	253,  434,  274,   63,	251,  433,  275,   65,	249,  433,  277,   65,
 		246,  432,  279,   67,	244,  432,  281,   67,	242,  431,  283,   68,	240,  431,  285,   68,
@@ -526,115 +525,115 @@ static void _manr_init(struct isp_ctx *ctx)
 		138,  374,  374,  138,
 	};
 
-	uint8_t i = 0;
+	u8 i = 0;
 
-	reg_04.bits.MMAP_0_LPF_00 = 3;
-	reg_04.bits.MMAP_0_LPF_01 = 4;
-	reg_04.bits.MMAP_0_LPF_02 = 3;
-	reg_04.bits.MMAP_0_LPF_10 = 4;
-	reg_04.bits.MMAP_0_LPF_11 = 4;
-	reg_04.bits.MMAP_0_LPF_12 = 4;
-	reg_04.bits.MMAP_0_LPF_20 = 3;
-	reg_04.bits.MMAP_0_LPF_21 = 4;
-	reg_04.bits.MMAP_0_LPF_22 = 3;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_04, reg_04.raw);
+	reg_04.bits.mmap_0_lpf_00 = 3;
+	reg_04.bits.mmap_0_lpf_01 = 4;
+	reg_04.bits.mmap_0_lpf_02 = 3;
+	reg_04.bits.mmap_0_lpf_10 = 4;
+	reg_04.bits.mmap_0_lpf_11 = 4;
+	reg_04.bits.mmap_0_lpf_12 = 4;
+	reg_04.bits.mmap_0_lpf_20 = 3;
+	reg_04.bits.mmap_0_lpf_21 = 4;
+	reg_04.bits.mmap_0_lpf_22 = 3;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_04, reg_04.raw);
 
-	reg_08.bits.MMAP_0_MAP_CORING = 0;
-	reg_08.bits.MMAP_0_MAP_GAIN   = 8;
-	reg_08.bits.MMAP_0_MAP_THD_L  = 64; /* for imx327 tuning */
-	reg_08.bits.MMAP_0_MAP_THD_H  = 255;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_08, reg_08.raw);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_0C,
-		    MMAP_0_LUMA_ADAPT_LUT_IN_0, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_0C,
-		    MMAP_0_LUMA_ADAPT_LUT_IN_1, 600);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_10,
-		    MMAP_0_LUMA_ADAPT_LUT_IN_2, 1500);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_10,
-		    MMAP_0_LUMA_ADAPT_LUT_IN_3, 2500);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_14,
-		    MMAP_0_LUMA_ADAPT_LUT_OUT_0, 63);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_14,
-		    MMAP_0_LUMA_ADAPT_LUT_OUT_1, 48);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_14,
-		    MMAP_0_LUMA_ADAPT_LUT_OUT_2, 8);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_14,
-		    MMAP_0_LUMA_ADAPT_LUT_OUT_3, 2);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_18,
-		    MMAP_0_LUMA_ADAPT_LUT_SLOPE_0, -27);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_18,
-		    MMAP_0_LUMA_ADAPT_LUT_SLOPE_1, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_1C,
-		    MMAP_0_LUMA_ADAPT_LUT_SLOPE_2, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_1C, MMAP_0_MAP_DSHIFT_BIT, 5);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_20, MMAP_0_IIR_PRTCT_LUT_IN_0, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_20, MMAP_0_IIR_PRTCT_LUT_IN_1, 45);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_20, MMAP_0_IIR_PRTCT_LUT_IN_2, 90);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_20, MMAP_0_IIR_PRTCT_LUT_IN_3, 255);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_24, MMAP_0_IIR_PRTCT_LUT_OUT_0, 6);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_24, MMAP_0_IIR_PRTCT_LUT_OUT_1, 10);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_24, MMAP_0_IIR_PRTCT_LUT_OUT_2, 9);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_24, MMAP_0_IIR_PRTCT_LUT_OUT_3, 2);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_28,
-		    MMAP_0_IIR_PRTCT_LUT_SLOPE_0, 12);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_28,
-		    MMAP_0_IIR_PRTCT_LUT_SLOPE_1, -4);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_2C,
-		    MMAP_0_IIR_PRTCT_LUT_SLOPE_2, -4);
+	reg_08.bits.mmap_0_map_coring = 0;
+	reg_08.bits.mmap_0_map_gain   = 8;
+	reg_08.bits.mmap_0_map_thd_l  = 64; /* for imx327 tuning */
+	reg_08.bits.mmap_0_map_thd_h  = 255;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_08, reg_08.raw);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_0c,
+		    mmap_0_luma_adapt_lut_in_0, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_0c,
+		    mmap_0_luma_adapt_lut_in_1, 600);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_10,
+		    mmap_0_luma_adapt_lut_in_2, 1500);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_10,
+		    mmap_0_luma_adapt_lut_in_3, 2500);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_14,
+		    mmap_0_luma_adapt_lut_out_0, 63);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_14,
+		    mmap_0_luma_adapt_lut_out_1, 48);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_14,
+		    mmap_0_luma_adapt_lut_out_2, 8);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_14,
+		    mmap_0_luma_adapt_lut_out_3, 2);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_18,
+		    mmap_0_luma_adapt_lut_slope_0, -27);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_18,
+		    mmap_0_luma_adapt_lut_slope_1, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_1c,
+		    mmap_0_luma_adapt_lut_slope_2, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_1c, mmap_0_map_dshift_bit, 5);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_20, mmap_0_iir_prtct_lut_in_0, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_20, mmap_0_iir_prtct_lut_in_1, 45);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_20, mmap_0_iir_prtct_lut_in_2, 90);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_20, mmap_0_iir_prtct_lut_in_3, 255);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_24, mmap_0_iir_prtct_lut_out_0, 6);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_24, mmap_0_iir_prtct_lut_out_1, 10);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_24, mmap_0_iir_prtct_lut_out_2, 9);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_24, mmap_0_iir_prtct_lut_out_3, 2);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_28,
+		    mmap_0_iir_prtct_lut_slope_0, 12);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_28,
+		    mmap_0_iir_prtct_lut_slope_1, -4);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_2c,
+		    mmap_0_iir_prtct_lut_slope_2, -4);
 
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_70, MMAP_0_GAIN_RATIO_R, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_70, MMAP_0_GAIN_RATIO_G, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_74, MMAP_0_GAIN_RATIO_B, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_78, MMAP_0_NS_SLOPE_R, 5);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_78, MMAP_0_NS_SLOPE_G, 4);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_7C, MMAP_0_NS_SLOPE_B, 6);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_80, MMAP_0_NS_LUMA_TH0_R, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_80, MMAP_0_NS_LUMA_TH0_G, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_84, MMAP_0_NS_LUMA_TH0_B, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_84, MMAP_0_NS_LOW_OFFSET_R, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_88, MMAP_0_NS_LOW_OFFSET_G, 2);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_88, MMAP_0_NS_LOW_OFFSET_B, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_8C, MMAP_0_NS_HIGH_OFFSET_R, 724);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_8C, MMAP_0_NS_HIGH_OFFSET_G, 724);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_90, MMAP_0_NS_HIGH_OFFSET_B, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_70, mmap_0_gain_ratio_r, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_70, mmap_0_gain_ratio_g, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_74, mmap_0_gain_ratio_b, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_78, mmap_0_ns_slope_r, 5);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_78, mmap_0_ns_slope_g, 4);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_7c, mmap_0_ns_slope_b, 6);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_80, mmap_0_ns_luma_th0_r, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_80, mmap_0_ns_luma_th0_g, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_84, mmap_0_ns_luma_th0_b, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_84, mmap_0_ns_low_offset_r, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_88, mmap_0_ns_low_offset_g, 2);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_88, mmap_0_ns_low_offset_b, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_8c, mmap_0_ns_high_offset_r, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_8c, mmap_0_ns_high_offset_g, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_90, mmap_0_ns_high_offset_b, 724);
 
-	reg_38.bits.MMAP_1_MAP_CORING = 0;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_38, reg_38.raw);
+	reg_38.bits.mmap_1_map_coring = 0;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_38, reg_38.raw);
 
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_A0, MMAP_1_GAIN_RATIO_R, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_A0, MMAP_1_GAIN_RATIO_G, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_A4, MMAP_1_GAIN_RATIO_B, 4096);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_A8, MMAP_1_NS_SLOPE_R, 5 * 4);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_A8, MMAP_1_NS_SLOPE_G, 4 * 4);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_AC, MMAP_1_NS_SLOPE_B, 6 * 4);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B0, MMAP_1_NS_LUMA_TH0_R, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B0, MMAP_1_NS_LUMA_TH0_G, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B4, MMAP_1_NS_LUMA_TH0_B, 16);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B4, MMAP_1_NS_LOW_OFFSET_R, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B8, MMAP_1_NS_LOW_OFFSET_G, 2);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_B8, MMAP_1_NS_LOW_OFFSET_B, 0);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_BC, MMAP_1_NS_HIGH_OFFSET_R, 724);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_BC, MMAP_1_NS_HIGH_OFFSET_G, 724);
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_C0, MMAP_1_NS_HIGH_OFFSET_B, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_a0, mmap_1_gain_ratio_r, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_a0, mmap_1_gain_ratio_g, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_a4, mmap_1_gain_ratio_b, 4096);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_a8, mmap_1_ns_slope_r, 5 * 4);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_a8, mmap_1_ns_slope_g, 4 * 4);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_ac, mmap_1_ns_slope_b, 6 * 4);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b0, mmap_1_ns_luma_th0_r, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b0, mmap_1_ns_luma_th0_g, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b4, mmap_1_ns_luma_th0_b, 16);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b4, mmap_1_ns_low_offset_r, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b8, mmap_1_ns_low_offset_g, 2);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_b8, mmap_1_ns_low_offset_b, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_bc, mmap_1_ns_high_offset_r, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_bc, mmap_1_ns_high_offset_g, 724);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_c0, mmap_1_ns_high_offset_b, 724);
 
 	for (i = 0; i < ARRAY_SIZE(data) / 4; ++i) {
-		uint64_t val = 0;
+		u64 val = 0;
 
-		ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, SRAM_WEN, 0);
-		ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, SRAM_WADD, i);
+		ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, sram_wen, 0);
+		ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, sram_wadd, i);
 
-		val = ((uint64_t)data[i * 4] | (uint64_t)data[i * 4 + 1] << 13 |
-			(uint64_t)data[i * 4 + 2] << 26 | (uint64_t)data[i * 4 + 3] << 39);
-		ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_64, val & 0xffffffff);
-		ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_68, val >> 32);
+		val = ((u64)data[i * 4] | (u64)data[i * 4 + 1] << 13 |
+			(u64)data[i * 4 + 2] << 26 | (u64)data[i * 4 + 3] << 39);
+		ISP_WR_REG(manr, reg_isp_mmap_t, reg_64, val & 0xffffffff);
+		ISP_WR_REG(manr, reg_isp_mmap_t, reg_68, val >> 32);
 
-		ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, SRAM_WEN, 1);
+		ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, sram_wen, 1);
 	}
 
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, SRAM_WEN, 0);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, sram_wen, 0);
 }
 
-void ispblk_tnr_post_chg(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
+void ispblk_tnr_post_chg(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t manr = ctx->phys_regs[ISP_BLK_ID_MMAP];
 	int w = ctx->isp_pipe_cfg[raw_num].is_tile ?
@@ -643,39 +642,39 @@ void ispblk_tnr_post_chg(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
 	int h = ctx->isp_pipe_cfg[raw_num].crop.h;
 	int grid_size = (1 << ctx->isp_pipe_cfg[raw_num].rgbmap_i.w_bit);
 
-	union REG_ISP_MMAP_60 reg_60;
-	union REG_ISP_MMAP_30 reg_30;
-	union REG_ISP_MMAP_D0 reg_d0;
-	union REG_ISP_MMAP_D4 reg_d4;
-	union REG_ISP_MMAP_D8 reg_d8;
+	union reg_isp_mmap_60 reg_60;
+	union reg_isp_mmap_30 reg_30;
+	union reg_isp_mmap_d0 reg_d0;
+	union reg_isp_mmap_d4 reg_d4;
+	union reg_isp_mmap_d8 reg_d8;
 
-	reg_60.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_60);
-	reg_60.bits.RGBMAP_W_BIT = ctx->isp_pipe_cfg[raw_num].rgbmap_i.w_bit;
-	reg_60.bits.RGBMAP_H_BIT = ctx->isp_pipe_cfg[raw_num].rgbmap_i.h_bit;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_60, reg_60.raw);
+	reg_60.raw = ISP_RD_REG(manr, reg_isp_mmap_t, reg_60);
+	reg_60.bits.rgbmap_w_bit = ctx->isp_pipe_cfg[raw_num].rgbmap_i.w_bit;
+	reg_60.bits.rgbmap_h_bit = ctx->isp_pipe_cfg[raw_num].rgbmap_i.h_bit;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_60, reg_60.raw);
 
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_04, WH_SW_MODE, 1);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_04, wh_sw_mode, 1);
 
 	reg_30.raw = 0;
-	reg_30.bits.IMG_WIDTHM1_SW	= ((((w + grid_size - 1) / grid_size) * 6 + 47) / 48 * 8 * grid_size - 1);
-	reg_30.bits.IMG_HEIGHTM1_SW	= h - 1;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_30, reg_30.raw);
+	reg_30.bits.img_widthm1_sw	= ((((w + grid_size - 1) / grid_size) * 6 + 47) / 48 * 8 * grid_size - 1);
+	reg_30.bits.img_heightm1_sw	= h - 1;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_30, reg_30.raw);
 
 	reg_d0.raw = 0;
-	reg_d0.bits.CROP_ENABLE_SCALAR		= 1;
-	reg_d0.bits.IMG_WIDTH_CROP_SCALAR	= reg_30.bits.IMG_WIDTHM1_SW;
-	reg_d0.bits.IMG_HEIGHT_CROP_SCALAR	= reg_30.bits.IMG_HEIGHTM1_SW;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_D0, reg_d0.raw);
+	reg_d0.bits.crop_enable_scalar		= 1;
+	reg_d0.bits.img_width_crop_scalar	= reg_30.bits.img_widthm1_sw;
+	reg_d0.bits.img_height_crop_scalar	= reg_30.bits.img_heightm1_sw;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_d0, reg_d0.raw);
 
 	reg_d4.raw = 0;
-	reg_d4.bits.CROP_W_STR_SCALAR		= 0;
-	reg_d4.bits.CROP_W_END_SCALAR		= w - 1;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_D4, reg_d4.raw);
+	reg_d4.bits.crop_w_str_scalar		= 0;
+	reg_d4.bits.crop_w_end_scalar		= w - 1;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_d4, reg_d4.raw);
 
 	reg_d8.raw = 0;
-	reg_d8.bits.CROP_H_STR_SCALAR		= 0;
-	reg_d8.bits.CROP_H_END_SCALAR		= h - 1;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_D8, reg_d8.raw);
+	reg_d8.bits.crop_h_str_scalar		= 0;
+	reg_d8.bits.crop_h_end_scalar		= h - 1;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_d8, reg_d8.raw);
 
 	ispblk_mmap_dma_config(ctx, raw_num, ISP_BLK_ID_DMA_CTL_MMAP_PRE_LE_R);
 	ispblk_mmap_dma_config(ctx, raw_num, ISP_BLK_ID_DMA_CTL_MMAP_CUR_LE_R);
@@ -689,18 +688,18 @@ void ispblk_tnr_post_chg(struct isp_ctx *ctx, enum cvi_isp_raw raw_num)
 void ispblk_manr_config(struct isp_ctx *ctx, bool en)
 {
 	uintptr_t manr = ctx->phys_regs[ISP_BLK_ID_MMAP];
-	uint8_t dma_disable;
-	union REG_ISP_MMAP_00 reg_00;
+	u8 dma_disable;
+	union reg_isp_mmap_00 reg_00;
 	u8 raw_num = vi_get_first_raw_num(ctx);
 
 	if (!en) {
-		reg_00.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_00);
-		reg_00.bits.MMAP_0_ENABLE = 0;
-		reg_00.bits.MMAP_1_ENABLE = 0;
-		reg_00.bits.BYPASS = 1;
-		ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_00, reg_00.raw);
+		reg_00.raw = ISP_RD_REG(manr, reg_isp_mmap_t, reg_00);
+		reg_00.bits.mmap_0_enable = 0;
+		reg_00.bits.mmap_1_enable = 0;
+		reg_00.bits.bypass = 1;
+		ISP_WR_REG(manr, reg_isp_mmap_t, reg_00, reg_00.raw);
 
-		ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, FORCE_DMA_DISABLE, 0xff);
+		ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, force_dma_disable, 0xff);
 		return;
 	}
 
@@ -722,31 +721,31 @@ void ispblk_manr_config(struct isp_ctx *ctx, bool en)
 		dma_disable = (ctx->is_hdr_on) ? 0xa0 : 0xaa;
 	}
 
-	reg_00.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_00);
-	reg_00.bits.MMAP_0_ENABLE = 1;
-	reg_00.bits.MMAP_1_ENABLE = (ctx->is_hdr_on) ? 1 : 0;
-	reg_00.bits.BYPASS = 0;
-	reg_00.bits.REG_2_TAP_EN = 1;
-	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_00, reg_00.raw);
+	reg_00.raw = ISP_RD_REG(manr, reg_isp_mmap_t, reg_00);
+	reg_00.bits.mmap_0_enable = 1;
+	reg_00.bits.mmap_1_enable = (ctx->is_hdr_on) ? 1 : 0;
+	reg_00.bits.bypass = 0;
+	reg_00.bits.reg_2_tap_en = 1;
+	ISP_WR_REG(manr, reg_isp_mmap_t, reg_00, reg_00.raw);
 
 	ctx->isp_pipe_cfg[raw_num].rgbmap_i.w_bit = g_w_bit[raw_num];
 	ctx->isp_pipe_cfg[raw_num].rgbmap_i.h_bit = g_h_bit[raw_num];
 
 	ispblk_tnr_post_chg(ctx, raw_num);
 
-	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_6C, FORCE_DMA_DISABLE, dma_disable);
+	ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, force_dma_disable, dma_disable);
 }
 
-void ispblk_mmap_dma_mode(struct isp_ctx *ctx, uint32_t dmaid)
+void ispblk_mmap_dma_mode(struct isp_ctx *ctx, u32 dmaid)
 {
 	uintptr_t dmab = ctx->phys_regs[dmaid];
-	union REG_ISP_DMA_CTL_SYS_CONTROL sys_ctrl;
+	union reg_isp_dma_ctl_sys_control sys_ctrl;
 
 	//1: SW mode: config by SW 0: HW mode: auto config by HW
-	sys_ctrl.raw = ISP_RD_REG(dmab, REG_ISP_DMA_CTL_T, SYS_CONTROL);
-	sys_ctrl.bits.BASE_SEL		= 0x1;
-	sys_ctrl.bits.STRIDE_SEL	= 0x1;
-	sys_ctrl.bits.SEGLEN_SEL	= 0x0;
-	sys_ctrl.bits.SEGNUM_SEL	= 0x0;
-	ISP_WR_REG(dmab, REG_ISP_DMA_CTL_T, SYS_CONTROL, sys_ctrl.raw);
+	sys_ctrl.raw = ISP_RD_REG(dmab, reg_isp_dma_ctl_t, sys_control);
+	sys_ctrl.bits.base_sel		= 0x1;
+	sys_ctrl.bits.stride_sel	= 0x1;
+	sys_ctrl.bits.seglen_sel	= 0x0;
+	sys_ctrl.bits.segnum_sel	= 0x0;
+	ISP_WR_REG(dmab, reg_isp_dma_ctl_t, sys_control, sys_ctrl.raw);
 }

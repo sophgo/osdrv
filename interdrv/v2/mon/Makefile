@@ -14,7 +14,7 @@ all:
 clean:
 	@rm -f *.o* *.ko
 	@rm -f Module.symvers modules.order
-	@rm -f *.mod.c
+	@rm -f *.mod *.mod.c
 	@rm -rf .tmp_versions
 	@rm -f .*cmd
 	@rm -f $(CHIP)/*.o*

@@ -7,11 +7,10 @@
 
 #include <linux/uaccess.h>
 #include <vi_defines.h>
-#include <linux/vi_uapi.h>
 
 
-void vi_event_queue(struct cvi_vi_dev *vdev, const u32 type, const u32 frm_num);
-int isp_proc_init(struct cvi_vi_dev *_vdev);
+void vi_event_queue(struct sop_vi_dev *vdev, const u32 type, const u32 frm_num);
+int isp_proc_init(struct sop_vi_dev *_vdev);
 int isp_proc_remove(void);
 int isp_proc_set_proc_content(void *buffer, size_t count);
 

@@ -9,7 +9,7 @@
 
 #include <linux/iommu.h>
 
-#include <linux/cvi_defines.h>
+#include <linux/defines.h>
 #include <linux/vpss_uapi.h>
 
 #include "scaler.h"
@@ -34,29 +34,29 @@
 		RATIO << VIP_CLK_RATIO_OFFSET(CLK_NAME))
 #endif
 
-enum cvi_vpss_type {
-	CVI_VPSS_V0 = 0,
-	CVI_VPSS_V1,
-	CVI_VPSS_V2,
-	CVI_VPSS_V3,
-	CVI_VPSS_T0,
-	CVI_VPSS_T1,
-	CVI_VPSS_T2,
-	CVI_VPSS_T3,
-	CVI_VPSS_D0,
-	CVI_VPSS_D1,
-	CVI_VPSS_MAX,
+enum vpss_dev_type {
+	VPSS_DEV_V0 = 0,
+	VPSS_DEV_V1,
+	VPSS_DEV_V2,
+	VPSS_DEV_V3,
+	VPSS_DEV_T0,
+	VPSS_DEV_T1,
+	VPSS_DEV_T2,
+	VPSS_DEV_T3,
+	VPSS_DEV_D0,
+	VPSS_DEV_D1,
+	VPSS_DEV_MAX,
 };
 
-enum cvi_vip_state {
-	CVI_VIP_IDLE,
-	CVI_VIP_RUNNING,
-	CVI_VIP_END,
-	CVI_VIP_ONLINE,
+enum vip_state {
+	VIP_IDLE,
+	VIP_RUNNING,
+	VIP_END,
+	VIP_ONLINE,
 };
 
 struct vpss_core {
-	enum cvi_vpss_type enVpssType;
+	enum vpss_dev_type vpss_type;
 	unsigned int irq_num;
 	atomic_t state;
 	spinlock_t vpss_lock;
@@ -65,23 +65,23 @@ struct vpss_core {
 	struct clk *clk_vpss;
 	struct timespec64 ts_start;
 	struct timespec64 ts_end;
-	u32 u32HwDuration;
-	u32 u32HwDurationTotal;
-	u32 u32DutyRatio;
+	u32 hw_duration;
+	u32 hw_duration_total;
+	u32 duty_ratio;
 	u8 intr_status;
 	u8 tile_mode;
 	u8 map_chn;
-	u8 isOnline;
+	u8 is_online;
 	u32 checksum;
-	u32 u32StartCnt;
-	u32 u32IntCnt;
+	u32 start_cnt;
+	u32 int_cnt;
 	void *job;
 };
 
-struct cvi_vpss_device {
+struct vpss_device {
 	struct miscdevice miscdev;
 	spinlock_t lock;
-	struct vpss_core vpss_cores[CVI_VPSS_MAX];
+	struct vpss_core vpss_cores[VPSS_MAX];
 };
 
 

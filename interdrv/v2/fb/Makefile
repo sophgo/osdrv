@@ -22,5 +22,5 @@ all:
 	$(MAKE) ARCH=${ARCH} -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:
-	rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c
+	rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod *.mod.c
 	rm -rf .tmp_versions

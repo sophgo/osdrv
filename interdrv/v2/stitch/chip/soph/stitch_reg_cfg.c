@@ -23,13 +23,13 @@
  * Global parameters
  ***************************************************************************/
 static uintptr_t reg_base;
-static u8 wgt_disable[2], bld_disable[2];
-static u8 drop_mode = 1;
+static unsigned char wgt_disable[2], bld_disable[2];
+static unsigned char drop_mode = 1;
 
 /****************************************************************************
  * Initial info
  ***************************************************************************/
-extern bool gStitchDumpReg;
+extern int gStitchDumpReg;
 extern bool gStitchDumpDmaCfg;
 
 static uintptr_t stitch_dma[STITCH_DMA_REG_NUM] = {
@@ -86,7 +86,7 @@ void stitch_set_base_addr(void *base, void *dma_base)
 	reg_base = (uintptr_t)base;
 	stitch_dma_ctrl = (uintptr_t)dma_base;
 
-	CVI_TRACE_STITCH(CVI_DBG_DEBUG, "reg_base-stitch_dma_ctrl(%#lx-%#lx)\n", reg_base, stitch_dma_ctrl);
+	TRACE_STITCH(DBG_DEBUG, "reg_base-stitch_dma_ctrl(%#lx-%#lx)\n", reg_base, stitch_dma_ctrl);
 
 	stitch_dma[0] = stitch_dma_ctrl;
 	for (i = 1; i < STITCH_DMA_REG_NUM; i++) {
@@ -133,7 +133,7 @@ static void stitch_reset_vi_sys(void)
 #endif
 }
 
-static void stitch_set_drop_mode(u8 drop_mode)
+static void stitch_set_drop_mode(unsigned char drop_mode)
 {
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_0, DROP_MODE_BLD0, drop_mode);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_0, DROP_MODE_LEFT0, drop_mode);
@@ -142,19 +142,21 @@ static void stitch_set_drop_mode(u8 drop_mode)
 
 void stitch_reset_init(void)
 {
+	stitch_reset_vi_sys();
+
 #if STITCH_RST_STITCH
-	udelay(100);
-	stitch_intr_clr();
+	udelay(1000);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, SUBSYS_RESET_W1P, 0);
 	//STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, RESET_DONE, 0);//ro
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, TRIG_CNT, 0);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, SHADOW_CNT, 0);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, RESET_CNT, 0);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, STCH_SHDW_SEL, STCH_SHDW_SEL, 1);
-	udelay(100);
+	udelay(1000*10);
+	udelay(1000*10);
+	stitch_intr_clr();
+	udelay(1000);
 #endif
-
-	stitch_reset_vi_sys();
 }
 
 void stitch_enable(void)
@@ -168,7 +170,7 @@ void stitch_disable(void)
 
 //enable top_wp0/top_wp1
 //top_id: top_wp0/top_wp1
-void stitch_valid_param(u8 top_id)
+void stitch_valid_param(unsigned char top_id)
 {
 	if (!top_id) {
 		//bld0_rdma
@@ -222,7 +224,7 @@ void stitch_valid_param(u8 top_id)
 
 //disable top_wp0/top_wp1
 //top_id: top_wp0/top_wp1
-void stitch_invalid_param(u8 top_id)
+void stitch_invalid_param(unsigned char top_id)
 {
 	if (!top_id) {
 		//bld0_rdma
@@ -275,7 +277,7 @@ void stitch_invalid_param(u8 top_id)
 	stitch_set_drop_mode(0);
 }
 
-void stitch_disable_wgt(u8 top_id)
+void stitch_disable_wgt(unsigned char top_id)
 {
 	if (!top_id) {
 		//wgt0_rdma
@@ -292,7 +294,7 @@ void stitch_disable_wgt(u8 top_id)
 	}
 }
 
-void stitch_disable_bld(u8 top_id)
+void stitch_disable_bld(unsigned char top_id)
 {
 	if (!top_id) {
 		//bld0_wdma
@@ -311,7 +313,7 @@ void stitch_disable_bld(u8 top_id)
 	}
 }
 
-void stitch_disable_left_right_rdma(u8 top_id)
+void stitch_disable_left_right_rdma(unsigned char top_id)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_16, RDMA_STCH_LEFTY0_ENABLE, 0);
@@ -333,7 +335,7 @@ void stitch_disable_left_right_rdma(u8 top_id)
 	}
 }
 
-void stitch_disable_left_rdma(u8 top_id)
+void stitch_disable_left_rdma(unsigned char top_id)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_16, RDMA_STCH_LEFTY0_ENABLE, 0);
@@ -346,7 +348,7 @@ void stitch_disable_left_rdma(u8 top_id)
 	}
 }
 
-void stitch_disable_right_rdma(u8 top_id)
+void stitch_disable_right_rdma(unsigned char top_id)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_16, RDMA_STCH_RIGHTY0_ENABLE, 0);
@@ -359,7 +361,7 @@ void stitch_disable_right_rdma(u8 top_id)
 	}
 }
 
-void stitch_disable_left_right_wdma(u8 top_id)
+void stitch_disable_left_right_wdma(unsigned char top_id)
 {
 	if (!top_id) {
 
@@ -384,7 +386,7 @@ void stitch_disable_left_right_wdma(u8 top_id)
 	}
 }
 
-void stitch_disable_left_wdma(u8 top_id)
+void stitch_disable_left_wdma(unsigned char top_id)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_18, WDMA_STCH_LEFTY0_ENABLE, 0);
@@ -403,7 +405,7 @@ void stitch_disable_left_wdma(u8 top_id)
 	}
 }
 
-void stitch_disable_right_wdma(u8 top_id)
+void stitch_disable_right_wdma(unsigned char top_id)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_18, WDMA_STCH_RIGHTY0_ENABLE, 0);
@@ -422,7 +424,7 @@ void stitch_disable_right_wdma(u8 top_id)
 	}
 }
 
-void stitch_r_uv_bypass(u8 sel)
+void stitch_r_uv_bypass(unsigned char sel)
 {
 	if (!sel) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_LEFTIN0, 1);
@@ -437,7 +439,7 @@ void stitch_r_uv_bypass(u8 sel)
 	}
 }
 
-void stitch_w_uv_bypass(u8 sel)
+void stitch_w_uv_bypass(unsigned char sel)
 {
 	if (!sel) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_BLD0, 1);
@@ -456,7 +458,7 @@ void stitch_w_uv_bypass(u8 sel)
 	}
 }
 
-void stitch_r_uv_half_bypass(u8 sel)
+void stitch_r_uv_half_bypass(unsigned char sel)
 {
 	if (!sel) {
 		//STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_LEFTIN0, 1);
@@ -471,7 +473,7 @@ void stitch_r_uv_half_bypass(u8 sel)
 	}
 }
 
-void stitch_w_uv_half_bypass(u8 sel)
+void stitch_w_uv_half_bypass(unsigned char sel)
 {
 	if (!sel) {
 		//STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_BLD0, 1);
@@ -490,7 +492,7 @@ void stitch_w_uv_half_bypass(u8 sel)
 	}
 }
 
-static void stitch_r_uv_bypass_clr(u8 sel)
+static void stitch_r_uv_bypass_clr(unsigned char sel)
 {
 	if (!sel) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_LEFTIN0, 0);
@@ -505,7 +507,7 @@ static void stitch_r_uv_bypass_clr(u8 sel)
 	}
 }
 
-static void stitch_w_uv_bypass_clr(u8 sel)
+static void stitch_w_uv_bypass_clr(unsigned char sel)
 {
 	if (!sel) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_20, BYPASS_H_BLD0, 0);
@@ -524,13 +526,13 @@ static void stitch_w_uv_bypass_clr(u8 sel)
 	}
 }
 
-void stitch_uv_bypass_clr(u8 sel)
+void stitch_uv_bypass_clr(unsigned char sel)
 {
 	stitch_r_uv_bypass_clr(sel);
 	stitch_w_uv_bypass_clr(sel);
 }
 
-void stitch_disable_uv(u8 sel)
+void stitch_disable_uv(unsigned char sel)
 {
 	if (!sel) {
 		//bld0_rdma
@@ -563,7 +565,7 @@ void stitch_disable_uv(u8 sel)
 	}
 }
 //0 = from dma data; 1 = from stitch data
-void stitch_src_sel(u8 sel)
+void stitch_src_sel(unsigned char sel)
 {
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, SRC_SEL, SRC_SEL_LEFT0, sel);
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, SRC_SEL, SRC_SEL_RIGHT0, sel);
@@ -572,13 +574,13 @@ void stitch_src_sel(u8 sel)
 }
 
 //wgt mode，0：yuv share wgt; 1: y wgt, uv share wgt; 2: y wgt, u wgt, v wgt
-void stitch_mode_sel(u8 sel)
+void stitch_mode_sel(unsigned char sel)
 {
 	STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, MODE_SEL, MODE_SEL, sel);
 }
 
 //blending judge start and end for left&right img.
-void stitch_bj_image_size_cfg(u8 top_id, struct stitch_bj_size_param *cfg)
+void stitch_bj_image_size_cfg(unsigned char top_id, struct stitch_bj_size_param *cfg)
 {
 	if (!top_id) {
 		//bj0
@@ -609,7 +611,7 @@ void stitch_bj_image_size_cfg(u8 top_id, struct stitch_bj_size_param *cfg)
 //cfg[0] :y rdma channel
 //cfg[1] :uv rdma channel
 //cfg[2] :wgt rdma channel
-void stitch_rdma_image_size_cfg(u8 top_id, struct stitch_rdma_size_param *cfg)
+void stitch_rdma_image_size_cfg(unsigned char top_id, struct stitch_rdma_size_param *cfg)
 {
 	if (!top_id) {
 		// y rdma channel
@@ -729,7 +731,7 @@ void stitch_rdma_image_size_cfg(u8 top_id, struct stitch_rdma_size_param *cfg)
 //wdma bld chn size cfg: y/uv
 //bld_cfg[0] :y wdma channel
 //bld_cfg[1] :uv wdma channel
-void stitch_wdma_image_size_cfg(u8 top_id, struct stitch_wdma_nbld_size_param *nbld_cfg, struct stitch_wdma_bld_size_param *bld_cfg)
+void stitch_wdma_image_size_cfg(unsigned char top_id, struct stitch_wdma_nbld_size_param *nbld_cfg, struct stitch_wdma_bld_size_param *bld_cfg)
 {
 	if (!top_id) {
 		//wdma y channel
@@ -910,7 +912,7 @@ void stitch_wdma_image_size_cfg(u8 top_id, struct stitch_wdma_nbld_size_param *n
 }
 
 //crop src img send to blending judge, left img drop right part, right img drop left part.
-void stitch_crop2bj_cfg(u8 top_id, struct stitch_crop2bj_param *cfg)
+void stitch_crop2bj_cfg(unsigned char top_id, struct stitch_crop2bj_param *cfg)
 {
 	if (!top_id) {
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_86, CROP2BJ_LEFT_ENABLE0, 1);
@@ -966,7 +968,7 @@ void stitch_dma_cfg(struct stitch_dma_ctl *cfg)
 	stitch_dma_model_sel(dma_id);
 
 	if (gStitchDumpDmaCfg)
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch_dma_ctl_addr-dma_id-addr-w-stride-h[%#lx-%d-%#llx-%d-%d-%d]\n"
+		TRACE_STITCH(DBG_DEBUG, "stitch_dma_ctl_addr-dma_id-addr-w-stride-h[%#lx-%d-%#llx-%d-%d-%d]\n"
 			, stitch_dma[dma_id],  dma_id, cfg->addr, cfg->width, cfg->stride, cfg->height);
 
 	STITCH_WR_BITS(stitch_dma[dma_id], REG_STITCH_DMA_CTL_T, BASE_ADDR,   BASEL,  cfg->addr & 0xffffffff);
@@ -978,7 +980,7 @@ void stitch_dma_cfg(struct stitch_dma_ctl *cfg)
 
 void stitch_dma_cfg_clr_all(void)
 {
-	u8 i = 0;
+	unsigned char i = 0;
 	struct stitch_dma_ctl cfg;
 
 	for (i = 0; i < ID_DMA_STCH_MAX; i++) {
@@ -994,9 +996,9 @@ void stitch_intr_clr(void)
 }
 
 //read intr status,0x3:stitch success, 0x0:fail
-u8 stitch_intr_status(void)
+unsigned char stitch_intr_status(void)
 {
-	u8 status = 0;
+	unsigned char status = 0;
 
 	status |= STITCH_RD_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_0, FRAME_DONE);
 	status |= STITCH_RD_BITS(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL, STITCH_INTER_FLOW) << 1;
@@ -1006,7 +1008,7 @@ u8 stitch_intr_status(void)
 
 //alpha_pixel + beta_pixel = 8’d255
 //blend_out = (alpha_pixel*(left_pixel<<8) + beta_pixel*(right_pixel<<8))>>reg_x
-void stitch_set_regx(u8 top_id, u8 regx)
+void stitch_set_regx(unsigned char top_id, unsigned char regx)
 {
 	if (!top_id)
 		STITCH_WR_BITS(reg_base, REG_STITCHING_BLENDING_T, REG_19, X_0, regx);
@@ -1016,130 +1018,130 @@ void stitch_set_regx(u8 top_id, u8 regx)
 
 void stitch_dump_register(void)
 {
-	u8 i;
+	unsigned char i;
 
 	if (gStitchDumpReg) {
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_0=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_0));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch FLOW_CONTROL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch STCH_SHDW_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, STCH_SHDW_SEL));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch MODE_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, MODE_SEL));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch SRC_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, SRC_SEL));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_0=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_0));
+		TRACE_STITCH(DBG_NOTICE, "stitch FLOW_CONTROL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, FLOW_CONTROL));
+		TRACE_STITCH(DBG_NOTICE, "stitch STCH_SHDW_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, STCH_SHDW_SEL));
+		TRACE_STITCH(DBG_NOTICE, "stitch MODE_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, MODE_SEL));
+		TRACE_STITCH(DBG_NOTICE, "stitch SRC_SEL=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, SRC_SEL));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_1=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_1));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_2=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_2));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_3=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_3));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_4=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_4));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_5=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_5));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_6=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_6));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_7=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_7));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_8=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_8));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_9=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_9));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_1=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_1));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_2=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_2));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_3=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_3));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_4=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_4));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_5=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_5));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_6=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_6));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_7=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_7));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_8=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_8));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_9=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_9));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_10=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_10));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_11=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_11));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_12=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_12));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_13=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_13));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_14=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_14));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_15=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_15));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_16=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_16));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_17=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_17));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_18=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_18));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_19=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_19));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_10=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_10));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_11=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_11));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_12=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_12));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_13=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_13));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_14=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_14));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_15=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_15));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_16=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_16));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_17=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_17));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_18=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_18));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_19=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_19));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_20=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_20));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_21=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_21));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_22=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_22));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_23=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_23));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_24=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_24));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_25=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_25));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_26=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_26));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_27=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_27));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_28=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_28));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_29=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_29));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_20=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_20));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_21=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_21));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_22=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_22));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_23=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_23));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_24=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_24));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_25=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_25));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_26=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_26));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_27=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_27));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_28=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_28));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_29=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_29));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_30=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_30));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_31=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_31));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_32=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_32));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_33=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_33));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_34=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_34));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_35=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_35));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_36=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_36));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_37=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_37));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_38=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_38));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_39=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_39));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_30=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_30));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_31=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_31));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_32=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_32));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_33=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_33));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_34=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_34));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_35=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_35));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_36=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_36));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_37=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_37));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_38=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_38));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_39=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_39));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_40=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_40));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_41=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_41));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_42=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_42));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_43=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_43));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_44=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_44));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_45=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_45));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_46=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_46));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_47=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_47));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_48=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_48));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_49=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_49));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_40=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_40));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_41=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_41));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_42=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_42));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_43=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_43));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_44=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_44));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_45=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_45));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_46=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_46));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_47=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_47));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_48=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_48));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_49=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_49));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_50=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_50));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_51=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_51));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_52=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_52));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_53=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_53));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_54=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_54));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_55=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_55));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_56=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_56));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_57=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_57));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_58=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_58));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_59=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_59));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_50=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_50));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_51=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_51));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_52=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_52));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_53=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_53));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_54=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_54));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_55=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_55));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_56=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_56));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_57=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_57));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_58=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_58));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_59=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_59));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_60=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_60));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_61=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_61));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_62=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_62));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_63=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_63));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_64=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_64));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_65=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_65));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_66=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_66));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_67=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_67));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_68=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_68));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_69=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_69));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_60=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_60));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_61=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_61));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_62=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_62));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_63=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_63));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_64=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_64));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_65=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_65));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_66=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_66));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_67=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_67));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_68=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_68));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_69=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_69));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_70=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_70));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_71=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_71));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_72=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_72));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_73=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_73));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_74=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_74));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_75=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_75));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_76=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_76));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_77=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_77));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_78=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_78));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_79=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_79));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_70=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_70));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_71=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_71));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_72=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_72));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_73=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_73));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_74=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_74));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_75=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_75));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_76=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_76));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_77=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_77));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_78=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_78));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_79=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_79));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_80=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_80));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_81=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_81));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_82=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_82));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_83=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_83));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_84=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_84));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_85=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_85));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_86=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_86));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_87=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_87));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_88=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_88));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_89=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_89));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_80=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_80));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_81=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_81));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_82=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_82));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_83=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_83));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_84=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_84));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_85=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_85));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_86=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_86));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_87=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_87));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_88=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_88));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_89=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_89));
 
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_90=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_90));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_91=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_91));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_92=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_92));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_93=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_93));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_94=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_94));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_95=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_95));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_96=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_96));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_97=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_97));
-		CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch REG_98=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_98));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_90=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_90));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_91=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_91));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_92=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_92));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_93=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_93));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_94=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_94));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_95=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_95));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_96=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_96));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_97=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_97));
+		TRACE_STITCH(DBG_NOTICE, "stitch REG_98=0x%08x\n", STITCH_RD_REG(reg_base, REG_STITCHING_BLENDING_T, REG_98));
 
 		for (i = 0; i < STITCH_DMA_REG_NUM; i++) {
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "----------------stitch DMAID[%d]--------------------\n", i);
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch SYS_CONTROL=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, SYS_CONTROL));
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch BASE_ADDR=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, BASE_ADDR));
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch DMA_SEGLEN=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_SEGLEN));
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch DMA_STRIDE=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_STRIDE));
-			CVI_TRACE_STITCH(CVI_DBG_DEBUG, "stitch DMA_SEGNUM=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_SEGNUM));
+			TRACE_STITCH(DBG_NOTICE, "----------------stitch DMAID[%d]--------------------\n", i);
+			TRACE_STITCH(DBG_NOTICE, "stitch SYS_CONTROL=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, SYS_CONTROL));
+			TRACE_STITCH(DBG_NOTICE, "stitch BASE_ADDR=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, BASE_ADDR));
+			TRACE_STITCH(DBG_NOTICE, "stitch DMA_SEGLEN=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_SEGLEN));
+			TRACE_STITCH(DBG_NOTICE, "stitch DMA_STRIDE=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_STRIDE));
+			TRACE_STITCH(DBG_NOTICE, "stitch DMA_SEGNUM=0x%08x\n", STITCH_RD_REG(stitch_dma[i], REG_STITCH_DMA_CTL_T, DMA_SEGNUM));
 		}
 	}
 }

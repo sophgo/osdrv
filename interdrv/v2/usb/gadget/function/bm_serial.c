@@ -34,6 +34,7 @@
 #include <linux/wait.h>
 #include <linux/fs.h>
 #include <linux/eventfd.h>
+#include <linux/compat.h>
 
 /*
  * This component encapsulates the TTY layer glue needed to provide basic
@@ -759,6 +760,16 @@ done:
 	return retval;
 }
 
+#ifdef CONFIG_COMPAT
+static long bm_serial_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations bmusbrx_fops = {
 	.open = bmusbrx_open,
 	.read = bmusbrx_read,
@@ -767,6 +778,9 @@ static const struct file_operations bmusbrx_fops = {
 	.poll = bmusbrx_poll,
 	.flush = bmusbrx_flush,
 	.unlocked_ioctl = bmusbrx_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = bm_serial_compat_ptr_ioctl,
+#endif
 	.owner = THIS_MODULE,
 };
 
@@ -964,6 +978,9 @@ static const struct file_operations bmusbtx_fops = {
 	.poll = bmusbtx_poll,
 	.flush = bmusbtx_flush,
 	.unlocked_ioctl = bmusbtx_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = bm_serial_compat_ptr_ioctl,
+#endif
 	.owner = THIS_MODULE,
 };
 

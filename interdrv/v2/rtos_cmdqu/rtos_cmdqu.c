@@ -15,6 +15,7 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/compat.h>
 
 #include "rtos_cmdqu.h"
 #include "cvi_mailbox.h"
@@ -484,11 +485,24 @@ static long cvi_rtos_cmdqu_ioctl(struct file *filp, unsigned int cmd, unsigned l
 	return ret;
 }
 
+#ifdef CONFIG_COMPAT
+static long cvi_rtos_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations rtos_cmdqu_fops = {
 	.owner = THIS_MODULE,
 	.open = cvi_rtos_cmdqu_open,
 	.release = cvi_rtos_cmdqu_release,
 	.unlocked_ioctl = cvi_rtos_cmdqu_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = cvi_rtos_compat_ptr_ioctl,
+#endif
 };
 
 static int _register_dev(struct cvi_rtos_cmdqu_device *ndev)

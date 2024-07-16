@@ -30,6 +30,7 @@
 #include <linux/of.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+#include <linux/compat.h>
 
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
@@ -424,12 +425,24 @@ static int cvi_mon_close(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static long cvi_mon_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations mon_fops = {
 	.owner = THIS_MODULE,
 	.open = cvi_mon_open,
 	.release = cvi_mon_close,
 	.unlocked_ioctl = cvi_mon_ioctl,
-	.compat_ioctl = cvi_mon_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = cvi_mon_compat_ptr_ioctl,
+#endif
 };
 
 int cvi_mon_register_cdev(struct cvi_mon_device *ndev)

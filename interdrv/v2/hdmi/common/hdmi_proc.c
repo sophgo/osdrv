@@ -3,9 +3,8 @@
 #include <linux/uaccess.h>
 #include "hdmi_debug.h"
 #include "edid/edid.h"
-#include <linux/cvi_comm_hdmi.h>
-#include <linux/cvi_common.h>
-#include <linux/cvi_defines.h>
+#include <linux/comm_hdmi.h>
+#include <linux/common.h>
 #include "hdmi_proc.h"
 
 #define HDMI_PROC_NAME          "soph/hdmi"
@@ -14,16 +13,16 @@
 #define HDMI_SINK_PROC_NAME     "soph/hdmi_sink"
 #define MAX_PROC_STR_SIZE (160)
 
-static char* _pix_fmt_to_string(CVI_HDMI_VIDEO_MODE PixFmt, char* str)
+static char* _pix_fmt_to_string(hdmi_video_mode pixfmt, char* str)
 {
-	switch (PixFmt) {
-		case CVI_HDMI_VIDEO_MODE_RGB888:
+	switch (pixfmt) {
+		case HDMI_VIDEO_MODE_RGB888:
 			strcpy(str, "RGB888");
 			break;
-		case CVI_HDMI_VIDEO_MODE_YCBCR444:
+		case HDMI_VIDEO_MODE_YCBCR444:
 			strcpy(str, "YCbCr444");
 			break;
-		case CVI_HDMI_VIDEO_MODE_YCBCR422:
+		case HDMI_VIDEO_MODE_YCBCR422:
 			strcpy(str, "YCbCr422");
 			break;
 		default:
@@ -33,19 +32,19 @@ static char* _pix_fmt_to_string(CVI_HDMI_VIDEO_MODE PixFmt, char* str)
 	return str;
 }
 
-static char* _quant_range_to_string(CVI_HDMI_RGB_QUANT_RANGE QuantRange, char* str)
+static char* _quant_range_to_string(hdmi_rgb_quant_range quant_range, char* str)
 {
-	switch (QuantRange) {
-		case CVI_HDMI_RGB_QUANT_DEFAULT_RANGE:
+	switch (quant_range) {
+		case HDMI_RGB_QUANT_DEFAULT_RANGE:
 			strcpy(str, "DEFAULT");
 			break;
-		case CVI_HDMI_RGB_QUANT_LIMITED_RANGE:
+		case HDMI_RGB_QUANT_LIMITED_RANGE:
 			strcpy(str, "LIMITED");
 			break;
-		case CVI_HDMI_RGB_QUANT_FULL_RANGE:
+		case HDMI_RGB_QUANT_FULL_RANGE:
 			strcpy(str, "FULLRANGE");
 			break;
-		case CVI_HDMI_RGB_QUANT_FULL_BUTT:
+		case HDMI_RGB_QUANT_FULL_BUTT:
 			strcpy(str, "RESERVED");
 			break;
 		default:
@@ -67,10 +66,10 @@ int hdmi_ctx_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%30s%30s\n", "hdmi enable",  "audio enable");
 	seq_printf(m, "%30s%30s\n",
 					ctx->mode.hdmi_en ? "YES": "NO",
-					ctx->mode.pAudio.audio_en ? "YES": "NO");
+					ctx->mode.paudio.audio_en ? "YES": "NO");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "auth mode enable",  "deep color mode");
-	seq_printf(m, "%30s%30d\n","Reserved", ctx->mode.pVideo.mColorResolution);
+	seq_printf(m, "%30s%30d\n","Reserved", ctx->mode.pvideo.mcolor_resolution);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s\n", "deep color adapt");
 	seq_printf(m, "%30s\n", "NO");
@@ -111,21 +110,21 @@ int hdmi_ctx_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%30s%30s\n", "SYNC sw enable", "progressive");
 	seq_printf(m, "%30s%30s\n",
 				"YES",
-				ctx->mode.pVideo.mDtd.mInterlaced ? "YES":"NO");
+				ctx->mode.pvideo.mdtd.m_interlaced ? "YES":"NO");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "HSYNC polarity", "VSYNC polarity");
 	seq_printf(m, "%30s%30s\n",
-				ctx->mode.pVideo.mDtd.mHSyncPolarity ? "YES": "NO",
-				ctx->mode.pVideo.mDtd.mVSyncPolarity ? "YES": "NO");
+				ctx->mode.pvideo.mdtd.m_hsync_polarity ? "YES": "NO",
+				ctx->mode.pvideo.mdtd.m_vsync_polarity ? "YES": "NO");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "HSYNC total", "VSYNC total");
 	seq_printf(m, "%30d%30d\n",
-				ctx->mode.pVideo.mDtd.mHActive + ctx->mode.pVideo.mDtd.mHBlanking,
-				ctx->mode.pVideo.mDtd.mVActive + ctx->mode.pVideo.mDtd.mVBlanking);
+				ctx->mode.pvideo.mdtd.m_hactive + ctx->mode.pvideo.mdtd.m_hblanking,
+				ctx->mode.pvideo.mdtd.m_vactive + ctx->mode.pvideo.mdtd.m_vblanking);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "Hactive", "Vactive");
 	seq_printf(m, "%30d%30d\n",
-				ctx->mode.pVideo.mDtd.mHActive, ctx->mode.pVideo.mDtd.mVActive);
+				ctx->mode.pvideo.mdtd.m_hactive, ctx->mode.pvideo.mdtd.m_vactive);
 #if 0
 	------------------------------------------------ task id=1112 event pool[0] status ---------------------------------------
 	-cnt|err total|hpd|unhpd|edid fail |rsen con|rsen dis
@@ -256,19 +255,19 @@ static int hdmi_proc_show(struct seq_file *m, void *v)
 
 static ssize_t hdmi_proc_write(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
 {
-	char cProcInputdata[MAX_PROC_STR_SIZE] = {'\0'};
+	char cproc_input_data[MAX_PROC_STR_SIZE] = {'\0'};
 
 	if (user_buf == NULL || count >= MAX_PROC_STR_SIZE) {
 		pr_err("Invalid input value\n");
 		return -EINVAL;
 	}
 
-	if (copy_from_user(cProcInputdata, user_buf, count)) {
+	if (copy_from_user(cproc_input_data, user_buf, count)) {
 		pr_err("copy_from_user fail\n");
 		return -EFAULT;
 	}
 
-	if(hdmi_proc_write_parse(cProcInputdata) < 0)
+	if(hdmi_proc_write_parse(cproc_input_data) < 0)
 		return -EFAULT;
 
 	return count;
@@ -328,104 +327,106 @@ int hdmi_video_ctx_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "HDMI version: 2.0\n");
 	seq_puts(m, "\n-------------------- VideoAttr ------------------------------- AVIInfo ------------------\n");
 	seq_printf(m, "%30s%40s\n", "video timing", "avi infoframe enable");
-    seq_printf(m, "%22d*%dp%d %d:%d%40s\n",
-				ctx->mode.pVideo.mDtd.mHActive,
-				ctx->mode.pVideo.mDtd.mVActive,
-				dtd_get_refresh_rate(&ctx->mode.pVideo.mDtd)/1000,
-				ctx->mode.pVideo.mDtd.mHImageSize,
-				ctx->mode.pVideo.mDtd.mVImageSize,
+	seq_printf(m, "%22d*%dp%d %d:%d%40s\n",
+				ctx->mode.pvideo.mdtd.m_hactive,
+				ctx->mode.pvideo.mdtd.m_vactive,
+				dtd_get_refresh_rate(&ctx->mode.pvideo.mdtd)/1000,
+				ctx->mode.pvideo.mdtd.m_himage_size,
+				ctx->mode.pvideo.mdtd.m_vimage_size,
 				"YES");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "disp fmt", "current format");
-    seq_printf(m, "%27dP@%d%26d*%dp%d %d:%d(vic=%d)\n",
-				ctx->mode.pVideo.mDtd.mVActive,
-				dtd_get_refresh_rate(&ctx->mode.pVideo.mDtd)/1000,
-				ctx->mode.pVideo.mDtd.mHActive,
-				ctx->mode.pVideo.mDtd.mVActive,
-				dtd_get_refresh_rate(&ctx->mode.pVideo.mDtd)/1000,
-				ctx->mode.pVideo.mDtd.mHImageSize,
-				ctx->mode.pVideo.mDtd.mVImageSize,
-				ctx->mode.pVideo.mDtd.mCode);
+	seq_printf(m, "%27dP@%d%26d*%dp%d %d:%d(vic=%d)\n",
+				ctx->mode.pvideo.mdtd.m_vactive,
+				dtd_get_refresh_rate(&ctx->mode.pvideo.mdtd)/1000,
+				ctx->mode.pvideo.mdtd.m_hactive,
+				ctx->mode.pvideo.mdtd.m_vactive,
+				dtd_get_refresh_rate(&ctx->mode.pvideo.mdtd)/1000,
+				ctx->mode.pvideo.mdtd.m_himage_size,
+				ctx->mode.pvideo.mdtd.m_vimage_size,
+				ctx->mode.pvideo.mdtd.m_code);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "pixel clk", "vsif format");
-    seq_printf(m, "%30d%40s\n",
+	seq_printf(m, "%30d%40s\n",
 				ctx->hdmi_tx.snps_hdmi_ctrl.pixel_clock,
 				"Reserved");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "in bit depth", "bar data present");
-    seq_printf(m, "%30s%40s\n" ,"8 bit",  "NONE");
-    seq_printf(m, "\n");
+	seq_printf(m, "%30s%40s\n" ,"8 bit",  "NONE");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "in color space", "color space");
-    seq_printf(m, "%30s%40s\n",
-				_pix_fmt_to_string(ctx->mode.pVideo.mEncodingIn, str),
-				_pix_fmt_to_string(ctx->mode.pVideo.mEncodingOut, str));
+	seq_printf(m, "%30s%40s\n",
+				_pix_fmt_to_string(ctx->mode.pvideo.mencodingin, str),
+				_pix_fmt_to_string(ctx->mode.pvideo.mencodingout, str));
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "colorimetry", "pixel repeat");
 	seq_printf(m, "%30s%40d\n",
-				ctx->mode.pVideo.mColorimetry == 1 ? "ITU R BT.601": "ITU R BT.709",
+				ctx->mode.pvideo.mcolorimetry == 1 ? "ITU R BT.601": "ITU R BT.709",
 				ctx->hdmi_tx.snps_hdmi_ctrl.pixel_repetition);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "pic aspect ratio", "act aspect ratio");
-    seq_printf(m, "%28d:%d%40s\n",
-				ctx->mode.pVideo.mDtd.mHImageSize,
-				ctx->mode.pVideo.mDtd.mVImageSize,
+	seq_printf(m, "%28d:%d%40s\n",
+				ctx->mode.pvideo.mdtd.m_himage_size,
+				ctx->mode.pvideo.mdtd.m_vimage_size,
 				"Reserved");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "ycc quantization", "Vactive");
-    seq_printf(m, "%30s%40s\n",
+	seq_printf(m, "%30s%40s\n",
 				"LIMITED",
-				_quant_range_to_string(ctx->mode.pVideo.mRgbQuantizationRange, str));
+				_quant_range_to_string(ctx->mode.pvideo.mrgb_quantization_range, str));
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "ext colorimetry", "ext colorimetry");
-    seq_printf(m, "%30s%40s\n", "Reserved", "Reserved");
+	seq_printf(m, "%30s%40s\n", "Reserved", "Reserved");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "stereo mode", "it content valid");
-    seq_printf(m, "%30s%40s\n", "NONE" ,"NO");
+	seq_printf(m, "%30s%40s\n", "NONE" ,"NO");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "hsync pol", "vsync pol");
-    seq_printf(m, "%30d%40d\n",
-				ctx->mode.pVideo.mDtd.mHSyncPolarity,
-				ctx->mode.pVideo.mDtd.mVSyncPolarity);
+	seq_printf(m, "%30d%40d\n",
+				ctx->mode.pvideo.mdtd.m_hsync_polarity,
+				ctx->mode.pvideo.mdtd.m_vsync_polarity);
 	seq_printf(m, "\n");
-    seq_puts(m, "------------------- video path -----------------------------------\n");
+	seq_puts(m, "------------------- video path -----------------------------------\n");
 	seq_printf(m, "%30s%40s\n", "video mute", "pic scaling");
-    seq_printf(m, "%30s%40s\n",
+	seq_printf(m, "%30s%40s\n",
 				ctx->hdmi_tx.snps_hdmi_ctrl.avmute ? "YES": "NO",
 				"UNKNOWN");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "out bit depth", "act fmt present");
-    seq_printf(m, "%30d%40s\n",
-				ctx->mode.pVideo.mEncodingOut == 2 ? 12: 8,
+	seq_printf(m, "%30d%40s\n",
+				ctx->mode.pvideo.mencodingout == 2 ? 12: 8,
 				"Reserved");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "out color space", "scan info");
-    seq_printf(m, "%30s%40s\n",
-				_pix_fmt_to_string(ctx->mode.pVideo.mEncodingOut, str),
+	seq_printf(m, "%30s%40s\n",
+				_pix_fmt_to_string(ctx->mode.pvideo.mencodingout, str),
 				"NONE");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "it content type", "ycbcr422_444");
 	seq_printf(m, "%30s%40s\n", "GRAPHICS", "NO");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "ycbcr420_422", "ycbcr444_422");
-	seq_printf(m, "%30s%40s\n",
-				  "NO",
-				  (ctx->mode.pVideo.mEncodingIn == 1 && ctx->mode.pVideo.mEncodingOut == 2) ? "YES": "NO");
-    seq_printf(m, "\n");
-    seq_printf(m, "%30s%40s\n", "ycbcr422_420", "rgb2ycbcr");
 	seq_printf(m, "%30s%40s\n", "NO",
-				(ctx->mode.pVideo.mEncodingIn == 0
-				&& (ctx->mode.pVideo.mEncodingOut == 1 || ctx->mode.pVideo.mEncodingOut == 2)) ? "YES": "NO");
-    seq_printf(m, "\n");
+				(ctx->mode.pvideo.mencodingin == 1 &&
+				ctx->mode.pvideo.mencodingout == 2) ? "YES": "NO");
+	seq_printf(m, "\n");
+	seq_printf(m, "%30s%40s\n", "ycbcr422_420", "rgb2ycbcr");
+	seq_printf(m, "%30s%40s\n", "NO",
+				(ctx->mode.pvideo.mencodingin == 0 &&
+				(ctx->mode.pvideo.mencodingout == 1 ||
+				 ctx->mode.pvideo.mencodingout == 2)) ? "YES": "NO");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s\n", "ycbcr2rgb");
-    seq_printf(m, "%30s\n",
-				(ctx->mode.pVideo.mEncodingIn == 1 &&  ctx->mode.pVideo.mEncodingOut == 0) ? "YES": "NO");
-    seq_printf(m, "\n");
-    seq_printf(m, "%30s%40s\n", "dither", "deep color mode");
+	seq_printf(m, "%30s\n",
+				(ctx->mode.pvideo.mencodingin == 1 &&
+				 ctx->mode.pvideo.mencodingout == 0) ? "YES": "NO");
+	seq_printf(m, "\n");
+	seq_printf(m, "%30s%40s\n", "dither", "deep color mode");
 	seq_printf(m, "%30s%40s\n", "Reserved", "24 bit(OFF)");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s\n", "avi info raw data");
 	seq_printf(m, "%30s\n", "Reserved");
-    seq_printf(m, "\n");
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s\n", "vsif info raw data");
 	seq_printf(m, "%30s\n", "Reserved");
 
@@ -502,57 +503,57 @@ int hdmi_audio_ctx_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%30s%30s\n", "PCM", "PCM");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "channel cnt", "channel cnt");
-    seq_printf(m, "%30d%30d\n",
-				  ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt,
-				  ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt);
+	seq_printf(m, "%30d%30d\n",
+				ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt,
+				ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "sample freq", "sample freq");
-    seq_printf(m, "%30d%30d\n",
-				  ctx->mode.pAudio.mSamplingFrequency,
-				  ctx->mode.pAudio.mSamplingFrequency);
+	seq_printf(m, "%30d%30d\n",
+				ctx->mode.paudio.msampling_frequency,
+				ctx->mode.paudio.msampling_frequency);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "sample depth", "sample depth");
-    seq_printf(m, "%30d%30d\n",
-				  ctx->mode.pAudio.mSampleSize,
-				  ctx->mode.pAudio.mSampleSize);
+	seq_printf(m, "%30d%30d\n",
+				ctx->mode.paudio.msample_size,
+				ctx->mode.paudio.msample_size);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "down sample", "sample size");
 	seq_printf(m, "%30s%30s\n", "NO", "STR_HEADER");
 	seq_printf(m, "\n");
-    seq_printf(m, "------------------- audio path --------------------------------------------\n");
+	seq_printf(m, "------------------- audio path --------------------------------------------\n");
 	seq_printf(m, "%30s%30s\n", "audio enable", "level shift value");
-    seq_printf(m, "%30s%28ddB\n",
-				  ctx->mode.pAudio.audio_en ? "YES": "NO",
-				  ctx->mode.pAudio.mLevelShiftValue);
+	seq_printf(m, "%30s%28ddB\n",
+				ctx->mode.paudio.audio_en ? "YES": "NO",
+				ctx->mode.paudio.mLevel_shift_value);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "audio mute", "lfe playback");
-    seq_printf(m, "%30s%30s\n",
-				  ctx->hdmi_tx.snps_hdmi_ctrl.audio_mute ? "YES": "NO",
-				  "UNKNOWN");
+	seq_printf(m, "%30s%30s\n",
+				ctx->hdmi_tx.snps_hdmi_ctrl.audio_mute ? "YES": "NO",
+				"UNKNOWN");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "sound intf", "channel/speakeralloc");
-    seq_printf(m, "%30s%30x\n",
-				  "AHB-DMA",
-				  ctx->mode.pAudio.mChannelAllocation);
+	seq_printf(m, "%30s%30x\n",
+				"AHB-DMA",
+				ctx->mode.paudio.mchannel_allocation);
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "channel cnt", "audio info raw data");
-    seq_printf(m, "%30d%30s\n",
-				  ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt,
-				  " ");
+	seq_printf(m, "%30d%30s\n",
+				ctx->hdmi_tx.snps_hdmi_ctrl.channel_cnt,
+				" ");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "sample freq", "sample depth");
 	seq_printf(m, "%30d%30d\n",
-				  ctx->mode.pAudio.mSamplingFrequency,
-				  ctx->mode.pAudio.mSampleSize);
-    seq_printf(m, "\n");
+				ctx->mode.paudio.msampling_frequency,
+				ctx->mode.paudio.msample_size);
+	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "down sample", "down mix inhibit");
 	seq_printf(m, "%30s%30s\n", "NO",
-				  ctx->mode.pAudio.mDownMixInhibitFlag ? "YES": "NO");
+				ctx->mode.paudio.mdown_mix_inhibit_flag ? "YES": "NO");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%30s\n", "cts value", "n value");
 	seq_printf(m, "%30d%30d\n",
-				  ctx->hdmi_tx.snps_hdmi_ctrl.cts,
-				  ctx->hdmi_tx.snps_hdmi_ctrl.n);
+				ctx->hdmi_tx.snps_hdmi_ctrl.cts,
+				ctx->hdmi_tx.snps_hdmi_ctrl.n);
 
 	return 0;
 }
@@ -625,7 +626,7 @@ int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
 	}
 
 	seq_puts(m, "HDMI version: 2.0\n");
-    seq_puts(m, "---------------------------- edid raw data ----------------------------\n");
+	seq_puts(m, "---------------------------- edid raw data ----------------------------\n");
 	seq_printf(m, "/* 00H: */");
 	for(i = 0; i < 16; i++)
 	{
@@ -732,33 +733,34 @@ int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
 		seq_puts(m, "-------------------------------- basic cap ------------------------------\n");
 		seq_printf(m, "%30s%20s\n", "hdmi1.4 support", "1st block version");
 		seq_printf(m, "%30s%18d.%d\n",
-					ctx->mode.pVideo.mHdmi ? "YES" : "NO",
+					ctx->mode.pvideo.mhdmi ? "YES" : "NO",
 					ctx->mode.edid.version,
 					ctx->mode.edid.revision);
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "hdmi2.0 support", "manufacturer name");
 		seq_printf(m, "%30s%20s\n",
-					ctx->mode.sink_cap->edid_m20Sink ? "YES" : "NO",
-					ctx->mode.sink_cap->edid_mMonitorName);
+					ctx->mode.sink_cap->edid_m20sink ? "YES" : "NO",
+					ctx->mode.sink_cap->edid_mmonitor_name);
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "max tmds clock(MHz)", "product code");
 		seq_printf(m, "%30d%20s\n",
-					ctx->mode.sink_cap->edid_mHdmiForumvsdb.mMaxTmdsCharRate,
+					ctx->mode.sink_cap->edid_mhdmi_forumvsdb.m_max_tmds_char_rate,
 					"Reserved");
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "serial number", "week of manufacture");
 		seq_printf(m, "%30s%20s\n", "Reserved", "Reserved");
-	    seq_printf(m, "\n");
+		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "max disp width", "maxdisp height");
 		seq_printf(m, "%30s%20s\n", "Reserved", "Reserved");
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "scdc support", "year of manufacture");
-		seq_printf(m, "%30s%20s\n", ctx->mode.sink_cap->edid_mHdmiForumvsdb.mSCDC_Present ? "YES" : "NO",
-									"Reserved");
+		seq_printf(m, "%30s%20s\n",
+					ctx->mode.sink_cap->edid_mhdmi_forumvsdb.m_scdc_Present ? "YES" : "NO",
+					"Reserved");
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "dvi dual support", "cec addr is valid");
 		seq_printf(m, "%30s%20s\n", "Reserved", "Reserved");
-	    seq_printf(m, "\n");
+		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "ai support", "cec addr");
 		seq_printf(m, "%30s%20s\n", "Reserved", "Reserved");
 		seq_printf(m, "\n");
@@ -767,47 +769,47 @@ int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%20s\n", "rgb quan selectable", "ycc quan selectable");
 		seq_printf(m, "%30s%20s\n",
-					ctx->mode.sink_cap->edid_mVideoCapabilityDataBlock.mQuantizationRangeSelectable ? "YES" : "NO",
-					ctx->mode.sink_cap->edid_mVideoCapabilityDataBlock.mQuantizationRangeSelectable ? "YES" : "NO");
+					ctx->mode.sink_cap->edid_mvideo_capability_datablock.mquantization_range_selectable ? "YES" : "NO",
+					ctx->mode.sink_cap->edid_mvideo_capability_datablock.mquantization_range_selectable ? "YES" : "NO");
 		seq_printf(m, "\n");
 		seq_puts(m, "-------------------------------- video cap ------------------------------\n");
 		seq_printf(m, "%30s\n", "native format");
 		seq_printf(m, "%16dx%d%s@%d %d:%d\n",
-					ctx->mode.sink_capinfo[0].sink_cap_info.mHActive,
-					ctx->mode.sink_capinfo[0].sink_cap_info.mVActive,
-					ctx->mode.sink_capinfo[0].sink_cap_info.mInterlaced ? "i" : "p",
+					ctx->mode.sink_capinfo[0].sink_cap_info.m_hactive,
+					ctx->mode.sink_capinfo[0].sink_cap_info.m_vactive,
+					ctx->mode.sink_capinfo[0].sink_cap_info.m_interlaced ? "i" : "p",
 					ctx->mode.sink_capinfo[0].fresh_rate / 1000,
-					ctx->mode.sink_capinfo[0].sink_cap_info.mHImageSize,
-					ctx->mode.sink_capinfo[0].sink_cap_info.mVImageSize);
+					ctx->mode.sink_capinfo[0].sink_cap_info.m_himage_size,
+					ctx->mode.sink_capinfo[0].sink_cap_info.m_vimage_size);
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s\n", "color space");
 		seq_printf(m, "%12s %s %s %s\n",
 					"RGB888",
-					ctx->mode.sink_cap->edid_mYcc444Support ? "YCbCr444" : " ",
-					ctx->mode.sink_cap->edid_mYcc422Support ? "YCbCr422" : " ",
-					ctx->mode.sink_cap->edid_mYcc420Support ? "YCbCr420" : " ");
+					ctx->mode.sink_cap->edid_mycc444_support ? "YCbCr444" : " ",
+					ctx->mode.sink_cap->edid_mycc422_support ? "YCbCr422" : " ",
+					ctx->mode.sink_cap->edid_mycc420_support ? "YCbCr420" : " ");
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s\n", "deep color");
 		seq_printf(m, "%30s %s %s\n",
-					ctx->mode.sink_cap->edid_mHdmivsdb.mDeepColor30 ? "RGB_30bit" : " ",
-					ctx->mode.sink_cap->edid_mHdmivsdb.mDeepColor36 ? "RGB_36bit" : " ",
-					ctx->mode.sink_cap->edid_mHdmivsdb.mDeepColor48 ? "RGB_48bit" : " ");
+					ctx->mode.sink_cap->edid_mhdmivsdb.m_deep_color30 ? "RGB_30bit" : " ",
+					ctx->mode.sink_cap->edid_mhdmivsdb.m_deep_color36 ? "RGB_36bit" : " ",
+					ctx->mode.sink_cap->edid_mhdmivsdb.m_deep_color48 ? "RGB_48bit" : " ");
 		seq_printf(m, "%30s\n", "ycbcr420 deep color");
 		seq_printf(m, "%30s %s %s\n",
-					ctx->mode.sink_cap->edid_mHdmiForumvsdb.mDC_30bit_420 ? "YCbCr420_30bit" : " ",
-					ctx->mode.sink_cap->edid_mHdmiForumvsdb.mDC_36bit_420 ? "YCbCr420_36bit" : " ",
-					ctx->mode.sink_cap->edid_mHdmiForumvsdb.mDC_48bit_420 ? "YCbCr420_48bit" : " ");
+					ctx->mode.sink_cap->edid_mhdmi_forumvsdb.mdc_30bit_420 ? "YCbCr420_30bit" : " ",
+					ctx->mode.sink_cap->edid_mhdmi_forumvsdb.mdc_36bit_420 ? "YCbCr420_36bit" : " ",
+					ctx->mode.sink_cap->edid_mhdmi_forumvsdb.mdc_48bit_420 ? "YCbCr420_48bit" : " ");
 		seq_printf(m, "%30s\n", "ycbcr420[also]");
-		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.mCode != 0; i++) {
-			if(ctx->mode.sink_capinfo[i].sink_cap_info.mYcc420) {
-				seq_printf(m, "%30s:%d ", "vic", ctx->mode.sink_capinfo[i].sink_cap_info.mCode);
+		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.m_code != 0; i++) {
+			if(ctx->mode.sink_capinfo[i].sink_cap_info.m_ycc420) {
+				seq_printf(m, "%30s:%d ", "vic", ctx->mode.sink_capinfo[i].sink_cap_info.m_code);
 			}
 		}
 		seq_printf(m, "\n");
-        seq_printf(m, "%30s\n", "ycbcr420[only]");
-		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.mCode != 0; i++) {
-			if(ctx->mode.sink_capinfo[i].sink_cap_info.mLimitedToYcc420) {
-				seq_printf(m, "%30s:%d ", "vic",ctx->mode.sink_capinfo[i].sink_cap_info.mCode);
+		seq_printf(m, "%30s\n", "ycbcr420[only]");
+		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.m_code != 0; i++) {
+			if(ctx->mode.sink_capinfo[i].sink_cap_info.m_limited_to_ycc420) {
+				seq_printf(m, "%30s:%d ", "vic",ctx->mode.sink_capinfo[i].sink_cap_info.m_code);
 			}
 		}
 		seq_printf(m, "\n");
@@ -818,69 +820,71 @@ int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
 		seq_printf(m, "%30s ", ctx->mode.sink_cap->adobe_rgb ? "adobe_rgb" : "");
 		seq_printf(m, "%30s ", ctx->mode.sink_cap->adobe_ycc601 ? "adobe_ycc601" : "");
 		seq_printf(m, "\n");
-        seq_puts(m, "-------------------------------- format cap -----------------------------\n");
-		for(i = 1; ctx->mode.sink_capinfo[i-1].sink_cap_info.mCode != 0; i++) {
-            seq_printf(m, "%30dx%d%s@%d %d:%d(mcode %d)\n",
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mHActive,
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mInterlaced ? ctx->mode.sink_capinfo[i-1].sink_cap_info.mVActive * 2
-					: ctx->mode.sink_capinfo[i-1].sink_cap_info.mVActive,
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mInterlaced ? "i" : "p",
+		seq_puts(m, "-------------------------------- format cap -----------------------------\n");
+		for(i = 1; ctx->mode.sink_capinfo[i-1].sink_cap_info.m_code != 0; i++) {
+			seq_printf(m, "%30dx%d%s@%d %d:%d(m_code %d)\n",
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_hactive,
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_interlaced ?
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_vactive * 2 :
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_vactive,
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_interlaced ? "i" : "p",
 					ctx->mode.sink_capinfo[i-1].fresh_rate / 1000,
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mHImageSize,
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mVImageSize,
-					ctx->mode.sink_capinfo[i-1].sink_cap_info.mCode);
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_himage_size,
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_vimage_size,
+					ctx->mode.sink_capinfo[i-1].sink_cap_info.m_code);
 		}
-        seq_puts(m, "---------------------------------- audio cap ----------------------------\n");
+		seq_puts(m, "---------------------------------- audio cap ----------------------------\n");
 
 		seq_printf(m, "%30s\n", "NO.0");
 
 		seq_printf(m, "%30s%30s\n", "code type", "max channel num");
-        seq_printf(m, "%30s%30d\n",
+		seq_printf(m, "%30s%30d\n",
 						"L-PCM",
-					    ctx->mode.sink_cap->edid_mSad->mMaxChannels);
+						ctx->mode.sink_cap->edid_msad->m_max_channels);
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s%30s\n", "max bit rate(KHz)", "bit depth");
-        seq_printf(m, "%28dhz%20s",
-					   ctx->mode.sink_cap->Support_SampleRate[0],
+		seq_printf(m, "%28dhz%20s",
+						ctx->mode.sink_cap->support_sample_rate[0],
 					" ");
-		for(i = 0; ctx->mode.sink_cap->Support_BitDepth[i] != 0; i++) {
-			seq_printf(m, " %d  ", ctx->mode.sink_cap->Support_BitDepth[i]);
+		for(i = 0; ctx->mode.sink_cap->support_bit_depth[i] != 0; i++) {
+			seq_printf(m, " %d  ", ctx->mode.sink_cap->support_bit_depth[i]);
 		}
 		seq_printf(m, "\n");
 		seq_printf(m, "\n");
 		seq_printf(m, "%30s\n", "sample rate(Hz)");
 		seq_printf(m, "%30s", " ");
-		for(i = 0; ctx->mode.sink_cap->Support_BitDepth[i] != 0; i++) {
-			seq_printf(m, "%s%d  ", " ", ctx->mode.sink_cap->Support_SampleRate[i]);
+		for(i = 0; ctx->mode.sink_cap->support_bit_depth[i] != 0; i++) {
+			seq_printf(m, "%s%d  ", " ", ctx->mode.sink_cap->support_sample_rate[i]);
 		}
 		seq_printf(m, "\n");
-        seq_puts(m, "---------------------------------- detail timing ----------------------------\n");
-        seq_puts(m, "[NO.]:  hact|vact|p/i |pclk  |aspw|asph|hfb |hpw |hbb |vfb |vpw |vbb |img_w|img_h|ihs |ivs |idv\n");
+		seq_puts(m, "---------------------------------- detail timing ----------------------------\n");
+		seq_puts(m, "[NO.]:  hact|vact|p/i |pclk  |aspw|asph|hfb |hpw |hbb |vfb |vpw |vbb |img_w|img_h|ihs |ivs |idv\n");
 
-		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.mCode != 0; i++) {
+		for(i = 0; ctx->mode.sink_capinfo[i].sink_cap_info.m_code != 0; i++) {
 			seq_printf(m, "[NO.%2d]:%4d|%4d|%2s  |%6d|%4d|%4d|%4d|%4d|%4d|%4d|%4d|%4d|%4d |%4d |%3s |%3s |%3s\n",
 						i,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHActive,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mInterlaced ? ctx->mode.sink_capinfo[i].sink_cap_info.mVActive * 2
-						 : ctx->mode.sink_capinfo[i].sink_cap_info.mVActive,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mInterlaced ? "i" : "p",
-						ctx->mode.sink_capinfo[i].sink_cap_info.mPixelClock,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHImageSize,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVImageSize,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHSyncOffset,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHSyncPulseWidth,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHBlanking
-						 - ctx->mode.sink_capinfo[i].sink_cap_info.mHSyncOffset
-						 - ctx->mode.sink_capinfo[i].sink_cap_info.mHSyncPulseWidth,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVSyncOffset,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVSyncPulseWidth,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVBlanking
-						 - ctx->mode.sink_capinfo[i].sink_cap_info.mVSyncOffset
-					     - ctx->mode.sink_capinfo[i].sink_cap_info.mVSyncPulseWidth,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHImageSize,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVImageSize,
-						ctx->mode.sink_capinfo[i].sink_cap_info.mHSyncPolarity ? "YES" : "NO",
-						ctx->mode.sink_capinfo[i].sink_cap_info.mVSyncPolarity ? "YES" : "NO",
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hactive,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_interlaced ?
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vactive * 2 :
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vactive,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_interlaced ? "i" : "p",
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_pixel_clock,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_himage_size,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vimage_size,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hsync_offset,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hsync_pulse_width,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hblanking -
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hsync_offset -
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hsync_pulse_width,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vsync_offset,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vsync_pulse_width,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vblanking -
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vsync_offset -
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vsync_pulse_width,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_himage_size,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vimage_size,
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_hsync_polarity ? "YES" : "NO",
+						ctx->mode.sink_capinfo[i].sink_cap_info.m_vsync_polarity ? "YES" : "NO",
 						ctx->hdmi_tx.snps_hdmi_ctrl.data_enable_polarity ? "YES" : "NO");
 		}
 	}

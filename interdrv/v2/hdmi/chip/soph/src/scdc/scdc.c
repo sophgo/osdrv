@@ -13,7 +13,7 @@ int scdc_read(hdmi_tx_dev_t *dev, u8 address, u8 size, u8 * data)
 {
 	if(ddc_read(dev, SCDC_SLAVE_ADDRESS, 0,0 , address, size, data)){
 		pr_debug("%s: SCDC addr 0x%x read failed ",__func__, address);
-		return CVI_ERR_HDMI_SCDC_FAILED;
+		return HDMI_ERR_SCDC_FAILED;
 	}
 	return 0;
 }
@@ -22,7 +22,7 @@ int scdc_write(hdmi_tx_dev_t *dev, u8 address, u8 size, u8 * data)
 {
 	if(ddc_write(dev, SCDC_SLAVE_ADDRESS, address, size, data)){
 		pr_debug("%s: SCDC addr 0x%x write failed ",__func__, address);
-		return CVI_ERR_HDMI_SCDC_FAILED;
+		return HDMI_ERR_SCDC_FAILED;
 	}
 	return 0;
 }
@@ -74,7 +74,7 @@ int scdc_set_rr_flag(hdmi_tx_dev_t *dev, u8 enable)
 {
 	if(ddc_write(dev, SCDC_SLAVE_ADDRESS, SCDC_CONFIG_0, 1, &enable)){
 		pr_debug("%s: SCDC addr 0x%x - 0x%x write failed ",__func__, SCDC_CONFIG_0, enable);
-		return CVI_ERR_HDMI_SCDC_FAILED;
+		return HDMI_ERR_SCDC_FAILED;
 	}
 	return 0;
 }
@@ -83,7 +83,7 @@ int scdc_get_rr_flag(hdmi_tx_dev_t *dev, u8 * flag)
 {
 	if(ddc_read(dev, SCDC_SLAVE_ADDRESS, 0, 0 , SCDC_CONFIG_0, 1, flag)){
 		pr_debug("%s: SCDC addr 0x%x read failed ",__func__, SCDC_CONFIG_0);
-		return CVI_ERR_HDMI_SCDC_FAILED;
+		return HDMI_ERR_SCDC_FAILED;
 	}
 	return 0;
 }
@@ -108,7 +108,7 @@ int scdc_read_cnt(hdmi_tx_dev_t *dev, u8 *data)
 {
 	if(ddc_read(dev, SCDC_SLAVE_ADDRESS, 0, 0, SCDC_ERR_DET_0_L, 8, data)){
 		pr_debug("%s: SCDC addr 0x%x read failed ",__func__, SCDC_ERR_DET_0_L);
-		return CVI_ERR_HDMI_SCDC_FAILED;
+		return HDMI_ERR_SCDC_FAILED;
 	}
 
 	return 0;

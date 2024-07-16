@@ -5,118 +5,116 @@
 	extern "C" {
 #endif
 
-#include <linux/vo_uapi.h>
-#include <linux/types.h>
-#include <linux/cvi_errno.h>
-#include "cvi_vo_ctx.h"
+#include <linux/comm_errno.h>
 #include "vo_common.h"
 #include "vo_defines.h"
 
-extern struct cvi_vo_ctx *gVoCtx;
+extern bool __clk_is_enabled(struct clk *clk);
+extern struct vo_ctx *g_vo_ctx;
 
-static inline s32 CHECK_VO_LAYER_DISABLE(VO_LAYER VoLayer)
+static inline int check_video_layer_disable(vo_layer layer)
 {
-	if (gVoCtx->astLayerCtx[VoLayer].is_layer_enable) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) already enabled.\n", VoLayer);
-		return CVI_ERR_VO_VIDEO_NOT_DISABLED;
+	if (g_vo_ctx->layer_ctx[layer].is_layer_enable) {
+		TRACE_VO(DBG_ERR, "layer(%d) already enabled.\n", layer);
+		return ERR_VO_VIDEO_NOT_DISABLED;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_LAYER_VALID(VO_LAYER VoLayer)
+static inline int check_video_layer_valid(vo_layer layer)
 {
-	if (VoLayer >= VO_MAX_LAYER_NUM) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
-		return CVI_ERR_VO_INVALID_LAYERID;
+	if (layer >= VO_MAX_VIDEO_LAYER_NUM) {
+		TRACE_VO(DBG_ERR, "layer(%d) invalid.\n", layer);
+		return ERR_VO_INVALID_LAYERID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_LAYER_ENABLE(VO_LAYER VoLayer)
+static inline int check_video_layer_enable(vo_layer layer)
 {
-
-	if (!gVoCtx->astLayerCtx[VoLayer].is_layer_enable) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) not enable.\n", VoLayer);
-		return CVI_ERR_VO_VIDEO_NOT_ENABLED;
+	if (!g_vo_ctx->layer_ctx[layer].is_layer_enable) {
+		TRACE_VO(DBG_ERR, "layer(%d) not enable.\n", layer);
+		return ERR_VO_VIDEO_NOT_ENABLED;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_OVERLAY_VALID(VO_LAYER VoLayer)
+static inline int check_graphic_layer_valid(vo_layer layer)
 {
-	if ((VoLayer < VO_MAX_LAYER_NUM) || (VoLayer >= (VO_MAX_LAYER_NUM + VO_MAX_OVERLAY_NUM))) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
-		return CVI_ERR_VO_INVALID_LAYERID;
+	if (layer < VO_MAX_VIDEO_LAYER_NUM || layer >= VO_MAX_LAYER_NUM) {
+		TRACE_VO(DBG_ERR, "layer(%d) invalid.\n", layer);
+		return ERR_VO_INVALID_LAYERID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_DEV_VALID(VO_DEV VoDev)
+static inline int check_vo_dev_valid(vo_dev dev)
 {
-	if ((VoDev >= VO_MAX_DEV_NUM) || (VoDev < 0)) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoDev(%d) invalid.\n", VoDev);
-		return CVI_ERR_VO_INVALID_DEVID;
+	if (dev >= VO_MAX_DEV_NUM || dev < 0) {
+		TRACE_VO(DBG_ERR, "dev(%d) invalid.\n", dev);
+		return ERR_VO_INVALID_DEVID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_CHN_VALID(VO_LAYER VoLayer, VO_CHN VoChn)
+static inline int check_vo_chn_valid(vo_layer layer, vo_chn chn)
 {
-	if ((VoLayer >= VO_MAX_LAYER_NUM) || (VoLayer < 0)) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) invalid.\n", VoLayer);
-		return CVI_ERR_VO_INVALID_LAYERID;
+	if (layer >= VO_MAX_VIDEO_LAYER_NUM || layer < 0) {
+		TRACE_VO(DBG_ERR, "layer(%d) invalid.\n", layer);
+		return ERR_VO_INVALID_LAYERID;
 	}
-	if ((VoChn >= VO_MAX_CHN_NUM) || (VoChn < 0)) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoChn(%d) invalid.\n", VoChn);
-		return CVI_ERR_VO_INVALID_CHNID;
+	if (chn >= VO_MAX_CHN_NUM || chn < 0) {
+		TRACE_VO(DBG_ERR, "chn(%d) invalid.\n", chn);
+		return ERR_VO_INVALID_CHNID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_CHN_ENABLE(VO_LAYER VoLayer, VO_CHN VoChn)
+static inline int check_vo_chn_enable(vo_layer layer, vo_chn chn)
 {
-	if (!gVoCtx->astLayerCtx[VoLayer].astChnCtx[VoChn].is_chn_enable) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoLayer(%d) VoChn(%d) isn't enabled yet.\n", VoLayer, VoChn);
-		return CVI_ERR_VO_CHN_NOT_ENABLED;
+	if (!g_vo_ctx->layer_ctx[layer].chn_ctx[chn].is_chn_enable) {
+		TRACE_VO(DBG_ERR, "layer(%d) chn(%d) isn't enabled yet.\n", layer, chn);
+		return ERR_VO_CHN_NOT_ENABLED;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_NULL_PTR(MOD_ID_E mod, const void *ptr)
+static inline int check_vo_null_ptr(mod_id_e mod, const void *ptr)
 {
-	if (mod >= CVI_ID_BUTT)
-		return CVI_FAILURE;
+	if (mod >= ID_BUTT)
+		return -1;
 
 	if (!ptr) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "NULL pointer\n");
-		return CVI_ERR_VO_NULL_PTR;
+		TRACE_VO(DBG_ERR, "NULL pointer\n");
+		return ERR_VO_NULL_PTR;
 	}
-	return CVI_SUCCESS;
+	return 0;
 }
 
-static inline s32 CHECK_VO_WBC_VALID(VO_WBC VoWbc)
+static inline int check_vo_wbc_valid(vo_wbc wbc_dev)
 {
-	if ((VoWbc >= VO_MAX_WBC_NUM) || (VoWbc < 0)) {
-		CVI_TRACE_VO(CVI_DBG_ERR, "VoWbc(%d) invalid.\n", VoWbc);
-		return CVI_ERR_VO_INVALID_WBCID;
+	if (wbc_dev >= VO_MAX_WBC_NUM || wbc_dev < 0) {
+		TRACE_VO(DBG_ERR, "VoWbc(%d) invalid.\n", wbc_dev);
+		return ERR_VO_INVALID_WBCID;
 	}
 
-	return CVI_SUCCESS;
+	return 0;
 }
 
-long vo_sdk_ctrl(struct cvi_vo_dev *vdev, struct vo_ext_control *p);
-s32 vo_disable(VO_DEV VoDev);
-s32 vo_disablevideolayer(VO_LAYER VoLayer);
-s32 vo_disable_chn(VO_LAYER VoLayer, VO_CHN VoChn);
-s32 vo_get_chnrotation(VO_LAYER VoLayer, VO_CHN VoChn, ROTATION_E *penRotation);
-s32 vo_wbc_qbuf(struct cvi_vo_wbc_ctx *pstWbcCtx);
+long vo_sdk_ctrl(struct vo_core_dev *vdev, struct vo_ext_control *p);
+int vo_disable(vo_dev dev);
+int vo_disablevideolayer(vo_layer layer);
+int vo_disable_chn(vo_layer layer, vo_chn chn);
+int vo_disable_wbc(vo_wbc wbc_dev);
+int vo_get_chnrotation(vo_layer layer, vo_chn chn, rotation_e *rotation);
+int vo_wbc_qbuf(struct vo_wbc_ctx *wbc_ctx);
 struct vo_fmt *vo_sdk_get_format(u32 pixelformat);
 
 #ifdef __cplusplus

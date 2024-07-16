@@ -3,17 +3,17 @@
 
 #include <base_cb.h>
 
-#include "cvi_vip_dwa.h"
+#include "dwa_core.h"
 #include "dwa_common.h"
 
 struct _dwa_cb_param {
-	MMF_CHN_S chn;
+	mmf_chn_s chn;
 	enum dwa_usage usage;
 };
 
-s32 mesh_dwa_do_op(struct cvi_dwa_vdev *wdev, enum dwa_usage usage
-	, const void *pUsageParam, struct vb_s *vb_in, PIXEL_FORMAT_E enPixFormat
-	, u64 mesh_addr, u8 sync_io, void *pcbParam, u32 cbParamSize
-	, MOD_ID_E enModId, ROTATION_E enRotation);
+int mesh_dwa_do_op(struct dwa_vdev *wdev, enum dwa_usage usage
+	, const void *usage_param, struct vb_s *vb_in, pixel_format_e pix_format
+	, unsigned long long mesh_addr, unsigned char sync_io, void *cb_param, unsigned int cb_param_size
+	, mod_id_e mod_id, rotation_e rotation);
 
 #endif /* __MESH_H__ */

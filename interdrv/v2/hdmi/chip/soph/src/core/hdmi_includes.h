@@ -31,33 +31,33 @@
 
 struct hdmitx_dev{
 	/** Device node */
-	struct device 		*parent_dev;
+	struct device *parent_dev;
 	/** Device list */
-	struct list_head 	devlist;
+	struct list_head devlist;
 
-	struct class		*hdmi_class;
-	struct cdev			cdev;
-	dev_t				cdev_id;
+	struct class *hdmi_class;
+	struct cdev cdev;
+	dev_t cdev_id;
 	/** Verbose */
-	int 			verbose;
-	int  			msi_enabled;
+	int verbose;
+	int msi_enabled;
 	/** Interrupts */
-	u32		irq[6];
+	u32 irq[6];
 
 	/** Spinlock */
-	spinlock_t 		slock;
+	spinlock_t slock;
 	/** Mutex */
-	struct mutex 		mutex;
+	struct mutex mutex;
 
 	/** Device Tree Information */
-	char 			*device_name;
+	char *device_name;
 	/** HDMI TX Controller */
-	void __iomem 		*dwc_hdmi_tx_io;
-	void __iomem		*base_address;
-	u32 			address_size;
+	void __iomem *dwc_hdmi_tx_io;
+	void __iomem *base_address;
+	u32 address_size;
 
 	/** EDID block of data */
-	u8 		edid_data[128];
+	u8 edid_data[128];
 
 	int hpd;
 	int hdcp22;

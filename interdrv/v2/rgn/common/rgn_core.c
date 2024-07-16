@@ -1,6 +1,7 @@
 #include <rgn_core.h>
 #include <base_cb.h>
 #include <linux/compat.h>
+
 #define CVI_RGN_DEV_NAME            "soph-rgn"
 
 static long rgn_core_ioctl(struct file *filp, u_int cmd, u_long arg)
@@ -8,6 +9,15 @@ static long rgn_core_ioctl(struct file *filp, u_int cmd, u_long arg)
 	return rgn_ioctl(filp, cmd, arg);
 }
 
+#ifdef CONFIG_COMPAT
+static long rgn_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->unlocked_ioctl)
+		return -ENOIOCTLCMD;
+
+	return file->f_op->unlocked_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
 
 static int rgn_core_open(struct inode *inode, struct file *filp)
 {
@@ -24,12 +34,12 @@ const struct file_operations rgn_fops = {
 	.open = rgn_core_open,
 	.unlocked_ioctl = rgn_core_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = rgn_compat_ptr_ioctl,
 #endif
 	.release = rgn_core_release,
 };
 
-int rgn_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int rgn_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	return rgn_cb(dev, caller, cmd, arg);
 }
@@ -39,7 +49,7 @@ static int rgn_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_RGN);
 }
 
-static int rgn_core_register_cb(struct cvi_rgn_dev *dev)
+static int rgn_core_register_cb(struct rgn_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -50,7 +60,7 @@ static int rgn_core_register_cb(struct cvi_rgn_dev *dev)
 	return base_reg_module_cb(&reg_cb);
 }
 
-static int register_rgn_dev(struct device *dev, struct cvi_rgn_dev *rdev)
+static int register_rgn_dev(struct device *dev, struct rgn_dev *rdev)
 {
 	int ret;
 
@@ -67,9 +77,9 @@ static int register_rgn_dev(struct device *dev, struct cvi_rgn_dev *rdev)
 	return ret;
 }
 
-static int cvi_rgn_probe(struct platform_device *pdev)
+static int rgn_probe(struct platform_device *pdev)
 {
-	struct cvi_rgn_dev *rdev;
+	struct rgn_dev *rdev;
 	int ret = 0;
 
 	rdev = devm_kzalloc(&pdev->dev, sizeof(*rdev), GFP_KERNEL);
@@ -109,9 +119,9 @@ err_create_instance:
 	return ret;
 }
 
-static int cvi_rgn_remove(struct platform_device *pdev)
+static int rgn_remove(struct platform_device *pdev)
 {
-	struct cvi_rgn_dev *rdev = platform_get_drvdata(pdev);
+	struct rgn_dev *rdev = platform_get_drvdata(pdev);
 	int ret = 0;
 
 	ret = rgn_destroy_instance(pdev);
@@ -133,19 +143,19 @@ err_destroy_instance:
 	return ret;
 }
 
-static const struct of_device_id cvi_rgn_dt_match[] = {
+static const struct of_device_id rgn_dt_match[] = {
 	{.compatible = "cvitek,rgn"},
 	{},
 };
 
-MODULE_DEVICE_TABLE(of, cvi_rgn_dt_match);
+MODULE_DEVICE_TABLE(of, rgn_dt_match);
 
 static struct platform_driver rgn_core_driver = {
-	.probe = cvi_rgn_probe,
-	.remove = cvi_rgn_remove,
+	.probe = rgn_probe,
+	.remove = rgn_remove,
 	.driver = {
 		.name = CVI_RGN_DEV_NAME,
-		.of_match_table = cvi_rgn_dt_match,
+		.of_match_table = rgn_dt_match,
 	},
 };
 

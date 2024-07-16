@@ -5,62 +5,62 @@
 #include "util/util.h"
 
 typedef struct {
-	u8 mByte3;
+	u8 mbyte3;
 
-	u8 mByte4;
+	u8 mbyte4;
 
-	int mValid;
+	int mvalid;
 
-} colorimetryDataBlock_t;
-
-typedef struct {
-	u8 mByte1;
-
-	int mValid;
-} speakerAllocationDataBlock_t;
+} colorimetry_datablock_t;
 
 typedef struct {
-	int mQuantizationRangeSelectable;
+	u8 mbyte1;
 
-	u8 mPreferredTimingScanInfo;
+	int mvalid;
+} speaker_allocation_datablock_t;
 
-	u8 mItScanInfo;
+typedef struct {
+	int mquantization_range_selectable;
 
-	u8 mCeScanInfo;
+	u8 mpreferred_timing_scaninfo;
 
-	int mValid;
-} videoCapabilityDataBlock_t;
+	u8 mit_scaninfo;
 
-void video_cap_data_block_reset(hdmi_tx_dev_t *dev, videoCapabilityDataBlock_t * vcdb);
+	u8 mce_scaninfo;
 
-int video_cap_data_block_parse(hdmi_tx_dev_t *dev, videoCapabilityDataBlock_t * vcdb, u8 * data);
+	int mvalid;
+} video_capability_datablock_t;
 
-void colorimetry_data_block_reset(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+void video_cap_data_block_reset(hdmi_tx_dev_t *dev, video_capability_datablock_t * vcdb);
 
-int colorimetry_data_block_parse(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb, u8 * data);
+int video_cap_data_block_parse(hdmi_tx_dev_t *dev, video_capability_datablock_t * vcdb, u8 * data);
 
-int supports_xv_ycc709(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+void colorimetry_data_block_reset(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_xv_ycc601(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int colorimetry_data_block_parse(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb, u8 * data);
 
-int supports_s_ycc601(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_xv_ycc709(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_adobe_ycc601(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_xv_ycc601(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_adobe_rgb(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_s_ycc601(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_metadata0(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_adobe_ycc601(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_metadata1(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_adobe_rgb(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_metadata2(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_metadata0(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int supports_metadata3(hdmi_tx_dev_t *dev, colorimetryDataBlock_t * cdb);
+int supports_metadata1(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-void speaker_alloc_data_block_reset(hdmi_tx_dev_t *dev, speakerAllocationDataBlock_t * sadb);
+int supports_metadata2(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int speaker_alloc_data_block_parse(hdmi_tx_dev_t *dev, speakerAllocationDataBlock_t * sadb, u8 * data);
+int supports_metadata3(hdmi_tx_dev_t *dev, colorimetry_datablock_t * cdb);
 
-int get_channell_alloc_code(hdmi_tx_dev_t *dev, speakerAllocationDataBlock_t * sadb);
+void speaker_alloc_data_block_reset(hdmi_tx_dev_t *dev, speaker_allocation_datablock_t * sadb);
+
+int speaker_alloc_data_block_parse(hdmi_tx_dev_t *dev, speaker_allocation_datablock_t * sadb, u8 * data);
+
+int get_channell_alloc_code(hdmi_tx_dev_t *dev, speaker_allocation_datablock_t * sadb);
 
 #endif	/* _DATA_BLOCK_H_ */

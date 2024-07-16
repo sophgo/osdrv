@@ -27,14 +27,14 @@
 #define SIZE_ARRAY(array, type) \
 	(sizeof(array) / sizeof(type))
 
-#define EDID_DTD_ARRAY_SIZE  (32)
-#define EDID_SVD_ARRAY_SIZE  (128)
-#define EDID_SAD_ARRAY_SIZE  (128)
+#define EDID_DTD_ARRAY_SIZE     (32)
+#define EDID_SVD_ARRAY_SIZE     (128)
+#define EDID_SAD_ARRAY_SIZE     (128)
 #define EDID_MONITOR_NAME_SIZE  (13)
 
-#define HDMI_HOTPLUG         (1)
-#define HDMI_NOPLUG          (2)
-#define HDMI_EDID_FAIL       (3)
+#define HDMI_HOTPLUG    (1)
+#define HDMI_NOPLUG     (2)
+#define HDMI_EDID_FAIL  (3)
 
 typedef struct _sink_cap_info {
 	dtd_t sink_cap_info;
@@ -47,9 +47,9 @@ typedef struct _sink_cap_info {
  * mode: variables and structures
  */
 struct hdmi_compliance_mode {
-	int 		current_mode;
-	int 		re_configure;
-	int 		ycc420_support;
+	int current_mode;
+	int re_configure;
+	int ycc420_support;
 };
 
 /**
@@ -58,45 +58,45 @@ struct hdmi_compliance_mode {
  * mode: variables and structures
  */
 struct hdmi_demo_mode {
-	int 		current_3D;
-	int 		re_configure;
-	int 		ycc420_support;
+	int current_3D;
+	int re_configure;
+	int ycc420_support;
 	u32	current_mode;
-	u32 	cea;
-	u32 	dcm;
-	u32	sfr_clk;
+	u32 cea;
+	u32 dcm;
+	u32 sfr_clk;
 };
 
 typedef struct {
 	/**
 	 * Array to hold all the parsed Detailed Timing Descriptors.
 	 */
-	dtd_t edid_mDtd[32];
+	dtd_t edid_mdtd[32];
 
-	unsigned int edid_mDtdIndex;
+	unsigned int edid_mdtd_index;
 	/**
 	 * array to hold all the parsed Short Video Descriptors.
 	 */
-	shortVideoDesc_t edid_mSvd[EDID_SVD_ARRAY_SIZE];
-	shortVideoDesc_t tmpSvd;
+	short_video_desc_t edid_msvd[EDID_SVD_ARRAY_SIZE];
+	short_video_desc_t tmp_svd;
 
-	unsigned int edid_mSvdIndex;
+	unsigned int edid_msvd_index;
 	/**
 	 * array to hold all the parsed Short Audio Descriptors.
 	 */
-	shortAudioDesc_t edid_mSad[EDID_SAD_ARRAY_SIZE];
+	short_audio_desc_t edid_msad[EDID_SAD_ARRAY_SIZE];
 
-	unsigned int edid_mSadIndex;
+	unsigned int edid_msad_index;
 	int native_vic;
 	/**
 	 * A string to hold the Monitor Name parsed from EDID.
 	 */
-	char edid_mMonitorName[EDID_MONITOR_NAME_SIZE];
-	int edid_mYcc444Support;
-	int edid_mYcc422Support;
-	int edid_mYcc420Support;
-	int edid_mBasicAudioSupport;
-	int edid_mUnderscanSupport;
+	char edid_mmonitor_name[EDID_MONITOR_NAME_SIZE];
+	int edid_mycc444_support;
+	int edid_mycc422_support;
+	int edid_mycc420_support;
+	int edid_mbasic_audio_support;
+	int edid_munder_scan_support;
 	int xv_ycc709;
 	int s_ycc601;
 	int xv_ycc601;
@@ -105,79 +105,79 @@ typedef struct {
 	/**
 	 *  Audio
 	 */
-	u32 Support_SampleRate[10];
-	u8  Support_BitDepth[10];
+	u32 support_sample_rate[10];
+	u8  support_bit_depth[10];
 
 	/**
 	 *  If Sink is HDMI 2.0
 	 */
-	int edid_m20Sink;
+	int edid_m20sink;
 
-	hdmivsdb_t edid_mHdmivsdb;
-	hdmiforumvsdb_t edid_mHdmiForumvsdb;
+	hdmivsdb_t edid_mhdmivsdb;
+	hdmiforumvsdb_t edid_mhdmi_forumvsdb;
 
-	monitorRangeLimits_t edid_mMonitorRangeLimits;
+	monitor_range_limits_t edid_mmonitor_range_limits;
 
-	videoCapabilityDataBlock_t edid_mVideoCapabilityDataBlock;
+	video_capability_datablock_t edid_mvideo_capability_datablock;
 
-	colorimetryDataBlock_t edid_mColorimetryDataBlock;
+	colorimetry_datablock_t edid_mcolorimetry_datablock;
 
-	speakerAllocationDataBlock_t edid_mSpeakerAllocationDataBlock;
+	speaker_allocation_datablock_t edid_mspeaker_allocation_datablock;
 } sink_edid_t;
 
 struct hdmi_mode {
 	bool hdmi_en;
 
-	videoParams_t 		pVideo;
-	audioParams_t 		pAudio;
-	hdcpParams_t 		pHdcp;
-	hdmivsdb_t 			vsdb;
-	hdmiforumvsdb_t 	forumvsdb;
+	video_params_t pvideo;
+	audio_params_t paudio;
+	hdcp_params_t phdcp;
+	hdmivsdb_t vsdb;
+	hdmiforumvsdb_t forumvsdb;
 
-	u8			ksv_list_buffer[670];
-	u8			ksv_devices;
-	u8			dpk_aksv[7];
-	u8			sw_enc_key[2];
-	u8			dpk_keys[560];
+	u8 ksv_list_buffer[670];
+	u8 ksv_devices;
+	u8 dpk_aksv[7];
+	u8 sw_enc_key[2];
+	u8 dpk_keys[560];
 
-	u8 		      edid_ext[3][128];
+	u8 edid_ext[3][128];
 
-	int 			hpd;
-	int 			edid_done;
+	int hpd;
+	int edid_done;
 
-	struct edid 	      edid;
-	sink_edid_t  	      * sink_cap;
-	sink_cap_info     sink_capinfo[128];
+	struct edid edid;
+	sink_edid_t * sink_cap;
+	sink_cap_info sink_capinfo[128];
 
 	struct hdmi_compliance_mode compliance;
-	struct hdmi_demo_mode		demo;
+	struct hdmi_demo_mode demo;
 };
 
 struct hdmi_tx_ctx {
 	/** Verbose */
-	int 				verbose;
+	int verbose;
 
 	/** HDMI TX Driver */
-	char 				hdmi_tx_name[STRING_ARRAY_SIZE];
+	char hdmi_tx_name[STRING_ARRAY_SIZE];
 	/** File descriptor */
-	u32			base_address;
+	u32 base_address;
 
 	/* Reserved for API internal use only */
 	/** HDMI TX API Internals */
 	struct device_access dev_access;
-	hdmi_tx_dev_t 		 hdmi_tx;
+	hdmi_tx_dev_t hdmi_tx;
 
 	/** Application mode configurations */
-	struct hdmi_mode	mode;
+	struct hdmi_mode mode;
 
 	/** Mutex to synchronize calls */
-	struct mutex  		mutex;
+	struct mutex mutex;
 
-	struct edid 	    * tx_edid;
-	u8 		        	* tx_edid_ext;
-	sink_edid_t  	    * tx_sink_cap;
+	struct edid * tx_edid;
+	u8 * tx_edid_ext;
+	sink_edid_t * tx_sink_cap;
 
-	int 				edid_tx_checks;
+	int edid_tx_checks;
 };
 
 int hdmitx_init(void);
@@ -188,21 +188,21 @@ int hdmitx_set_phy(int phy, int debug_mode);
 
 int edid_read_cap(void);
 
-int hdmitx_force_get_edid(CVI_HDMI_EDID* edid_raw, char *fileName);
+int hdmitx_force_get_edid(hdmi_edid* edid_raw, char *fileName);
 
-int sink_capability(CVI_HDMI_SINK_CAPABILITY* cvi_sink_cap);
+int sink_capability(hdmi_sink_capability* hdmi_sink_cap);
 
-int hdmitx_set_infoframe(CVI_HDMI_INFOFRAME* info_frame);
+int hdmitx_set_infoframe(hdmi_infoframe* info_frame);
 
-int hdmitx_get_infoframe(CVI_HDMI_INFOFRAME* info_frame);
+int hdmitx_get_infoframe(hdmi_infoframe* info_frame);
 
 int hdmitx_start(void);
 
 int hdmitx_stop(void);
 
-int hdmitx_set_attr(CVI_HDMI_ATTR* attr);
+int hdmitx_set_attr(hdmi_attr* attr);
 
-int hdmitx_get_attr(CVI_HDMI_ATTR* attr);
+int hdmitx_get_attr(hdmi_attr* attr);
 
 int stop_handler(void);
 
@@ -216,11 +216,11 @@ int hdmitx_set_avmute(int enable);
 
 int hdmitx_set_audio_mute(int enable);
 
-int edid_parser(hdmi_tx_dev_t *dev, u8 * buffer, sink_edid_t *edidExt, u16 edid_size);
+int edid_parser(hdmi_tx_dev_t *dev, u8 * buffer, sink_edid_t *edid_ext, u16 edid_size);
 
-void print_videoinfo(videoParams_t *pVideo);
+void print_videoinfo(video_params_t *pvideo);
 
-void cvitek_hdmi_clk_set(u32 pClk);
+void cvitek_hdmi_clk_set(u32 pclk);
 
 void disp_hdmi_gen(dtd_t *mdtd);
 

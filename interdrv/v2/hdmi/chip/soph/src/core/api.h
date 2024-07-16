@@ -14,7 +14,7 @@
 #include "hdmitx_dev.h"
 
 
-void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, videoParams_t * video, hdcpParams_t * hdcp);
+void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, video_params_t * video, hdcp_params_t * hdcp);
 
 /**
  * Configure API.
@@ -30,7 +30,7 @@ void api_set_hdmi_ctrl(hdmi_tx_dev_t *dev, videoParams_t * video, hdcpParams_t *
  * @note during this function, all controller's interrupts are disabled
  * @note this function needs to have the HW initialized before the first call
  */
-int api_configure(hdmi_tx_dev_t *dev, videoParams_t * video, audioParams_t * audio, hdcpParams_t * hdcp);
+int api_configure(hdmi_tx_dev_t *dev, video_params_t * video, audio_params_t * audio, hdcp_params_t * hdcp);
 
 /**
  * Prepare API modules and local variables to standby mode (hdmi_tx_dev_t *dev, and not respond
@@ -47,4 +47,3 @@ int api_standby(hdmi_tx_dev_t *dev);
 void api_avmute(hdmi_tx_dev_t *dev, int enable);
 
 #endif	/* _API_H_ */
-

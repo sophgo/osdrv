@@ -2214,6 +2214,7 @@ It sets the mode of error conceal.
     InstanceBuffer   instBuffer; /**< <<vpuapi_h_InstanceBuffer>>. (WAVE6 only) */
     Uint32           extAddrVcpu; /**< AXI address extension of vCPU DMA. (WAVE6 only) */
     Uint8            cmdQueueDepth;
+    Uint8            reorderEnable;
 } DecOpenParam;
 
 /**
@@ -5008,7 +5009,7 @@ VPU core index number
     int picMotionLevel;
     int motionSensitivy;
     int maxStillQp;
-    BOOL cviRcEn;
+    BOOL RcEn;
 } EncOpenParam;
 
 /**
@@ -5142,7 +5143,7 @@ This is only for CODA9.
     Uint32 last2BitData; /**< It indicates the value to fill the last 2bit data. This variable is a valid when the updateLast2Bit is on. */
     EncCSCParam csc; /**< It indicates the RGB to YUV CSC(color space conversion) parameter. <<vpuapi_h_EncCSCParam>> */
 
-    // cvi custom
+    // custom
     BOOL is_idr_frame;
 } EncParam;
 
@@ -7134,7 +7135,8 @@ RetCode VPU_EncSetWrPtr(
 
 
 PhysicalAddress VPU_MapToAddr40Bit(int coreIdx, unsigned int Addr);
-int VPU_DecGetCoreIdx(void);
+int VPU_DecRequestCore(void);
+int VPU_DecReleaseCore(unsigned int core_idx);
 
 #ifdef __cplusplus
 }

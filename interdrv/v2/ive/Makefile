@@ -3,9 +3,9 @@ include $(PWD)/../Makefile.interdrv.param
 ifneq ($(KERNELRELEASE),)
 
 obj-m += $(CVIARCH_L)_ive.o
-$(CVIARCH_L)_ive-y += common/cvi_ive_interface.o
-$(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/cvi_reg.o
-$(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/cvi_ive_platform.o
+$(CVIARCH_L)_ive-y += common/ive_interface.o
+$(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/reg.o
+$(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/ive_platform.o
 
 ccflags-y += -I$(src)/../include/common/uapi -I$(src)/../include/chip/$(CVIARCH_L)/uapi/
 ccflags-y += -I$(src)/../include/chip/$(CVIARCH_L)/kapi/
@@ -24,7 +24,7 @@ all:
 	$(MAKE) ARCH=${ARCH} -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:
-	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c
+	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod *.mod.c
 	@rm -rf .tmp_versions
 	@find . -name \*.o* -type f -delete
 endif

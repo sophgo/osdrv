@@ -65,7 +65,7 @@ typedef struct  {
     unsigned int chip_id;
     unsigned char             ext_addr;
     unsigned int instance_start_flag;
-    unsigned int instance_count;
+    atomic_t instance_count;
     int mutex[VDI_NUM_LOCK_HANDLES];
 } vdi_info_t;
 
@@ -208,6 +208,7 @@ int vdi_init(unsigned long core_idx)
     vdi->core_idx = core_idx;
     vdi->task_num++;
     vdi_set_clock_gate(core_idx, 0);
+    atomic_set(&vdi->instance_count, 0);
     vdi_unlock(core_idx);
 
     VLOG(INFO, "[VDI] success to init driver \n");
@@ -1303,7 +1304,7 @@ int vdi_set_clock_gate(unsigned long core_idx, int enable)
     }
 
     vdi->clock_state = enable;
-    ret = vpu_set_clock_gate(&enable);
+    ret = 0;//vpu_set_clock_gate(&enable);
 
     return ret;
 }
@@ -1726,44 +1727,6 @@ int vdi_get_ddr_map(unsigned long core_idx)
     return  vdi->ext_addr;
 }
 
-int vdi_set_instance_flag(unsigned long core_idx, unsigned long instance_idx)
-{
-    vdi_info_t *vdi;
-    unsigned int flag;
-
-    if (core_idx >= MAX_NUM_VPU_CORE)
-        return -1;
-
-    vdi = &s_vdi_info[core_idx];
-    flag = 1 << instance_idx;
-
-    if ((vdi->instance_start_flag & flag) == 0) {
-        vdi->instance_start_flag |= flag;
-        vdi->instance_count++;
-    }
-
-    return 0;
-}
-
-int vdi_clear_instance_flag(unsigned long core_idx, unsigned long instance_idx)
-{
-    vdi_info_t *vdi;
-    unsigned int flag;
-
-    if (core_idx >= MAX_NUM_VPU_CORE)
-        return -1;
-
-    vdi = &s_vdi_info[core_idx];
-    flag = 1 << instance_idx;
-
-    if (vdi->instance_start_flag & flag) {
-        vdi->instance_start_flag &= ~flag;
-        vdi->instance_count--;
-    }
-
-    return 0;
-}
-
 int vdi_get_instance_count(unsigned long core_idx)
 {
     vdi_info_t *vdi;
@@ -1773,7 +1736,35 @@ int vdi_get_instance_count(unsigned long core_idx)
 
     vdi = &s_vdi_info[core_idx];
 
-    return vdi->instance_count;
+    return atomic_read(&vdi->instance_count);
+}
+
+int vdi_request_instance(unsigned long core_idx)
+{
+    vdi_info_t *vdi;
+
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    vdi = &s_vdi_info[core_idx];
+
+    atomic_add(1, &vdi->instance_count);
+
+    return 0;
+}
+
+int vdi_release_instance(unsigned long core_idx)
+{
+    vdi_info_t *vdi;
+
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    vdi = &s_vdi_info[core_idx];
+
+    atomic_sub(1, &vdi->instance_count);
+
+    return 0;
 }
 
 #endif	//#if defined(linux) || defined(__linux) || defined(ANDROID)

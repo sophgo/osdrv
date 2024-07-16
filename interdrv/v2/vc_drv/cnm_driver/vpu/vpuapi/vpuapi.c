@@ -353,8 +353,10 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     VpuAttr*    pAttr;
 
     ret = ProductVpuDecCheckOpenParam(pop);
-    if (ret != RETCODE_SUCCESS)
+    if (ret != RETCODE_SUCCESS) {
+        VLOG(ERR, "Invalid open param, ret:%d\n", ret);
         return ret;
+    }
 
     if (EnterLock(pop->coreIdx) != RETCODE_SUCCESS) {
         return RETCODE_FAILURE;
@@ -370,6 +372,7 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     {
         *pHandle = 0;
         LeaveLock(pop->coreIdx);
+        VLOG(ERR, "GetCodecInstance failed, ret:%d\n", ret);
         return ret;
     }
 
@@ -439,6 +442,7 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     }
     else {
         LeaveLock(pop->coreIdx);
+        VLOG(ERR, "invalid bitstreamFormat:%d\n", pop->bitstreamFormat);
         return RETCODE_INVALID_PARAM;
     }
 
@@ -453,7 +457,7 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     pDecInfo->streamBufStartAddr = pop->bitstreamBuffer;
     pDecInfo->streamBufSize      = pop->bitstreamBufferSize;
     pDecInfo->streamBufEndAddr   = pop->bitstreamBuffer + pop->bitstreamBufferSize;
-    pDecInfo->reorderEnable      = TRUE;
+    pDecInfo->reorderEnable      = pop->reorderEnable;
     pDecInfo->mirrorDirection    = MIRDIR_NONE;
     pDecInfo->tempIdSelectMode   = TEMPORAL_ID_MODE_ABSOLUTE;
     pDecInfo->targetTempId       = DECODE_ALL_TEMPORAL_LAYERS;
@@ -462,6 +466,7 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     if ((ret=ProductVpuDecBuildUpOpenParam(pCodecInst, pop)) != RETCODE_SUCCESS) {
         *pHandle = 0;
         LeaveLock(pCodecInst->coreIdx);
+        VLOG(ERR, "Invalid build param, ret:%d\n", ret);
         return ret;
     }
 
@@ -480,8 +485,6 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
         pDecInfo->wtlMode = 0;
 
     osal_memset((void*)&pDecInfo->cacheConfig, 0x00, sizeof(MaverickCacheConfig));
-    vdi_set_instance_flag(pCodecInst->coreIdx, pCodecInst->instIndex);
-
     LeaveLock(pCodecInst->coreIdx);
 
     return RETCODE_SUCCESS;
@@ -563,7 +566,6 @@ RetCode VPU_DecClose(DecHandle handle)
 
     if (GetPendingInst(pCodecInst->coreIdx) == pCodecInst)
         ClearPendingInst(pCodecInst->coreIdx);
-    vdi_clear_instance_flag(pCodecInst->coreIdx, pCodecInst->instIndex);
 
     LeaveLock(pCodecInst->coreIdx);
 
@@ -2411,7 +2413,6 @@ RetCode VPU_EncOpen(EncHandle* pHandle, EncOpenParam * pop)
         LeaveLock(pop->coreIdx);
         return RETCODE_FAILURE;
     }
-    vdi_set_instance_flag(pCodecInst->coreIdx, pCodecInst->instIndex);
     LeaveLock(pop->coreIdx);
 
     return ret;
@@ -2489,7 +2490,6 @@ RetCode VPU_EncClose(EncHandle handle)
     if (pEncInfo->vbTask.size)
         vdi_free_dma_memory(pCodecInst->coreIdx, &pEncInfo->vbTask, ENC_TASK, pCodecInst->instIndex);
 
-    vdi_clear_instance_flag(pCodecInst->coreIdx, pCodecInst->instIndex);
     LeaveLock(pCodecInst->coreIdx);
 
     FreeCodecInstance(pCodecInst);
@@ -3565,13 +3565,34 @@ PhysicalAddress VPU_MapToAddr40Bit(int coreIdx, unsigned int Addr)
     return RealAddr;
 }
 
-int VPU_DecGetCoreIdx(void)
+int VPU_DecRequestCore(void)
 {
-    int core1_instance_count;
-    int core2_instance_count;
+    int i;
+    int core_idx;
+    int min_instance = MAX_NUM_INSTANCE;
+    int instance_count [MAX_NUM_VPU_CORE];
 
-    core1_instance_count = vdi_get_instance_count(1);//vd0
-    core2_instance_count = vdi_get_instance_count(2);//vd1
+    mutex_lock(&__vdi_init_mutex);
+    for (i=1; i<MAX_NUM_VPU_CORE; i++) {
+        instance_count[i] = vdi_get_instance_count(i);
+        if (instance_count[i] <= min_instance) {
+            min_instance = instance_count[i];
+            core_idx = i;
+        }
+    }
 
-    return core1_instance_count > core2_instance_count ? 2 : 1;
+    vdi_request_instance(core_idx);
+    mutex_unlock(&__vdi_init_mutex);
+
+    return core_idx;
 }
+
+int VPU_DecReleaseCore(unsigned int core_idx)
+{
+    mutex_lock(&__vdi_init_mutex);
+    vdi_release_instance(core_idx);
+    mutex_unlock(&__vdi_init_mutex);
+
+    return 0;
+}
+

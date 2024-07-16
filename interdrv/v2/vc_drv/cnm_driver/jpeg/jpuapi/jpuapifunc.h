@@ -329,7 +329,7 @@ extern "C" {
     JpgRet JpgLeaveLockEx(void);
     JpgRet JpgSetClockGate(Uint32 on);
 
-    JpgInst *GetJpgPendingInstEx(Uint32 instIdx);
+    JpgInst *GetJpgPendingInstEx(JpgInst * inst);
     void SetJpgPendingInstEx(JpgInst *inst, Uint32 instIdx);
     void ClearJpgPendingInstEx(Uint32 instIdx);
 
@@ -337,11 +337,6 @@ extern "C" {
     Uint32 GetDec12bitBusReqNum(FrameFormat iFormat, PackedFormat oPackMode);
     Uint32 GetEnc8bitBusReqNum(PackedFormat iPackMode, FrameFormat oFormat);
     Uint32 GetEnc12bitBusReqNum(PackedFormat iPackMode, FrameFormat oFormat);
-
-    int JpgResRequestOneCore(int timeout);
-    int JpgResSetTaskCore(pid_t pid, int coreidx);
-    int JpgResGetCoreByTask(pid_t pid);
-    void JpgResReleaseCore(int coreidx);
 
 #ifdef __cplusplus
 }
