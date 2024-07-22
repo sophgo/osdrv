@@ -105,6 +105,9 @@ struct sop_vi_dev {
 	struct completion		tpu_done[ISP_PRERAW_MAX];
 	wait_queue_head_t		ai_isp_wait_q[ISP_PRERAW_MAX];
 	struct vi_thread_attr		vi_th[E_VI_TH_MAX];
+	atomic_t			is_suspend;
+	atomic_t			is_suspend_pre_trig_done;
+	atomic_t			is_suspend_post_trig_done;
 };
 
 #ifdef __cplusplus

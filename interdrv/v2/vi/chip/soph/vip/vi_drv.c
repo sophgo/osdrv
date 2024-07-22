@@ -2,6 +2,7 @@
 #include "vi_sys.h"
 #include <ion.h>
 #include <cmdq.h>
+#include <vi_defines.h>
 
 #define LUMA_MAP_W_BIT	4
 #define LUMA_MAP_H_BIT	4
@@ -611,15 +612,21 @@ void isp_splt_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 void isp_pre_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num, const u8 chn_num)
 {
+	struct sop_vi_dev *vdev;
+
+	vdev = container_of(ctx, struct sop_vi_dev, ctx);
+	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_pre_trig_done) == 1)) {
+		vi_pr(VI_DBG, "already trig preraw\n");
+		return;
+	}
+	if (atomic_read(&vdev->is_suspend) == 1) {
+		atomic_set(&vdev->is_suspend_pre_trig_done, 1);
+	}
+
 	if (ctx->isp_pipe_cfg[raw_num].is_raw_replay_be) { //dram->be
 		uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
 		union reg_isp_top_sw_ctrl_0 sw_ctrl_0;
 		union reg_isp_top_sw_ctrl_1 sw_ctrl_1;
-
-		if (ctx->is_suspend) {
-			vi_pr(VI_DBG, "already trig preraw\n");
-			return;
-		}
 
 		sw_ctrl_0.raw = sw_ctrl_1.raw = 0;
 
@@ -736,12 +743,18 @@ void isp_post_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 	union reg_isp_top_sw_ctrl_0 sw_ctrl_0;
 	union reg_isp_top_sw_ctrl_1 sw_ctrl_1;
+	struct sop_vi_dev *vdev;
+
+	vdev = container_of(ctx, struct sop_vi_dev, ctx);
 
 	sw_ctrl_0.raw = sw_ctrl_1.raw = 0;
 
-	if (ctx->is_suspend) {
+	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_post_trig_done) == 1)) {
 		vi_pr(VI_DBG, "already trig postraw\n");
 		return;
+	}
+	if (atomic_read(&vdev->is_suspend) == 1) {
+		atomic_set(&vdev->is_suspend_post_trig_done, 1);
 	}
 
 	if (_is_fe_be_online(ctx) && !ctx->is_slice_buf_on) { //fe->be->dram->post

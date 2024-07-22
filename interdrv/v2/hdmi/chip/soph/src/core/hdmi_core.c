@@ -31,6 +31,7 @@ struct hdmitx_dev *dev_hdmi;
 struct hdmi_tx_ctx *ctx;
 static bool hdmitx_state = FALSE;
 static int hdmitx_event_id = 0;
+static bool is_resume = false;
 static int scrambling_low_rates = -1;
 
 static struct fasync_struct *hdmi_fasync;
@@ -903,7 +904,11 @@ int hdmitx_start(void)
 			{
 				if(ctx->mode.pvideo.mdtd.m_code == ctx->mode.sink_cap->edid_msvd[i++].m_code){
 					break;
-				} else if (ctx->mode.sink_cap->edid_msvd[i].m_code == 0){
+				} else if (ctx->mode.sink_cap->edid_msvd[i].m_code == 0) {
+					if (is_resume) {
+						is_resume = false;
+						return 0;
+					}
 					pr_err("m_code %d is not supported by this Sink\n", ctx->mode.pvideo.mdtd.m_code);
 					ctx->mode.pvideo.mdtd.m_code = 0;
 					ctx->hdmi_tx.snps_hdmi_ctrl.pixel_clock = 0;
@@ -1055,7 +1060,7 @@ irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
 
 		irq_read_stat(&ctx->hdmi_tx, PHY, &phy_decode);
 
-		if(decode_is_phy_lock(phy_decode)){
+		if(decode_is_phy_lock(phy_decode)) {
 			irq_clear_bit(&ctx->hdmi_tx, PHY, IH_PHY_STAT0_TX_PHY_LOCK_MASK);
 		}
 
@@ -2147,6 +2152,8 @@ static int hdmi_tx_resume(struct platform_device *pdev)
 	struct hdmitx_dev *dev = platform_get_drvdata(pdev);
 
 	enable_irq(dev->irq[0]);
+	is_resume = true;
+	hdmitx_start();
 	pr_info("hdmi resumed\n");
 
 	return 0;
@@ -2155,16 +2162,12 @@ static int hdmi_tx_resume(struct platform_device *pdev)
 static int hdmi_tx_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct hdmitx_dev *dev = platform_get_drvdata(pdev);
-	int ret;
 
 	disable_irq(dev->irq[0]);
-	ret = hdmitx_stop();
-	if(ret)
-		return 0;
-
+	hdmitx_stop();
 	pr_info("hdmi suspended\n");
 
-	return ret;
+	return 0;
 }
 #endif
 

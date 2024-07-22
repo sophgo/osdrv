@@ -355,9 +355,8 @@ int hdmi_video_ctx_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%30s%40s\n" ,"8 bit",  "NONE");
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "in color space", "color space");
-	seq_printf(m, "%30s%40s\n",
-				_pix_fmt_to_string(ctx->mode.pvideo.mencodingin, str),
-				_pix_fmt_to_string(ctx->mode.pvideo.mencodingout, str));
+	seq_printf(m, "%30s", _pix_fmt_to_string(ctx->mode.pvideo.mencodingin, str));
+	seq_printf(m, "%40s\n", _pix_fmt_to_string(ctx->mode.pvideo.mencodingout, str));
 	seq_printf(m, "\n");
 	seq_printf(m, "%30s%40s\n", "colorimetry", "pixel repeat");
 	seq_printf(m, "%30s%40d\n",

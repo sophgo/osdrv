@@ -4643,7 +4643,7 @@ s8 _pre_hw_enque(
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum isp_blk_id_t splt_rdma_id;
 
-	if (ctx->is_suspend) {
+	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_pre_trig_done) == 1)) {
 		vi_pr(VI_DBG, "already pre_hw_enque\n");
 		return -ISP_ERROR;
 	}
@@ -5448,7 +5448,7 @@ static void _post_hw_enque(
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	enum sop_isp_fe_chn_num chn_num = ISP_FE_CH0;
 
-	if (ctx->is_suspend) {
+	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_post_trig_done) == 1)) {
 		vi_pr(VI_DBG, "already post_hw_enque\n");
 		return;
 	}
@@ -5896,22 +5896,79 @@ static void _pre_fe_rgbmap_update(
 
 void vi_suspend(struct sop_vi_dev *vdev)
 {
-	vdev->ctx.is_suspend = true;
+	union reg_isp_top_int_event2_en ev2_en;
+	union reg_isp_top_int_event2_en_fe345 ev2_en_fe345;
+	uintptr_t isptopb = vdev->ctx.phys_regs[ISP_BLK_ID_ISPTOP];
+	u8 count = 10;
+	atomic_set(&vdev->is_suspend, 1);
+	ev2_en.raw = 0;
+	ev2_en.bits.frame_start_enable_fe0	= 0;
+	ev2_en.bits.frame_start_enable_fe1	= 0;
+	ev2_en.bits.frame_start_enable_fe2	= 0;
+	ev2_en_fe345.bits.frame_start_enable_fe3	= 0;
+	ev2_en_fe345.bits.frame_start_enable_fe4	= 0;
+	ev2_en_fe345.bits.frame_start_enable_fe5	= 0;
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en, ev2_en.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en_fe345, ev2_en_fe345.raw);
 	if (atomic_read(&vdev->isp_streamon)) {
-		atomic_set(&vdev->isp_streamon, 0);
-		atomic_set(&vdev->isp_streamoff, 1);
+		while(count--) {
+			if (atomic_read(&vdev->postraw_state) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH2]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH3]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW1][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW1][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW1][ISP_FE_CH2]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW1][ISP_FE_CH3]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW2][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW2][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW3][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW3][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW4][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW4][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW5][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW5][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH2]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH3]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE1][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE1][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE1][ISP_FE_CH2]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE1][ISP_FE_CH3]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_be_state[ISP_BE_CH0]) == ISP_STATE_IDLE &&
+				atomic_read(&vdev->pre_be_state[ISP_BE_CH1]) == ISP_STATE_IDLE) {
+					break;
+				}
+			msleep(5);
+		}
 		_vi_clk_ctrl(vdev, false);
 	}
 }
 
 void vi_resume(struct sop_vi_dev *vdev)
 {
-	vdev->ctx.is_suspend = false;
-	if (vdev && atomic_read(&vdev->isp_streamoff)) {
-		atomic_set(&vdev->isp_streamon, 1);
-		atomic_set(&vdev->isp_streamoff, 0);
+
+	union reg_isp_top_int_event2_en ev2_en;
+	union reg_isp_top_int_event2_en_fe345 ev2_en_fe345;
+	uintptr_t isptopb = vdev->ctx.phys_regs[ISP_BLK_ID_ISPTOP];
+	atomic_set(&vdev->is_suspend, 0);
+	atomic_set(&vdev->is_suspend_pre_trig_done, 0);
+	atomic_set(&vdev->is_suspend_post_trig_done, 0);
+	if (vdev && atomic_read(&vdev->isp_streamon)) {
 		_vi_clk_ctrl(vdev, true);
 	}
+	ev2_en.raw = 0;
+	ev2_en.bits.frame_start_enable_fe0	= 0xF;
+	ev2_en.bits.frame_start_enable_fe1	= 0xF;
+	ev2_en.bits.frame_start_enable_fe2	= 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe3	= 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe4	= 0x3;
+	ev2_en_fe345.bits.frame_start_enable_fe5	= 0x3;
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en, ev2_en.raw);
+	ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en_fe345, ev2_en_fe345.raw);
+
 }
 
 void vi_destory_thread(struct sop_vi_dev *vdev, enum E_VI_TH th_id)
@@ -6023,7 +6080,6 @@ static void _vi_sw_init(struct sop_vi_dev *vdev)
 	ctx->is_slice_buf_on    = false;
 	ctx->is_rgbmap_sbm_on   = false;
 	ctx->is_3dnr_old2new    = false;
-	ctx->is_suspend         = false;
 	ctx->rgbmap_prebuf_idx  = 1;
 	ctx->cam_id             = 0;
 	ctx->total_chn_num      = 0;
@@ -6153,6 +6209,9 @@ static void _vi_sw_init(struct sop_vi_dev *vdev)
 	atomic_set(&vdev->ol_sc_frm_done, 1);
 	atomic_set(&vdev->isp_dbg_flag, 0);
 	atomic_set(&vdev->ctx.is_post_done, 0);
+	atomic_set(&vdev->is_suspend, 0);
+	atomic_set(&vdev->is_suspend_pre_trig_done, 0);
+	atomic_set(&vdev->is_suspend_post_trig_done, 0);
 
 	atomic_set(&vdev->ai_isp_type, AI_ISP_TYPE_BUTT);
 	mutex_init(&vdev->ai_isp_lock);
@@ -8767,15 +8826,8 @@ static void _isp_sof_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw
 	struct _isp_dqbuf_n *n = NULL;
 	unsigned long flags;
 
-	union reg_isp_top_int_event2_en ev2_en;
-	uintptr_t isptopb = vdev->ctx.phys_regs[ISP_BLK_ID_ISPTOP];
-
-	if (ctx->is_suspend) {
-		ev2_en.raw = 0;
-		ev2_en.bits.frame_start_enable_fe0	= 0;
-		ev2_en.bits.frame_start_enable_fe1	= 0;
-		ev2_en.bits.frame_start_enable_fe2	= 0;
-		ISP_WR_REG(isptopb, reg_isp_top_t, int_event2_en, ev2_en.raw);
+	if (atomic_read(&vdev->is_suspend) == 1) {
+		return;
 	}
 
 	if (atomic_read(&vdev->isp_streamoff) == 1)

@@ -644,7 +644,6 @@ struct isp_ctx {
 	u32			is_slice_buf_on     : 1;
 	u32			is_rgbmap_sbm_on    : 1;
 	u32			is_3dnr_old2new     : 1;
-	u32			is_suspend          : 1;
 };
 
 struct vi_fbc_cfg {
