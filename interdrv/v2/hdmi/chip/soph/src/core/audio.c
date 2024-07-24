@@ -228,6 +228,7 @@ void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
 	pr_debug("start_addr:%llx, stop_addr:%llx\n", audio->start_addr, audio->stop_addr);
 	dma_channel = audio_channel_count(dev, audio) + 1;
 
+	dev_write_mask(AHB_DMA_STOP, 0x1, 0x1);
 	high_bit = audio->start_addr >> 32;
 	extern_axi_to_36bit(high_bit);
 

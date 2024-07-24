@@ -5899,7 +5899,7 @@ void vi_suspend(struct sop_vi_dev *vdev)
 	union reg_isp_top_int_event2_en ev2_en;
 	union reg_isp_top_int_event2_en_fe345 ev2_en_fe345;
 	uintptr_t isptopb = vdev->ctx.phys_regs[ISP_BLK_ID_ISPTOP];
-	u8 count = 10;
+	u8 count = 20;
 	atomic_set(&vdev->is_suspend, 1);
 	ev2_en.raw = 0;
 	ev2_en.bits.frame_start_enable_fe0	= 0;

@@ -969,6 +969,10 @@ int hdmitx_start(void)
 
 	irq_hpd_sense_enable(&ctx->hdmi_tx);
 
+	if (is_resume) {
+		is_resume = false;
+	}
+
 	// mutex_unlock(&(ctx->mutex));
 
 	return res;
