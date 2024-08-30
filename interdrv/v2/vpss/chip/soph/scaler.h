@@ -800,6 +800,8 @@ struct sclr_fbd_cfg {
 
 
 void sclr_set_base_addr(void *vi_base, void *vd0_base, void *vd1_base, void *vo_base);
+void sclr_init_sys_top_addr(void);
+void sclr_deinit_sys_top_addr(void);
 void sclr_reg_force_up(u8 inst);
 void sclr_top_set_cfg(u8 inst, bool sc_enable, bool fbd_enable);
 void sclr_rt_set_cfg(u8 inst, union sclr_rt_cfg cfg);

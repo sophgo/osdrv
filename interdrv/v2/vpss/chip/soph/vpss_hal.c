@@ -18,6 +18,7 @@
 
 #define FBD_MAX_CHN (2)
 #define HAL_WAIT_TIMEOUT_MS  1000
+#define IS_POWER_OF_TWO(x) ((x != 0) && ((x & (x - 1)) == 0))
 
 enum vpss_online_state {
 	VPSS_ONLINE_UNEXIST,
@@ -56,8 +57,10 @@ static struct vpss_device *vpss_dev;
 struct vpss_convert_to_bak convert_to_bak[VPSS_MAX];
 
 int work_mask = 0xff; //default vpss_v + vpss_t
+int avail_mask = 0xff;
 int sche_thread_enable = 1;
-unsigned char reset_time[VPSS_MAX];
+unsigned short reset_time[VPSS_MAX];
+unsigned char core_last_sign[VPSS_MAX];
 
 module_param(work_mask, int, 0644);
 
@@ -76,7 +79,7 @@ static void show_hw_state(void)
 		state[7], state[8], state[9]);
 }
 
-static int find_available_dev(u8 chn_num)
+static int find_available_dev(u8 chn_num, struct vpss_hal_grp_cfg cfg, int after_core)
 {
 	int i;
 	int start_idx = VPSS_V0;
@@ -92,19 +95,39 @@ static int find_available_dev(u8 chn_num)
 	for (i = start_idx; i <= end_idx; i++) {
 		mask_tmp = mask;
 		mask_tmp &= user_mask;
-		if (!(user_mask ^ mask_tmp))
+		if (!(user_mask ^ mask_tmp)){
+			if (cfg.addr[2] && core_last_sign[i]){ // 3chn format limit
+				after_core = i;
+				mask = mask >> 1;
+				continue;
+			}
 			return i;
+		}
 		//if (mask & 0x1) //v3 -> v0
 		//	mask |= BIT(dev_num);
 		mask = mask >> 1;
 	}
 
+	if (after_core != VPSS_MAX) {
+		if(!IS_POWER_OF_TWO(work_mask))
+			return after_core;
+		else { // slt scene, single core, find alternative core
+			for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+				if ((avail_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)) {
+					if (cfg.addr[2] && core_last_sign[i])
+						continue;
+					return i;
+				}
+			}
+		}
+	}
+
 	return -1;
 }
 
-static int job_cheack_hw_ready(bool is_fbd, u8 chn_num, bool vpss_v_priority)
+static int job_check_hw_ready(bool is_fbd, u8 chn_num, struct vpss_hal_grp_cfg cfg)
 {
-	int i, start_core;
+	int i, start_core, after_core;
 
 	if (is_fbd && (chn_num > FBD_MAX_CHN)) {
 		TRACE_VPSS(DBG_ERR, "FBD maximum number of channels(%d), job chn num(%d).\n",
@@ -112,36 +135,75 @@ static int job_cheack_hw_ready(bool is_fbd, u8 chn_num, bool vpss_v_priority)
 		return -1;
 	}
 
-	if(vpss_v_priority && (!is_fbd))
-		start_core = VPSS_V0; //vpss_v priority
-	else
-		start_core = VPSS_T0; //vpss_t -> vpss_v
+	start_core = VPSS_T0; //vpss_t -> vpss_v
+	after_core = VPSS_MAX;
+
+	if (cfg.bm_scene) {
+		for (i = start_core; i < VPSS_MAX; ++i) {
+			if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)) {
+				if ((!is_fbd) && cfg.addr[2] && core_last_sign[i]){ // 3chn format limit
+					after_core = i;
+					continue;
+				}
+				return i;
+			}
+		}
+		if (is_fbd)
+			return -1;
+		for (i = VPSS_V0; i < VPSS_T0; ++i) {
+			if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)) {
+				if (cfg.addr[2] && core_last_sign[i])
+					continue;
+				return i;
+			}
+		}
+		if (after_core != VPSS_MAX)
+			return after_core;
+		return -1;
+	}
 
 	if (chn_num == 1) {
 		for (i = start_core; i < VPSS_MAX; ++i) {
-			if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE))
+			if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)){
+				if ((!is_fbd) && cfg.addr[2] && core_last_sign[i]){ // 3chn format limit
+					after_core = i;
+					continue;
+				}
 				return i;
+			}
 		}
 
-		if (is_fbd || vpss_v_priority)
+		if (is_fbd)
 			return -1;
 	} else if (chn_num == 2) {
 		if ((atomic_read(&vpss_dev->vpss_cores[VPSS_T0].state) == VIP_IDLE)
-			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_T1].state) == VIP_IDLE))
-			return VPSS_T0;
+			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_T1].state) == VIP_IDLE)){
+			if ((!is_fbd) && cfg.addr[2] && core_last_sign[VPSS_T0]) // 3chn format limit
+				after_core = i;
+			else
+				return VPSS_T0;
+		}
 		if ((atomic_read(&vpss_dev->vpss_cores[VPSS_T2].state) == VIP_IDLE)
-			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_T3].state) == VIP_IDLE))
-			return VPSS_T2;
+			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_T3].state) == VIP_IDLE)){
+			if ((!is_fbd) && cfg.addr[2] && core_last_sign[VPSS_T2]) // 3chn format limit
+				after_core = i;
+			else
+				return VPSS_T2;
+		}
 		if ((work_mask & BIT(VPSS_D0))  && (work_mask & BIT(VPSS_D1))
 			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_D0].state) == VIP_IDLE)
-			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_D1].state) == VIP_IDLE))
-			return VPSS_D0;
+			&& (atomic_read(&vpss_dev->vpss_cores[VPSS_D1].state) == VIP_IDLE)){
+			if ((!is_fbd) && cfg.addr[2] && core_last_sign[VPSS_D0]) // 3chn format limit
+				after_core = i;
+			else
+				return VPSS_D0;
+		}
 
 		if (is_fbd)
 			return -1;
 	}
 
-	return find_available_dev(chn_num);
+	return find_available_dev(chn_num, cfg, after_core);
 }
 
 static int online_get_dev(struct vpss_job *job)
@@ -246,7 +308,7 @@ static int job_try_schedule(struct vpss_job *job)
 	if (job->is_online)
 		dev_idx = 0;
 	else
-		dev_idx = job_cheack_hw_ready(is_fbd, chn_num, cfg->grp_cfg.vpss_v_priority);
+		dev_idx = job_check_hw_ready(is_fbd, chn_num, cfg->grp_cfg);
 	if (dev_idx < 0) {
 		TRACE_VPSS(DBG_DEBUG, "Grp(%d), hw not ready.\n", job->grp_id);
 		show_hw_state();
@@ -276,6 +338,13 @@ static int job_try_schedule(struct vpss_job *job)
 	job->vpss_dev_mask = 0;
 	job->dev_idx_start = dev_idx;
 	dev_idx_max = dev_idx + chn_num;
+
+	if(job->cfg.grp_cfg.pixelformat == PIXEL_FORMAT_NV12 ||
+		job->cfg.grp_cfg.pixelformat == PIXEL_FORMAT_NV21)
+		core_last_sign[dev_idx] = true;
+	else
+		core_last_sign[dev_idx] = false;
+
 	TRACE_VPSS(DBG_DEBUG, "Scheduling Grp(%d), tile(%d).\n",
 		job->grp_id, job->is_tile);
 
@@ -600,20 +669,26 @@ int vpss_hal_remove_job(struct vpss_job *job)
 		while (--count > 0) {
 			if (atomic_read(&job->job_state) == JOB_END)
 				break;
-			if(!job->cfg.grp_cfg.vpss_v_priority) // cvi sence
+			if(!job->cfg.grp_cfg.bm_scene) // cvi sence
 				TRACE_VPSS(DBG_WARN, "wait count(%d)\n", count);
 			usleep_range(1000, 2000);
 		}
 		//hw hang
 		if (count == 0) {
-			if(!job->cfg.grp_cfg.vpss_v_priority) // cvi sence
+			if(!job->cfg.grp_cfg.bm_scene) // cvi sence
 				TRACE_VPSS(DBG_ERR, "Grp(%d) Wait timeout, HW hang.\n", job->grp_id);
 			for (i = 0; i < VPSS_MAX; i++) {
 				if (!(job->vpss_dev_mask & BIT(i)))
 					continue;
 				vpss_stauts(i);
-				// work_mask &= (~BIT(i));
-				vpss_hal_reset(job->vpss_dev_mask, job->is_online);
+				// BIT(10) always reset; BIT(11) never reset
+				if((work_mask & BIT(10)) || ((!reset_time[i]) && ((work_mask & BIT(11)) == 0))){
+					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
+					reset_time[i] = 1000;
+				} else {
+					work_mask &= (~BIT(i));
+					avail_mask &= (~BIT(i));
+				}
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
 					__clk_is_enabled(vpss_dev->vpss_cores[i].clk_vpss))
 					clk_disable(vpss_dev->vpss_cores[i].clk_vpss);
@@ -1035,7 +1110,8 @@ static void vpss_job_finish(struct vpss_job *job)
 			if (!(job->vpss_dev_mask & BIT(i)))
 				continue;
 
-			reset_time[i] = 0;
+			if(reset_time[i] != 0 && reset_time[i] <= 1000)
+				reset_time[i]--;
 
 			max_duration = dev->vpss_cores[i].hw_duration > max_duration ?
 							dev->vpss_cores[i].hw_duration : max_duration;
@@ -1173,9 +1249,8 @@ void vpss_hal_suspend(void)
 }
 
 void vpss_hal_down_reg(unsigned char inst){
-	if(reset_time[inst])
+	if(work_mask & BIT(12)) // BIT(12) always dump reg
 		vpss_error_stauts(inst);
-	reset_time[inst]++;
 }
 
 void vpss_hal_resume(void)

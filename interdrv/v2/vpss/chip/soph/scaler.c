@@ -42,6 +42,8 @@ static struct sclr_border_vpp_cfg g_bd_vpp_cfg[SCL_MAX_INST][BORDER_VPP_MAX];
 static struct sclr_odma_cfg g_odma_cfg[SCL_MAX_INST];
 static struct sclr_fbd_cfg g_fbd_cfg[SCL_MAX_INST];
 static uintptr_t reg_base_vi, reg_base_vd0, reg_base_vd1, reg_base_vo;
+static uintptr_t top_rst_reg_base, vi_sys_reg_base, vo_sys_reg_base;
+static u32 reset_mask[SCL_MAX_INST] = {BIT(16), BIT(17), BIT(18), BIT(19), BIT(10), BIT(11), BIT(14), BIT(15), BIT(4), BIT(5)};
 static uintptr_t reg_base = 0;
 /****************************************************************************
  * Initial info
@@ -433,6 +435,20 @@ void sclr_set_base_addr(void *vi_base, void *vd0_base, void *vd1_base, void *vo_
 	reg_base_vo = (uintptr_t)vo_base;
 }
 
+void sclr_init_sys_top_addr(void)
+{
+	top_rst_reg_base = (uintptr_t)ioremap(REG_TOP_RESET_BASE, 0x4);
+	vi_sys_reg_base = (uintptr_t)ioremap(REG_VI_STS_BASE, 0x4);
+	vo_sys_reg_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x4);
+}
+
+void sclr_deinit_sys_top_addr(void)
+{
+	iounmap((void *)top_rst_reg_base);
+	iounmap((void *)vi_sys_reg_base);
+	iounmap((void *)vo_sys_reg_base);
+}
+
 /**
  * sclr_reg_force_up - trigger reg update by sw.
  *
@@ -450,7 +466,7 @@ void sclr_reg_force_up(u8 inst)
 void sclr_top_set_cfg(u8 inst, bool sc_enable, bool fbd_enable)
 {
 	union sclr_top_cfg_01 cfg_01;
-	u8 qos_en;
+	u8 qos_en = 0;
 
 	cfg_01.raw = 0;
 	cfg_01.b.sc_enable = sc_enable;
@@ -1005,87 +1021,27 @@ bool sclr_img_reg_shadow_mask(u8 inst, bool mask)
 
 void vpss_v_sw_top_reset(u8 inst)
 {
-	union vi_sys_reset mask_reset, origin_value;
-	mask_reset = vi_sys_get_reset();
-	origin_value = mask_reset;
-
-	switch (inst) {
-		case VPSS_V0:
-			mask_reset.b.vpss0 = 1;
-			break;
-		case VPSS_V1:
-			mask_reset.b.vpss1 = 1;
-			break;
-		case VPSS_V2:
-			mask_reset.b.vpss2 = 1;
-			break;
-		case VPSS_V3:
-			mask_reset.b.vpss3 = 1;
-			break;
-		default:
-			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
-			return;
-	}
-	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
-	vi_sys_set_reset(mask_reset);
-	udelay(1);
-	vi_sys_set_reset(origin_value);
+	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], reset_mask[inst]);
+	udelay(20);
+	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], 0);
 
 	return;
 }
 
 void vpss_d_sw_top_reset(u8 inst)
 {
-	union vo_sys_reset mask_reset, origin_value;
-	mask_reset = vo_sys_get_reset();
-	origin_value = mask_reset;
-
-	switch (inst) {
-		case VPSS_D0:
-			mask_reset.b.vpss0 = 1;
-			break;
-		case VPSS_D1:
-			mask_reset.b.vpss1 = 1;
-			break;
-		default:
-			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
-			return;
-	}
-	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
-	vo_sys_set_reset(mask_reset);
-	udelay(1);
-	vo_sys_set_reset(origin_value);
+	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], reset_mask[inst]);
+	udelay(20);
+	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], 0);
 
 	return;
 }
 
 void vpss_t_sw_top_reset(u8 inst)
 {
-	union top_reset mask_reset, origin_value;
-	mask_reset = top_sys_get_reset();
-	origin_value = mask_reset;
-
-	switch (inst) {
-		case VPSS_T0:
-			mask_reset.b.vdsys0_vpss_0 = 0;
-			break;
-		case VPSS_T1:
-			mask_reset.b.vdsys0_vpss_1 = 0;
-			break;
-		case VPSS_T2:
-			mask_reset.b.vdsys1_vpss_0 = 0;
-			break;
-		case VPSS_T3:
-			mask_reset.b.vdsys1_vpss_1 = 0;
-			break;
-		default:
-			TRACE_VPSS(DBG_ERR, "vpss_top_reset failed, invalid core index: %d\n", inst);
-			return;
-	}
-	TRACE_VPSS(DBG_DEBUG, "vpss_top_reset: bit_mask = 0x%x\n", mask_reset.raw);
-	top_sys_set_reset(mask_reset);
-	udelay(1);
-	top_sys_set_reset(origin_value);
+	_reg_write_mask(top_rst_reg_base, reset_mask[inst], 0);
+	udelay(20);
+	_reg_write_mask(top_rst_reg_base, reset_mask[inst], reset_mask[inst]);
 
 	return;
 }
@@ -1104,14 +1060,14 @@ void sclr_vpss_sw_top_reset(u8 inst)
 
 void sclr_img_reset(u8 inst)
 {
-	_reg_write_mask(reg_base + REG_SCL_IMG_DBG(inst) , (BIT(3) | BIT(7) | BIT(18) | BIT(19)), (BIT(3) | BIT(7) | BIT(18) | BIT(19))); // img reset
+	_reg_write(reg_base + REG_SCL_IMG_DBG(inst), 0xfffff); // img reset
 	if(inst > VPSS_V3)
 		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), BIT(2)); // fbd reset
 }
 
 void sclr_img_start(u8 inst)
 {
-	_reg_write_mask(reg_base + REG_SCL_IMG_DBG(inst), BIT(18), BIT(18)); // img reset
+	_reg_write(reg_base + REG_SCL_IMG_DBG(inst), 0xfffff); // img reset
 
 	if((inst > VPSS_V3) && (_reg_read(reg_base + REG_SCL_MAP_CONV_CTRL(inst)) & BIT(2)))
 		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), 0); // fbd init

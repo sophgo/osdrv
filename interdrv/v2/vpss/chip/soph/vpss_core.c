@@ -436,6 +436,8 @@ static int vpss_init_resources(struct platform_device *pdev)
 	}
 	sclr_set_base_addr(reg_base[0], reg_base[1], reg_base[2], reg_base[3]);
 
+	sclr_init_sys_top_addr();
+
 	/* Interrupt */
 	for (i = 0; i < ARRAY_SIZE(vpss_name); ++i) {
 		irq_num = platform_get_irq_byname(pdev, vpss_name[i]);
@@ -657,6 +659,7 @@ static int vpss_remove(struct platform_device *pdev)
 	vpss_proc_remove(dev);
 	misc_deregister(&dev->miscdev);
 	dev_set_drvdata(&pdev->dev, NULL);
+	sclr_deinit_sys_top_addr();
 
 	TRACE_VPSS(DBG_WARN, "vpss remove done\n");
 

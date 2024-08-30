@@ -4257,6 +4257,7 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	job->data = (void *)&data;
 	job->job_cb = vpss_wkup_frame_done_handle;
 	atomic_set(&job->job_state, JOB_INVALID);
+	spin_lock_init(&job->lock);
 
 	job->cfg.chn_num = 1;
 	job->cfg.chn_enable[0] = true;
@@ -4367,7 +4368,7 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	}
 	grp_hw_cfg->bytesperline[0] = vpss_cfg->snd_frm_cfg.video_frame.video_frame.stride[0];
 	grp_hw_cfg->bytesperline[1] = vpss_cfg->snd_frm_cfg.video_frame.video_frame.stride[1];
-	grp_hw_cfg->vpss_v_priority = true;
+	grp_hw_cfg->bm_scene = true;
 
 	chn_hw_cfg->pixelformat = vpss_cfg->chn_frm_cfg.video_frame.video_frame.pixel_format;
 	chn_hw_cfg->bytesperline[0] = vpss_cfg->chn_frm_cfg.video_frame.video_frame.stride[0];
@@ -4436,12 +4437,12 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 
 	if ((atomic_read(&job->job_state) == JOB_WAIT) ||
 		(atomic_read(&job->job_state) == JOB_WORKING)){
+		vpss_hal_remove_job(job);
 		for (i = 0; i < VPSS_MAX; i++) {
 			if (!(job->vpss_dev_mask & BIT(i)))
 				continue;
 			vpss_hal_down_reg(i);
 		}
-		vpss_hal_remove_job(job);
 	}
 fail:
 	up(&g_vpss_core_sem);

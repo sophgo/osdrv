@@ -132,7 +132,7 @@ struct vpss_hal_grp_cfg {
 	bool fbd_enable;
 	bool online_from_isp;
 	bool upsample;
-	bool vpss_v_priority;
+	bool bm_scene;
 	__u32 pixelformat;
 	__u32 bytesperline[2];
 	__u64 addr[4];

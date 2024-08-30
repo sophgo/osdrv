@@ -2,10 +2,13 @@
 #define _SCL_REG_H_
 
 
-//#define REG_VPSS_V_BASE 0x68080000
-//#define REG_VPSS_T1_BASE 0x23020000
-//#define REG_VPSS_T2_BASE 0x24020000
-//#define REG_VPSS_D_BASE 0x67010000
+// #define REG_VPSS_V_BASE 0x68080000
+// #define REG_VPSS_T1_BASE 0x23020000
+// #define REG_VPSS_T2_BASE 0x24020000
+// #define REG_VPSS_D_BASE 0x67010000
+#define REG_TOP_RESET_BASE 0x28103000
+#define REG_VI_STS_BASE 0x680be000
+#define REG_VO_SYS_BASE 0x67000000
 #define REG_VPSS_BASE(x) (x < 4 ? reg_base_vi : (x < 6 ? reg_base_vd0 : (x < 8 ? reg_base_vd1 : reg_base_vo)))
 #define REG_VPSS_IP_IDX(x) (x < 4 ? x : (x < 6 ? (x - 4) : (x < 8 ? (x - 6) : (x - 8))))
 #define REG_VPSS_SIZE(x) ((x < 4 || x > 7) ? 0X4000 : 0X10000)
