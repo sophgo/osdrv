@@ -1,0 +1,77 @@
+include $(PWD)/../Makefile.interdrv.param
+
+ifeq ($(KERNEL_DIR),)
+KERNEL_DIR=/media/cvitek/allen.huang/code/dual_os_fastboot/linux_5.10/build/cv1801c_wevb_0009a_spinor
+endif
+
+obj-m := cvi_ipcm.o
+obj-m += cvi_ipcm_test.o
+
+cvi_ipcm-y := core/ipcm_common.o \
+	core/ipcm_pool.o \
+	core/ipcm.o \
+	core/msg_queue.o \
+	core/mailbox/mailbox.o \
+	core/mailbox/cvi_spinlock.o \
+	plat/plat_common/ipcm_port_common.o \
+	plat/linux/driver/ipcm_dev.o \
+	plat/linux/message/ipcmsg_dev.o \
+	plat/linux/message/ipcmsg.o \
+	plat/linux/linux_common/ipcm_drv_port_common.o \
+	sysdeps/linux/cvi_sys.o
+
+# ipcm message port (user space)
+#cvi_ipcm-y += plat/linux/message/ipcm_port_msg.o
+
+# ipcm message port (kernel space)
+cvi_ipcm-y += plat/linux/message/ipcm_message_ker.o
+
+# ipcm system port
+cvi_ipcm-y += plat/linux/system/ipcm_port_sys.o
+
+# ipcm anon port
+cvi_ipcm-y += plat/linux/anonymous/ipcm_port_anon.o
+
+# ipcm message test (kernel space)
+ ifneq ($(findstring DRV_TEST, $(INTRERDRV_FLAGS)),)
+ cvi_ipcm-y += test/common/ipcm_test_common.o \
+ 	test/linux/test_ker.o
+ endif
+
+# ipcm info record
+ ifneq ($(findstring IPCM_INFO_REC, $(INTRERDRV_FLAGS)),)
+ cvi_ipcm-y += core/ring.o
+ endif
+
+cvi_ipcm_test-y := core/ipcm_common.o \
+	test/linux/anon_kernel_test.o
+
+ccflags-y += -I$(PWD)/core -I$(PWD)/core/mailbox -I$(PWD)/plat/include
+ccflags-y += -I$(PWD)/plat/palt_common -I$(PWD)/plat/linux/include -I$(PWD)/plat/linux/message
+ccflags-y += -I$(PWD)/sysdeps/linux -I$(PWD)/test/common
+ccflags-y += -I$(PWD)/../include/common/uapi/
+ccflags-y += -D__LINUX_DRV__
+
+ccflags-y += $(INTRERDRV_FLAGS)
+
+ccflags-y += -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
+
+# BUILD_DIR = $(PWD)/../build/ipcm
+BUILD_DIR = $(PWD)/build
+
+all: $(BUILD_DIR)/Makefile
+	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(BUILD_DIR) src=$(PWD) modules
+	@cp $(BUILD_DIR)/*.ko $(PWD)/
+
+$(BUILD_DIR):
+	mkdir -p "$@"
+
+$(BUILD_DIR)/Makefile: $(BUILD_DIR)
+	touch "$@"
+
+clean:
+#	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(BUILD_DIR) src=$(PWD) clean
+	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c *.mod
+	@rm -rf .tmp_versions
+	@rm -rf $(BUILD_DIR)
+	@find . -name \*.o* -type f -delete

@@ -302,8 +302,6 @@ void rtl8188f_set_FwPwrModeInIPS_cmd(PADAPTER padapter, u8 cmd_param)
 
 	RTW_INFO("%s()\n", __func__);
 
-	cmd_param = cmd_param;
-
 	FillH2CCmd8188F(padapter, H2C_8188F_INACTIVE_PS_, 1, &cmd_param);
 
 }

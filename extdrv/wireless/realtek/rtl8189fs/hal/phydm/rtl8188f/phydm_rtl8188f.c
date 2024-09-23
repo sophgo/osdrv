@@ -50,4 +50,11 @@ s8 phydm_cck_rssi_8188f(struct dm_struct *dm, u8 lna_idx, u8 vga_idx)
 	}
 	return rx_pwr_all;
 }
+void odm_hw_setting_8188F(struct dm_struct *dm){
+	if (dm->is_R2R_CCA_MASKT_TIME_SHORT)
+		odm_set_bb_reg(dm,0x814,0xffff,0x3110);
+	else
+		odm_set_bb_reg(dm,0x814,0xffff,0x3d10);	
+}
+	
 #endif

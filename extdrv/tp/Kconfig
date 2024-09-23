@@ -3,7 +3,6 @@
 #
 
 source "osdrv/extdrv/tp/ts_gsl/Kconfig"
-source "osdrv/extdrv/tp/ts_gt9xx/Kconfig"
 
 
 

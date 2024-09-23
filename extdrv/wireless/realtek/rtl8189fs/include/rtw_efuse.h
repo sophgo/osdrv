@@ -57,8 +57,12 @@ enum _EFUSE_DEF_TYPE {
 #define EFUSE_BT_REAL_CONTENT_LEN		(EFUSE_BT_REAL_BANK_CONTENT_LEN * BANK_NUM)
 #define EFUSE_BT_MAP_LEN				1024	/* 1k bytes */
 #define EFUSE_BT_MAX_SECTION			(EFUSE_BT_MAP_LEN / 8)
+#ifdef CONFIG_RTL8822C
+#define EFUSE_PROTECT_BYTES_BANK		54
+#else
 #define EFUSE_PROTECT_BYTES_BANK		16
-#define AVAILABLE_EFUSE_ADDR(addr)	(addr < EFUSE_BT_REAL_CONTENT_LEN)
+#endif
+#define AVAILABLE_EFUSE_ADDR(addr)	(addr < EFUSE_BT_REAL_CONTENT_LEN - EFUSE_PROTECT_BYTES_BANK)
 #endif
 
 #define EXT_HEADER(header) ((header & 0x1F) == 0x0F)
@@ -207,7 +211,9 @@ u8	rtw_efuse_map_read(PADAPTER padapter, u16 addr, u16 cnts, u8 *data);
 u8	rtw_efuse_map_write(PADAPTER padapter, u16 addr, u16 cnts, u8 *data);
 u8	rtw_BT_efuse_map_read(PADAPTER padapter, u16 addr, u16 cnts, u8 *data);
 u8	rtw_BT_efuse_map_write(PADAPTER padapter, u16 addr, u16 cnts, u8 *data);
-
+#ifdef CONFIG_RTL8822C
+void	rtw_pre_bt_efuse(PADAPTER padapter);
+#endif
 u16	Efuse_GetCurrentSize(PADAPTER pAdapter, u8 efuseType, BOOLEAN bPseudoTest);
 u8	Efuse_CalculateWordCnts(u8 word_en);
 void	ReadEFuseByte(PADAPTER Adapter, u16 _offset, u8 *pbuf, BOOLEAN bPseudoTest) ;
@@ -260,7 +266,8 @@ extern const u8 _mac_hidden_proto_to_hal_proto_cap[];
 u8 mac_hidden_wl_func_to_hal_wl_func(u8 func);
 
 #ifdef PLATFORM_LINUX
-u8 rtw_efuse_file_read(PADAPTER padapter, u8 *filepatch, u8 *buf, u32 len);
+u8 rtw_efuse_file_read(PADAPTER padapter, u8 *filepath, u8 *buf, u32 len);
+u8 rtw_efuse_file_store(PADAPTER padapter, u8 *filepath, u8 *buf, u32 len);
 #ifdef CONFIG_EFUSE_CONFIG_FILE
 u32 rtw_read_efuse_from_file(const char *path, u8 *buf, int map_size);
 u32 rtw_read_macaddr_from_file(const char *path, u8 *buf);
