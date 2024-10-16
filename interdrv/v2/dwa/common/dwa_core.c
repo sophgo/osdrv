@@ -54,7 +54,7 @@ static atomic_t suspend_flag = ATOMIC_INIT(0);
 static struct dwa_vdev *dwa_dev;
 static struct fasync_struct *dwa_fasync;
 
-unsigned int dwa_log_lv = DBG_WARN;
+unsigned int dwa_log_lv = DBG_INFO;
 bool dwa_dump_reg;
 
 module_param(dwa_log_lv, int, 0644);
@@ -108,6 +108,7 @@ void dwa_dev_init(struct dwa_vdev *dev)
 
 	for (i = 0; i < DWA_DEV_MAX_CNT; i++) {
 		atomic_set(&dev->core[i].state, DWA_CORE_STATE_IDLE);
+		dev->core[i].dev_type = (enum dwa_type)i;
 		dwa_core_init(i);
 	}
 
@@ -135,17 +136,17 @@ void dwa_enable_dev_clk(int coreid, bool en)
 {
 	struct dwa_vdev *dev = dwa_get_dev();
 
-	if (!dev || !dev->clk_dwa[coreid]) {
+	if (!dev || !dev->core[coreid].clk_dwa) {
 		TRACE_DWA(DBG_ERR, "null dev or null clk_dwa[%d]\n", coreid);
 		return;
 	}
 
 	if (en) {
-		if (!__clk_is_enabled(dev->clk_dwa[coreid]))
-			clk_enable(dev->clk_dwa[coreid]);
+		if (!__clk_is_enabled(dev->core[coreid].clk_dwa))
+			clk_enable(dev->core[coreid].clk_dwa);
 	} else {
-		if (__clk_is_enabled(dev->clk_dwa[coreid]))
-			clk_disable(dev->clk_dwa[coreid]);
+		if (__clk_is_enabled(dev->core[coreid].clk_dwa))
+			clk_disable(dev->core[coreid].clk_dwa);
 	}
 }
 
@@ -439,38 +440,16 @@ static const struct file_operations dwa_fops = {
 static void dwa_tsk_finish(struct dwa_vdev *dev, int top_id)
 {
 	struct dwa_core *core = &dev->core[top_id];
-	struct dwa_task *done_tsk;
-	unsigned long flags;
-	struct dwa_job *done_job;
-
-	if (atomic_read(&core->state) != DWA_CORE_STATE_END)
-		return;
-
-	spin_lock_irqsave(&dev->job_lock, flags);
-	done_tsk = list_first_entry_or_null(&core->list.done_list, struct dwa_task, node);
-	done_job = list_first_entry_or_null(&dev->list.done_list[top_id], struct dwa_job, node);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-
-	TRACE_DWA(DBG_DEBUG, "job [%px]\n", done_job);
-	if (unlikely(!done_tsk)) {
-		TRACE_DWA(DBG_ERR, "null core[%d] done tsk\n", top_id);
-		return;
-	}
-
-	if (atomic_read(&done_tsk->state) == DWA_TASK_STATE_RUNNING) {
-		if (done_tsk->fn_tsk_cb)
-			done_tsk->fn_tsk_cb(core, top_id);
-		else
-			TRACE_DWA(DBG_WARN, "null pfntskCB\n");
-	}
+	dwa_wkup_frm_done_work(core);
 }
 
 #if DWA_USE_THREADED_IRQ
 static irqreturn_t dwa_tsk_finish_thread_func(int irq, void *data)
 {
-	struct dwa_vdev *dev = (struct dwa_vdev *)data;
+	struct dwa_vdev *dev = (struct dwa_job *)data;
 	struct dwa_core *core;
 	int i, top_id = -1;
+	struct dwa_job *done_job;
 
 	if (!dev) {
 		TRACE_DWA(DBG_ERR, "invalid dwa_dev\n");
@@ -489,13 +468,14 @@ static irqreturn_t dwa_tsk_finish_thread_func(int irq, void *data)
 		dwa_tsk_finish(dev, top_id);
 	else
 		TRACE_DWA(DBG_ERR, "invalid core[%d]\n", top_id);
+
 	return IRQ_HANDLED;
 }
 #endif
 
-static void dwa_irq_handler(unsigned char intr_status, struct dwa_vdev *dev, int top_id, bool use_cmdq)
+static void dwa_irq_handler(unsigned char intr_status, struct dwa_vdev *dev, int top_id, struct dwa_job *done_job)
 {
-	if (!dev)
+	if (!dev || !done_job)
 		return;
 
 	if (top_id < 0 || top_id >= DWA_DEV_MAX_CNT) {
@@ -503,7 +483,7 @@ static void dwa_irq_handler(unsigned char intr_status, struct dwa_vdev *dev, int
 		return;
 	}
 
-	if (use_cmdq) {
+	if (done_job->use_cmdq) {
 		TRACE_DWA(DBG_DEBUG, "core(%d) cmdq status(%#x)\n", top_id, intr_status);
 	} else {
 		if (!(intr_status & BIT(0))) {
@@ -511,8 +491,8 @@ static void dwa_irq_handler(unsigned char intr_status, struct dwa_vdev *dev, int
 			return;
 		}
 	}
+
 	atomic_set(&dev->core[top_id].state, DWA_CORE_STATE_END);
-	TRACE_DWA(DBG_INFO, "core(%d) state set(%d)\n", top_id, DWA_CORE_STATE_END);
 
 #if !DWA_USE_THREADED_IRQ
 	dwa_tsk_finish(dev, top_id);
@@ -525,9 +505,7 @@ static irqreturn_t dwa_isr(int irq, void *data)
 	struct dwa_core *core;
 	int top_id, i;
 	unsigned char intr_status;
-	unsigned long flags;
 	struct dwa_job *done_job;
-	struct dwa_task *done_tsk;
 
 	if (!dev) {
 		TRACE_DWA(DBG_ERR, "invalid dwa_dev\n");
@@ -538,28 +516,19 @@ static irqreturn_t dwa_isr(int irq, void *data)
 		core = &dev->core[i];
 		if (core->irq_num == irq) {
 			top_id = i;
-			spin_lock_irqsave(&dev->job_lock, flags);
-			done_job = list_first_entry_or_null(&dev->list.work_list[top_id], struct dwa_job, node);
-			done_tsk = list_first_entry_or_null(&dev->core[top_id].list.work_list, struct dwa_task, node);
-			spin_unlock_irqrestore(&dev->job_lock, flags);
+			spin_lock(&core->core_lock);
+			done_job = list_first_entry_or_null(&core->list, struct dwa_job, node);
+			spin_unlock(&core->core_lock);
 
-			if (unlikely(!done_job || !done_tsk)) {
-				TRACE_DWA(DBG_ERR, "null done_job done_tsk\n");
-				intr_status = dwa_intr_status(top_id);
-				dwa_intr_clr(intr_status, top_id);
-				dwa_intr_ctrl(0x00, top_id);
-				dwa_disable(top_id);
-				//dwa_enable_dev_clk(top_id, false);
-				return IRQ_HANDLED;
+			if (unlikely(!done_job)) {
+				TRACE_DWA(DBG_NOTICE, "null done job\n");
+				goto CMDQ_STATUS_UNKOWN;
 			}
 
-			spin_lock_irqsave(&dev->job_lock, flags);
-			list_del(&done_job->node);
-			list_add_tail(&done_job->node, &dev->list.done_list[top_id]);
-
-			list_del(&done_tsk->node);
-			list_add_tail(&done_tsk->node, &dev->core[top_id].list.done_list);
-			spin_unlock_irqrestore(&dev->job_lock, flags);
+			if (unlikely(done_job->coreid != top_id)) {
+				TRACE_DWA(DBG_NOTICE, "done job core[%d] not match with [%d]\n", done_job->coreid, top_id);
+				goto CMDQ_STATUS_UNKOWN;
+			}
 
 			if (done_job->use_cmdq) {
 				intr_status = dwa_cmdq_intr_status(top_id);
@@ -584,9 +553,8 @@ CMDQ_STATUS_UNKOWN:
 			}
 			dwa_intr_ctrl(0x00, top_id);
 			dwa_disable(top_id);
-			//dwa_enable_dev_clk(top_id, false);
 
-			dwa_irq_handler(intr_status, dev, top_id, done_job->use_cmdq);
+			dwa_irq_handler(intr_status, dev, top_id, done_job);
 		}
 	}
 #if DWA_USE_THREADED_IRQ
@@ -654,7 +622,7 @@ static int dwa_init_resources(struct platform_device *pdev)
 
 		irq_num[i] = platform_get_irq_byname(pdev, irq_name[i]);
 		if (irq_num[i] < 0) {
-			dev_err(&pdev->dev, "No IRQ resource for %s\n", irq_name[i]);
+			dev_err(&pdev->dev, "(%d)No IRQ resource for %s\n", i, irq_name[i]);
 			return -ENODEV;
 		}
 
@@ -662,18 +630,18 @@ static int dwa_init_resources(struct platform_device *pdev)
 			, i, irq_num[i], irq_name[i]);
 
 		//clk res
-		dev->clk_src[i] = devm_clk_get(&pdev->dev, dwa_clk_sys_name[i]);
-		if (IS_ERR(dev->clk_src[i])) {
-			TRACE_DWA(DBG_ERR, "Cannot get clk for clk_sys_3 for stitch\n");
-			dev->clk_src[i] = NULL;
+		dev->core[i].clk_src = devm_clk_get(&pdev->dev, dwa_clk_sys_name[i]);
+		if (IS_ERR(dev->core[i].clk_src)) {
+			TRACE_DWA(DBG_ERR, "Cannot get clk for clk_sys_3 for dwa[%d]\n", i);
+			dev->core[i].clk_src = NULL;
 		}
-		dev->clk_dwa[i] = devm_clk_get(&pdev->dev, dwa_clk_name[i]);
-		if (IS_ERR(dev->clk_dwa[i])) {
-			TRACE_DWA(DBG_ERR, "Cannot get clk for clk_stitch\n");
-			dev->clk_dwa[i] = NULL;
+		dev->core[i].clk_dwa = devm_clk_get(&pdev->dev, dwa_clk_name[i]);
+		if (IS_ERR(dev->core[i].clk_dwa)) {
+			TRACE_DWA(DBG_ERR, "Cannot get clk for clk_dwa[%d]\n", i);
+			dev->core[i].clk_dwa = NULL;
 		}
 		if (clk_sys_freq[i])
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 
 #if DWA_USE_WORKQUEUE
 		if (devm_request_irq(&pdev->dev, irq_num[i], dwa_isr, IRQF_SHARED
@@ -688,8 +656,6 @@ static int dwa_init_resources(struct platform_device *pdev)
 		}
 
 		dev->core[i].irq_num = irq_num[i];
-		dev->core[i].dev_type = (enum dwa_type)i;
-		atomic_set(&dev->core[i].state, DWA_CORE_STATE_IDLE);
 	}
 
 	// clk_dwa_src_sel default 1(clk_src_vip_sys_2), 600 MHz
@@ -721,17 +687,17 @@ static void dwa_clk_init(struct dwa_vdev *dev)
 	}
 
 	for (i = 0; i < DWA_DEV_MAX_CNT; i++) {
-		if (dev->clk_src[i])
-			clk_prepare_enable(dev->clk_src[i]);
-		if (dev->clk_apb[i])
-			clk_prepare_enable(dev->clk_apb[i]);
-		if (dev->clk_dwa[i] && !__clk_is_enabled(dev->clk_dwa[i]))
-			clk_prepare_enable(dev->clk_dwa[i]);
+		if (dev->core[i].clk_src)
+			clk_prepare_enable(dev->core[i].clk_src);
+		if (dev->core[i].clk_apb)
+			clk_prepare_enable(dev->core[i].clk_apb);
+		if (dev->core[i].clk_dwa && !__clk_is_enabled(dev->core[i].clk_dwa))
+			clk_prepare_enable(dev->core[i].clk_dwa);
 
 		dwa_enable_dev_clk(i, true);
 
 		if (clk_sys_freq[i])
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 	}
 }
 
@@ -745,15 +711,15 @@ static void dwa_clk_deinit(struct dwa_vdev *dev)
 	}
 
 	for (i = 0; i < DWA_DEV_MAX_CNT; i++) {
-		if (dev->clk_dwa[i] && __clk_is_enabled(dev->clk_dwa[i]))
-			clk_disable_unprepare(dev->clk_dwa[i]);
-		if (dev->clk_apb[i])
-			clk_disable_unprepare(dev->clk_apb[i]);
-		if (dev->clk_src[i])
-			clk_disable_unprepare(dev->clk_src[i]);
+		if (dev->core[i].clk_dwa && __clk_is_enabled(dev->core[i].clk_dwa))
+			clk_disable_unprepare(dev->core[i].clk_dwa);
+		if (dev->core[i].clk_apb)
+			clk_disable_unprepare(dev->core[i].clk_apb);
+		if (dev->core[i].clk_src)
+			clk_disable_unprepare(dev->core[i].clk_src);
 
 		if (clk_sys_freq[i]) {
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 			clk_sys_freq[i] = 0;
 		}
 	}

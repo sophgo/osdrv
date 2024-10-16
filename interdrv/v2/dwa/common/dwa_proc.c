@@ -261,30 +261,19 @@ static const struct file_operations dwa_proc_fops = {
 };
 #endif
 
-static int dwa_handle_to_procIdx(bool is_end, struct dwa_job *job)
+static int dwa_handle_to_procIdx(struct dwa_job *job)
 {
 	int idx = -1;
-	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
 	unsigned long flags;
 
-	if (proc_ctx && job) {
-		spin_lock_irqsave(&proc_ctx->lock, flags);
-		for (idx = 0; idx < DWA_PROC_JOB_INFO_NUM; ++idx) {
-			if (proc_ctx->job_info[idx].handle == (u64)(uintptr_t)job) {
-				if (is_end && proc_ctx->job_info[idx].state == DWA_JOB_WORKING)
-					break;
-				if (!is_end && proc_ctx->job_info[idx].state == DWA_JOB_WAIT)
-					break;
-			}
-		}
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
-
-		if (idx >= DWA_PROC_JOB_INFO_NUM) {
-			TRACE_DWA(DBG_NOTICE, "(%d)canot find match job(%px) from proc_ctx,idx out of range\n"
-				, idx, job);
-			idx = -1;
-		}
+	if (!job) {
+		TRACE_DWA(DBG_ERR, "null job\n");
+		return idx;
 	}
+
+	spin_lock_irqsave(&job->lock, flags);
+	idx = job->proc_idx;
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	return idx;
 }
@@ -320,14 +309,12 @@ void dwa_proc_record_hw_tsk_start(struct dwa_job *job, struct dwa_task *tsk, uns
 	int idx;
 	struct timespec64 curTime;
 	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
-	unsigned long flags;
 
-	idx = dwa_handle_to_procIdx(true, job);
+	idx = dwa_handle_to_procIdx(job);
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < DWA_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time =
 			(u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = DWA_TASK_STATE_RUNNING;
@@ -336,7 +323,6 @@ void dwa_proc_record_hw_tsk_start(struct dwa_job *job, struct dwa_task *tsk, uns
 		proc_ctx->tsk_status.procing_num++;
 		proc_ctx->tsk_status.wait_num =
 			proc_ctx->tsk_status.begin_num - proc_ctx->tsk_status.procing_num;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_DWA(DBG_NOTICE, "job or tsk or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -348,17 +334,16 @@ void dwa_proc_record_hw_tsk_done(struct dwa_job *job, struct dwa_task *tsk)
 	unsigned long long end_time;
 	struct timespec64 curTime;
 	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
-	unsigned long flags;
 	enum dwa_task_state state;
 
-	idx = dwa_handle_to_procIdx(true, job);
+	idx = dwa_handle_to_procIdx(job);
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < DWA_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
 		end_time = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
-		state = atomic_read(&tsk->state);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
+		state = atomic_read(&tsk->state);
+		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time =
 			(u32)(end_time - proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time);
 
@@ -371,8 +356,6 @@ void dwa_proc_record_hw_tsk_done(struct dwa_job *job, struct dwa_task *tsk)
 		else
 			TRACE_DWA(DBG_ERR, "invalid tsk id(%d) state (%d).\n", tsk->tsk_id, state);
 
-		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_DWA(DBG_NOTICE, "job or tsk or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -384,22 +367,19 @@ void dwa_proc_record_job_start(struct dwa_job *job)
 	struct timespec64 curTime;
 	unsigned long long curTimeUs;
 	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
-	unsigned long flags;
 
-	idx = dwa_handle_to_procIdx(false, job);
+	idx = dwa_handle_to_procIdx(job);
 
 	if (job && proc_ctx && idx >= 0 && idx < DWA_PROC_JOB_INFO_NUM) {
 		ktime_get_ts64(&curTime);
 		curTimeUs = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_info[idx].busy_time =
 			(u32)(curTimeUs - proc_ctx->job_info[idx].submit_time);
 		proc_ctx->job_status.procing_num++;
 		proc_ctx->job_status.wait_num =
 			proc_ctx->job_status.begin_num - proc_ctx->job_status.procing_num;
 		proc_ctx->job_info[idx].state = DWA_JOB_WORKING;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_DWA(DBG_NOTICE, "job or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -411,17 +391,15 @@ void dwa_proc_record_job_done(struct dwa_job *job)
 	struct timespec64 curTime;
 	unsigned long long curTimeUs;
 	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
-	unsigned long flags;
 	enum dwa_job_state state;
 
-	idx = dwa_handle_to_procIdx(true, job);
+	idx = dwa_handle_to_procIdx(job);
 
 	if (job && proc_ctx && idx >= 0) {
 		ktime_get_ts64(&curTime);
 		curTimeUs = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
-		state = atomic_read(&job->job_state);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
+		state = atomic_read(&job->job_state);
 		if (state == DWA_JOB_END)
 			proc_ctx->job_status.success++;
 		else if (state == DWA_JOB_CANCLE)
@@ -434,7 +412,6 @@ void dwa_proc_record_job_done(struct dwa_job *job)
 		proc_ctx->job_info[idx].state = state;
 		proc_ctx->job_info[idx].cost_time =
 			(u32)(curTimeUs - proc_ctx->job_info[idx].submit_time);
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_DWA(DBG_NOTICE, "job or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -442,23 +419,42 @@ void dwa_proc_record_job_done(struct dwa_job *job)
 
 void dwa_proc_commit_job(struct dwa_job *job)
 {
-	unsigned short u16Idx, i = 0;
-	struct dwa_task *curelm, *tmp;
+	unsigned short u16Idx, i;
+	struct dwa_task *curelm;
 	struct timespec64 curTime;
 	struct dwa_proc_ctx *proc_ctx = dwa_get_proc_ctx();
 	unsigned long flags;
+	int tsk_num;
 
 	if (job && proc_ctx) {
+		tsk_num = atomic_read(&job->task_num);
+
 		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_idx = (proc_ctx->job_idx >= DWA_PROC_JOB_INFO_NUM) ?
 			0 : proc_ctx->job_idx;
 		u16Idx = proc_ctx->job_idx;
+		proc_ctx->job_idx++;
+		spin_unlock_irqrestore(&proc_ctx->lock, flags);
+
+		spin_lock_irqsave(&job->lock, flags);
+		job->proc_idx = u16Idx;
+		spin_unlock_irqrestore(&job->lock, flags);
+
+		TRACE_DWA(DBG_INFO, "proc ctx idx (%d)\n", u16Idx);
 
 		memset(&proc_ctx->job_info[u16Idx], 0, sizeof(proc_ctx->job_info[u16Idx]));
 		proc_ctx->job_info[u16Idx].handle = (u64)(uintptr_t)job;
 		memcpy(&proc_ctx->job_info[u16Idx].identity, &job->identity, sizeof(job->identity));
 
-		list_for_each_entry_safe(curelm, tmp, &job->task_list, node) {
+		for (i = 0; i < tsk_num; i++) {
+			spin_lock_irqsave(&job->lock, flags);
+			curelm = list_first_entry_or_null(&job->task_list, struct dwa_task, node);
+			spin_unlock_irqrestore(&job->lock, flags);
+
+			if (unlikely(!curelm)) {
+				TRACE_DWA(DBG_ERR, "task index %d invalid\n", i);
+				return;
+			}
 			proc_ctx->job_info[u16Idx].task_num++;
 			proc_ctx->job_info[u16Idx].tsk_info[i].in_size =
 				curelm->attr.img_in.video_frame.width *
@@ -468,18 +464,15 @@ void dwa_proc_commit_job(struct dwa_job *job)
 				curelm->attr.img_out.video_frame.height;
 			proc_ctx->job_info[u16Idx].tsk_info[i].state = DWA_TASK_STATE_WAIT;
 			proc_ctx->job_info[u16Idx].tsk_info[i].type = curelm->type;
-			i++;
 			proc_ctx->tsk_status.begin_num++;
 		}
 
 		proc_ctx->job_info[u16Idx].state = DWA_JOB_WAIT;
 		proc_ctx->job_status.begin_num++;
-		proc_ctx->job_idx++;
 
 		ktime_get_ts64(&curTime);
 		proc_ctx->job_info[u16Idx].submit_time =
 			(u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	}else {
 		TRACE_DWA(DBG_NOTICE, "job or proc_ctx invalid.\n");
 	}

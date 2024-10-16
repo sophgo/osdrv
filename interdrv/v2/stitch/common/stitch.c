@@ -2035,7 +2035,7 @@ int stitch_enable_dev(void)
 
 	mutex_unlock(&stitch_ctx->io_lock);
 
-	TRACE_STITCH(DBG_WARN, "enable dev+ count:%d\n", enable_count);
+	TRACE_STITCH(DBG_INFO, "enable dev+ count:%d\n", enable_count);
 	return 0;
 }
 
@@ -2093,7 +2093,7 @@ int stitch_disable_dev(void)
 
 	mutex_unlock(&stitch_ctx->io_lock);
 
-	TRACE_STITCH(DBG_WARN, "disable dev+ count:%d\n", enable_count);
+	TRACE_STITCH(DBG_INFO, "disable dev+ count:%d\n", enable_count);
 	return ret;
 }
 

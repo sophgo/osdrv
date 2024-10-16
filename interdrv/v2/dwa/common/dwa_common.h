@@ -29,6 +29,7 @@
 
 #define DWA_DEV_MAX_CNT (2)
 #define VIP_MAX_PLANES (3)
+#define END_JOB_MAX_LEN (16)
 
 #define DWA_IP_NUM                 (2)
 #define DWA_PROC_JOB_INFO_NUM      (16)
@@ -36,13 +37,13 @@
 #define DWA_JOB_MAX_TSK_NUM        (16)
 
 #ifndef FPGA_PORTING
+#define DWA_IDLE_WAIT_TIMEOUT_MS    1000
+#define DWA_SYNC_IO_WAIT_TIMEOUT_MS 1000*2
+#define DWA_EOF_WAIT_TIMEOUT_MS     200
+#else
 #define DWA_IDLE_WAIT_TIMEOUT_MS    1000*5
 #define DWA_SYNC_IO_WAIT_TIMEOUT_MS 1000*10
 #define DWA_EOF_WAIT_TIMEOUT_MS     1000*1
-#else
-#define DWA_IDLE_WAIT_TIMEOUT_MS    1000*50
-#define DWA_SYNC_IO_WAIT_TIMEOUT_MS 1000*100
-#define DWA_EOF_WAIT_TIMEOUT_MS     1000*10
 #endif
 
 #define R_IDX 0
@@ -87,9 +88,7 @@ struct dwa_task {
 	enum dwa_task_type type;
 	rotation_e rotation;
 	atomic_t state;//dwa_task_state
-	dwa_tsk_cb fn_tsk_cb;
 	int tsk_id;
-	struct semaphore sem;
 	//char coreid;
 };
 
@@ -111,6 +110,7 @@ enum dwa_job_state {
 };
 
 struct dwa_job {
+	spinlock_t lock;
 	struct dwa_data cap_data, out_data;
 	atomic_t job_state; //dwa_job_state
 	struct list_head node;//add to dwa_vdev job_list
@@ -121,11 +121,13 @@ struct dwa_job {
 	char coreid;
 	wait_queue_head_t job_done_wq;
 	bool job_done_evt;
+	int proc_idx;
 };
 
 struct dwa_vb_doneq {
 	struct semaphore sem;
 	struct list_head doneq;
+	spinlock_t lock;
 };
 
 struct dwa_vb_done {

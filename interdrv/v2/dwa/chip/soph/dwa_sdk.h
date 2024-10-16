@@ -15,7 +15,7 @@ int dwa_exec_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *
 int dwa_rm_cb(void);
 int dwa_reg_cb(struct dwa_vdev *wdev);
 
-void dwa_work_handle_frm_done(struct dwa_vdev *dev, struct dwa_core *core);
+void dwa_wkup_frm_done_work(void *data);
 
 /* Begin a dwa job,then add task into the job,dwa will finish all the task in the job.
  *

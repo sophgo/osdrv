@@ -33,28 +33,21 @@ enum dwa_wait_evt {
 	DWA_EVENT_RST =  0x4,
 };
 
-struct dwa_tsk_list {
-	struct list_head work_list;
-	struct list_head done_list;
-};
-
 struct dwa_core {
+	spinlock_t core_lock;
 	enum dwa_type dev_type;
 	int irq_num;
-	struct clk *clk_sys;
-	struct clk *clk;
+	struct clk *clk_src;
+	struct clk *clk_apb;
+	struct clk *clk_dwa;
+	unsigned int clk_sys_freq;
 	atomic_t state;//dwa_core_state
-	struct dwa_tsk_list list;
+	struct list_head list;
 #if DWA_USE_WORKQUEUE
 	struct work_struct work_frm_done;
 #endif
 	wait_queue_head_t cmdq_wq;
 	bool cmdq_evt;
-};
-
-struct dwa_job_list {
-	struct list_head work_list[DWA_DEV_MAX_CNT];
-	struct list_head done_list[DWA_DEV_MAX_CNT];
 };
 
 struct dwa_vdev {
@@ -63,22 +56,17 @@ struct dwa_vdev {
 	struct dwa_core core[DWA_DEV_MAX_CNT];
 	int core_num;
 	//atomic_t cur_irq_core_id;
-	struct clk *clk_src[DWA_DEV_MAX_CNT];
-	struct clk *clk_apb[DWA_DEV_MAX_CNT];
-	struct clk *clk_dwa[DWA_DEV_MAX_CNT];
-	unsigned int clk_sys_freq[DWA_DEV_MAX_CNT];
 	void *shared_mem;
 	struct task_struct *thread;
 	wait_queue_head_t wait;
 	enum dwa_wait_evt evt;
-	spinlock_t job_lock;
 	struct list_head job_list;
 	int job_cnt;
+	spinlock_t wdev_lock;
 	//struct workqueue_struct *workqueue;
-	struct dwa_job_list list;
 	struct dwa_vb_doneq vb_doneq;
 	vb_pool vb_pool;
-	struct semaphore sem;
+	struct semaphore sem;//for suspend
 };
 
 struct dwa_vdev *dwa_get_dev(void);

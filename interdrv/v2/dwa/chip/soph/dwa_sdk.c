@@ -5,6 +5,7 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <uapi/linux/sched/types.h>
+#include <linux/delay.h>
 
 #include <linux/comm_video.h>
 #include <linux/comm_gdc.h>
@@ -191,12 +192,12 @@ static void dwa_hdl_hw_tsk_cb(struct dwa_vdev *wdev, struct dwa_job *job
 	} else {
 		if (!job->identity.sync_io && is_last) {
 			vb_done = kzalloc(sizeof(*vb_done), GFP_ATOMIC);
-
-			spin_lock_irqsave(&wdev->job_lock, flags);
 			memcpy(&vb_done->img_out, &tsk->attr.img_out, sizeof(vb_done->img_out));
 			memcpy(&vb_done->job, job, sizeof(*job));
+
+			spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
 			list_add_tail(&vb_done->node, &wdev->vb_doneq.doneq);
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
+			spin_unlock_irqrestore(&wdev->vb_doneq.lock, flags);
 
 			TRACE_DWA(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 			up(&wdev->vb_doneq.sem);
@@ -211,14 +212,18 @@ static void dwa_hdl_hw_tsk_cb(struct dwa_vdev *wdev, struct dwa_job *job
 }
 
 static void dwa_wkup_cmdq_tsk(struct dwa_core *core) {
+	unsigned long flags;
+
 #if USE_REAL_CMDQ
 	(void)(core);
 #else
-	TRACE_DWA(DBG_DEBUG, "dwa_wkup_cmdq_tsk\n");
-
+	spin_lock_irqsave(&core->core_lock, flags);
 	core->cmdq_evt = true;
+	spin_unlock_irqrestore(&core->core_lock, flags);
+
 	wake_up_interruptible(&core->cmdq_wq);
 #endif
+	TRACE_DWA(DBG_DEBUG, "dwa_wkup_cmdq_tsk\n");
 }
 
 static void dwa_notify_wkup_evt_kth(void *data, enum dwa_wait_evt evt)
@@ -231,12 +236,12 @@ static void dwa_notify_wkup_evt_kth(void *data, enum dwa_wait_evt evt)
 		return;
 	}
 
-	spin_lock_irqsave(&dev->job_lock, flags);
+	spin_lock_irqsave(&dev->wdev_lock, flags);
 	dev->evt |= evt;
-	TRACE_DWA(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
 	wake_up_interruptible(&dev->wait);
+
+	TRACE_DWA(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
 }
 
 static void dwa_clr_evt_kth(void *data)
@@ -246,55 +251,60 @@ static void dwa_clr_evt_kth(void *data)
 	enum dwa_wait_evt evt;
 
 	if(!dev) {
-		TRACE_DWA(DBG_ERR, "ldc vdev isn't created yet.\n");
+		TRACE_DWA(DBG_ERR, "dwa vdev isn't created yet.\n");
 		return;
 	}
 
-	spin_lock_irqsave(&dev->job_lock, flags);
 	evt = dev->evt;
+	spin_lock_irqsave(&dev->wdev_lock, flags);
 	dev->evt &= ~evt;
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
+
 	TRACE_DWA(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
 }
 
-static void dwa_work_handle_job_done(struct dwa_vdev *dev, struct dwa_job *job, unsigned char irq_coreid)
+static void dwa_work_handle_job_done(struct dwa_vdev *dev, struct dwa_job *job)
 {
 	unsigned long flags;
 	struct fasync_struct *fasync;
+	struct dwa_core *core;
+	int coreid;
 
-	if (!job) {
-		TRACE_DWA(DBG_ERR, "null job\n");
-		return;
-	}
+	coreid = job->coreid;
+	core = &dev->core[coreid];
 
 	atomic_set(&job->job_state, DWA_JOB_END);
 
 	dwa_proc_record_job_done(job);
 
-	spin_lock_irqsave(&dev->job_lock, flags);
-	dev->job_cnt--;
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-	dwa_notify_wkup_evt_kth(dev, DWA_EVENT_EOF);
+	spin_lock_irqsave(&job->lock, flags);
+	list_del(&job->node);
+	job->job_done_evt = true;
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_DWA(DBG_INFO, "job [%px] done\n", job);
+
+	atomic_set(&core->state, DWA_CORE_STATE_IDLE);
 
 	if (job->identity.sync_io) {
-		TRACE_DWA(DBG_INFO, "job[%px]\n", job);
-		job->job_done_evt = true;
+		TRACE_DWA(DBG_INFO, "job[%px] wake endjob\n", job);
 		wake_up(&job->job_done_wq);
 	} else {
 		kfree(job);
-		job = NULL;
 		fasync = dwa_get_dev_fasync();
 		kill_fasync(&fasync, SIGIO, POLL_IN);
 	}
-	TRACE_DWA(DBG_DEBUG, "job done\n");
+
+	dwa_notify_wkup_evt_kth(dev, DWA_EVENT_EOF);
+
 }
 
 static void dwa_work_handle_tsk_done(struct dwa_vdev *dev
-	, struct dwa_task *tsk, struct dwa_job *job, unsigned char irq_coreid, bool is_last_tsk)
+	, struct dwa_task *tsk, struct dwa_job *job, bool is_last_tsk)
 {
 	unsigned long flags;
 
-	if (!tsk) {
+	if (unlikely(!tsk)) {
 		TRACE_DWA(DBG_ERR, "null tsk\n");
 		return;
 	}
@@ -307,65 +317,51 @@ static void dwa_work_handle_tsk_done(struct dwa_vdev *dev
 
 		dwa_proc_record_hw_tsk_done(job, tsk);
 
-		spin_lock_irqsave(&dev->job_lock, flags);
-		TRACE_DWA(DBG_DEBUG, "tsk[%px]\n", tsk);
-		kfree(tsk);
-		tsk = NULL;
-		spin_unlock_irqrestore(&dev->job_lock, flags);
+		TRACE_DWA(DBG_INFO, "tsk[%px] done, is last tsk[%d]\n", tsk, is_last_tsk);
 
-		TRACE_DWA(DBG_DEBUG, "tsk done, is last tsk[%d]\n", is_last_tsk);
-		if (is_last_tsk) {
-			dwa_work_handle_job_done(dev, job, irq_coreid);
-		}
+		spin_lock_irqsave(&job->lock, flags);
+		list_del(&tsk->node);
+		spin_unlock_irqrestore(&job->lock, flags);
+
+		kfree(tsk);
+
+		if (is_last_tsk)
+			dwa_work_handle_job_done(dev, job);
 	} else {
 		TRACE_DWA(DBG_ERR, "invalid tsk state(%d).\n"
 			, (enum dwa_task_state)atomic_read(&tsk->state));
 	}
 }
 
-void dwa_work_handle_frm_done(struct dwa_vdev *dev, struct dwa_core *core)
+static void dwa_work_handle_frm_done(int coreid)
 {
+	struct dwa_vdev *dev = dwa_get_dev();
+	struct dwa_core *core = &dev->core[coreid];
 	struct dwa_job *job;
 	struct dwa_task *tsk;
 	unsigned long flags;
-	unsigned char irq_coreid;
-	bool is_last_tsk = false;
+	bool is_last_tsk;
 
-	if(!dev) {
-		TRACE_DWA(DBG_ERR, "dwa vdev isn't created yet.\n");
+	spin_lock_irqsave(&core->core_lock, flags);
+	job = list_first_entry_or_null(&core->list, struct dwa_job, node);
+	spin_unlock_irqrestore(&core->core_lock, flags);
+
+	if (unlikely(!job)) {
+		TRACE_DWA(DBG_ERR, "core[%d] null job", coreid);
 		return;
 	}
 
-	atomic_set(&core->state, DWA_CORE_STATE_IDLE);
-	irq_coreid = (u8)core->dev_type;
-	TRACE_DWA(DBG_INFO, "core(%d) state set(%d)\n", irq_coreid, DWA_CORE_STATE_IDLE);
-
-	if (unlikely(irq_coreid) >= DEV_DWA_MAX)
-		return;
-
-	spin_lock_irqsave(&dev->job_lock, flags);
-	job = list_first_entry_or_null(&dev->list.done_list[irq_coreid], struct dwa_job, node);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-
-	if (unlikely(!job))
-		return;
-
 	if (atomic_read(&job->job_state) == DWA_JOB_WORKING) {
-		spin_lock_irqsave(&dev->job_lock, flags);
-		tsk = list_first_entry_or_null(&dev->core[irq_coreid].list.done_list, struct dwa_task, node);
-		if (unlikely(!tsk)) {
-			spin_unlock_irqrestore(&dev->job_lock, flags);
-			return;
-		}
-		is_last_tsk = (atomic_read(&job->task_num) > 1 ? false : true);
-		list_del(&tsk->node);
-		list_del(&job->node);
-		spin_unlock_irqrestore(&dev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
+		tsk = list_first_entry_or_null(&job->task_list, struct dwa_task, node);
+		spin_unlock_irqrestore(&job->lock, flags);
 
-		dwa_work_handle_tsk_done(dev, tsk, job, irq_coreid, is_last_tsk);
+		is_last_tsk = ((atomic_read(&job->task_num) > 1) ? false : true);
+
+		dwa_work_handle_tsk_done(dev, tsk, job, is_last_tsk);
 
 		if (job && job->use_cmdq && !is_last_tsk)
-			dwa_wkup_cmdq_tsk(&dev->core[irq_coreid]);
+			dwa_wkup_cmdq_tsk(core);
 	} else {
 		TRACE_DWA(DBG_ERR, "invalid job(%px) state(%d).\n"
 			, job, (enum dwa_job_state)atomic_read(&job->job_state));
@@ -376,108 +372,28 @@ void dwa_work_handle_frm_done(struct dwa_vdev *dev, struct dwa_core *core)
 static void dwa_work_frm_done(struct work_struct *work)//intr post handle
 {
 	struct dwa_core *core = container_of(work, struct dwa_core, work_frm_done);
-	struct dwa_vdev *dev = dwa_get_dev();
 
-	if(!core || !dev) {
-		TRACE_DWA(DBG_ERR, "dwa vdev or core isn't created yet.\n");
-		return;
-	}
-
-	dwa_work_handle_frm_done(dev, core);
+	dwa_work_handle_frm_done((int)core->dev_type);
 }
 #endif
 
-static void dwa_wkup_frm_done_work(void *data, int top_id)
+//wakeup post handle
+void dwa_wkup_frm_done_work(void *data)
 {
 	struct dwa_core *core = (struct dwa_core *)data;
-	(void)top_id;
-
-	if (!core) {
-		TRACE_DWA(DBG_ERR, "dwa core isn't created yet.\n");
-		return;
-	}
 
 #if DWA_USE_WORKQUEUE
-	//queue_work(dev->workqueue, &dev->work_frm_done);//wakeup post handle
+	//queue_work(dev->workqueue, &dev->work_frm_done);
 	schedule_work(&core->work_frm_done);
 #else
-	dwa_work_handle_frm_done(dwa_get_dev(), core);
+	dwa_work_handle_frm_done((int)core->dev_type);
 #endif
-}
-
-static void dwa_reset_cur_abord_tsk(struct dwa_vdev *dev, unsigned char coreid, struct dwa_job *job)
-{
-#if USE_EXCEPTION_HDL
-	struct dwa_task *tsk, tsk_tmp;
-
-	if (unlikely(!dev)) {
-		TRACE_DWA(DBG_ERR, "dwa vdev isn't created yet.\n");
-		return;
-	}
-
-	if (unlikely(!job)) {
-		TRACE_DWA(DBG_ERR, "err job is null\n");
-		return;
-	}
-
-	if (list_empty(&job->task_list)) {
-		TRACE_DWA(DBG_ERR, "err tsklist is null\n");
-		return;
-	}
-
-	list_for_each_entry_safe(tsk, tsk_tmp, &job->task_list, node) {
-		if (unlikely(!tsk)) {
-			TRACE_DWA(DBG_ERR, "cur job(%px) cur tsk is null\n", job);
-			continue;
-		}
-
-		if (unlikely(tsk->tsk_id < 0 || tsk->tsk_id >= DWA_JOB_MAX_TSK_NUM)) {
-			TRACE_DWA(DBG_ERR, "cur job(%px) cur tsk id(%d) invalid\n", job, tsk->tsk_id);
-			continue;
-		}
-
-		dwa_intr_ctrl(DWA_INTR_EN_NULL, coreid);
-		dwa_disable(coreid);
-		dwa_reset(coreid);
-
-		atomic_set(&dev->core[coreid]->state, DWA_CORE_STATE_IDLE);
-
-		dwa_notify_wkup_evt_kth(dev, DWA_EVENT_RST);
-		up(&tsk->sem);
-	}
-
-	atomic_set(&dev->state, DWA_DEV_STATE_RUNNING);
-#else
-	(void) dev;
-	(void) coreid;
-	(void) job;
-	return;
-#endif
-}
-
-static void dwa_try_reset_abort_job(struct dwa_vdev *wdev)
-{
-	unsigned char coreid;
-	unsigned long flags;
-	struct dwa_job *work_job;
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	for (coreid = 0; coreid < wdev->core_num; coreid++) {
-		work_job = list_first_entry_or_null(&wdev->list.work_list[coreid], struct dwa_job, node);
-		if (unlikely(!work_job)) {
-			TRACE_DWA(DBG_NOTICE, "dwa vdev core[%d] select timeout,hw busy\n", coreid);
-			dwa_reset_cur_abord_tsk(wdev, coreid, work_job);
-		}
-	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
 }
 
 static void dwa_set_tsk_run_status(struct dwa_vdev *wdev, int top_id
 	, struct dwa_job *job, struct dwa_task *tsk)
 {
 	atomic_set(&wdev->core[top_id].state, DWA_CORE_STATE_RUNNING);
-	TRACE_DWA(DBG_INFO, "core(%d) state set(%d)\n", top_id, DWA_CORE_STATE_RUNNING);
-
 	atomic_set(&tsk->state, DWA_TASK_STATE_RUNNING);
 
 	dwa_proc_record_hw_tsk_start(job, tsk, top_id);
@@ -493,8 +409,6 @@ static void dwa_submit_hw(struct dwa_vdev *wdev, int top_id
 	unsigned long long mesh_addr;
 	unsigned char num_of_plane, i;
 	unsigned long flags;
-	struct dwa_job *work_job;
-	struct dwa_task *work_tsk;
 
 	dwa_set_tsk_run_status(wdev, top_id, job, tsk);
 
@@ -549,29 +463,26 @@ static void dwa_submit_hw(struct dwa_vdev *wdev, int top_id
 		cfg.dst_buf[i].offset_x = cfg.src_buf[i].offset_y = 0;
 	}
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	//tsk->coreid = top_id;
+	spin_lock_irqsave(&job->lock, flags);
 	job->coreid = top_id;
+	spin_unlock_irqrestore(&job->lock, flags);
 
-	list_add_tail(&job->node, &wdev->list.work_list[top_id]);
-	work_job = list_first_entry_or_null(&wdev->list.work_list[top_id], struct dwa_job, node);
+	spin_lock_irqsave(&wdev->core[top_id].core_lock, flags);
+	list_add_tail(&job->node, &wdev->core[top_id].list);
+	spin_unlock_irqrestore(&wdev->core[top_id].core_lock, flags);
 
-	list_add_tail(&tsk->node, &wdev->core[top_id].list.work_list);
-	work_tsk = list_first_entry_or_null(&wdev->core[top_id].list.work_list, struct dwa_task, node);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	wdev->job_cnt--;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
-	if (unlikely(!work_job || !work_tsk)) {
-		TRACE_DWA(DBG_WARN, "core_id:[%d] null work job tsk\n", top_id);
-		return;
-	}
 	dwa_reset(top_id);
 	dwa_init(top_id);
 	dwa_intr_ctrl(DWA_INTR_EN_ALL, top_id);//0x7 if you want get mesh tbl id err status
 	dwa_engine(&cfg, top_id);
 
-	TRACE_DWA(DBG_DEBUG, "job[%px]\n", job);
+	TRACE_DWA(DBG_INFO, "job[%px]\n", job);
 
-	TRACE_DWA(DBG_DEBUG, "core_id:%d\n", top_id);
+	TRACE_DWA(DBG_INFO, "core_id:%d\n", top_id);
 	TRACE_DWA(DBG_DEBUG, "update size src(%d %d) dst(%d %d)\n",
 		cfg.src_width, cfg.src_height, cfg.dst_width, cfg.dst_height);
 	TRACE_DWA(DBG_DEBUG, "update src-buf: %#llx-%#llx-%#llx\n",
@@ -601,8 +512,7 @@ static void dwa_submit_hw_cmdq(struct dwa_vdev *wdev, int top_id
 	unsigned long long mesh_addr;
 	unsigned char num_of_plane, i, tsk_idx;
 	int tsk_num, cmdq_wq_ret;
-	struct dwa_job *work_job;
-	struct dwa_task *work_tsk;
+	unsigned long flags;
 
 	if (unlikely(!wdev || !job || !last_tsk || !tskq))
 		return;
@@ -615,9 +525,20 @@ static void dwa_submit_hw_cmdq(struct dwa_vdev *wdev, int top_id
 
 	cmdq_addr = kzalloc(sizeof(*cmdq_addr) * tsk_num * DWA_CMDQ_MAX_REG_CNT, GFP_ATOMIC);
 
-	for (tsk_idx = 0; tsk_idx < tsk_num; tsk_idx++) {
-		unsigned long flags;
+	spin_lock_irqsave(&job->lock, flags);
+	job->coreid = top_id;
+	spin_unlock_irqrestore(&job->lock, flags);
 
+	spin_lock_irqsave(&wdev->core[top_id].core_lock, flags);
+	list_add_tail(&job->node, &wdev->core[top_id].list);
+	wdev->core[top_id].cmdq_evt = false;
+	spin_unlock_irqrestore(&wdev->core[top_id].core_lock, flags);
+
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	wdev->job_cnt--;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+	for (tsk_idx = 0; tsk_idx < tsk_num; tsk_idx++) {
 		dwa_set_tsk_run_status(wdev, top_id, job, tskq[tsk_idx]);
 
 		cfg_q[tsk_idx] = kzalloc(sizeof(struct dwa_cfg), GFP_ATOMIC);
@@ -672,19 +593,6 @@ static void dwa_submit_hw_cmdq(struct dwa_vdev *wdev, int top_id
 			cfg_q[tsk_idx]->dst_buf[i].offset_x = cfg_q[tsk_idx]->src_buf[i].offset_y = 0;
 		}
 
-		spin_lock_irqsave(&wdev->job_lock, flags);
-		//tskq[tsk_idx]->coreid = top_id;
-		job->coreid = top_id;
-
-		list_add_tail(&job->node, &wdev->list.work_list[top_id]);
-		work_job = list_first_entry_or_null(&wdev->list.work_list[top_id], struct dwa_job, node);
-
-		list_add_tail(&tskq[tsk_idx]->node, &wdev->core[top_id].list.work_list);
-		work_tsk = list_first_entry_or_null(&wdev->core[top_id].list.work_list, struct dwa_task, node);
-
-		wdev->core[top_id].cmdq_evt = false;
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
-
 #if !USE_REAL_CMDQ //fake cmdq
 		dwa_reset(top_id);
 		dwa_init(top_id);
@@ -696,7 +604,6 @@ static void dwa_submit_hw_cmdq(struct dwa_vdev *wdev, int top_id
 				, wdev->core[top_id].cmdq_evt, DWA_EOF_WAIT_TIMEOUT_MS);
 			if (cmdq_wq_ret <= 0) {
 				TRACE_DWA(DBG_WARN, "dwa cdmq wait timeout, ret(%d)\n", cmdq_wq_ret);
-				tsk_idx++;
 				goto FREE_CMDQ_RES;
 			}
 			TRACE_DWA(DBG_DEBUG, "dwa cdmq wait done, ret(%d)\n", cmdq_wq_ret);
@@ -714,8 +621,6 @@ static void dwa_submit_hw_cmdq(struct dwa_vdev *wdev, int top_id
 #endif
 
 FREE_CMDQ_RES:
-	//last_tsk->coreid = top_id;
-
 	TRACE_DWA(DBG_DEBUG, "cmd_start(%px)\n",cmdq_addr);
 	for (i = 0; i < tsk_idx; i++) {
 		TRACE_DWA(DBG_DEBUG, "tsk_id[%d]-core_id[%d]\n", i,  top_id);
@@ -745,11 +650,6 @@ FREE_CMDQ_RES:
 
 if (cmdq_addr)
 	kfree(cmdq_addr);
-
-#if 0
-	dwa_dump_register(top_id);
-	//dwa_dump_cmdq(top_id);
-#endif
 }
 
 static int dwa_try_submit_hw(struct dwa_vdev *wdev, struct dwa_job *job
@@ -757,15 +657,10 @@ static int dwa_try_submit_hw(struct dwa_vdev *wdev, struct dwa_job *job
 {
 	int i, top_id, ret = -1;
 	enum dwa_core_state state;
-	bool finish;
 
 	for (i = 0; i < wdev->core_num; i++) {
-		finish = dwa_is_finish(i);
 		state = atomic_read(&wdev->core[i].state);
-
-		TRACE_DWA(DBG_INFO, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
-
-		if ((state == DWA_CORE_STATE_IDLE) && finish) {
+		if ((state == DWA_CORE_STATE_IDLE)) {
 			top_id = i;
 			//dwa_enable_dev_clk(top_id, true);
 			if (use_cmdq)
@@ -801,14 +696,10 @@ static unsigned char dwa_is_tskq_ready(struct dwa_task *tsk)
 		return false;
 	}
 
-	if (unlikely(down_trylock(&tsk->sem))) {
-		TRACE_DWA(DBG_ERR, "cur tsk(%px) get sem fail\n", tsk);
-		return false;
-	}
 	return true;
 }
 
-static unsigned char dwa_get_idle_coreid(struct dwa_vdev *wdev)
+/*static unsigned char dwa_get_idle_coreid(struct dwa_vdev *wdev)
 {
 	unsigned char coreid;
 	enum dwa_core_state state;
@@ -819,7 +710,7 @@ static unsigned char dwa_get_idle_coreid(struct dwa_vdev *wdev)
 			break;
 	}
 	return coreid;
-}
+}*/
 
 static bool dwa_have_idle_core(struct dwa_vdev *wdev)
 {
@@ -847,32 +738,23 @@ static void dwa_try_commit_job(struct dwa_vdev *wdev, struct dwa_job *job)
 	if (atomic_read(&job->job_state) != DWA_JOB_WORKING)
 		return;
 
-	if (!dwa_have_idle_core(wdev))
-		return;
-
 	tsk_num = atomic_read(&job->task_num);
-	if (unlikely(tsk_num <= 0)) {
-		TRACE_DWA(DBG_ERR, "cur job(%px) tsk_num(%d) invalid\n"
-			, job, tsk_num);
-		return;
-	}
-
 	if (tsk_num == 1) {
 		use_cmdq = false;
-		spin_lock_irqsave(&wdev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
 		tsk = list_first_entry_or_null(&job->task_list, struct dwa_task, node);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		spin_unlock_irqrestore(&job->lock, flags);
 		is_ready = dwa_is_tskq_ready(tsk);
 	} else {
 		use_cmdq = true;
 		i = 0;
-		spin_lock_irqsave(&wdev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
 		list_for_each_entry_safe(tskq[i], tmp_tsk, &job->task_list, node) {
 			is_ready &= dwa_is_tskq_ready(tskq[i]);
 			last_tsk = tskq[i];
 			i++;
 		}
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		spin_unlock_irqrestore(&job->lock, flags);
 	}
 
 	if (!is_ready) {
@@ -890,30 +772,20 @@ static void dwa_try_commit_job(struct dwa_vdev *wdev, struct dwa_job *job)
 			TRACE_DWA(DBG_ERR, "invalid last_tsk,is not last node\n");
 			return;
 		}
-#if USE_REAL_CMDQ
-		last_tsk->fn_tsk_cb = dwa_wkup_frm_done_work;
-#else
-		for (i = 0; i < atomic_read(&job->task_num); i++)
-			tskq[i]->fn_tsk_cb = dwa_wkup_frm_done_work;
-#endif
 		dwa_try_submit_hw_cmdq(wdev, job, tskq, last_tsk);
-	} else {
-		tsk->fn_tsk_cb = dwa_wkup_frm_done_work;
+	} else
 		dwa_try_submit_hw(wdev, job, tsk, false, NULL);
-	}
 }
 
 static int dwa_event_handler_th(void *data)
 {
 	struct dwa_vdev *wdev = (struct dwa_vdev *)data;
 	unsigned long flags;
-	struct dwa_job *job, *job_tmp;
+	struct dwa_job *job;
 	int ret;
 	unsigned long idle_timeout = msecs_to_jiffies(DWA_IDLE_WAIT_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(DWA_EOF_WAIT_TIMEOUT_MS);
 	unsigned long timeout = idle_timeout;
-	unsigned char idle_coreid;
-	bool have_idle_job;
 
 	if (!wdev) {
 		TRACE_DWA(DBG_ERR, "dwa vdev isn't created yet.\n");
@@ -937,25 +809,13 @@ static int dwa_event_handler_th(void *data)
 
 		/* timeout */
 		if (!ret) {
-			if (atomic_read(&wdev->state) == DWA_DEV_STATE_STOP) {
-				timeout = idle_timeout;
-				continue;
-			} else if((atomic_read(&wdev->state) == DWA_DEV_STATE_RUNNING)
-				&& list_empty(&wdev->job_list)) {
-				timeout = idle_timeout;
+			if (list_empty(&wdev->job_list)) {
 				atomic_set(&wdev->state, DWA_DEV_STATE_STOP);
 				up(&wdev->sem);
+				timeout = idle_timeout;
 				continue;
-			} else {
-				dwa_try_reset_abort_job(wdev);
-				continue;
-			}
-		}
-
-		idle_coreid = dwa_get_idle_coreid(wdev);
-		if (idle_coreid >= wdev->core_num) {
-			TRACE_DWA(DBG_INFO, "dwa vdev hw busy, no idle core\n");
-			goto continue_th;
+			} else
+				TRACE_DWA(DBG_NOTICE, "timeout but job list not empty\n");
 		}
 
 		if (list_empty(&wdev->job_list)) {
@@ -965,29 +825,22 @@ static int dwa_event_handler_th(void *data)
 			goto continue_th;
 		}
 
-		have_idle_job = false;
-		spin_lock_irqsave(&wdev->job_lock, flags);
-		list_for_each_entry_safe(job, job_tmp, &wdev->job_list, node) {
-			if (job->coreid == DWA_INVALID_CORE_ID) {
-				TRACE_DWA(DBG_DEBUG, "got idle job[%px]\n", job);
-				have_idle_job = true;
-				break;
-			}
-		}
-
-		if (!have_idle_job) { //have idle core but cur job is doing
-			TRACE_DWA(DBG_INFO, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
-				, job, job_tmp, job_tmp->coreid);
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
+		if (!dwa_have_idle_core(wdev)) {
+			TRACE_DWA(DBG_INFO, "core busy, not have idle core\n");
 			goto continue_th;
 		}
 
-		atomic_set(&job->job_state, DWA_JOB_WORKING);
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		job = list_first_entry_or_null(&wdev->job_list, struct dwa_job, node);
 		list_del(&job->node);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+		TRACE_DWA(DBG_INFO, "send job[[%px]]\n", job);
+
+		atomic_set(&job->job_state, DWA_JOB_WORKING);
+		atomic_set(&wdev->state, DWA_DEV_STATE_RUNNING);
 
 		dwa_proc_record_job_start(job);
-		atomic_set(&wdev->state, DWA_DEV_STATE_RUNNING);
 		dwa_try_commit_job(wdev, job);
 continue_th:
 		dwa_clr_evt_kth(wdev);
@@ -999,36 +852,12 @@ continue_th:
 	return 0;
 }
 
-static void dwa_cancel_cur_tsk(struct dwa_job *job)
-{
-	struct dwa_task *tsk = NULL;
-	unsigned char i;
-
-	if (unlikely(!job))
-		return;
-	if (unlikely(list_empty(&job->task_list))) {
-			TRACE_DWA(DBG_NOTICE, "null tsk list\n");
-			return;
-	}
-
-	for (i = 0; i < atomic_read(&job->task_num); i++) {
-		tsk = list_first_entry_or_null(&job->task_list, struct dwa_task, node);
-		if (tsk) {
-			TRACE_DWA(DBG_DEBUG, "free tsk[%px]\n", tsk);
-			list_del(&tsk->node);
-			kfree(tsk);
-			tsk = NULL;
-		}
-	}
-}
-
 /**************************************************************************
  *   Public APIs.
  **************************************************************************/
 int dwa_begin_job(struct dwa_vdev *wdev, struct dwa_handle_data *data)
 {
 	struct dwa_job *job;
-	unsigned long flags;
 	int ret = 0;
 
 	ret = dwa_check_null_ptr(wdev) ||
@@ -1047,13 +876,11 @@ int dwa_begin_job(struct dwa_vdev *wdev, struct dwa_handle_data *data)
 		return ERR_DWA_NOBUF;
 	}
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	INIT_LIST_HEAD(&job->task_list);
+	spin_lock_init(&job->lock);
 	atomic_set(&job->job_state, DWA_JOB_CREAT);
 	atomic_set(&job->task_num, 0);
 	job->identity.sync_io = true;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
-
 	data->handle = (u64)(uintptr_t)job;
 
 	TRACE_DWA(DBG_DEBUG, "job[%px]++\n", job);
@@ -1063,11 +890,11 @@ int dwa_begin_job(struct dwa_vdev *wdev, struct dwa_handle_data *data)
 
 int dwa_end_job(struct dwa_vdev *wdev, unsigned long long handle)
 {
-	int ret = 0, sync_io_ret = 1;
+	int ret = 0;
 	struct dwa_job *job = (struct dwa_job *)(uintptr_t)handle;
 	unsigned long flags;
 	int tsk_num = 0;
-	unsigned long timeout = msecs_to_jiffies(DWA_SYNC_IO_WAIT_TIMEOUT_MS);
+	//unsigned long timeout = msecs_to_jiffies(DWA_SYNC_IO_WAIT_TIMEOUT_MS);
 	struct dwa_task *tsk, *tmp_tsk;
 
 	ret = dwa_check_null_ptr(wdev) ||
@@ -1079,104 +906,148 @@ int dwa_end_job(struct dwa_vdev *wdev, unsigned long long handle)
 		TRACE_DWA(DBG_DEBUG, "no task in job.\n");
 		return ERR_DWA_NOT_PERMITTED;
 	}
-	TRACE_DWA(DBG_INFO, "job[%px]\n", job);
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	atomic_set(&job->job_state, DWA_JOB_WAIT);
-	list_add_tail(&job->node, &wdev->job_list);
-	wdev->job_cnt++;
+	if (wdev->job_cnt >= END_JOB_MAX_LEN) {
+		TRACE_DWA(DBG_ERR, "job_cnt is full.\n");
+		kfree(job);
+		return ERR_DWA_BUF_FULL;
+	}
 
+	//mutex_lock(&g_io_lock);
+	spin_lock_irqsave(&job->lock, flags);
 	list_for_each_entry_safe(tsk, tmp_tsk, &job->task_list, node) {
-		up(&tsk->sem);
 		tsk_num++;
 		tsk->tsk_id = tsk_num - 1;
 	}
-	atomic_set(&job->task_num, tsk_num);
 	job->coreid = DWA_INVALID_CORE_ID;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	atomic_set(&job->job_state, DWA_JOB_WAIT);
+	atomic_set(&job->task_num, tsk_num);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	dwa_proc_commit_job(job);
 
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	list_add_tail(&job->node, &wdev->job_list);
+	wdev->job_cnt++;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
 	dwa_notify_wkup_evt_kth(wdev, DWA_EVENT_WKUP);
+	//mutex_unlock(&g_io_lock);
+
+	TRACE_DWA(DBG_INFO, "job[%px] name[%s] sync_io=%d\n", job, job->identity.name, job->identity.sync_io);
 
 	if (job->identity.sync_io) {
+		spin_lock_irqsave(&job->lock, flags);
 		init_waitqueue_head(&job->job_done_wq);
 		job->job_done_evt = false;
-		sync_io_ret = wait_event_timeout(job->job_done_wq, job->job_done_evt, timeout);
-		if (sync_io_ret <= 0) {
-			TRACE_DWA(DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
-			ret = -1;
-			spin_lock_irqsave(&wdev->job_lock, flags);
-			wdev->job_cnt--;
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
-		} else
-			ret = 0;
-	}
+		spin_unlock_irqrestore(&job->lock, flags);
 
-	TRACE_DWA(DBG_INFO, "jobname[%s] sync_io=%d, ret=%d\n", job->identity.name, job->identity.sync_io, ret);
+		wait_event(job->job_done_wq, job->job_done_evt);
 
-	if (job->identity.sync_io) {
 		kfree(job);
-		job = NULL;
 	}
 
 	return ret;
 }
 
-int dwa_cancel_job(struct dwa_vdev *wdev, unsigned long long handle)
+static int dwa_cancel_wait_job(struct dwa_vdev *wdev, struct dwa_job *job_handle)
 {
-	int ret = 0;
-	struct dwa_job *job = (struct dwa_job *)(uintptr_t)handle;
-	struct dwa_job *job_tmp, *work_job, *wait_job;
+	struct dwa_job* tmp, *job;
+	bool wait_flag = false;
 	unsigned long flags;
-	unsigned char coreid;
-	bool needfreeJob = false;
 
-	ret = dwa_check_null_ptr(wdev) ||
-		dwa_check_null_ptr(job);
-	if (ret)
-		return ret;
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	if (atomic_read(&job->job_state) == DWA_JOB_CREAT) {
-		needfreeJob = true;
-		goto FREE_JOB;
-	}
-
-	list_for_each_entry_safe(wait_job, job_tmp, &wdev->job_list, node) {
-		if (job == wait_job) {
-			TRACE_DWA(DBG_DEBUG, "cancel wait job(%px)\n", wait_job);
-			atomic_set(&wdev->state, DWA_DEV_STATE_RUNNING);
-			needfreeJob = true;
-			dwa_cancel_cur_tsk(job);
-			list_del(&job->node);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	list_for_each_entry_safe(job, tmp, &wdev->job_list, node) {
+		if (job == job_handle) {
+			wait_flag = true;
 			break;
 		}
 	}
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+	if (wait_flag) {
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		list_del(&job_handle->node);
+		wdev->job_cnt--;
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+		kfree(job_handle);
+		TRACE_DWA(DBG_NOTICE, "cancel wdev job_list job[%px]\n", job_handle);
+		return 0;
+	}
+
+	return -1;
+}
+
+static int dwa_cancel_work_job(struct dwa_vdev *wdev, struct dwa_job *job_handle)
+{
+	unsigned long flags;
+	bool work_flag = false;
+	struct dwa_core *core;
+	struct dwa_job* tmp, *job;
+	int coreid;
+	int state;
+	int count = 5000;
 
 	for (coreid = 0; coreid < DWA_DEV_MAX_CNT; coreid++) {
-		list_for_each_entry_safe(work_job, job_tmp, &wdev->list.work_list[coreid], node) {
-			if (job == work_job) {
-				TRACE_DWA(DBG_DEBUG, "cancel work job(%px)\n", wait_job);
-				atomic_set(&wdev->state, DWA_DEV_STATE_RUNNING);
-				atomic_set(&wdev->core[coreid].state, DWA_CORE_STATE_IDLE);
-				dwa_core_deinit(coreid);
-				needfreeJob = true;
-				dwa_cancel_cur_tsk(job);
-				list_del(&job->node);
+		core = &wdev->core[coreid];
+		if (list_empty(&core->list))
+			continue;
+
+		spin_lock_irqsave(&core->core_lock, flags);
+		list_for_each_entry_safe(job, tmp, &core->list, node) {
+			if (job == job_handle) {
+				work_flag = true;
 				break;
 			}
 		}
+		spin_unlock_irqrestore(&core->core_lock, flags);
+
+		if (work_flag)
+			break;
 	}
 
-FREE_JOB:
-	if (needfreeJob) {
-		TRACE_DWA(DBG_DEBUG, "free job[%px]\n", job);
-		// kfree(job);
-	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
-	TRACE_DWA(DBG_DEBUG, "++\n");
+	if (work_flag) {
+		while (--count > 0) {
+			state = atomic_read(&core->state);
+			if (state == DWA_CORE_STATE_RUNNING)
+				usleep_range(100, 200);
+			else
+				break;
+		}
 
+		if (state == DWA_CORE_STATE_RUNNING) {
+			atomic_set(&core->state, DWA_CORE_STATE_IDLE);
+
+			spin_lock_irqsave(&core->core_lock, flags);
+			list_del(&job_handle->node);
+			spin_unlock_irqrestore(&core->core_lock, flags);
+
+			kfree(job_handle);
+			dwa_core_deinit(coreid);
+			TRACE_DWA(DBG_NOTICE, "cancel core[%d] workjob[%px]\n", job_handle->coreid, job_handle);
+			TRACE_DWA(DBG_NOTICE, "cur core if timeout, need reset\n");
+		} else
+			TRACE_DWA(DBG_NOTICE, "core[%d] irq have cancel this job[%px] done\n", job_handle->coreid, job_handle);
+	}
+
+	return 0;
+}
+
+int dwa_cancel_job(struct dwa_vdev *wdev, unsigned long long handle)
+{
+	int ret = 0;
+	struct dwa_job *job_handle = (struct dwa_job *)(uintptr_t)handle;
+
+	ret = dwa_check_null_ptr(wdev) ||
+		dwa_check_null_ptr(job_handle);
+	if (ret)
+		return ret;
+
+	if (dwa_cancel_wait_job(wdev, job_handle) == 0)
+		return ret;
+
+	ret = dwa_cancel_work_job(wdev, job_handle);
 	return ret;
 }
 
@@ -1192,14 +1063,14 @@ int dwa_get_work_job(struct dwa_vdev *wdev, struct dwa_handle_data *data)
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
-		job = list_first_entry_or_null(&wdev->list.work_list[coreid], struct dwa_job, node);
-		if (job) {
+		spin_lock_irqsave(&wdev->core[coreid].core_lock, flags);
+		job = list_first_entry_or_null(&wdev->core[coreid].list, struct dwa_job, node);
+		spin_unlock_irqrestore(&wdev->core[coreid].core_lock, flags);
+
+		if (job)
 			break;
-		}
 	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	data->handle = (u64)(uintptr_t)job;
 
@@ -1221,16 +1092,15 @@ int dwa_set_identity(struct dwa_vdev *wdev,
 		return -1;
 	}
 	handle = identity->handle;
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	if (!job) {
 		TRACE_DWA(DBG_ERR, "null job handle\n");
 		return -1;
 	}
 
+	spin_lock_irqsave(&job->lock, flags);
 	memcpy(&job->identity, &identity->attr, sizeof(identity->attr));
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "sync_io:%d, name:%s, id:%d\n"
 		, job->identity.sync_io, job->identity.name, job->identity.id);
@@ -1254,18 +1124,18 @@ int dwa_add_rotation_task(struct dwa_vdev *wdev,
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = DWA_TASK_TYPE_ROT;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, DWA_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1290,18 +1160,18 @@ int dwa_add_ldc_task(struct dwa_vdev *wdev, struct dwa_task_attr *attr)
 		return ret;
 #endif
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = DWA_TASK_TYPE_LDC;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, DWA_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1325,18 +1195,18 @@ int dwa_add_cor_task(struct dwa_vdev *wdev, struct dwa_task_attr *attr)
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = DWA_TASK_TYPE_FISHEYE;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, DWA_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1356,18 +1226,18 @@ int dwa_add_warp_task(struct dwa_vdev *wdev, struct dwa_task_attr *attr)
 
 	handle = attr->handle;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = DWA_TASK_TYPE_WARP;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, DWA_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1390,18 +1260,18 @@ int dwa_add_affine_task(struct dwa_vdev *wdev, struct dwa_task_attr *attr)
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct dwa_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = DWA_TASK_TYPE_AFFINE;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, DWA_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1421,7 +1291,7 @@ int dwa_get_chn_frame(struct dwa_vdev *wdev, struct dwa_identity_attr *identity
 	ret = dwa_check_null_ptr(pstvideo_frame)
 		|| dwa_check_null_ptr(wdev)
 		|| dwa_check_null_ptr(identity);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	memset(pstvideo_frame, 0, sizeof(*pstvideo_frame));
@@ -1440,20 +1310,13 @@ int dwa_get_chn_frame(struct dwa_vdev *wdev, struct dwa_identity_attr *identity
 		TRACE_DWA(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 	}
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	if (list_empty(&wdev->vb_doneq.doneq)) {
 		TRACE_DWA(DBG_ERR, "vb_doneq is empty\n");
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
 		return ERR_DWA_NOBUF;
 	}
 
+	spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
 	list_for_each_entry_safe(vb_done, vb_done_tmp, &wdev->vb_doneq.doneq, node) {
-		if (!vb_done) {
-			TRACE_DWA(DBG_ERR, "vb_done is null\n");
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
-			return ERR_DWA_NOBUF;
-		}
-
 		if (dwa_identity_is_match(&vb_done->job.identity, &identity->attr)) {
 			TRACE_DWA(DBG_DEBUG, "vb_doneq identity[%d-%d-%s] is match [%d-%d-%s]\n"
 				, vb_done->job.identity.mod_id, vb_done->job.identity.id, vb_done->job.identity.name
@@ -1462,23 +1325,19 @@ int dwa_get_chn_frame(struct dwa_vdev *wdev, struct dwa_identity_attr *identity
 			break;
 		}
 	}
+	if (ismatch)
+		list_del(&vb_done->node);
+	spin_unlock_irqrestore(&wdev->vb_doneq.lock, flags);
 
 	if (!ismatch) {
 		TRACE_DWA(DBG_DEBUG, "vb_doneq[%px] identity[%d-%d-%s] not match [%d-%d-%s]\n"
 			, vb_done_tmp, vb_done_tmp->job.identity.mod_id, vb_done_tmp->job.identity.id, vb_done_tmp->job.identity.name
 			, identity->attr.mod_id, identity->attr.id, identity->attr.name);
-		up(&wdev->vb_doneq.sem);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
 		return ERR_GDC_NOBUF;
 	}
 
-	list_del(&vb_done->node);
-
 	memcpy(pstvideo_frame, &vb_done->img_out, sizeof(*pstvideo_frame));
 	kfree(vb_done);
-	vb_done = NULL;
-
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	TRACE_DWA(DBG_DEBUG, "end to get pstvideo_frame width:%d height:%d buf:0x%llx\n"
 		, pstvideo_frame->video_frame.width
@@ -1486,7 +1345,7 @@ int dwa_get_chn_frame(struct dwa_vdev *wdev, struct dwa_identity_attr *identity
 		, pstvideo_frame->video_frame.phyaddr[0]);
 	TRACE_DWA(DBG_DEBUG, "--\n");
 
-	return ret;
+	return 0;
 }
 
 /**************************************************************************
@@ -1502,30 +1361,28 @@ int dwa_sw_init(struct dwa_vdev *wdev)
 	if (ret)
 		return ret;
 
-	INIT_LIST_HEAD(&wdev->job_list);
 	INIT_LIST_HEAD(&wdev->vb_doneq.doneq);
-	init_waitqueue_head(&wdev->wait);
 	sema_init(&wdev->vb_doneq.sem, 0);
+	spin_lock_init(&wdev->vb_doneq.lock);
 	sema_init(&wdev->sem, 0);
-
-	spin_lock_init(&wdev->job_lock);
+	init_waitqueue_head(&wdev->wait);
+	spin_lock_init(&wdev->wdev_lock);
+	INIT_LIST_HEAD(&wdev->job_list);
 	wdev->core_num = DWA_DEV_MAX_CNT;
 	wdev->evt = DWA_EVENT_BUSY_OR_NOT_STAT;
 	wdev->vb_pool = VB_INVALID_POOLID;
+	wdev->job_cnt = 0;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 #if DWA_USE_WORKQUEUE
 		INIT_WORK(&wdev->core[coreid].work_frm_done, dwa_work_frm_done);
 #endif
-		INIT_LIST_HEAD(&wdev->list.work_list[coreid]);
-		INIT_LIST_HEAD(&wdev->list.done_list[coreid]);
-		INIT_LIST_HEAD(&wdev->core[coreid].list.work_list);
-		INIT_LIST_HEAD(&wdev->core[coreid].list.done_list);
+		INIT_LIST_HEAD(&wdev->core[coreid].list);
 #if !USE_REAL_CMDQ
 		init_waitqueue_head(&wdev->core[coreid].cmdq_wq);
 #endif
+		spin_lock_init(&wdev->core[coreid].core_lock);
 	}
-	wdev->job_cnt = 0;
 
 	wdev->thread = kthread_run(dwa_event_handler_th, (void *)wdev, "dwa_event_handler_th");
 	if (IS_ERR(wdev->thread)) {
@@ -1564,18 +1421,14 @@ void dwa_sw_deinit(struct dwa_vdev *wdev)
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 		flush_work(&wdev->core[coreid].work_frm_done);
 		cancel_work_sync(&wdev->core[coreid].work_frm_done);
-		list_del_init(&wdev->list.work_list[coreid]);
-		list_del_init(&wdev->list.work_list[coreid]);
-		list_del_init(&wdev->core[coreid].list.work_list);
-		list_del_init(&wdev->core[coreid].list.done_list);
+		list_del_init(&wdev->core[coreid].list);
 	}
 #endif
-	(void)coreid;
+
 	if (!IS_ERR(wdev->thread)) {
 		if (kthread_stop(wdev->thread))
 			TRACE_DWA(DBG_ERR, "fail to stop dwa kthread\n");
 	}
-
 	list_del_init(&wdev->job_list);
 	list_del_init(&wdev->vb_doneq.doneq);
 }
@@ -1584,7 +1437,8 @@ int dwa_suspend_handler(void)
 {
 	int ret;
 	struct dwa_vdev * dev = dwa_get_dev();
-	struct dwa_job *job;
+	int job_cnt;
+	unsigned long flags;
 
 	if (unlikely(!dev)) {
 		TRACE_DWA(DBG_ERR, "dwa_dev is null\n");
@@ -1596,7 +1450,11 @@ int dwa_suspend_handler(void)
 		return ERR_DWA_SYS_NOTREADY;
 	}
 
-	if (dev->job_cnt > 0 || !list_empty(&dev->job_list) || atomic_read(&dev->state) == DWA_DEV_STATE_RUNNING) {
+	spin_lock_irqsave(&dev->wdev_lock, flags);
+	job_cnt = dev->job_cnt;
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
+
+	if (job_cnt > 0 || atomic_read(&dev->state) == DWA_DEV_STATE_RUNNING) {
 		sema_init(&dev->sem, 0);
 		ret = down_timeout(&dev->sem, msecs_to_jiffies(DWA_IDLE_WAIT_TIMEOUT_MS));
 		if (ret == -ETIME) {
@@ -1605,14 +1463,6 @@ int dwa_suspend_handler(void)
 		}
 	}
 	atomic_set(&dev->state, DWA_DEV_STATE_STOP);
-
-	spin_lock(&dev->job_lock);
-	while(!list_empty(&dev->job_list)) {
-		job = list_first_entry_or_null(&dev->job_list, struct dwa_job, node);
-		list_del(&job->node);
-	}
-	dev->job_cnt = 0;
-	spin_unlock(&dev->job_lock);
 
 	TRACE_DWA(DBG_WARN, "suspend handler+\n");
 
