@@ -21,28 +21,12 @@
 
 vdec_dbg vdecDbg;
 vdec_context *vdec_handle;
-#ifdef USE_vb_pool
-extern int32_t vb_create_pool(struct vb_pool_cfg *config);
-extern int32_t vb_get_config(struct vb_cfg *pstVbConfig);
-extern vb_blk vb_get_block_with_id(vb_pool poolId, uint32_t blk_size,
-                   MOD_ID_E modId);
-extern uint64_t vb_handle2phys_addr(vb_blk blk);
-extern vb_blk vb_phys_addr2handle(uint64_t u64PhyAddr);
-extern vb_pool vb_handle2pool_id(vb_blk blk);
-extern int32_t vb_release_block(vb_blk blk);
-extern int32_t vb_destroy_pool(vb_pool poolId);
-// TODO: need to refine:
-struct drv_vdec_vb_ctx vdec_vb_ctx[VENC_MAX_CHN_NUM];
-#endif
-
 
 uint32_t VDEC_LOG_LV = DRV_VDEC_MASK_ERR;
 module_param(VDEC_LOG_LV, int, 0644);
 extern wait_queue_head_t tVdecWaitQueue[];
 
-
 static DEFINE_MUTEX(g_vdec_handle_mutex);
-static DEFINE_MUTEX(jpdLock);
 
 static uint64_t get_current_time(void)
 {
@@ -90,12 +74,18 @@ static int check_vdec_chn_handle(vdec_chn VdChn)
     return 0;
 }
 
-
-static void h26x_set_output_format(DecOnePicCfg *pdopc,
-                       pixel_format_e enPixelFormat)
+static int h26x_decode(void *pHandle, pixel_format_e enPixelFormat,
+                   const vdec_stream_s *pstStream,
+                   int s32MilliSec)
 {
-    if (pdopc == NULL)
-        return;
+    DecOnePicCfg dopc, *pdopc = &dopc;
+    int decStatus = 0;
+
+    pdopc->bsAddr = pstStream->pu8Addr;
+    pdopc->bsLen = pstStream->u32Len;
+    pdopc->bEndOfStream = pstStream->bEndOfStream;
+    pdopc->pts = pstStream->u64PTS;
+    pdopc->dts = pstStream->u64DTS;
 
     switch (enPixelFormat) {
     case PIXEL_FORMAT_NV12:
@@ -111,46 +101,11 @@ static void h26x_set_output_format(DecOnePicCfg *pdopc,
         pdopc->nv21 = 0;
         break;
     }
-}
-
-static int h264_decode(void *pHandle, pixel_format_e enPixelFormat,
-                   const vdec_stream_s *pstStream,
-                   int s32MilliSec)
-{
-    DecOnePicCfg dopc, *pdopc = &dopc;
-    int decStatus = 0;
-
-    pdopc->bsAddr = pstStream->pu8Addr;
-    pdopc->bsLen = pstStream->u32Len;
-    pdopc->bEndOfStream = pstStream->bEndOfStream;
-    pdopc->pts = pstStream->u64PTS;
-    pdopc->dts = pstStream->u64DTS;
-    h26x_set_output_format(pdopc, enPixelFormat);
 
     decStatus = vdec_decode_frame(pHandle, pdopc, s32MilliSec);
 
     return decStatus;
 }
-
-static int h265_decode(void *pHandle, pixel_format_e enPixelFormat,
-                   const vdec_stream_s *pstStream,
-                   int s32MilliSec)
-{
-    DecOnePicCfg dopc, *pdopc = &dopc;
-    int decStatus = 0;
-
-    pdopc->bsAddr = pstStream->pu8Addr;
-    pdopc->bsLen = pstStream->u32Len;
-    pdopc->bEndOfStream = pstStream->bEndOfStream;
-    pdopc->pts = pstStream->u64PTS;
-    pdopc->dts = pstStream->u64DTS;
-    h26x_set_output_format(pdopc, enPixelFormat);
-
-    decStatus = vdec_decode_frame(pHandle, pdopc, s32MilliSec);
-
-    return decStatus;
-}
-
 
 static void set_video_frame_info(video_frame_info_s *pstVideoFrame,
                  DispFrameCfg *pdfc)
@@ -258,8 +213,7 @@ static int set_vdec_fps_toproc(vdec_chn VdChn, unsigned char bSendStream)
                 (unsigned int)((pChnHandle->u32SendStreamCnt *
                        SEC_TO_MS) /
                       ((unsigned int)(u64CurTime -
-                             pChnHandle
-                                 ->u64LastSendStreamTimeStamp)));
+                       pChnHandle->u64LastSendStreamTimeStamp)));
             pChnHandle->u64LastSendStreamTimeStamp = u64CurTime;
             pChnHandle->u32SendStreamCnt = 0;
         }
@@ -270,8 +224,7 @@ static int set_vdec_fps_toproc(vdec_chn VdChn, unsigned char bSendStream)
                 (unsigned int)((pChnHandle->u32GetFrameCnt *
                        SEC_TO_MS) /
                       ((unsigned int)(u64CurTime -
-                             pChnHandle
-                                 ->u64LastGetFrameTimeStamp)));
+                        pChnHandle->u64LastGetFrameTimeStamp)));
             pChnHandle->u64LastGetFrameTimeStamp = u64CurTime;
             pChnHandle->u32GetFrameCnt = 0;
         }
@@ -377,13 +330,13 @@ int vdec_init_handle(void)
         vdec_handle->g_stModParam.u32MiniBufMode = 0;
         vdec_handle->g_stModParam.u32ParallelMode = 0;
         vdec_handle->g_stModParam.stVideoModParam.u32MaxPicHeight =
-            2160;
-        vdec_handle->g_stModParam.stVideoModParam.u32MaxPicWidth = 4096;
+            8192;
+        vdec_handle->g_stModParam.stVideoModParam.u32MaxPicWidth = 8192;
         vdec_handle->g_stModParam.stVideoModParam.u32MaxSliceNum = 200;
         vdec_handle->g_stModParam.stPictureModParam.u32MaxPicHeight =
-            8192;
+            32768;
         vdec_handle->g_stModParam.stPictureModParam.u32MaxPicWidth =
-            8192;
+            32768;
     }
 
     MUTEX_UNLOCK(&g_vdec_handle_mutex);
@@ -401,6 +354,8 @@ int vdec_drv_init(void)
         DRV_VENC_ERR("venc_context\n");
         s32Ret = DRV_ERR_VDEC_NOMEM;
     }
+
+    vdec_init_handle_pool();
     return s32Ret;
 }
 
@@ -411,240 +366,6 @@ void vdec_drv_deinit(void)
     vdec_handle = NULL;
 
     return;
-}
-
-
-static int vdec_alloc_vbbuf(vdec_chn_context *pChnHandle, void *arg)
-{
-    stCb_HostAllocFB *pHostAllocFB = (stCb_HostAllocFB *)arg;
-
-    if (vdec_handle->g_stModParam.enVdecVBSource == VB_SOURCE_PRIVATE) {
-        if (pChnHandle->bHasVbPool == false) {
-
-            struct vb_pool_cfg stVbPoolCfg;
-
-            stVbPoolCfg.blk_size = pHostAllocFB->iFrmBufSize;
-            stVbPoolCfg.blk_cnt = pHostAllocFB->iFrmBufNum;
-            stVbPoolCfg.remap_mode = VB_REMAP_MODE_NONE;
-
-            #ifdef USE_vb_pool
-            pChnHandle->vbPool.hPicVbPool =
-                vb_create_pool(&stVbPoolCfg);
-
-            if (pChnHandle->vbPool.hPicVbPool ==
-                VB_INVALID_POOLID) {
-                DRV_VDEC_ERR("DRV_VB_CreatePool failed !\n");
-                return 0;
-            }
-
-            pChnHandle->bHasVbPool = true;
-                #endif
-
-            DRV_VDEC_TRACE(
-                "Create Private Pool: %d, blk_size=0x%x,  u32BlkCnt=%d\n",
-                pChnHandle->vbPool.hPicVbPool,
-                stVbPoolCfg.blk_size, stVbPoolCfg.blk_cnt);
-        }
-    }
-
-    if (pChnHandle->bHasVbPool == false) {
-        DRV_VDEC_ERR("pChnHandle->bHasVbPool == false\n");
-        return 0;
-    }
-
-    if (pHostAllocFB->iFrmBufNum > MAX_VDEC_FRM_NUM) {
-        DRV_VDEC_ERR("iFrmBufNum > %d\n", MAX_VDEC_FRM_NUM);
-        return 0;
-    }
-
-    #ifdef USE_vb_pool
-    for (j = 0; j < pHostAllocFB->iFrmBufNum; j++) {
-        uint64_t u64PhyAddr;
-
-        pChnHandle->vbBLK[j] =
-            vb_get_block_with_id(pChnHandle->vbPool.hPicVbPool,
-                         pHostAllocFB->iFrmBufSize,
-                         ID_VENC);
-        if (pChnHandle->vbBLK[j] == VB_INVALID_HANDLE) {
-            DRV_VDEC_ERR("DRV_VB_GetBlockwithID failed !\n");
-            DRV_VDEC_ERR(
-                "Frame isn't enough. Need %d frames, size 0x%x. Now only %d frames\n",
-                pHostAllocFB->iFrmBufNum,
-                pHostAllocFB->iFrmBufSize, j);
-            return 0;
-        }
-
-        u64PhyAddr = vb_handle2phys_addr(pChnHandle->vbBLK[j]);
-
-        pChnHandle->FrmArray[j].phyAddr = u64PhyAddr;
-        pChnHandle->FrmArray[j].size = pHostAllocFB->iFrmBufSize;
-
-        DRV_VDEC_TRACE(
-            "DRV_VB_GetBlockwithID, VbBlk = %d, u64PhyAddr = 0x%llx, virtAddr = %p\n",
-            (int)pChnHandle->vbBLK[j], (long long)u64PhyAddr,
-            pChnHandle->FrmArray[j].virtAddr);
-    }
-    #endif
-
-    pChnHandle->FrmNum = pHostAllocFB->iFrmBufNum;
-
-    return 1;
-}
-
-static int vdec_free_vbbuf(vdec_chn_context *pChnHandle)
-{
-    if (vdec_handle->g_stModParam.enVdecVBSource == VB_SOURCE_PRIVATE) {
-        DRV_VDEC_ERR("not support VB_SOURCE_PRIVATE yet\n");
-        return 0;
-    }
-
-    DRV_VDEC_TRACE("\n");
-    #ifdef USE_vb_pool
-    if (pChnHandle->ChnAttr.enType == PT_H264 ||
-        pChnHandle->ChnAttr.enType == PT_H265) {
-        if (pChnHandle->bHasVbPool == true) {
-            unsigned int i = 0;
-            vb_blk blk;
-
-            for (i = 0; i < pChnHandle->FrmNum; i++) {
-                blk = vb_phys_addr2handle(
-                    pChnHandle->FrmArray[i].phyAddr);
-
-                if (blk != VB_INVALID_HANDLE) {
-                    vb_release_block(blk);
-                }
-            }
-        } else {
-            DRV_VDEC_ERR("bHasVbPool = false\n");
-            return 0;
-        }
-    }
-    #endif
-
-    return 1;
-}
-
-static int vdec_get_dispq_count(vdec_chn_context *pChnHandle)
-{
-    int s32Count = 0;
-
-    unsigned int i = 0;
-
-    for (i = 0; i < pChnHandle->VideoFrameArrayNum; i++) {
-        video_frame_s *pstCurFrame;
-
-        pstCurFrame = &pChnHandle->VideoFrameArray[i].video_frame;
-
-        if (pstCurFrame->frame_flag == 1) {
-            s32Count++;
-        }
-    }
-
-    DRV_VDEC_TRACE("s32Count=%d\n", s32Count);
-
-    return s32Count;
-}
-
-static int vdec_callback_func(unsigned int VdChn, unsigned int CbType,
-                      void *arg)
-{
-    int s32Ret = 0, s32Check = 0;
-    vdec_chn_context *pChnHandle = NULL;
-
-    s32Check = check_vdec_chn_handle(VdChn);
-    if (s32Check != 0) {
-        DRV_VDEC_ERR("check_chn_handle, %d\n", s32Ret);
-        return s32Ret;
-    }
-
-    DRV_VDEC_TRACE("VdChn = %d, CbType= %d\n", VdChn, CbType);
-
-    pChnHandle = vdec_handle->chn_handle[VdChn];
-
-    switch (CbType) {
-    case DRV_H26X_DEC_CB_AllocFB:
-        if (arg == NULL) {
-            DRV_VDEC_ERR("arg == NULL\n");
-            return s32Ret;
-        }
-
-        if (vdec_alloc_vbbuf(pChnHandle, arg) != 1) {
-            return s32Ret;
-        }
-        s32Ret = 1;
-        break;
-    case DRV_H26X_DEC_CB_FreeFB:
-        if (vdec_free_vbbuf(pChnHandle) != 1) {
-            return s32Ret;
-        }
-        s32Ret = 1;
-        break;
-    case DRV_H26X_DEC_CB_GET_DISPQ_COUNT:
-        s32Ret = vdec_get_dispq_count(pChnHandle);
-        break;
-    default:
-        DRV_VDEC_ERR("Unsupported cbType: %d\n", CbType);
-        break;
-    }
-
-    return s32Ret;
-}
-
-#define VDEC_NO_FRAME_IDX 0xFFFFFFFF
-unsigned char vdec_find_blkinfo(vdec_chn_context *pChnHandle, uint64_t u64PhyAddr,
-                   vb_blk *pVbBLK, unsigned int *pFrmIdx)
-{
-    unsigned int i = 0;
-
-    if ((pChnHandle == NULL) || (pVbBLK == NULL) || (pFrmIdx == NULL))
-        return false;
-
-    *pVbBLK = VB_INVALID_HANDLE;
-    *pFrmIdx = VDEC_NO_FRAME_IDX;
-
-    for (i = 0; i < pChnHandle->FrmNum; i++) {
-        if ((pChnHandle->FrmArray[i].phyAddr <= u64PhyAddr) &&
-            (pChnHandle->FrmArray[i].phyAddr +
-             pChnHandle->FrmArray[i].size) > u64PhyAddr) {
-            *pVbBLK = pChnHandle->vbBLK[i];
-            *pFrmIdx = i;
-            break;
-        }
-    }
-
-    if (i == pChnHandle->FrmNum) {
-        DRV_VDEC_ERR("Can't find BLK !\n");
-        return false;
-    }
-
-    return true;
-}
-
-int vdec_find_frameidx(vdec_chn_context *pChnHandle,
-                   const video_frame_info_s *pstFrameInfo)
-{
-    unsigned int i = 0;
-
-    if ((pChnHandle == NULL) || (pstFrameInfo == NULL))
-        return -1;
-
-    for (i = 0; i < pChnHandle->VideoFrameArrayNum; i++) {
-        video_frame_s *pstCurFrame;
-
-        pstCurFrame = &pChnHandle->VideoFrameArray[i].video_frame;
-
-        if ((pstCurFrame->frame_flag == 1) &&
-            (pstCurFrame->phyaddr[0] ==
-             pstFrameInfo->video_frame.phyaddr[0]) &&
-            (pstCurFrame->phyaddr[1] ==
-             pstFrameInfo->video_frame.phyaddr[1]) &&
-            (pstCurFrame->phyaddr[2] ==
-             pstFrameInfo->video_frame.phyaddr[2])) {
-            return i;
-        }
-    }
-
-    return -1;
 }
 
 static void get_debug_config_from_proc(void)
@@ -760,14 +481,9 @@ static int jpeg_decode(vdec_chn_context *pChnHandle, const vdec_stream_s *pstStr
                    int s32MilliSec, uint64_t *pu64DecHwTime)
 {
     int ret = 0;
-    vdec_chn_attr_s *pstChnAttr = &pChnHandle->ChnAttr;
-    unsigned long external_fb_addr = 0;
-
-    if(pstChnAttr->stBufferInfo.frame_buffer)
-        external_fb_addr = pstChnAttr->stBufferInfo.frame_buffer->phys_addr;
 
     /* send jpeg data for decode or encode operator */
-    ret = jpeg_dec_send_stream(pChnHandle->pHandle, pstStream->pu8Addr, pstStream->u32Len, external_fb_addr, pstChnAttr->u32FrameBufSize);
+    ret = jpeg_dec_send_stream(pChnHandle->pHandle, pstStream->pu8Addr, pstStream->u32Len, s32MilliSec);
     if (ret != 0) {
         if ((ret == VDEC_RET_TIMEOUT) && (s32MilliSec >= 0)) {
             DRV_VDEC_TRACE("jpeg_dec_send_stream ret timeout\n");
@@ -839,9 +555,6 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
 
     pChnHandle = vdec_handle->chn_handle[VdChn];
     pChnHandle->VdChn = VdChn;
-    #ifdef USE_vb_pool
-    pChnHandle->pVbCtx = &vdec_vb_ctx[VdChn];
-    #endif
     pstChnAttr = &pChnHandle->ChnAttr;
     memcpy(&pChnHandle->ChnAttr, pstAttr, sizeof(vdec_chn_attr_s));
     pChnHandle->VideoFrameArrayNum = MAX_VDEC_DISPLAYQ_NUM;
@@ -862,7 +575,6 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
     memset(pChnHandle->display_queue, -1, DISPLAY_QUEUE_SIZE);
 
     MUTEX_INIT(&pChnHandle->display_queue_lock, 0);
-    MUTEX_INIT(&pChnHandle->jpdLock, 0);
     MUTEX_INIT(&pChnHandle->status_lock, 0);
     MUTEX_INIT(&pChnHandle->chnShmMutex, &ma);
 
@@ -885,6 +597,11 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
             config.u.dec.external_bs_addr = pstChnAttr->stBufferInfo.bitstream_buffer->phys_addr;
             config.u.dec.external_bs_size = pstChnAttr->stBufferInfo.bitstream_buffer->size;
         }
+        if(pstChnAttr->stBufferInfo.frame_buffer) {
+            config.u.dec.external_fb_addr = pstChnAttr->stBufferInfo.frame_buffer->phys_addr;
+            config.u.dec.external_fb_size = pstChnAttr->stBufferInfo.frame_buffer->size;
+        }
+
         config.s32ChnNum = pChnHandle->VdChn;
 
         /* Open JPU Devices */
@@ -925,16 +642,22 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
         pInitDecCfg->cmdQueueDepth = pChnHandle->ChnAttr.u8CommandQueueDepth;
         pInitDecCfg->reorder_enable = pChnHandle->ChnAttr.u8ReorderEnable;
 
+        pInitDecCfg->picWidth = pChnHandle->ChnAttr.u32PicWidth;
+        pInitDecCfg->picHeight = pChnHandle->ChnAttr.u32PicHeight;
+
+        pInitDecCfg->bitstream_buffer = pstAttr->stBufferInfo.bitstream_buffer;
+        pInitDecCfg->frame_buffer = pstAttr->stBufferInfo.frame_buffer;
+        pInitDecCfg->Ytable_buffer = pstAttr->stBufferInfo.Ytable_buffer;
+        pInitDecCfg->Ctable_buffer = pstAttr->stBufferInfo.Ctable_buffer;
+        pInitDecCfg->numOfDecFbc = pstAttr->stBufferInfo.numOfDecFbc;
+        pInitDecCfg->numOfDecwtl = pstAttr->stBufferInfo.numOfDecwtl;
+
         s32Ret = vdec_open(pInitDecCfg, &pChnHandle->pHandle);
         if (s32Ret != 0) {
             DRV_VDEC_ERR("vdec_open, %d\n", s32Ret);
             return s32Ret;
         }
 
-        if (vdec_handle->g_stModParam.enVdecVBSource !=
-            VB_SOURCE_COMMON) {
-            vdec_attach_callback(vdec_callback_func);
-        }
     }
 
     return 0;
@@ -958,28 +681,10 @@ int drv_vdec_destroy_chn(vdec_chn VdChn)
 
     if (pChnHandle->ChnAttr.enType == PT_H264 ||
         pChnHandle->ChnAttr.enType == PT_H265) {
-        s32Ret = vdec_close(pChnHandle->pHandle);
-#ifdef USE_vb_pool
-        if (pChnHandle->bHasVbPool == true) {
-            unsigned int i = 0;
-            vb_blk blk;
-
-            for (i = 0; i < pChnHandle->FrmNum; i++) {
-                blk = vb_phys_addr2handle(
-                    pChnHandle->FrmArray[i].phyAddr);
-                if (blk != VB_INVALID_HANDLE) {
-                    vb_release_block(blk);
-                }
-            }
-
-            if (vdec_handle->g_stModParam.enVdecVBSource ==
-                VB_SOURCE_PRIVATE) {
-                vb_destroy_pool(pChnHandle->vbPool.hPicVbPool);
-                DRV_VDEC_TRACE("DRV_VB_DestroyPool: %d\n",
-                           pChnHandle->vbPool.hPicVbPool);
-            }
+        if (pChnHandle->pHandle != NULL) {
+            s32Ret = vdec_close(pChnHandle->pHandle);
+            pChnHandle->pHandle = NULL;
         }
-#endif
     }else {
         if (pChnHandle->pHandle != NULL) {
             jpeg_dec_close(pChnHandle->pHandle);
@@ -991,7 +696,6 @@ int drv_vdec_destroy_chn(vdec_chn VdChn)
     MUTEX_DESTROY(&pChnHandle->display_queue_lock);
     MUTEX_DESTROY(&pChnHandle->status_lock);
     MUTEX_DESTROY(&pChnHandle->chnShmMutex);
-    MUTEX_DESTROY(&pChnHandle->jpdLock);
 
     if (pChnHandle->VideoFrameArray) {
         MEM_FREE(pChnHandle->VideoFrameArray);
@@ -1070,6 +774,10 @@ int drv_vdec_set_chn_param(vdec_chn VdChn, const vdec_chn_param_s *pstParam)
         config.u.dec.roiHeight = pstChnParam->stVdecPictureParam.s32ROIHeight;
         config.u.dec.roiOffsetX = pstChnParam->stVdecPictureParam.s32ROIOffsetX;
         config.u.dec.roiOffsetY = pstChnParam->stVdecPictureParam.s32ROIOffsetY;
+        config.u.dec.max_frame_width = pstChnParam->stVdecPictureParam.s32MaxFrameWidth;
+        config.u.dec.max_frame_height = pstChnParam->stVdecPictureParam.s32MaxFrameHeight;
+        config.u.dec.min_frame_width = pstChnParam->stVdecPictureParam.s32MinFrameWidth;
+        config.u.dec.min_frame_height = pstChnParam->stVdecPictureParam.s32MinFrameHeight;
         config.u.dec.usePartialMode = 0;
         config.u.dec.rotAngle = pstChnParam->stVdecPictureParam.s32RotAngle;
         config.u.dec.mirDir = pstChnParam->stVdecPictureParam.s32MirDir;
@@ -1117,6 +825,7 @@ int drv_vdec_send_stream(vdec_chn VdChn, const vdec_stream_s *pstStream,
     uint64_t u64DecHwTime = 0;
     struct drv_vdec_vb_ctx *pVbCtx = NULL;
     vdec_chn_context *pChnHandle = NULL;
+    uint64_t startTime, endTime;
 
     DRV_VDEC_API("\n");
 
@@ -1128,6 +837,10 @@ int drv_vdec_send_stream(vdec_chn VdChn, const vdec_stream_s *pstStream,
 
     pChnHandle = vdec_handle->chn_handle[VdChn];
     pVbCtx = pChnHandle->pVbCtx;
+
+    if (pChnHandle->bStartRecv == 0) {
+        return DRV_ERR_VDEC_NOT_PERM;
+    }
 
     if ((pstStream->u32Len == 0) &&
         (pChnHandle->ChnAttr.enType == PT_JPEG ||
@@ -1151,105 +864,65 @@ int drv_vdec_send_stream(vdec_chn VdChn, const vdec_stream_s *pstStream,
     }
 
     get_debug_config_from_proc();
+    startTime = get_current_time();
 
-    while (1) {
-        uint64_t startTime, endTime;
-        startTime = get_current_time();
-
-        pChnHandle->stStatus.u32LeftStreamBytes += pstStream->u32Len;
-        if (pChnHandle->ChnAttr.enType == PT_JPEG ||
-            pChnHandle->ChnAttr.enType == PT_MJPEG) {
-            s32Ret = jpeg_decode(pChnHandle, pstStream, s32TimeOutMs, &u64DecHwTime);
-            if (s32Ret != 0) {
-                if (s32Ret == DRV_ERR_VDEC_BUSY) {
-                    pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
-                    DRV_VDEC_TRACE(
-                        "jpeg timeout in nonblock mode[%d]\n",
-                        s32TimeOutMs);
-                    return s32Ret;
-                }
-                DRV_VDEC_ERR("jpeg_decode error\n");
-                goto ERR_DRV_VDEC_SEND_STREAM;
-            }
-            pChnHandle->u32GetFrameCnt++;
-            s32Ret = set_vdec_fps_toproc(VdChn, 0);
-            if (s32Ret != 0) {
-                DRV_VDEC_ERR("(chn %d) set_vdec_fps_toproc fail\n", VdChn);
+    pChnHandle->stStatus.u32LeftStreamBytes += pstStream->u32Len;
+    if (pChnHandle->ChnAttr.enType == PT_JPEG ||
+        pChnHandle->ChnAttr.enType == PT_MJPEG) {
+        s32Ret = jpeg_decode(pChnHandle, pstStream, s32TimeOutMs, &u64DecHwTime);
+        if (s32Ret != 0) {
+            if (s32Ret == DRV_ERR_VDEC_BUSY) {
+                pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
+                DRV_VDEC_TRACE(
+                    "jpeg timeout in nonblock mode[%d]\n",
+                    s32TimeOutMs);
                 return s32Ret;
             }
-            wake_up(&tVdecWaitQueue[VdChn]);
-        } else if ((pChnHandle->ChnAttr.enType == PT_H264) ||
-               (pChnHandle->ChnAttr.enType == PT_H265)) {
-            if (pChnHandle->ChnAttr.enType == PT_H264) {
-                s32Ret = h264_decode(
-                    pChnHandle->pHandle,
-                    pChnHandle->ChnParam.enPixelFormat,
-                    pstStream, s32TimeOutMs);
-            } else {
-                s32Ret = h265_decode(
-                    pChnHandle->pHandle,
-                    pChnHandle->ChnParam.enPixelFormat,
-                    pstStream, s32TimeOutMs);
-            }
-
-            if (s32Ret == RETCODE_SUCCESS) {
-                s32Ret = 0;
-                pChnHandle->u32GetFrameCnt++;
-                s32Ret = set_vdec_fps_toproc(VdChn, 0);
-                if (s32Ret != 0) {
-                    DRV_VDEC_ERR("(chn %d) set_vdec_fps_toproc fail\n", VdChn);
-                    return s32Ret;
-                }
-                DispFrameCfg dfc = {0};
-                s32Ret = vdec_get_frame(pChnHandle->pHandle, &dfc, 1);
-                if (s32Ret >= 0) {
-                    set_video_frame_info(&pChnHandle->stVideoFrameInfo, &dfc);
-                }
-                pChnHandle->stFPS.hw_time = dfc.decHwTime;
-                wake_up(&tVdecWaitQueue[VdChn]);
-                pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
-                break;
-            } if (s32Ret == RETCODE_QUEUEING_FAILURE) {
-                s32Ret = DRV_ERR_VDEC_BUF_FULL;
-                pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
-                goto ERR_DRV_VDEC_SEND_STREAM;
-            }
-
-        } else {
-            DRV_VDEC_ERR("enType = %d\n", pChnHandle->ChnAttr.enType);
-            s32Ret = DRV_ERR_VDEC_NOT_SUPPORT;
-            goto ERR_DRV_VDEC_SEND_STREAM;
+            DRV_VDEC_ERR("jpeg_decode error\n");
+            return s32Ret;
         }
 
-        pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
+        wake_up(&tVdecWaitQueue[VdChn]);
+    } else if ((pChnHandle->ChnAttr.enType == PT_H264) ||
+           (pChnHandle->ChnAttr.enType == PT_H265)) {
+        s32Ret = h26x_decode(
+                pChnHandle->pHandle,
+                pChnHandle->ChnParam.enPixelFormat,
+                pstStream, s32TimeOutMs);
 
-        endTime = get_current_time();
-
-        pChnHandle->totalDecTime += (endTime - startTime);
-        DRV_VDEC_PERF(
-            "SendStream timestamp = %llu , dec time = %llu ms, total = %llu ms\n",
-            (unsigned long long)(startTime),
-            (unsigned long long)(endTime - startTime),
-            (unsigned long long)(pChnHandle->totalDecTime));
-
-        if ((pstStream->bEndOfStream == 1) &&
-            (s32MilliSec > 0)) {
-            DRV_VDEC_TRACE(
-                "force flush in EndOfStream in nonblock mode flush dec\n");
-            s32TimeOutMs = -1;
+        if (s32Ret == RETCODE_QUEUEING_FAILURE) {
+            pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
+            return DRV_ERR_VDEC_BUF_FULL;
+        }
+        else if(s32Ret == RETCODE_INVALID_PARAM) {
+            pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
+            return DRV_ERR_VDEC_ILLEGAL_PARAM;
         }
 
-        if (s32Ret == 0)
-            break;
+    } else {
+        DRV_VDEC_ERR("enType = %d\n", pChnHandle->ChnAttr.enType);
+        return DRV_ERR_VDEC_NOT_SUPPORT;
     }
 
-ERR_DRV_VDEC_SEND_STREAM:
-    // set_current_state(TASK_INTERRUPTIBLE);
-    // schedule_timeout(usecs_to_jiffies(1000));
+    pChnHandle->stStatus.u32LeftStreamBytes -= pstStream->u32Len;
+
+    endTime = get_current_time();
+
+    pChnHandle->totalDecTime += (endTime - startTime);
+    DRV_VDEC_PERF(
+        "SendStream timestamp = %llu , dec time = %llu ms, total = %llu ms\n",
+        (unsigned long long)(startTime),
+        (unsigned long long)(endTime - startTime),
+        (unsigned long long)(pChnHandle->totalDecTime));
+
+    if ((pstStream->bEndOfStream == 1) && (s32MilliSec > 0)) {
+        DRV_VDEC_TRACE(
+            "force flush in EndOfStream in nonblock mode flush dec\n");
+        s32TimeOutMs = -1;
+    }
+
     return s32Ret;
 }
-
-
 
 int drv_vdec_query_status(vdec_chn VdChn, vdec_chn_status_s *pstStatus)
 {
@@ -1361,9 +1034,16 @@ int drv_vdec_get_frame(vdec_chn VdChn, video_frame_info_s *pstFrameInfo,
         return s32Ret;
     }
 
+    s32Ret = set_vdec_fps_toproc(VdChn, 0);
+    if (s32Ret != 0) {
+        DRV_VDEC_ERR("(chn %d) set_vdec_fps_toproc fail\n", VdChn);
+        return s32Ret;
+    }
+
     pChnHandle = vdec_handle->chn_handle[VdChn];
     if (pChnHandle->ChnAttr.enType == PT_JPEG
         || pChnHandle->ChnAttr.enType == PT_MJPEG) {
+        pChnHandle->u32GetFrameCnt++;
         s32Ret = jpeg_dec_get_frame(pChnHandle->pHandle, (unsigned char *)&FrameBuf, &hw_time);
         if (s32Ret == 0) {
             jpeg_set_frame_info(&pstFrameInfo->video_frame, &FrameBuf);
@@ -1375,9 +1055,15 @@ int drv_vdec_get_frame(vdec_chn VdChn, video_frame_info_s *pstFrameInfo,
         }
     }else {
         DispFrameCfg dfc = {0};
-        s32Ret = vdec_get_frame(pChnHandle->pHandle, &dfc, 0);
+        s32Ret = vdec_get_frame(pChnHandle->pHandle, &dfc);
         if (s32Ret >= 0) {
+            pChnHandle->u32GetFrameCnt++;
             set_video_frame_info(pstFrameInfo, &dfc);
+            s32Ret = set_video_chnattr_toproc(VdChn, pstFrameInfo, dfc.decHwTime);
+            if (s32Ret != 0) {
+                DRV_VDEC_ERR("set_video_chnattr_toproc fail");
+                return s32Ret;
+            }
         }
 
         pChnHandle->stFPS.hw_time = dfc.decHwTime;
@@ -1525,24 +1211,6 @@ int drv_vdec_detach_vbpool(vdec_chn VdChn)
         return 0;
 
     } else {
-        #ifdef USE_vb_pool
-        if (pChnHandle->ChnAttr.enType == PT_H264 ||
-            pChnHandle->ChnAttr.enType == PT_H265) {
-            DRV_VDEC_API("26x detach\n");
-            if (pChnHandle->bHasVbPool == true) {
-                unsigned int i = 0;
-                vb_blk blk;
-
-                for (i = 0; i < pChnHandle->FrmNum; i++) {
-                    blk = vb_phys_addr2handle(
-                        pChnHandle->FrmArray[i].phyAddr);
-
-                    if (blk != VB_INVALID_HANDLE)
-                        vb_release_block(blk);
-                }
-            }
-        }
-        #endif
         pChnHandle->bHasVbPool = false;
     }
 

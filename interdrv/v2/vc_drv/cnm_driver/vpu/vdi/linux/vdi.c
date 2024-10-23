@@ -19,7 +19,6 @@
 #include <linux/dma-buf.h>
 #include <linux/time.h>
 
-#include "driver/vpu.h"
 #include "../vdi.h"
 #include "../vdi_osal.h"
 #include "coda9/coda9_regdefine.h"
@@ -77,27 +76,6 @@ static vdi_info_t s_vdi_info[MAX_NUM_VPU_CORE];
 
 extern int chip_id;
 extern vpudrv_buffer_t s_vpu_register[MAX_NUM_VPU_CORE];
-
-
-
-extern int vpu_op_open(int core_idx);
-extern int vpu_op_close(int core_idx);
-extern ssize_t vpu_op_read(char *buf, size_t len);
-extern ssize_t vpu_op_write(const char *buf, size_t len);
-
-extern long vpu_get_common_memory(vpudrv_buffer_t *vdb);
-extern long vpu_get_instance_pool(vpudrv_buffer_t *info);
-extern long vpu_open_instance(vpudrv_inst_info_t *inst_info);
-extern long vpu_close_instance(vpudrv_inst_info_t *inst_info);
-
-extern int vpu_hw_reset(int core_idx);
-extern long vpu_flush_dcache(vpudrv_buffer_t *info);
-extern long vpu_invalidate_dcache(vpudrv_buffer_t *info);
-extern long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb);
-extern long vpu_free_physical_memory(vpudrv_buffer_t *vdb);
-extern long vpu_get_free_mem_size(unsigned long *size);
-extern long vpu_set_clock_gate(u32 *clkgate);
-extern long vpu_wait_interrupt(vpudrv_intr_info_t *info);
 
 int swap_endian(unsigned long core_idx, unsigned char *data, int len, int endian);
 
@@ -948,9 +926,11 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
     swap_endian(core_idx, data, len, endian);
     osal_memcpy((void *)((unsigned long)vdb.virt_addr+offset), data, len);
 
-    if (vpu_flush_dcache(&vdb) < 0) {
-        VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
-        return -1;
+    if (vdb.is_cached) {
+        if (vpu_flush_dcache(&vdb) < 0) {
+            VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
+            return -1;
+        }
     }
 
     return len;
@@ -1065,6 +1045,49 @@ int vdi_allocate_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTyp
 
     VLOG(INFO, "[VDI] vdi_allocate_dma_memory, physaddr=0x%llx, virtaddr=0x%llx~0x%llx, size=%d, memType=%d, count:%d\n",
        vb->phys_addr, vb->virt_addr, vb->virt_addr + vb->size, vb->size, memTypes, vdi->vpu_buffer_pool_count);
+
+    return 0;
+}
+
+int vdi_insert_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex)
+{
+    vdi_info_t *vdi;
+    int i;
+    vpudrv_buffer_t vdb;
+
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    vdi = &s_vdi_info[core_idx];
+    if(!vdi || vdi->vpu_fd == (VPU_FD)-1 || vdi->vpu_fd == (VPU_FD)0x00)
+        return -1;
+
+    osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
+
+    vdb.core_idx = core_idx;
+    vdb.size = vb->size;
+    vdb.phys_addr = vb->phys_addr;
+    vdb.base = vb->base;
+    vdb.virt_addr = vb->virt_addr;
+
+    vmem_lock(core_idx);
+    for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+    {
+        if (vdi->vpu_buffer_pool[i].inuse == 0)
+        {
+            vdi->vpu_buffer_pool[i].vdb = vdb;
+            vdi->vpu_buffer_pool_count++;
+            vdi->vpu_buffer_pool[i].inuse = 1;
+            break;
+        }
+    }
+
+    if (MAX_VPU_BUFFER_POOL == i) {
+        VLOG(ERR, "[VDI] fail to vdi_allocate_dma_memory, vpu_buffer_pool_count=%d MAX_VPU_BUFFER_POOL=%d\n", vdi->vpu_buffer_pool_count, MAX_VPU_BUFFER_POOL);
+        vmem_unlock(core_idx);
+        return -1;
+    }
+    vmem_unlock(core_idx);
 
     return 0;
 }
@@ -1213,6 +1236,46 @@ void vdi_free_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes,
     vmem_unlock(core_idx);
 }
 
+void vdi_remove_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex)
+{
+    vdi_info_t *vdi;
+    int i;
+    vpudrv_buffer_t vdb;
+
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return;
+
+    vdi = &s_vdi_info[core_idx];
+    if(!vb || !vdi || vdi->vpu_fd== (VPU_FD)-1 || vdi->vpu_fd == (VPU_FD)0x00)
+        return;
+
+    if (vb->size == 0)
+        return ;
+
+    osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
+
+    vmem_lock(core_idx);
+    for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+    {
+        if (vdi->vpu_buffer_pool[i].vdb.phys_addr == vb->phys_addr)
+        {
+            vdi->vpu_buffer_pool[i].inuse = 0;
+            vdi->vpu_buffer_pool_count--;
+            vdb = vdi->vpu_buffer_pool[i].vdb;
+            break;
+        }
+    }
+
+    if (!vdb.size)
+    {
+        VLOG(ERR, "[VDI] invalid buffer to free address = 0x%x\n", (int)vdb.virt_addr);
+        vmem_unlock(core_idx);
+        return ;
+    }
+
+    osal_memset(vb, 0, sizeof(vpu_buffer_t));
+    vmem_unlock(core_idx);
+}
 
 int vdi_get_sram_memory(unsigned long core_idx, vpu_buffer_t *vb)
 {

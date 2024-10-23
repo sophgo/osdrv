@@ -216,6 +216,8 @@ struct dpu_dev_s {
 	struct mutex dpu_lock;
 	unsigned int bsuspend;
 	struct mutex suspend_lock;
+	unsigned int duty_ratio;
+	unsigned int total_hwduration;
 };
 
 int dpu_create_grp(dpu_grp dpu_grp_id,dpu_grp_attr_s *pstGrpAttr);

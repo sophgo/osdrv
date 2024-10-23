@@ -602,7 +602,8 @@ void cif_set_group(struct cif_ctx *ctx, int gruop);
 void cif_set_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 			uint32_t select, uint32_t pn_swap);
 void cif_set_rx_bus_config(struct cif_ctx *ctx, enum lane_id_e lane, uint32_t select);
-void set_rx0_enable(struct cif_ctx *ctx);
+void set_rx_frist_lane_enable(struct cif_ctx *ctx, int frist_lane_used);
+void cif_set_pd(struct cif_ctx *ctx, short clock_lane);
 void cif_hdr_enable(struct cif_ctx *ctx, struct cif_param *param, uint32_t on);
 void cif_streaming(struct cif_ctx *ctx, uint32_t on, uint32_t hdr);
 void cif_hdr_manual_config(struct cif_ctx *ctx,

@@ -200,6 +200,7 @@ void vpss_cmdq_irq_handler(struct vpss_core *vpss_dev);
 
 void vpss_hal_suspend(void);
 void vpss_hal_resume(void);
+bool vpss_check_suspend(void);
 
 void vpss_clk_disable(void);
 void vpss_clk_enable(void);

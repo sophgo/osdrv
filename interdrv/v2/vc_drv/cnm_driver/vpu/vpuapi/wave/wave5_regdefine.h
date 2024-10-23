@@ -510,6 +510,16 @@ typedef enum {
 #define W5_CMD_ENC_SEQ_VUI_RBSP_ADDR            (W5_REG_BASE + 0x1B8)
 #define W5_CMD_ENC_SEQ_HRD_RBSP_ADDR            (W5_REG_BASE + 0x1BC)
 
+#ifdef ENABLE_HOST_RC
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x31      (W5_REG_BASE + 0x1C4)   // reserved param0
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x32      (W5_REG_BASE + 0x1C8)   // reserved param1
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x33      (W5_REG_BASE + 0x1CC)   // reserved param2
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x34      (W5_REG_BASE + 0x1D0)
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x35      (W5_REG_BASE + 0x1D4)
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x36      (W5_REG_BASE + 0x1D8)
+#define W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x37      (W5_REG_BASE + 0x1DC)
+#endif /// ENABLE_HOST_RC
+
 /************************************************************************/
 /* ENCODER - ENC_SET_PARAM (CUSTOM_GOP)                                 */
 /************************************************************************/
@@ -560,6 +570,10 @@ typedef enum {
 #define W5_CMD_ENC_PIC_PREFIX_SEI_INFO           (W5_REG_BASE + 0x184)
 #define W5_CMD_ENC_PIC_SUFFIX_SEI_NAL_ADDR       (W5_REG_BASE + 0x188)
 #define W5_CMD_ENC_PIC_SUFFIX_SEI_INFO           (W5_REG_BASE + 0x18c)
+
+#ifdef ENABLE_HOST_RC
+#define W5_CMD_ENC_PIC_MOTION_LEVEL              (W5_REG_BASE + 0x19c)
+#endif /// ENABLE_HOST_RC
 
 /************************************************************************/
 /* ENCODER - QUERY (GET_RESULT)                                         */

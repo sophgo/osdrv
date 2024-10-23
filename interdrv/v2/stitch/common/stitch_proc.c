@@ -302,168 +302,180 @@ static void _update_status_to_string(enum stitch_update_status updatstate, char 
 
 int stitch_ctx_proc_show(struct seq_file *m, void *v)
 {
-	int i;
+	int i, j;
 	char str1[32];
 	char str2[32];
 	char str3[32];
-	struct __stitch_ctx *pStitchCtx = stitch_get_ctx();
+	struct __stitch_ctx **stitchCtx = stitch_get_ctx();
+	int stitch_grp_num = stitch_get_grp_num();
+	bool *grp_used = stitch_get_grp_used();
 	struct stitch_dev *dev = (struct stitch_dev *)m->private;
-	// unsigned int duration;
-	// unsigned int cost_time, max_cost_time, hw_cost_time, hw_max_cost_time, duration;
-	// struct timespec64 time;
+	unsigned char is_created;
+	unsigned char is_started;
 
 	// Module Param
 	seq_printf(m, "\nModule: [STITCH], Build Time[%s]\n", UTS_VERSION);
-	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------\n");
-	seq_printf(m, "%20s\n", "Num. of Inputs");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		seq_printf(m, "%20d\n", pStitchCtx->src_num);
-	} else {
-		seq_printf(m, "%15s\n", "unknown");
-	}
-	// seq_printf(m, "%25s%25s\n", "stitch_vb_source", "stitch_split_node_num");
-	// seq_printf(m, "%18d%25d\n", 0, 1);
+	seq_printf(m, "IP_NUM: %d\tGRP_NUM: %d\tGRP_ID: ", STITCH_IP_NUM, stitch_grp_num);
 
-	// STITCH SRC ATTR
-	//  seq_puts(m, "\n-------------------------------STITCH SRC ATTR------------------------------\n");
-	seq_puts(m, "\n--------------------------------------STITCH SRC Image ATTR-------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s\n", "ID(Max: N)", "MaxW", "MaxH", "PixFmt");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		_pix_fmt_to_string(pStitchCtx->src_attr.fmt_in, str1, sizeof(str1));
-		for (i = 0; i < pStitchCtx->src_num; i++) {
-			seq_printf(m, "%20d%20d%20d%20s\n",
-					i,
-					pStitchCtx->src_attr.size[i].width,
-					pStitchCtx->src_attr.size[i].height,
-					str1);
-		}
+	for (j = 0; j < STITCH_MAX_GRP_NUM; j++) {
+		seq_printf(m, "grp_used%d:[%d]\n", j, grp_used[j]);
 	}
 
-	seq_puts(m, "\n-------------------------------STITCH SRC OVLP ATTR------------------------\n");
-	seq_printf(m, "%20s%20s%20s\n", "ID(Max: N-1)", "ovlp_lx", "ovlp_rx");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		for (i = 0; i < pStitchCtx->src_num - 1; i++) {
-			seq_printf(m, "%20d%20d%20d\n",
-					i,
-					pStitchCtx->src_attr.ovlap_attr.ovlp_lx[i],
-					pStitchCtx->src_attr.ovlap_attr.ovlp_rx[i]);
-		}
-	}
-
-	seq_puts(m, "\n-------------------------------STITCH SRC BD ATTR------------------------\n");
-	seq_printf(m, "%20s%20s%20ss\n", "ID(Max: N)", "ovlp_lx", "ovlp_rx");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		for (i = 0; i < pStitchCtx->src_num; i++) {
-			seq_printf(m, "%20d%20d%20d\n",
-					i,
-					pStitchCtx->src_attr.bd_attr.bd_lx[i],
-					pStitchCtx->src_attr.bd_attr.bd_rx[i]);
-		}
-	}
-
-	// STITCH WGT ATTR
-	seq_puts(m, "\n--------------------------------------STITCH WGT ATTR-------------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s%20s\n", "ID(Max: N-1)", "MaxW", "MaxH", "PhyAddrWgt(Alpha)",
-			"PhyAddrWgt(Beta)");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		for (i = 0; i < pStitchCtx->src_num - 1; i++) {
-			seq_printf(m, "%20d%20d%20d%20lld%20lld\n", i,
-					   pStitchCtx->wgt_attr.size_wgt[i].width,
-					   pStitchCtx->wgt_attr.size_wgt[i].height,
-					   pStitchCtx->wgt_attr.phy_addr_wgt[i][0],
-					   pStitchCtx->wgt_attr.phy_addr_wgt[i][1]);
-		}
-	}
-
-	// STITCH CHN ATTR
-	seq_puts(m, "\n-------------------------------STITCH CHN ATTR------------------------------\n");
-	seq_printf(m, "%20s%20s%20s\n", "MaxW", "MaxH", "PixFmt");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		_pix_fmt_to_string(pStitchCtx->chn_attr.fmt_out, str1, sizeof(str1));
-		seq_printf(m, "%20d%20d%20s\n",
-					pStitchCtx->chn_attr.size.width,
-					pStitchCtx->chn_attr.size.height,
-					str1);
-	}
-
-	// STITCH OP ATTR
-	seq_puts(m, "\n-------------------------------STITCH OP ATTR------------------------------\n");
-	seq_printf(m, "%20s%20s\n", "dataSrc", "wgtMode");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		memset(str2, 0, sizeof(str2));
-		_data_src_to_string(pStitchCtx->op_attr.data_src, str1, sizeof(str1));
-		_wgt_mode_to_string(pStitchCtx->op_attr.wgt_mode, str2, sizeof(str2));
-		seq_printf(m, "%20s%20s\n", str1, str2);
-	}
-
-	seq_puts(m, "\n-------------------------------STITCH Update STATUS-----------------------\n");
-	seq_printf(m, "%20s%20s\n", "ParamUpdate", "UpdateStatus");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		_update_status_to_string(pStitchCtx->update_status, str1, sizeof(str1));
-		seq_printf(m, "%20s%20s\n",
-				   (pStitchCtx->param_update) ? "Y" : "N",
-				   str1);
-	}
-
-	seq_puts(m, "\n-----------------------------------STITCH VB STATUS---------------------------\n");
-	seq_printf(m, "%20s%20s\n", "Attached VBPool ID", "vb_size");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		memset(str1, 0, sizeof(str2));
-		if (pStitchCtx->vb_pool == -1) {
-			strncpy(str1, "N", sizeof(str1));
-			strncpy(str2, "N", sizeof(str2));
+	for(j = 0; j < stitch_grp_num; j++) {
+		is_created =  stitchCtx[j]->is_created;
+		is_started = stitchCtx[j]->is_started;
+		seq_printf(m, "\n===========================================GRP[%d]: MODULE PARAM===========================================\n", j);
+		seq_printf(m, "%20s%20s\n", "IP ID", "Num. of Inputs");
+		if (stitchCtx[j] && is_created) {
+			seq_printf(m, "%20d%20d\n", stitchCtx[j]->core_id, stitchCtx[j]->src_num);
 		} else {
-			snprintf(str1, sizeof(str1), "%d", pStitchCtx->vb_pool);
-			snprintf(str2, sizeof(str2), "%d", pStitchCtx->vb_size);
+			seq_printf(m, "%20s%20s\n", "unknown", "unknown");
 		}
-		seq_printf(m, "%20s%20s\n",
-				   str1,
-				   str2);
-	}
 
-	seq_puts(m, "\n---------------------------------STITCH HW STATUS---------------------------------\n");
-	seq_printf(m, "%20s%20s%20s\n", "HdlState", "JobStatus", "DevState");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		memset(str1, 0, sizeof(str1));
-		memset(str2, 0, sizeof(str2));
-		memset(str3, 0, sizeof(str3));
-		_hdl_state_to_string(atomic_read(&pStitchCtx->hdl_state), str1, sizeof(str1));
-		_job_status_to_string(atomic_read(&pStitchCtx->job.job_state), str2, sizeof(str2));
-		_dev_state_to_string(atomic_read(&dev->state), str3, sizeof(str3));
-		seq_printf(m, "%20s%20s%20s\n",
-				   str1,
-				   str2,
-				   str3);
-	}
+		// seq_printf(m, "%25s%25s\n", "stitch_vb_source", "stitch_split_node_num");
+		// seq_printf(m, "%18d%25d\n", 0, 1);
 
-	seq_puts(m, "\n--------------------------------------------STITCH WORK STATUS--------------------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s%20s\n",
-			   "RecvCnt", "LostCnt", "DoneCnt", "FailRecvCnt", "bStart");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		seq_printf(m, "%20d%20d%20d%20d%20s\n",
-				   pStitchCtx->work_status.recv_cnt,
-				   pStitchCtx->work_status.lost_cnt,
-				   pStitchCtx->work_status.done_cnt,
-				   pStitchCtx->work_status.fail_recv_cnt,
-				   (pStitchCtx->is_started) ? "Y" : "N");
-	}
+		// STITCH SRC ATTR
+		//  seq_puts(m, "\n-------------------------------STITCH SRC ATTR------------------------------\n");
+		seq_printf(m, "\n--------------------------------------GRP[%d]: STITCH SRC Image ATTR-------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s%20s\n", "ID(Max: N)", "MaxW", "MaxH", "PixFmt");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			_pix_fmt_to_string(stitchCtx[j]->src_attr.fmt_in, str1, sizeof(str1));
+			for (i = 0; i < stitchCtx[j]->src_num; i++) {
+				seq_printf(m, "%20d%20d%20d%20s\n",
+						i,
+						stitchCtx[j]->src_attr.size[i].width,
+						stitchCtx[j]->src_attr.size[i].height,
+						str1);
+			}
+		}
 
-	seq_puts(m, "\n-------------------------------STITCH RUN TIME STATUS-------------------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s\n", "CostTime(us)", "MaxCostTime(us)",
-			   "HwCostTime(us)", "HwMaxCostTime(us)");
-	if (pStitchCtx && pStitchCtx->is_created) {
-		seq_printf(m, "%20u%20u%20u%20u\n",
-				   pStitchCtx->work_status.cost_time,
-				   pStitchCtx->work_status.max_cost_time,
-				   pStitchCtx->work_status.hw_cost_time,
-				   pStitchCtx->work_status.hw_max_cost_time);
-	}
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH SRC OVLP ATTR------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s\n", "ID(Max: N-1)", "ovlp_lx", "ovlp_rx");
+		if (stitchCtx[j] && is_created) {
+			for (i = 0; i < stitchCtx[j]->src_num - 1; i++) {
+				seq_printf(m, "%20d%20d%20d\n",
+						i,
+						stitchCtx[j]->src_attr.ovlap_attr.ovlp_lx[i],
+						stitchCtx[j]->src_attr.ovlap_attr.ovlp_rx[i]);
+			}
+		}
 
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH SRC BD ATTR------------------------\n", j);
+		seq_printf(m, "%20s%20s%20ss\n", "ID(Max: N)", "ovlp_lx", "ovlp_rx");
+		if (stitchCtx[j] && is_created) {
+			for (i = 0; i < stitchCtx[j]->src_num; i++) {
+				seq_printf(m, "%20d%20d%20d\n",
+						i,
+						stitchCtx[j]->src_attr.bd_attr.bd_lx[i],
+						stitchCtx[j]->src_attr.bd_attr.bd_rx[i]);
+			}
+		}
+
+		// STITCH WGT ATTR
+		seq_printf(m, "\n--------------------------------------GRP[%d]: STITCH WGT ATTR-------------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s%20s%20s\n", "ID(Max: N-1)", "MaxW", "MaxH", "PhyAddrWgt(Alpha)",
+				"PhyAddrWgt(Beta)");
+		if (stitchCtx[j] && is_created) {
+			for (i = 0; i < stitchCtx[j]->src_num - 1; i++) {
+				seq_printf(m, "%20d%20d%20d%20lld%20lld\n", i,
+						stitchCtx[j]->wgt_attr.size_wgt[i].width,
+						stitchCtx[j]->wgt_attr.size_wgt[i].height,
+						stitchCtx[j]->wgt_attr.phy_addr_wgt[i][0],
+						stitchCtx[j]->wgt_attr.phy_addr_wgt[i][1]);
+			}
+		}
+
+		// STITCH CHN ATTR
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH CHN ATTR------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s\n", "MaxW", "MaxH", "PixFmt");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			_pix_fmt_to_string(stitchCtx[j]->chn_attr.fmt_out, str1, sizeof(str1));
+			seq_printf(m, "%20d%20d%20s\n",
+						stitchCtx[j]->chn_attr.size.width,
+						stitchCtx[j]->chn_attr.size.height,
+						str1);
+		}
+
+		// STITCH OP ATTR
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH OP ATTR------------------------------\n", j);
+		seq_printf(m, "%20s%20s\n", "dataSrc", "wgtMode");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			memset(str2, 0, sizeof(str2));
+			_data_src_to_string(stitchCtx[j]->op_attr.data_src, str1, sizeof(str1));
+			_wgt_mode_to_string(stitchCtx[j]->op_attr.wgt_mode, str2, sizeof(str2));
+			seq_printf(m, "%20s%20s\n", str1, str2);
+		}
+
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH Update STATUS-----------------------\n", j);
+		seq_printf(m, "%20s%20s\n", "ParamUpdate", "UpdateStatus");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			_update_status_to_string(stitchCtx[j]->update_status, str1, sizeof(str1));
+			seq_printf(m, "%20s%20s\n",
+					(stitchCtx[j]->param_update) ? "Y" : "N",
+					str1);
+		}
+
+		seq_printf(m, "\n-----------------------------------GRP[%d]: STITCH VB STATUS---------------------------\n", j);
+		seq_printf(m, "%20s%20s\n", "Attached VBPool ID", "vb_size");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			memset(str1, 0, sizeof(str2));
+			if (stitchCtx[j]->vb_pool == VB_INVALID_POOLID) {
+				strncpy(str1, "N", sizeof(str1));
+				strncpy(str2, "N", sizeof(str2));
+			} else {
+				snprintf(str1, sizeof(str1), "%d", stitchCtx[j]->vb_pool);
+				snprintf(str2, sizeof(str2), "%d", stitchCtx[j]->vb_size);
+			}
+			seq_printf(m, "%20s%20s\n",
+					str1,
+					str2);
+		}
+
+		seq_printf(m, "\n---------------------------------GRP[%d]: STITCH HW STATUS---------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s%20s\n", "HdlState", "JobStatus", "DevState", "Evt");
+		if (stitchCtx[j] && is_created) {
+			memset(str1, 0, sizeof(str1));
+			memset(str2, 0, sizeof(str2));
+			memset(str3, 0, sizeof(str3));
+			_hdl_state_to_string(atomic_read(&stitchCtx[j]->hdl_state), str1, sizeof(str1));
+			_job_status_to_string(atomic_read(&stitchCtx[j]->job.job_state), str2, sizeof(str2));
+			_dev_state_to_string(atomic_read(&dev->state), str3, sizeof(str3));
+			seq_printf(m, "%20s%20s%20s\n",
+					str1,
+					str2,
+					str3);
+		}
+
+		seq_printf(m, "\n--------------------------------------------GRP[%d]: STITCH WORK STATUS--------------------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s%20s%20s\n",
+				"RecvCnt", "LostCnt", "DoneCnt", "FailRecvCnt", "bStart");
+		if (stitchCtx[j] && is_created) {
+			seq_printf(m, "%20d%20d%20d%20d%20s\n",
+					stitchCtx[j]->work_status.recv_cnt,
+					stitchCtx[j]->work_status.lost_cnt,
+					stitchCtx[j]->work_status.done_cnt,
+					stitchCtx[j]->work_status.fail_recv_cnt,
+					(is_started) ? "Y" : "N");
+		}
+
+		seq_printf(m, "\n-------------------------------GRP[%d]: STITCH RUN TIME STATUS-------------------------------\n", j);
+		seq_printf(m, "%20s%20s%20s%20s\n", "CostTime(us)", "MaxCostTime(us)",
+				"HwCostTime(us)", "HwMaxCostTime(us)");
+		if (stitchCtx[j] && is_created) {
+			seq_printf(m, "%20u%20u%20u%20u\n",
+					stitchCtx[j]->work_status.cost_time,
+					stitchCtx[j]->work_status.max_cost_time,
+					stitchCtx[j]->work_status.hw_cost_time,
+					stitchCtx[j]->work_status.hw_max_cost_time);
+		}
+		seq_puts(m, "\n\n");
+	}
 	return 0;
 }
 

@@ -502,6 +502,52 @@ static int LANE_IS_PORT1(int x)
 	}
 }
 
+static int LANE_IS_FRIST(uint16_t phy_mode, short lane_num, unsigned int devno)
+{
+	if (phy_mode == 0) {
+		if (lane_num == CIF_PHY_LANE_0)
+			return 1;
+	} else if (phy_mode == 1) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_9)
+				return 1;
+		}
+	} else if (phy_mode == 2) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		}
+	} else if (phy_mode == 3) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_9)
+				return 1;
+		} else if (devno == 4) {
+			if (lane_num == CIF_PHY_LANE_12)
+				return 1;
+		}
+	} else if (phy_mode == 4) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_6)
+				return 1;
+		}
+	} else if (phy_mode == 5) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		}
+	}
+	return 0;
+}
+
 //#define LANE_IS_PORT1(x)	((x > 2) ? 1 : 0)
 #define IS_SAME_PORT(x, y)	(!((LANE_IS_PORT1(x))^(LANE_IS_PORT1(y))))
 
@@ -570,6 +616,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
+			} else if (max_port == 1 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 2) {
 			if (max_port == 5 && min_port == 0) {
@@ -613,6 +661,9 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P32P4);
 			} else if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
+			} else if (max_port == 2 && min_port == 2) {
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 3) {
 			if (max_port == 3 && min_port == 0) {
@@ -656,6 +707,10 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 			} else if (max_port == 5 && min_port == 3) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P4);
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
+			} else if (max_port == 3 && min_port == 3) {
+				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 4) {
 			if (max_port == 4 && min_port == 0) {
@@ -692,6 +747,11 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
 			} else if (max_port == 5 && min_port == 4) {
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
+			} else if (min_port == 4 && max_port == 4) {
+				cif_set_clk_dir(ctx, CIF_CLK_P42P3);
+				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 5) {
 			if (max_port == 5 && min_port == 0) {
@@ -714,6 +774,13 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
 			} else if (max_port == 5 && min_port == 4) {
 				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
+			} else if (max_port == 5 && min_port == 5) {
+				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
+				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
+				cif_set_clk_dir(ctx, CIF_CLK_P42P3);
+				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		}
 	} else if (ctx->phy_mode == 1) {
@@ -732,12 +799,17 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
+			} else if (max_port == 1 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 2) {
 			if (max_port == 2 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			} else if (max_port == 2 && min_port == 2) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 			}
 		} else if (clk_port == 3) {
@@ -761,12 +833,17 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
+			} else if (max_port == 1 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 2) {
 			if (max_port == 2 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			} else if (max_port == 2 && min_port == 2) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 			}
 		}
@@ -778,6 +855,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 		} else if (clk_port == 1) {
 			if (max_port == 1 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
+			} else if (max_port == 1 && min_port == 1) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 2) {
 			if (max_port == 3 && min_port == 2) {
@@ -786,6 +865,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 		} else if (clk_port == 3) {
 			if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+			} else if (max_port == 3 && min_port == 3) {
+				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 			}
 		} else if (clk_port == 4) {
 			if (max_port == 5 && min_port == 4) {
@@ -793,6 +874,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 			}
 		} else if (clk_port == 5) {
 			if (max_port == 5 && min_port == 4) {
+				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
+			} else if (max_port == 5 && min_port == 5) {
 				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
 			}
 		}
@@ -804,6 +887,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 		} else if (clk_port == 1) {
 			if (max_port == 1 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
+			} else if (max_port == 1 && min_port == 0) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		} else if (clk_port == 2) {
 			if (max_port == 3 && min_port == 2) {
@@ -811,6 +896,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 			}
 		} else if (clk_port == 3) {
 			if (max_port == 3 && min_port == 2) {
+				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+			} else if (max_port == 3 && min_port == 3) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 			}
 		}
@@ -821,6 +908,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 			}
 		} else if (clk_port == 1) {
 			if (max_port == 1 && min_port == 0) {
+				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
+			} else if (max_port == 1 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
 		}
@@ -842,7 +931,7 @@ static int _cif_set_attr_mipi(struct cif_dev *dev,
 	struct param_csi *csi = &param->cfg.csi;
 	struct mipi_demux_info_s *info = &attr->demux;
 	uint32_t tbl = 0x1FF;
-	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, lane0_used = 0;
+	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, frist_lane_used = 0;
 	uint32_t value;
 
 	param->type = CIF_TYPE_CSI;
@@ -881,9 +970,9 @@ static int _cif_set_attr_mipi(struct cif_dev *dev,
 			continue;
 		if (attr->lane_id[i] >= CIF_PHY_LANE_NUM)
 			return -EINVAL;
-		if (attr->lane_id[i] == 0 && devno == CIF_MAC_0) {
-			lane0_used = 1;
-		}
+
+		frist_lane_used =  LANE_IS_FRIST(ctx->phy_mode, attr->lane_id[i], devno);
+
 		if (!i)
 			clk_port = LANE_IS_PORT1(attr->lane_id[i]);
 		else {
@@ -915,10 +1004,9 @@ static int _cif_set_attr_mipi(struct cif_dev *dev,
 		cif_set_lane_id(ctx, j++, idx, 0);
 		tbl &= ~(1 << idx);
 	}
-	/* if lane id is 213 , Although 0 is not used, enbale [0] is still needed*/
-	if (attr->lane_id[0] != 0 && lane0_used == 0 && devno == CIF_MAC_0) {
-		set_rx0_enable(ctx);
-	}
+	//frist line for each port should be turned on, as the MAC will only receive clocks from one wire
+	set_rx_frist_lane_enable(ctx, frist_lane_used);
+
 	/* config  clock buffer direction.
 	 * 1. When clock is between 0~2 and 1c4d, direction is P0->P1.
 	 * 2. When clock is between 3~5 and 1c4d, direction is P1->P0.
@@ -948,6 +1036,9 @@ static int _cif_set_attr_mipi(struct cif_dev *dev,
 		cif_set_group(ctx, 1);
 		cif_set_group(ctx, 2);
 	}
+
+	cif_set_pd(ctx, attr->lane_id[0]);
+
 	// if (csi->lane_num == 8) {
 	// 	for (i = 0; (i < csi->lane_num + 1); i++) {
 	// 		if (!i)
@@ -1093,7 +1184,7 @@ static int _cif_set_attr_sublvds(struct cif_dev *dev,
 	struct param_sublvds *sublvds = &param->cfg.sublvds;
 	struct sublvds_sync_code *sc;
 	uint32_t tbl = 0x1FF;
-	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, lane0_used = 0;
+	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, frist_lane_used = 0;
 	int rc = 0;
 	uint32_t value;
 
@@ -1140,9 +1231,9 @@ static int _cif_set_attr_sublvds(struct cif_dev *dev,
 			continue;
 		if (attr->lane_id[i] >= CIF_PHY_LANE_NUM)
 			return -EINVAL;
-		if (attr->lane_id[i] == 0 && devno == CIF_MAC_0) {
-			lane0_used = 1;
-		}
+
+		frist_lane_used = LANE_IS_FRIST(ctx->phy_mode, attr->lane_id[i], devno);
+
 		if (!i)
 			clk_port = LANE_IS_PORT1(attr->lane_id[i]);
 		else {
@@ -1174,10 +1265,8 @@ static int _cif_set_attr_sublvds(struct cif_dev *dev,
 		cif_set_lane_id(ctx, j++, idx, 0);
 		tbl &= ~(1 << idx);
 	}
-	/* if lane id is 213 , Although 0 is not used, enbale [0] is still needed*/
-	if (attr->lane_id[0] != 0 && lane0_used == 0 && devno == CIF_MAC_0) {
-		set_rx0_enable(ctx);
-	}
+	//frist line for each port should be turned on, as the MAC will only receive clocks from one wire
+	set_rx_frist_lane_enable(ctx, frist_lane_used);
 	/* config  clock buffer direction.
 	 * 1. When clock is between 0~2 and 1c4d, direction is P0->P1.
 	 * 2. When clock is between 3~5 and 1c4d, direction is P1->P0.
@@ -1207,6 +1296,9 @@ static int _cif_set_attr_sublvds(struct cif_dev *dev,
 		cif_set_group(ctx, 1);
 		cif_set_group(ctx, 2);
 	}
+
+	cif_set_pd(ctx, attr->lane_id[0]);
+
 	// if (sublvds->lane_num == 8) {
 	// 	for (i = 0; (i < sublvds->lane_num + 1); i++) {
 	// 		if (!i)
@@ -1340,7 +1432,7 @@ static int _cif_set_attr_hispi(struct cif_dev *dev,
 	struct param_hispi *hispi = &param->cfg.hispi;
 	struct hispi_sync_code *sc;
 	uint32_t tbl = 0x1FF;
-	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, lane0_used = 0;
+	int i, j = 0, clk_port = 0, max_port = 0, min_port = 5, frist_lane_used = 0;
 	int rc = 0;
 	uint32_t value;
 
@@ -1391,9 +1483,9 @@ static int _cif_set_attr_hispi(struct cif_dev *dev,
 			continue;
 		if (attr->lane_id[i] >= CIF_PHY_LANE_NUM)
 			return -EINVAL;
-		if (attr->lane_id[i] == 0 && devno == CIF_MAC_0) {
-			lane0_used = 1;
-		}
+
+		frist_lane_used = LANE_IS_FRIST(ctx->phy_mode, attr->lane_id[i], devno);
+
 		if (!i)
 			clk_port = LANE_IS_PORT1(attr->lane_id[i]);
 		else {
@@ -1425,10 +1517,8 @@ static int _cif_set_attr_hispi(struct cif_dev *dev,
 		cif_set_lane_id(ctx, j++, idx, 0);
 		tbl &= ~(1 << idx);
 	}
-	/* if lane id is 213 , Although 0 is not used, enbale [0] is still needed*/
-	if (attr->lane_id[0] != 0 && lane0_used == 0 && devno == CIF_MAC_0) {
-		set_rx0_enable(ctx);
-	}
+	//frist line for each port should be turned on, as the MAC will only receive clocks from one wire
+	set_rx_frist_lane_enable(ctx, frist_lane_used);
 	/* config  clock buffer direction.
 	 * 1. When clock is between 0~2 and 1c4d, direction is P0->P1.
 	 * 2. When clock is between 3~5 and 1c4d, direction is P1->P0.
@@ -1458,6 +1548,9 @@ static int _cif_set_attr_hispi(struct cif_dev *dev,
 		cif_set_group(ctx, 1);
 		cif_set_group(ctx, 2);
 	}
+
+	cif_set_pd(ctx, attr->lane_id[0]);
+
 	// if (hispi->lane_num == 8) {
 	// 	for (i = 0; (i < hispi->lane_num + 1); i++) {
 	// 		if (!i)

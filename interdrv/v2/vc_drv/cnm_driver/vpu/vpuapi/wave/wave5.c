@@ -626,7 +626,7 @@ RetCode Wave5VpuDecGetSeqInfo(CodecInst* instance, DecInitialInfo* info)
     if (ret != RETCODE_SUCCESS) {
         regVal = VpuReadReg(instance->coreIdx, W5_RET_FAIL_REASON);
         if (regVal != WAVE5_SYSERR_QUEUEING_FAIL)
-            VLOG(ERR, "FAIL_REASON = 0x%x\n", regVal);
+            VLOG(WARN, "FAIL_REASON = 0x%x\n", regVal);
 
         if (regVal == WAVE5_SYSERR_RESULT_NOT_READY)
             return RETCODE_REPORT_NOT_READY;
@@ -2235,6 +2235,8 @@ RetCode Wave5VpuEncInitSeq(CodecInst* instance)
     EncInfo*        pEncInfo;
     EncOpenParam*   pOpenParam;
     EncWave5Param*  pParam;
+    int             frameRateDiv = 0, frameRateRes = 0, frameRate = 0;
+
     coreIdx    = instance->coreIdx;
     pEncInfo   = &instance->CodecInfo->encInfo;
     pOpenParam = &pEncInfo->openParam;
@@ -2388,7 +2390,12 @@ RetCode Wave5VpuEncInitSeq(CodecInst* instance)
         VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_INTRA_REFRESH, pParam->intraRefreshArg<<16 | pParam->intraRefreshMode);
     }
 
-    VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_RC_FRAME_RATE,  pOpenParam->frameRateInfo);
+    frameRateDiv = (pOpenParam->frameRateInfo >> 16) + 1;
+    frameRateRes = pOpenParam->frameRateInfo & 0xFFFF;
+
+    frameRate = frameRateRes / frameRateDiv;
+
+    VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_RC_FRAME_RATE,  frameRate);
     VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_RC_TARGET_RATE, pOpenParam->bitRate);
 
     if (instance->codecMode == W_AVC_ENC) {
@@ -2527,6 +2534,70 @@ RetCode Wave5VpuEncInitSeq(CodecInst* instance)
         VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_VUI_HRD_PARAM, 0);
     }
 
+    /* host rc param */
+#ifdef ENABLE_HOST_RC
+    {	/*	W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x34(0x1D0)
+                [15: 8] : u32RCIpQpDelta + 10;   /// Range:[-10,10] -> [0,20]
+                [ 7: 4] : u32EnableHierarchy;    /// Range:[0,  1]
+                [ 3: 0] : enRcMode
+                        0 : C&M R/C
+                        1 : host_CBR
+                        2 : host_VBR
+                        3 : host_ABR
+                        4 : host_UNKNOWN
+                        5 ~ 15 : N/A
+        */
+        VLOG(INFO, "hostrc mode:%d, EnableHierarchy:%d, RCIpQpDelta:%d\n"
+                , pOpenParam->hostRcmode, pOpenParam->enableHierarchy, pOpenParam->rcIpQpDelta);
+        VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x34,  pOpenParam->hostRcmode                    |
+                                                                (pOpenParam->enableHierarchy      << 4)    |
+                                                                ((pOpenParam->rcIpQpDelta + 10)   << 8)
+        );
+
+	    /*	W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x35(0x1D4)
+                [31:24] : N/A
+                [23:16] : u32RcLastClip;         /// Range:[0, 12]
+                [15: 8] : u32RcLevelClip;        /// Range:[0, 12]
+                [ 7: 0] : u32RcPicNormalClip;    /// Range:[0, 12]
+        */
+        VLOG(INFO, "hostrc lastClip:%d, levelClip:%d, normalClip:%d\n"
+                , pOpenParam->rcLastClip, pOpenParam->rcLevelClip, pOpenParam->rcPicNormalClip);
+        VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x35, pOpenParam->rcPicNormalClip            |
+                                                                (pOpenParam->rcLevelClip      << 8 )   |
+                                                                (pOpenParam->rcLastClip       << 16)
+        );
+
+    	/*	W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x36(0x1D8)
+                [31:24] : u32StatTime;           /// Range:[1, 60];
+                [23:16] : u32MinIprop;           /// Range:[1, 100]
+                [15: 8] : u32MaxIprop;           /// Range:(u32MinIprop, 100]
+                [ 7: 0] : s32ChangePos;          /// Range:[50, 100]
+        */
+        VLOG(INFO, "hostrc stat:%d, minIprop:%d, maxIprop:%d, changPos:%d\n"
+                , pOpenParam->statTime, pOpenParam->minIprop
+                , pOpenParam->maxIprop, pOpenParam->changePos);
+        VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x36, pOpenParam->changePos                |
+                                                                (pOpenParam->maxIprop      << 8  )   |
+                                                                (pOpenParam->minIprop      << 16 )   |
+                                                                (pOpenParam->statTime      << 24)
+        );
+
+    	/*	W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x37(0x1DC)
+                [31:24] : s32MinStillPercent;    /// Range:[5, 100]
+                [23:16] : u32MaxStillQP;         /// Range:[u32MinIQp, u32MaxIQp]
+                [15: 8] : u32MotionSensitivity;  /// Range:[0, 100]
+                [ 7: 0] : s32AvbrPureStillThr;   /// Range:[0, 128]
+        */
+        VLOG(INFO, "hostrc minstillPercent:%d, maxStillQp:%d, MotionSensitivity:%d, AvbrPureStillThr:%d\n"
+                , pOpenParam->minStillPercent, pOpenParam->maxStillQp
+                , pOpenParam->motionSensitivity, pOpenParam->avbrPureStillThr);
+        VpuWriteReg(coreIdx, W5_CMD_ENC_SEQ_HOST_RC_PARAM_0x37, pOpenParam->avbrPureStillThr               |
+                                                                (pOpenParam->motionSensitivity   << 8  )   |
+                                                                (pOpenParam->maxStillQp          << 16 )   |
+                                                                (pOpenParam->minStillPercent     << 24)
+        );
+    }
+#endif /// ENABLE_HOST_RC
 
     Wave5BitIssueCommand(instance, W5_ENC_SET_PARAM);
     if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
@@ -3036,6 +3107,12 @@ RetCode Wave5VpuEncode(CodecInst* instance, EncParam* option)
     VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_SUFFIX_SEI_INFO, ((pEncInfo->suffixSeiDataSize << 16) | (pEncInfo->suffixSeiNalEnable&0x01)));
     VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_SUFFIX_SEI_NAL_ADDR, pEncInfo->suffixSeiNalAddr);
 
+#ifdef ENABLE_HOST_RC /// ML
+    /*	W5_CMD_ENC_PIC_MOTION_LEVEL (0x19c)
+            [31: 0] : motion level
+    */
+    VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_MOTION_LEVEL, option->picMotionLevel);
+#endif /// ENABLE_HOST_RC
 
     Wave5BitIssueCommand(instance, W5_ENC_PIC);
 
@@ -3218,6 +3295,10 @@ RetCode Wave5VpuEncGetHeader(EncHandle instance, EncHeaderParam * encHeaderParam
 
     VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_CODE_OPTION, (encHeaderParam->headerType) | (encHeaderParam->encodeAUD<<5));
     VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_SRC_PIC_IDX, 0);
+
+#ifdef ENABLE_HOST_RC
+	VpuWriteReg(coreIdx, W5_CMD_ENC_PIC_MOTION_LEVEL, -1); // MOTION_LEVEL in Wave5VpuEncGetHeader() is not valid.
+#endif /// ENABLE_HOST_RC
 
     Wave5BitIssueCommand(instance, W5_ENC_PIC);
 
@@ -3763,6 +3844,7 @@ RetCode Wave5VpuEncCheckRcParamValid(EncOpenParam* pop)
 {
     RetCode       ret = RETCODE_SUCCESS;
     EncWave5Param* param = &pop->EncStdParam.waveParam;
+    int           frameRateDiv = 0, frameRateRes = 0, frameRate = 0;
 
     if(pop->rcEnable == 1)
     {
@@ -3773,7 +3855,11 @@ RetCode Wave5VpuEncCheckRcParamValid(EncOpenParam* pop)
             ret = RETCODE_FAILURE;
         }
 
-        if(pop->bitRate <= (int) pop->frameRateInfo)
+        frameRateDiv = (pop->frameRateInfo >> 16) + 1;
+        frameRateRes = pop->frameRateInfo & 0xFFFF;
+        frameRate = frameRateRes / frameRateDiv;
+
+        if(pop->bitRate <= frameRate)
         {
             VLOG(ERR,"CFG FAIL : Not allowed EncBitRate <= FrameRate\n");
             VLOG(ERR,"RECOMMEND CONFIG PARAMETER : EncBitRate = FrameRate * 10000\n");

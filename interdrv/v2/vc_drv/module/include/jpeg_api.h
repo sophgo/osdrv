@@ -70,6 +70,7 @@ enum JPG_OP_NUM {
     JPEG_OP_SET_SBM_ENABLE ,
     JPEG_OP_WAIT_FRAME_DONE,
     JPEG_OP_SET_QMAP_TABLE,
+    JPEG_OP_SET_RC_PARAM,
     JPEG_OP_MAX,
 };
 
@@ -86,6 +87,7 @@ typedef enum _DRV_JPEG_OP_ {
     DRV_JPEG_OP_SET_SBM_ENABLE =  (JPEG_OP_SET_SBM_ENABLE << DRV_JPEG_OP_SHIFT),
     DRV_JPEG_OP_WAIT_FRAME_DONE = (JPEG_OP_WAIT_FRAME_DONE << DRV_JPEG_OP_SHIFT),
     DRV_JPEG_OP_SET_QMAP_TABLE =  (JPEG_OP_SET_QMAP_TABLE << DRV_JPEG_OP_SHIFT),
+    DRV_JPEG_OP_SET_RC_PARAM   =  (JPEG_OP_SET_RC_PARAM << DRV_JPEG_OP_SHIFT),
     DRV_JPEG_OP_MAX =             (JPEG_OP_MAX << DRV_JPEG_OP_SHIFT),
 } DRV_JPEG_OP;
 
@@ -134,18 +136,26 @@ typedef struct {
     int bitstreamBufSize;
     int singleEsBuffer;
     int jpgMarkerOrder[DRV_JPG_MARKER_ORDER_CNT];
+    int qmin;
+    int qmax;
 } JPG_EncConfigParam;
 
 /* decode config param */
 typedef struct {
     uint64_t external_bs_addr;
     int external_bs_size;
+    uint64_t external_fb_addr;
+    int external_fb_size;
     /* ROI param */
     int roiEnable;
     int roiWidth;
     int roiHeight;
     int roiOffsetX;
     int roiOffsetY;
+    int max_frame_width;
+    int max_frame_height;
+    int min_frame_width;
+    int min_frame_height;
     /* Frame Partial Mode (DON'T SUPPORT)*/
     int usePartialMode;
     /* Rotation Angle (0, 90, 180, 270) */
@@ -186,6 +196,12 @@ typedef struct _jpeg_user_data_ {
     unsigned int len;
 } jpeg_user_data;
 
+typedef struct _jpeg_enc_rc_param {
+    int chg_pos;
+    int max_qfactor;
+    int min_qfactor;
+} jpeg_enc_rc_param;
+
 /* JPU CODEC HANDLE */
 typedef void *drv_jpg_handle;
 
@@ -206,9 +222,9 @@ int jpeg_get_caps(drv_jpg_handle handle);
 /* flush data */
 int jpeg_flush(drv_jpg_handle handle);
 /* send jpu data to decode or encode */
-int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data);
+int jpeg_enc_send_frame(drv_jpg_handle jpgHandle, DRVFRAMEBUF *data, int timeout);
 /* send jpu data to decode or encode */
-int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, uint64_t external_fb_addr, int external_fb_size);
+int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int timeout);
 int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu64HwTime);
 int jpeg_dec_get_frame(drv_jpg_handle handle, void *data, unsigned long int *pu64HwTime);
 /* release stream buffer */

@@ -183,6 +183,7 @@ void vi_tuning_clut_update(
 	struct isp_ctx *ctx,
 	enum sop_isp_raw raw_num)
 {
+	int ret = 0;
 	u8 tun_idx = 0;
 	u8 dev_num = vi_get_dev_num_by_raw(ctx, raw_num);
 	static int stop_update_clut = -1;
@@ -214,11 +215,14 @@ void vi_tuning_clut_update(
 		stop_update_clut = 0;
 
 	clut_cfg = &post_cfg->tun_cfg[tun_idx].clut_cfg;
-	ispblk_clut_tun_cfg(ctx, clut_cfg, raw_num);
+	ret = ispblk_clut_tun_cfg(ctx, clut_cfg, raw_num);
 
 	//Record the clut tbl idx written into HW for ISP MW.
 	spin_lock_irqsave(&g_clut_idx[raw_num].clut_idx_lock, flags);
-	g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = clut_cfg->tbl_idx;
+	if (ret)
+		g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = clut_cfg->tbl_idx;
+	else
+		g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = 0;
 	spin_unlock_irqrestore(&g_clut_idx[raw_num].clut_idx_lock, flags);
 }
 
@@ -478,6 +482,7 @@ void postraw_tuning_update(
 	struct isp_ctx *ctx,
 	enum sop_isp_raw raw_num)
 {
+	int ret = 0;
 	u8 idx = 0, tun_idx = 0;
 	u8 dev_num = vi_get_dev_num_by_raw(ctx, raw_num);
 	static int stop_update = -1;
@@ -576,11 +581,14 @@ void postraw_tuning_update(
 			POST_RUNTIME_TUN(ycur);
 
 			clut_cfg = &post_tun->clut_cfg;
-			ispblk_clut_tun_cfg(ctx, clut_cfg, raw_num);
+			ret = ispblk_clut_tun_cfg(ctx, clut_cfg, raw_num);
 
 			//Record the clut tbl idx written into HW for ISP MW.
 			spin_lock_irqsave(&g_clut_idx[raw_num].clut_idx_lock, flags);
-			g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = clut_cfg->tbl_idx;
+			if (ret)
+				g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = clut_cfg->tbl_idx;
+			else
+				g_clut_idx[raw_num].clut_tbl_idx[tun_idx] = 0;
 			spin_unlock_irqrestore(&g_clut_idx[raw_num].clut_idx_lock, flags);
 		}
 	}
@@ -1073,13 +1081,13 @@ void ispblk_clut_partial_update(
 	ISP_WR_REG(clut, reg_isp_clut_t, clut_ctrl, ctrl.raw);
 }
 
-void ispblk_clut_tun_cfg(
+int ispblk_clut_tun_cfg(
 	struct isp_ctx *ctx,
 	struct sop_vip_isp_clut_config *cfg,
 	const enum sop_isp_raw raw_num)
 {
 	if (!cfg->update)
-		return;
+		return 0;
 
 	if (cfg->is_update_partial) { //partail update table
 		ispblk_clut_partial_update(ctx, cfg, raw_num);
@@ -1087,6 +1095,8 @@ void ispblk_clut_tun_cfg(
 		//ispblk_clut_config(ctx, cfg->enable, cfg->r_lut, cfg->g_lut, cfg->b_lut);
 		ispblk_clut_cmdq_config(ctx, raw_num, cfg->enable, cfg->r_lut, cfg->g_lut, cfg->b_lut);
 	}
+
+	return 1;
 }
 
 void ispblk_drc_tun_cfg(

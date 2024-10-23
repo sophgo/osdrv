@@ -4,30 +4,31 @@ include $(PWD)/../Makefile.interdrv.param
 #PWD	:= $(shell pwd)
 #include $(PWD)/audio.mk
 
-#$(CVIARCH_L)_audio-objs += ./src/cviaudio_interface.o
+#$(ARCH_L)_audio-objs += ./src/audio_interface.o
 
-#$(CVIARCH_L)_audio-objs += /common/cviaudio_core.o
-#$(CVIARCH_L)_audio-objs += /src/cviaudio_interface.o
+#$(ARCH_L)_audio-objs += /common/audio_core.o
+#$(ARCH_L)_audio-objs += /src/audio_interface.o
 
-$(CVIARCH_L)_audio_core-objs :=	common/cviaudio_core.o				\
-			src/cviaudio_interface_dev.o			\
-			src/cvi_pcm.o
+$(ARCH_L)_audio_core-objs :=	common/audio_core.o				\
+			src/audio_interface_dev.o			\
+			src/pcm.o
 
-cviaudio_driver_header := -I$(PWD)/		\
+audio_driver_header := -I$(PWD)/		\
 				-I$(PWD)/include/	\
 				-I$(PWD)/common/	\
 				-I$(PWD)/src/		\
 				-I$(srctree)/drivers/staging/android/	\
 				-I$(PWD)/../include/common/uapi/linux/	\
 				-I$(PWD)/../include/common/kapi/	\
-				-I$(PWD)/../include/chip/$(CVIARCH_L)/uapi/	\
+				-I$(PWD)/../include/chip/$(ARCH_L)/uapi/	\
 				-I$(PWD)/../include/common/uapi/	\
 				-I$(PWD)/../sys/common/uapi/	\
 				-I$(PWD)/../base/	\
-				-I$(PWD)/../rtos_cmdqu/
+				-I$(PWD)/../rtos_cmdqu/ \
+				-I$(PWD)/../include/chip/soph/uapi/
 
 
-ccflags-y += $(PWD) -I$(LDDINCDIR) $(cviaudio_driver_header) -DAUDIO_DRV -Wno-date-time
+ccflags-y += $(PWD) -I$(LDDINCDIR) $(audio_driver_header) -DAUDIO_DRV -Wno-date-time
 ifeq ($(CONFIG_SDK_VER), "32bit")
 ccflags-y += -DCONFIG_SDK_VER_32BIT
 endif
@@ -35,8 +36,8 @@ endif
 ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
 
 #PWD	:= $(shell pwd)
-obj-m = $(CVIARCH_L)_audio_core.o
-$(CVIARCH_L)_audio_core-y = $($(CVIARCH_L)_audio_core-objs)
+obj-m = $(ARCH_L)_audio_core.o
+$(ARCH_L)_audio_core-y = $($(ARCH_L)_audio_core-objs)
 KBUILD_EXTRA_SYMBOLS = $(PWD)/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../base/Module.symvers

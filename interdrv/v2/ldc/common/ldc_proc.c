@@ -97,8 +97,9 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 
 	// recent job info
 	seq_puts(m, "\n------------------------------------------------------------RECENT JOB INFO--------------------------------------------------------\n");
-	seq_printf(m, "%10s%15s%20s%15s%15s%15s%15s%15s\n",
-		"SeqNo", "Modname", "jobname", "sync_io", "id", "TaskNum", "State", "CostTime(us)");
+	seq_printf(m, "%10s%15s%20s%15s%15s%15s%15s%15s%15s\n",
+		"SeqNo", "Modname", "jobname", "sync_io", "id", "TaskNum", "State", "CostTime(us)", "CoreID");
+	seq_puts(m, "\n-----------------------------------------------------------------------------------------------------------------------------------\n");
 
 	for (i = 0 ; i < LDC_PROC_JOB_INFO_NUM; ++i) {
 		if (!pldcCtx->job_info[idx].handle)
@@ -117,7 +118,7 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 		else
 			strncpy(c, "UNKNOWN", sizeof(c));
 
-		seq_printf(m, "%9s%d%15s%20s%15d%15d%15d%15s%15d\n",
+		seq_printf(m, "%9s%d%15s%20s%15d%15d%15d%15s%15d%15d\n",
 			"#",
 			i,
 			(pldcCtx->job_info[idx].identity.mod_id == ID_BUTT) ?
@@ -127,8 +128,8 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 			pldcCtx->job_info[idx].identity.id,
 			pldcCtx->job_info[idx].task_num,
 			c,
-			pldcCtx->job_info[idx].cost_time);
-
+			pldcCtx->job_info[idx].cost_time,
+			pldcCtx->job_info[idx].core_id);
 		ldc_proc_show_tsk(m, pldcCtx, idx);
 
 		idx = (--idx < 0) ? (LDC_PROC_JOB_INFO_NUM - 1) : idx;
@@ -258,30 +259,19 @@ static const struct file_operations ldc_proc_fops = {
 };
 #endif
 
-static int ldc_handle_to_procIdx(bool is_end, struct ldc_job *job)
+static int ldc_handle_to_procIdx(struct ldc_job *job)
 {
 	int idx = -1;
-	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
 	unsigned long flags;
 
-	if (proc_ctx && job) {
-		spin_lock_irqsave(&proc_ctx->lock, flags);
-		for (idx = 0; idx < LDC_PROC_JOB_INFO_NUM; ++idx) {
-			if (proc_ctx->job_info[idx].handle == (u64)(uintptr_t)job) {
-				if (is_end && proc_ctx->job_info[idx].state == LDC_JOB_WORKING)
-					break;
-				if (!is_end && proc_ctx->job_info[idx].state == LDC_JOB_WAIT)
-					break;
-			}
-		}
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
-
-		if (idx >= LDC_PROC_JOB_INFO_NUM) {
-			TRACE_LDC(DBG_NOTICE, "(%d)canot find match job(%px) from proc_ctx,idx out of range\n"
-				, idx, job);
-			idx = -1;
-		}
+	if (!job) {
+		TRACE_LDC(DBG_ERR, "null job\n");
+		return idx;
 	}
+
+	spin_lock_irqsave(&job->lock, flags);
+	idx = job->proc_idx;
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	return idx;
 }
@@ -317,14 +307,12 @@ void ldc_proc_record_hw_tsk_start(struct ldc_job *job, struct ldc_task *tsk, uns
 	int idx;
 	struct timespec64 curTime;
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
-	unsigned long flags;
 
-	idx = ldc_handle_to_procIdx(true, job);
+	idx = ldc_handle_to_procIdx(job);
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < LDC_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time =
 			(u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = LDC_TASK_STATE_RUNNING;
@@ -333,7 +321,6 @@ void ldc_proc_record_hw_tsk_start(struct ldc_job *job, struct ldc_task *tsk, uns
 		proc_ctx->tsk_status.procing_num++;
 		proc_ctx->tsk_status.wait_num =
 			proc_ctx->tsk_status.begin_num - proc_ctx->tsk_status.procing_num;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_LDC(DBG_NOTICE, "job or tsk or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -345,17 +332,15 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 	unsigned long long end_time;
 	struct timespec64 curTime;
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
-	unsigned long flags;
 	enum ldc_task_state state;
 
-	idx = ldc_handle_to_procIdx(true, job);
+	idx = ldc_handle_to_procIdx(job);
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < LDC_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
 		end_time = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 		state = atomic_read(&tsk->state);
-
-		spin_lock_irqsave(&proc_ctx->lock, flags);
+		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time =
 			(u32)(end_time - proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time);
 
@@ -367,9 +352,6 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 			proc_ctx->tsk_status.fail++;
 		else
 			TRACE_LDC(DBG_ERR, "invalid tsk id(%d) state (%d).\n", tsk->tsk_id, state);
-
-		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_LDC(DBG_NOTICE, "job or tsk or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -381,22 +363,19 @@ void ldc_proc_record_job_start(struct ldc_job *job)
 	struct timespec64 curTime;
 	unsigned long long curTimeUs;
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
-	unsigned long flags;
 
-	idx = ldc_handle_to_procIdx(false, job);
+	idx = ldc_handle_to_procIdx(job);
 
 	if (job && proc_ctx && idx >= 0 && idx < LDC_PROC_JOB_INFO_NUM) {
 		ktime_get_ts64(&curTime);
 		curTimeUs = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_info[idx].busy_time =
 			(u32)(curTimeUs - proc_ctx->job_info[idx].submit_time);
 		proc_ctx->job_status.procing_num++;
 		proc_ctx->job_status.wait_num =
 			proc_ctx->job_status.begin_num - proc_ctx->job_status.procing_num;
 		proc_ctx->job_info[idx].state = LDC_JOB_WORKING;
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	} else {
 		TRACE_LDC(DBG_NOTICE, "job or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -408,17 +387,15 @@ void ldc_proc_record_job_done(struct ldc_job *job)
 	struct timespec64 curTime;
 	unsigned long long curTimeUs;
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
-	unsigned long flags;
 	enum ldc_job_state state;
 
-	idx = ldc_handle_to_procIdx(true, job);
+	idx = ldc_handle_to_procIdx(job);
 
 	if (job && proc_ctx && idx >= 0) {
 		ktime_get_ts64(&curTime);
 		curTimeUs = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 		state = atomic_read(&job->job_state);
 
-		spin_lock_irqsave(&proc_ctx->lock, flags);
 		if (state == LDC_JOB_END)
 			proc_ctx->job_status.success++;
 		else if (state == LDC_JOB_CANCLE)
@@ -431,7 +408,7 @@ void ldc_proc_record_job_done(struct ldc_job *job)
 		proc_ctx->job_info[idx].state = state;
 		proc_ctx->job_info[idx].cost_time =
 			(u32)(curTimeUs - proc_ctx->job_info[idx].submit_time);
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
+		proc_ctx->job_info[idx].core_id = job->coreid;
 	} else {
 		TRACE_LDC(DBG_NOTICE, "job or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
@@ -439,23 +416,41 @@ void ldc_proc_record_job_done(struct ldc_job *job)
 
 void ldc_proc_commit_job(struct ldc_job *job)
 {
-	unsigned short u16Idx, i = 0;
-	struct ldc_task *curelm, *tmp;
+	unsigned short u16Idx, i;
+	struct ldc_task *curelm;
 	struct timespec64 curTime;
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
 	unsigned long flags;
+	int tsk_num;
 
 	if (job && proc_ctx) {
+		tsk_num = atomic_read(&job->task_num);
 		spin_lock_irqsave(&proc_ctx->lock, flags);
 		proc_ctx->job_idx = (proc_ctx->job_idx >= LDC_PROC_JOB_INFO_NUM) ?
 			0 : proc_ctx->job_idx;
 		u16Idx = proc_ctx->job_idx;
+		proc_ctx->job_idx++;
+		spin_unlock_irqrestore(&proc_ctx->lock, flags);
+
+		spin_lock_irqsave(&job->lock, flags);
+		job->proc_idx = u16Idx;
+		spin_unlock_irqrestore(&job->lock, flags);
+
+		TRACE_LDC(DBG_INFO, "proc ctx idx (%d)\n", u16Idx);
 
 		memset(&proc_ctx->job_info[u16Idx], 0, sizeof(proc_ctx->job_info[u16Idx]));
 		proc_ctx->job_info[u16Idx].handle = (u64)(uintptr_t)job;
 		memcpy(&proc_ctx->job_info[u16Idx].identity, &job->identity, sizeof(job->identity));
 
-		list_for_each_entry_safe(curelm, tmp, &job->task_list, node) {
+		for (i = 0; i < tsk_num; i++) {
+			spin_lock_irqsave(&job->lock, flags);
+			curelm = list_first_entry_or_null(&job->task_list, struct ldc_task, node);
+			spin_unlock_irqrestore(&job->lock, flags);
+
+			if (unlikely(!curelm)) {
+				TRACE_LDC(DBG_ERR, "task index %d invalid\n", i);
+				return;
+			}
 			proc_ctx->job_info[u16Idx].task_num++;
 			proc_ctx->job_info[u16Idx].tsk_info[i].in_size =
 				curelm->attr.img_in.video_frame.width *
@@ -465,18 +460,15 @@ void ldc_proc_commit_job(struct ldc_job *job)
 				curelm->attr.img_out.video_frame.height;
 			proc_ctx->job_info[u16Idx].tsk_info[i].state = LDC_TASK_STATE_WAIT;
 			proc_ctx->job_info[u16Idx].tsk_info[i].type = curelm->type;
-			i++;
 			proc_ctx->tsk_status.begin_num++;
 		}
 
 		proc_ctx->job_info[u16Idx].state = LDC_JOB_WAIT;
 		proc_ctx->job_status.begin_num++;
-		proc_ctx->job_idx++;
 
 		ktime_get_ts64(&curTime);
 		proc_ctx->job_info[u16Idx].submit_time =
 			(u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
-		spin_unlock_irqrestore(&proc_ctx->lock, flags);
 	}else {
 		TRACE_LDC(DBG_NOTICE, "job or proc_ctx invalid.\n");
 	}

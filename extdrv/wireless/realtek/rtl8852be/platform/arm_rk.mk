@@ -33,6 +33,6 @@ EXTRA_CFLAGS += -DCONFIG_RTW_EVENT_HDL_USE_WQ
 endif
 
 ifeq ($(CONFIG_SDIO_HCI), y)
-_PLATFORM_FILES = platform/platform_ARM_RK_sdio.c
+_PLATFORM_FILES = platform/platform_ARM_RK_sdio.o
 endif
 endif

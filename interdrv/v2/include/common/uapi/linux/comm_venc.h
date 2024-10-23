@@ -84,6 +84,7 @@ typedef enum {
 	DRV_ERR_VENC_H265_SAO,
 	DRV_ERR_VENC_H265_PRED_UNIT,
 	DRV_ERR_VENC_SEARCH_WINDOW,
+	DRV_ERR_VENC_SET_EXTERN_BUF,
 	DRV_ERR_VENC_BUTT
 } venc_recode_e_errtype;
 
@@ -1116,6 +1117,9 @@ typedef struct _venc_initial_info_s {
 
     /* Caller must register at least this many framebuffers for source(GOP) */
     unsigned int min_num_src_fb;
+
+    /* (option) Caller can alloc extern buf as bitstream buffer */
+     unsigned int min_bs_buf_size;
 } venc_initial_info_s;
 
 typedef struct _venc_encode_header_s {
@@ -1135,6 +1139,15 @@ typedef struct _venc_search_window_s {
     unsigned int u32Ver;
 } venc_search_window_s;
 
+typedef struct _venc_extern_buf {
+    unsigned int bs_buf_size;
+    uint64_t bs_phys_addr;
+} venc_extern_buf_s;
+
+typedef struct _venc_phys_buf {
+    unsigned int size;
+    unsigned long phys_addr;
+} venc_phys_buf_s;
 
 #ifdef __cplusplus
 #if __cplusplus

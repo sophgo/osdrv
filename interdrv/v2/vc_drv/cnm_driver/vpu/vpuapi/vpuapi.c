@@ -146,11 +146,17 @@ int VPU_GetProductId(int coreIdx)
         return productId;
     }
 
+    mutex_lock(&__vdi_init_mutex);
     if (vdi_init(coreIdx) < 0) {
+        mutex_unlock(&__vdi_init_mutex);
         return -1;
     }
+    mutex_unlock(&__vdi_init_mutex);
 
     if (EnterLock(coreIdx) != RETCODE_SUCCESS) {
+        mutex_lock(&__vdi_init_mutex);
+        vdi_release(coreIdx);
+        mutex_unlock(&__vdi_init_mutex);
         return -1;
     }
 
@@ -160,10 +166,9 @@ int VPU_GetProductId(int coreIdx)
         productId = ProductVpuGetId(coreIdx);
     LeaveLock((coreIdx));
 
-#ifdef HAPS100
-#else
+    mutex_lock(&__vdi_init_mutex);
     vdi_release(coreIdx);
-#endif
+    mutex_unlock(&__vdi_init_mutex);
     return productId;
 }
 
@@ -282,6 +287,7 @@ RetCode VPU_DeInit(Uint32 coreIdx)
     if (ret != 0)
         return RETCODE_FAILURE;
 
+    vpu_free_extern_buffers(coreIdx);
     return RETCODE_SUCCESS;
 }
 
@@ -352,14 +358,20 @@ RetCode VPU_DecOpen(DecHandle* pHandle, DecOpenParam* pop)
     RetCode     ret;
     VpuAttr*    pAttr;
 
-    ret = ProductVpuDecCheckOpenParam(pop);
-    if (ret != RETCODE_SUCCESS) {
-        VLOG(ERR, "Invalid open param, ret:%d\n", ret);
-        return ret;
+    if (pop == NULL) {
+        VLOG(ERR, "param ptr is null\n");
+        return RETCODE_INVALID_PARAM;
     }
 
     if (EnterLock(pop->coreIdx) != RETCODE_SUCCESS) {
         return RETCODE_FAILURE;
+    }
+
+    ret = ProductVpuDecCheckOpenParam(pop);
+    if (ret != RETCODE_SUCCESS) {
+        VLOG(ERR, "Invalid open param, ret:%d\n", ret);
+        LeaveLock(pop->coreIdx);
+        return ret;
     }
 
     if (ProductVpuIsInit(pop->coreIdx) == 0) {
@@ -540,10 +552,14 @@ RetCode VPU_DecClose(DecHandle handle)
     for ( i=0 ; i<MAX_REG_FRAME; i++) {
         if (pDecInfo->vbMV[i].size)
             vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbMV[i], DEC_MV, pCodecInst->instIndex);
-        if (pDecInfo->vbFbcYTbl[i].size)
+        if (pDecInfo->vbFbcYTbl[i].size && pDecInfo->frameBufFlag == 0)
             vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcYTbl[i], DEC_FBCY_TBL, pCodecInst->instIndex);
-        if (pDecInfo->vbFbcCTbl[i].size)
+        else if (pDecInfo->frameBufFlag == 1)
+            vdi_dettach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcYTbl[i]);
+        if (pDecInfo->vbFbcCTbl[i].size && pDecInfo->frameBufFlag == 0)
             vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcCTbl[i], DEC_FBCC_TBL, pCodecInst->instIndex);
+        else if (pDecInfo->frameBufFlag == 1)
+            vdi_dettach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcCTbl[i]);
     }
     if (pDecInfo->vbDefCdf.size)
         vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbDefCdf, DEC_DEF_CDF, pCodecInst->instIndex);
@@ -2013,11 +2029,15 @@ RetCode VPU_DecGiveCommand(DecHandle handle, CodecCommand cmd, void* param)
                     vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFrame, DEC_ETC, pCodecInst->instIndex);
             }
             for (i=0  ; i<MAX_REG_FRAME; i++) {
-                if (pDecInfo->vbFbcYTbl[i].size)
+                if (pDecInfo->vbFbcYTbl[i].size && pDecInfo->frameBufFlag == 0)
                     vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcYTbl[i], DEC_FBCY_TBL, pCodecInst->instIndex);
+                else if (pDecInfo->frameBufFlag == 1)
+                    vdi_dettach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcYTbl[i]);
 
-                if (pDecInfo->vbFbcCTbl[i].size)
+                if (pDecInfo->vbFbcCTbl[i].size && pDecInfo->frameBufFlag == 0)
                     vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcCTbl[i], DEC_FBCC_TBL, pCodecInst->instIndex);
+                else if (pDecInfo->frameBufFlag == 1)
+                    vdi_dettach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbFbcCTbl[i]);
 
                 if (pDecInfo->vbMV[i].size)
                     vdi_free_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbMV[i], DEC_MV, pCodecInst->instIndex);
@@ -2376,11 +2396,18 @@ RetCode VPU_EncOpen(EncHandle* pHandle, EncOpenParam * pop)
     RetCode     ret;
     VpuAttr*    pAttr;
 
-    if ((ret=ProductVpuEncCheckOpenParam(pop)) != RETCODE_SUCCESS)
-        return ret;
+    if (pop == NULL) {
+        VLOG(ERR, "param ptr is null\n");
+        return RETCODE_INVALID_PARAM;
+    }
 
     if (EnterLock(pop->coreIdx) != RETCODE_SUCCESS) {
         return RETCODE_FAILURE;
+    }
+
+    if ((ret=ProductVpuEncCheckOpenParam(pop)) != RETCODE_SUCCESS) {
+        LeaveLock(pop->coreIdx);
+        return ret;
     }
 
     if (ProductVpuIsInit(pop->coreIdx) == 0) {

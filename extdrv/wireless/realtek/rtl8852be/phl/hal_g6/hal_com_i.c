@@ -188,6 +188,25 @@ void rtw_hal_get_fw_ver(void *hal, char *ver_str, u16 len)
 }
 
 enum rtw_hal_status
+rtw_hal_antdiv_fix_ant(void *hal, u8 antIndex)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct rtw_hal_com_t *hal_com = hal_info->hal_com;
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
+
+	hal_status = rtw_hal_bb_antdiv_fix_ant(hal_com, antIndex);
+	return hal_status;
+}
+
+enum rf_path rtw_hal_get_path_from_ant_num(void *hal, u8 antnum)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct hal_ops_t *hal_ops = hal_get_ops(hal_info);
+
+	return hal_ops->get_path_from_ant_num(antnum);
+}
+
+enum rtw_hal_status
 rtw_hal_set_mu_edca(void *hal, u8 band, u8 ac,
 	u16 timer, u8 cw_min, u8 cw_max, u8 aifsn)
 {
@@ -416,15 +435,6 @@ rtw_hal_init_hw_band_info(void *hal, enum phl_band_idx band_idx)
 			0, sizeof(struct rtw_hw_band));
 	rtw_phl_init_chdef(hal_i->phl_com, &hw_band_i->cur_chandef);
 }
-
-void rtw_hal_get_mac_sel_tx_status(void *hal, enum phl_band_idx bidx, void *out_tx_cnt)
-{
-	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
-
-	rtw_hal_mac_get_sel_tx_cnt(hal_info, bidx, out_tx_cnt);
-
-}
-
 #ifdef DBG_DUMP_TX_COUNTER
 void rtw_hal_dump_tx_status(void *hal, enum phl_band_idx bidx)
 {

@@ -21,7 +21,6 @@
 		MOD(RTOS_CMDQU)	\
 		MOD(DPU)	\
 		MOD(STITCH)	\
-		MOD(DWA)	\
 		MOD(BMTPU)	\
 		MOD(HDMI)	\
 		MOD(BUTT)	\

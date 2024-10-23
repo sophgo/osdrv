@@ -5,6 +5,7 @@
 
 #include "vc_drv.h"
 #include "h265_interface.h"
+#include "jpuconfig.h"
 
 unsigned int VENC_LOG_LV = 1;
 
@@ -101,7 +102,8 @@ int vpu_drv_resume(struct platform_device *pdev);
 int jpeg_drv_suspend(struct platform_device *pdev, pm_message_t state);
 int jpeg_drv_resume(struct platform_device *pdev);
 #endif
-
+void jpu_clk_disable(int core_idx);
+void jpu_clk_enable(int core_idx);
 static int _vc_drv_open(struct inode *inode, struct file *filp);
 static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg);
 #ifdef ENABLE_DEC
@@ -219,9 +221,13 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
         }
     }
 
-    if (minor < 0 || minor > VENC_MAX_CHN_NUM) {
-        pr_err("invalid enc channel index %d.\n", minor);
-        return -1;
+    if (cmd != DRV_VC_VENC_ALLOC_PHYSICAL_MEMORY && cmd != DRV_VC_VENC_FREE_PHYSICAL_MEMORY) {
+        if ((minor < 0 || minor > VENC_MAX_CHN_NUM)) {
+            pr_err("invalid enc channel index %d.\n", minor);
+            return -1;
+        }
+    } else {
+        minor = 0;
     }
 
     if (down_interruptible(&vencSemArry[minor])) {
@@ -232,6 +238,10 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
     case DRV_VC_VENC_CREATE_CHN: {
         venc_chn_attr_s stChnAttr;
 
+        if (pstChnInfo->is_channel_exist) {
+            s32Ret = DRV_ERR_VENC_EXIST;
+            break;
+        }
         if (copy_from_user(&stChnAttr, (venc_chn_attr_s *)arg,
                    sizeof(venc_chn_attr_s)) != 0) {
             break;
@@ -1331,8 +1341,64 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
             s32Ret = -1;
         }
     } break;
+    case DRV_VC_VENC_SET_EXTERN_BUF: {
+        venc_extern_buf_s stExternBuf;
 
+        if (copy_from_user(&stExternBuf,
+                   (venc_extern_buf_s *)arg,
+                   sizeof(venc_extern_buf_s)) != 0) {
+            break;
+        }
 
+        s32Ret = drv_venc_set_extern_buf(minor, &stExternBuf);
+        if (s32Ret != 0) {
+            pr_err("drv_venc_set_search_window with %d\n", s32Ret);
+        }
+    } break;
+    case DRV_VC_VENC_ALLOC_PHYSICAL_MEMORY: {
+        venc_phys_buf_s phys_buf;
+        vpudrv_buffer_t vdb;
+
+        if (copy_from_user(&phys_buf, (venc_phys_buf_s *)arg,
+                   sizeof(venc_phys_buf_s)) != 0) {
+            break;
+        }
+
+        osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
+        vdb.core_idx = 0;
+        vdb.size = phys_buf.size;
+
+        s32Ret = vpu_allocate_extern_memory(&vdb);
+        if (s32Ret != 0) {
+            pr_err("drv_venc_alloc_phys_buf with %d\n", s32Ret);
+        }
+
+        phys_buf.phys_addr = vdb.phys_addr;
+        phys_buf.size = vdb.size;
+        if (copy_to_user((venc_phys_buf_s *)arg, &phys_buf,
+                 sizeof(venc_phys_buf_s)) != 0) {
+            s32Ret = -1;
+        }
+    } break;
+    case DRV_VC_VENC_FREE_PHYSICAL_MEMORY: {
+        vpudrv_buffer_t vdb;
+        venc_phys_buf_s phys_buf;
+
+        if (copy_from_user(&phys_buf,
+                   (venc_phys_buf_s *)arg,
+                   sizeof(venc_phys_buf_s)) != 0) {
+            break;
+        }
+
+        osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
+        vdb.size = phys_buf.size;
+        vdb.phys_addr = phys_buf.phys_addr;
+        vdb.base = phys_buf.phys_addr;
+        vdb.core_idx = 0;
+
+        vpu_free_extern_memory(&vdb);
+        s32Ret = 0;
+    } break;
 #ifdef VC_DRIVER_TEST
     case DRV_VC_VENC_ENC_JPEG_TEST: {
         s32Ret = jpeg_enc_test(arg);
@@ -1422,20 +1488,169 @@ static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
     switch (cmd) {
     case DRV_VC_VDEC_CREATE_CHN: {
         vdec_chn_attr_s stChnAttr;
+        buffer_info_s* bitstream_buffer = NULL;
+	    buffer_info_s* frame_buffer = NULL;
+	    buffer_info_s* Ytable_buffer = NULL;
+	    buffer_info_s* Ctable_buffer = NULL;
 
         if (copy_from_user(&stChnAttr, (vdec_chn_attr_s *)arg,
                    sizeof(vdec_chn_attr_s)) != 0) {
             break;
         }
 
+        if (pstChnInfo->is_channel_exist) {
+            s32Ret = DRV_ERR_VDEC_EXIST;
+            break;
+        }
+        if (stChnAttr.stBufferInfo.bitstream_buffer != NULL) {
+            if(stChnAttr.enType == PT_JPEG || stChnAttr.enType == PT_MJPEG ||
+                stChnAttr.enMode == VIDEO_MODE_STREAM) {
+                bitstream_buffer = vmalloc(sizeof(buffer_info_s));
+                if(bitstream_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    break;
+                }
+
+                if(copy_from_user(bitstream_buffer, stChnAttr.stBufferInfo.bitstream_buffer,
+                    sizeof(buffer_info_s)) != 0) {
+                    vfree(bitstream_buffer);
+                    break;
+                }
+            } else {
+                bitstream_buffer = vmalloc(sizeof(buffer_info_s) * stChnAttr.u8CommandQueueDepth);
+                if(bitstream_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    break;
+                }
+
+                if(copy_from_user(bitstream_buffer, stChnAttr.stBufferInfo.bitstream_buffer,
+                   sizeof(buffer_info_s) * stChnAttr.u8CommandQueueDepth) != 0) {
+                    vfree(bitstream_buffer);
+                    break;
+                }
+            }
+        }
+
+        if (stChnAttr.stBufferInfo.frame_buffer != NULL) {
+            if(stChnAttr.enType == PT_JPEG || stChnAttr.enType == PT_MJPEG) {
+                frame_buffer = vmalloc(sizeof(buffer_info_s));
+                if (frame_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    break;
+                }
+
+                if (copy_from_user(frame_buffer, stChnAttr.stBufferInfo.frame_buffer,
+                    sizeof(buffer_info_s)) != 0) {
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    break;
+                }
+            } else if(stChnAttr.enType == PT_H264 || stChnAttr.enType == PT_H265) {
+                if(stChnAttr.stBufferInfo.Ytable_buffer == NULL &&
+                    stChnAttr.stBufferInfo.Ctable_buffer == NULL) {
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    s32Ret = DRV_ERR_VDEC_NOBUF;
+                    break;
+                }
+
+                frame_buffer = vmalloc(sizeof(buffer_info_s) *
+                    (stChnAttr.stBufferInfo.numOfDecFbc + stChnAttr.stBufferInfo.numOfDecwtl));
+                if (frame_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    break;
+                }
+
+                Ytable_buffer = vmalloc(sizeof(buffer_info_s) * stChnAttr.stBufferInfo.numOfDecFbc);
+                if (Ytable_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    break;
+                }
+
+                Ctable_buffer = vmalloc(sizeof(buffer_info_s) * stChnAttr.stBufferInfo.numOfDecFbc);
+                if (Ctable_buffer == NULL) {
+                    s32Ret = DRV_ERR_VDEC_NOMEM;
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    vfree(Ytable_buffer);
+                    break;
+                }
+
+                if (copy_from_user(frame_buffer, stChnAttr.stBufferInfo.frame_buffer, sizeof(buffer_info_s) *
+                    (stChnAttr.stBufferInfo.numOfDecFbc + stChnAttr.stBufferInfo.numOfDecwtl)) != 0) {
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    vfree(Ytable_buffer);
+                    vfree(Ctable_buffer);
+                    break;
+                }
+
+                if (copy_from_user(Ytable_buffer, stChnAttr.stBufferInfo.Ytable_buffer,
+                    sizeof(buffer_info_s) * stChnAttr.stBufferInfo.numOfDecFbc) != 0) {
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    vfree(Ytable_buffer);
+                    vfree(Ctable_buffer);
+                    break;
+                }
+
+                if (copy_from_user(Ctable_buffer, stChnAttr.stBufferInfo.Ctable_buffer,
+                    sizeof(buffer_info_s) * stChnAttr.stBufferInfo.numOfDecFbc) != 0) {
+                    if(bitstream_buffer) {
+                        vfree(bitstream_buffer);
+                    }
+                    vfree(frame_buffer);
+                    vfree(Ytable_buffer);
+                    vfree(Ctable_buffer);
+                    break;
+                }
+            }
+        }
+
+        stChnAttr.stBufferInfo.bitstream_buffer = bitstream_buffer;
+        stChnAttr.stBufferInfo.frame_buffer = frame_buffer;
+        stChnAttr.stBufferInfo.Ytable_buffer = Ytable_buffer;
+        stChnAttr.stBufferInfo.Ctable_buffer = Ctable_buffer;
         s32Ret = drv_vdec_create_chn(minor, &stChnAttr);
         if (s32Ret != 0) {
             pr_err("drv_vdec_create_chn with %d\n", s32Ret);
         } else if (pstChnInfo){
             pstChnInfo->is_channel_exist = true;
         }
+
+        if(bitstream_buffer) {
+            vfree(bitstream_buffer);
+        }
+        if(frame_buffer) {
+            vfree(frame_buffer);
+            vfree(Ytable_buffer);
+            vfree(Ctable_buffer);
+        }
     } break;
     case DRV_VC_VDEC_DESTROY_CHN: {
+        if (!pstChnInfo->is_channel_exist) {
+            s32Ret = DRV_ERR_VDEC_UNEXIST;
+            break;
+        }
         s32Ret = drv_vdec_destroy_chn(minor);
         if (s32Ret != 0) {
             pr_err("drv_vdec_destroy_chn with %d\n", s32Ret);
@@ -1694,7 +1909,7 @@ static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
 
         s32Ret = drv_vdec_frame_buffer_add_user(minor, &stFrameInfo);
 
-    }
+    } break;
 
     case DRV_VC_VDEC_SET_STRIDE_ALIGN: {
         unsigned int align;
@@ -2035,6 +2250,7 @@ static struct platform_driver vc_plat_driver = {
 static int __init _vc_drv_init(void)
 {
     int ret = 0;
+    int core;
     struct vc_drv_device *vdev;
 
     vdev = vzalloc( sizeof(*vdev));
@@ -2054,7 +2270,14 @@ static int __init _vc_drv_init(void)
     pVcDrvDevice = vdev;
 
     ret = platform_driver_register(&vc_plat_driver);
-
+    for (core = 0; core < MAX_NUM_VPU_CORE; core++) {
+        vpu_clk_enable(core);
+        vpu_clk_disable(core);
+    }
+    for (core = 0; core < MAX_NUM_JPU_CORE; core++) {
+        jpu_clk_enable(core);
+        jpu_clk_disable(core);
+    }
     pr_info("_vc_drv_init result = 0x%x\n", ret);
 
     return ret;

@@ -520,7 +520,7 @@ struct _isp_dg_info {
 	u8			bdg_w_ls_cnt[ISP_FE_CHN_MAX];
 	u8			bdg_h_gt_cnt[ISP_FE_CHN_MAX];
 	u8			bdg_h_ls_cnt[ISP_FE_CHN_MAX];
-};	
+};
 
 struct isp_grid_s_info {
 	u8 w_bit;
@@ -768,10 +768,11 @@ void ispblk_rgbmap_dma_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num, int
 void ispblk_rgbmap_dma_mode(struct isp_ctx *ctx, u32 dmaid);
 u64 ispblk_dma_getaddr(struct isp_ctx *ctx, u32 dmaid);
 int ispblk_dma_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num, int dmaid, u64 buf_addr);
-void ispblk_dma_setaddr(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr);
-void ispblk_dma_enable(struct isp_ctx *ctx, u32 dmaid, u32 on, u8 dma_disable);
+void ispblk_dma_setaddr(struct isp_ctx *ctx, enum sop_isp_raw raw_num, u32 dmaid, u64 buf_addr);
+void ispblk_dma_enable(struct isp_ctx *ctx, u32 dmaid, u32 on, uint8_t dma_disable);
 int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num, int dmaid);
 void ispblk_dma_set_sw_mode(struct isp_ctx *ctx, u32 dmaid, bool is_sw_mode);
+bool ispblk_dma_get_sw_mode(struct isp_ctx *ctx, u32 dmaid);
 
 /****************************************************************************
  *	PRERAW FE SUBSYS
@@ -998,7 +999,7 @@ void ispblk_bnr_tun_cfg(
 	struct isp_ctx *ctx,
 	struct sop_vip_isp_bnr_config *cfg,
 	const enum sop_isp_raw raw_num);
-void ispblk_clut_tun_cfg(
+int ispblk_clut_tun_cfg(
 	struct isp_ctx *ctx,
 	struct sop_vip_isp_clut_config *cfg,
 	const enum sop_isp_raw raw_num);

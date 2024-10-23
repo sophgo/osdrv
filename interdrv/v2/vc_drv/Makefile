@@ -156,7 +156,6 @@ clean:
 	rm -rf cnm_driver/jpeg/jdi/linux/driver/.*.o*
 	rm -rf cnm_driver/jpeg/sample/.*.o.cmd
 	rm -rf cnm_driver/jpeg/sample/helper/.*.o.cmd
-	rm -rf cnm_driver/jpeg/jpeg_interface/src/.*.o.cmd
 	rm -rf .*.o.d
 	rm -rf $(MODULE_OBJS) $(VPU_OBJS) $(JPU_OBJS)
 

@@ -530,6 +530,13 @@ Frame buffer endianess
     BOOL            sliceInstMode;
     Uint32          rotation;            /**< It rotates source images in 0, 90, 180, or 270 degree before encoding. */
     Uint32          mirror;              /**< <<jpuapi_h_JpgMirrorDirection>> */
+
+    /* mjpeg rc param */
+    Uint32          quality;             /**< for mjpeg rate control. */
+    Uint32          bitrate;             /**< for mjpeg rate control. */
+    Uint32          framerate;           /**< for mjpeg rate control. */
+    Uint32          qfactor_min;          /**< for mjpeg rate control. */
+    Uint32          qfactor_max;          /**< for mjpeg rate control. */
 } JpgEncOpenParam;
 
 

@@ -58,14 +58,14 @@ SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
-	KO_LIST += vi snsr_i2c cif vpss ldc dwa vo mipi_tx rgn ive 2d_engine dpu stitch spacc
+	KO_LIST += vi snsr_i2c cif vpss ldc vo mipi_tx rgn ive 2d_engine dpu stitch spacc
 	FB_DEP = vpss vo
 ifneq (${CONFIG_BOARD}, "fpga")
 	KO_LIST += hdmi
 endif
 
 else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
-	KO_LIST += vi snsr_i2c cif vpss dwa rgn audio
+	KO_LIST += vi snsr_i2c cif vpss rgn audio
 	FB_DEP = vpss
 endif
 
@@ -178,9 +178,6 @@ vpss: base
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 ldc: base
-	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
-
-dwa: base
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 rgn: base vpss

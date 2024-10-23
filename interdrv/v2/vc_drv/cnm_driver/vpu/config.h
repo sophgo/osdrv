@@ -131,7 +131,7 @@
 
 // #define SUPPORT_SAMPLE_ENC_DOLBY_SEI
 
-
+#define ENABLE_HOST_RC
 
 #endif /* __CONFIG_H__ */
 

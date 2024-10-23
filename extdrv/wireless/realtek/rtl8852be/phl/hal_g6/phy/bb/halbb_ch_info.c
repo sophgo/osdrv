@@ -148,8 +148,8 @@ void halbb_ch_info_print(struct bb_info *bb, char input[][16], u32 *_used,
 	struct bb_ch_info_raw_info *buf = &ch_rpt->bb_ch_info_raw_i;
 	u16 *rpt_tmp_16 = NULL;
 	u8 *rpt_tmp_8 = NULL;
-	u16 tone_num = 0;
-	u8 i, j, k;
+	u16 i, tone_num = 0;
+	u8 j, k;
 	u32 rpt_idx = 0;
 	#if defined(BB_8852A_2_SUPPORT)
 	u16 shift_tone = 0;
@@ -1420,9 +1420,9 @@ bool halbb_ch_info_calc_pertone_snr(struct bb_info *bb, u8 snrvalue, u16 *addr, 
 	struct bb_ch_info_snr_bin_info *snr = &ch_rpt->bb_ch_info_snr_bin_i;
 	s16 *rpt_tmp_16 = NULL;
 	s8 *rpt_tmp_8 = NULL;
-	u32 rpt_idx = 0;
+	u32 i, rpt_idx = 0;
 	u32 calc_tone_num = 0, per_bin_tone_num = 0, bin_num_index = 0;
-	u8 i, j, k;
+	u8 j, k;
 	u16 tmp, re_pwr, im_pwr, re_tmp, im_tmp;
 	u32 csi_percent ,csi_tmp_numerator, csi_tmp_denominator;
 	u64 tmplinear;

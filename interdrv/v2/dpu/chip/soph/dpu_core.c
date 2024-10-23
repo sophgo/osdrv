@@ -37,7 +37,7 @@ static const char *const CLK_DPU_NAME = "clk_dpu";
 
 module_param(dpu_log_lv, int, 0644);
 module_param(hw_wait_time, int, 0644);
-
+extern bool __clk_is_enabled(struct clk *clk);
 int dpu_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	return 0;
@@ -443,7 +443,7 @@ static int dpu_suspend(struct device *dev)
 	mutex_lock(&wdev->suspend_lock);
 	wdev->bsuspend =TRUE;
 	mutex_unlock(&wdev->suspend_lock);
-	if(wdev->clk_sys[1])
+	if(wdev->clk_sys[1] && __clk_is_enabled(wdev->clk_sys[1]))
 		clk_disable_unprepare(wdev->clk_sys[1]);
 
 
@@ -456,7 +456,7 @@ static int dpu_resume(struct device *dev)
 	struct dpu_dev_s *wdev = dev_get_drvdata(dev);
 	if (!wdev)
         return -ENODEV;
-	if(wdev->clk_sys[1])
+	if(wdev->clk_sys[1] && !__clk_is_enabled(wdev->clk_sys[1]))
 		clk_prepare_enable(wdev->clk_sys[1]);
 
 	mutex_lock(&wdev->suspend_lock);

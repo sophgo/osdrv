@@ -405,18 +405,9 @@ enum ENUM_CHIP_ID {
 #define VPSS_MAX_ZOOMOUT                128
 #define VPSS_RECT_NUM             4
 
-/*For Gdc*/
-#define LDC_ALIGN                      64
-#define LDC_MIN_IMAGE_WIDTH            640
-#define LDC_MIN_IMAGE_HEIGHT           480
-
-#define SPREAD_MIN_IMAGE_WIDTH          640
-#define SPREAD_MIN_IMAGE_HEIGHT         480
-
 /* For GDC */
-#define GDC_IP_NUM                 2
-#define GDC_PROC_JOB_INFO_NUM      (500)
-#define GDC_MAX_REGION_NUM         4
+#define LDC_ALIGN                      64 /* gdc align width  */
+#define GDC_PROC_JOB_INFO_NUM      (500) /* gdc proc job max num  */
 
 /* For DPU */
 #define DPU_ALIGN                   16
@@ -439,6 +430,12 @@ enum ENUM_CHIP_ID {
 /* For STITCH*/
 #define STITCH_MAX_SRC_NUM         4
 #define STITCH_ALIGN                   16
+#define STITCH_IP_NUM 1
+#define STITCH_MAX_GRP_NUM 16
+#define STITCH_MAX_W 4608
+#define STITCH_MIN_H 64
+
+
 
 #ifdef __cplusplus
 #if __cplusplus

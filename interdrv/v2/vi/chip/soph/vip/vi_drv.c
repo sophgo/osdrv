@@ -13,6 +13,11 @@
 #define SLICE_MAX_GRID_SIZE	5
 
 /****************************************************************************
+ * Function declaration
+ ****************************************************************************/
+void _ispblk_ldci_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num);
+
+/****************************************************************************
  * Global parameters
  ****************************************************************************/
 u8 g_w_bit[ISP_PRERAW_MAX], g_h_bit[ISP_PRERAW_MAX];
@@ -112,7 +117,7 @@ int vi_get_raw_num_by_dev(struct isp_ctx *ctx, u8 dev_num)
 	}
 
 	if (raw_num == ISP_PRERAW_MAX) {
-		raw_num = ISP_PRERAW0;
+		vi_pr(VI_ERR, "not bind dev, please call vi_set_dev_bind_attr\n");
 	}
 
 	return raw_num;
@@ -1162,12 +1167,55 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num, int d
 	return len * num;
 }
 
-void ispblk_dma_setaddr(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr)
+void ispblk_dma_setaddr(struct isp_ctx *ctx, enum sop_isp_raw raw_num, u32 dmaid, u64 buf_addr)
 {
 	uintptr_t dmab = ctx->phys_regs[dmaid];
+	u32 is_rgbmap_dma = 0;
+
+	/* RGBMAP DMA need only setaddr */
+	switch (dmaid) {
+	case ISP_BLK_ID_DMA_CTL_FE0_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE0_RGBMAP_SE:
+	case ISP_BLK_ID_DMA_CTL_FE1_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE1_RGBMAP_SE:
+	case ISP_BLK_ID_DMA_CTL_FE2_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE2_RGBMAP_SE:
+	case ISP_BLK_ID_DMA_CTL_FE3_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE3_RGBMAP_SE:
+	case ISP_BLK_ID_DMA_CTL_FE4_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE4_RGBMAP_SE:
+	case ISP_BLK_ID_DMA_CTL_FE5_RGBMAP_LE:
+	case ISP_BLK_ID_DMA_CTL_FE5_RGBMAP_SE:
+	{
+		is_rgbmap_dma = 1;
+		break;
+	}
+	default:
+		break;
+	}
+
+	if (ispblk_dma_get_sw_mode(ctx, dmaid) && !is_rgbmap_dma) {
+		if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
+			ispblk_dma_yuv_bypass_config(ctx, dmaid, buf_addr, raw_num);
+		} else {
+			ispblk_dma_config(ctx, raw_num, dmaid, buf_addr);
+		}
+		return;
+	}
 
 	ISP_WR_REG(dmab, reg_isp_dma_ctl_t, base_addr, (buf_addr & 0xFFFFFFFF));
 	ISP_WR_BITS(dmab, reg_isp_dma_ctl_t, sys_control, baseh, ((buf_addr >> 32) & 0xFFFFFFFF));
+}
+
+bool ispblk_dma_get_sw_mode(struct isp_ctx *ctx, u32 dmaid)
+{
+	uintptr_t dmab = ctx->phys_regs[dmaid];
+	union reg_isp_dma_ctl_sys_control sys_ctrl;
+
+	//SW mode: 1 ; HW mode: 0
+	sys_ctrl.raw = ISP_RD_REG(dmab, reg_isp_dma_ctl_t, sys_control);
+
+	return sys_ctrl.bits.stride_sel;
 }
 
 void ispblk_dma_set_sw_mode(struct isp_ctx *ctx, u32 dmaid, bool is_sw_mode)
@@ -1622,8 +1670,10 @@ int ispblk_dma_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num, int dmaid, 
 	ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_stride, stride);
 	ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_segnum, num);
 
-	if (buf_addr)
-		ispblk_dma_setaddr(ctx, dmaid, buf_addr);
+	if (buf_addr) {
+		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, base_addr, (buf_addr & 0xFFFFFFFF));
+		ISP_WR_BITS(dmab, reg_isp_dma_ctl_t, sys_control, baseh, ((buf_addr >> 32) & 0xFFFFFFFF));
+	}
 
 	return len * num;
 }
@@ -1641,7 +1691,14 @@ void ispblk_dma_enable(struct isp_ctx *ctx, u32 dmaid, u32 on, u8 dma_disable)
 		/* yuvtop uv crop5 */
 		srcb = ctx->phys_regs[ISP_BLK_ID_YUV_CROP_C];
 		break;
-
+	case ISP_BLK_ID_DMA_CTL_RAW_RDMA0:
+		/* yuvtop uv crop5 */
+		srcb = ctx->phys_regs[ISP_BLK_ID_RAW_CROP_LE];
+		break;
+	case ISP_BLK_ID_DMA_CTL_RAW_RDMA1:
+		/* yuvtop uv crop5 */
+		srcb = ctx->phys_regs[ISP_BLK_ID_RAW_CROP_SE];
+		break;
 	default:
 		break;
 	}
@@ -2208,16 +2265,16 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_ra
 			scene_ctrl.bits.hdr_enable = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 		}
 	} else if (_is_be_post_online(ctx)) {
-		if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //yuv sensor
+		if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //YUV sensor
 			scene_ctrl.bits.raw2yuv_422_enable = 1;
+			scene_ctrl.bits.pre2yuv_422_enable = 0;
 			scene_ctrl.bits.dci_rgb0yuv1 = 1;
 			scene_ctrl.bits.hdr_enable = 0;
-
 			scene_ctrl.bits.be2raw_l_enable = 0;
 			scene_ctrl.bits.be2raw_s_enable = 0;
 			scene_ctrl.bits.be_rdma_l_enable = 0;
 			scene_ctrl.bits.be_rdma_s_enable = 0;
-		} else { //rgb sensor
+		} else { //RGB sensor
 			scene_ctrl.bits.raw2yuv_422_enable = 0;
 			scene_ctrl.bits.dci_rgb0yuv1 = 0;
 			scene_ctrl.bits.hdr_enable = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
@@ -2242,6 +2299,9 @@ void _ispblk_be_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 		return;
 
 	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //YUV sensor
+		if (ctx->isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+				return;
+			}
 		//Disable af dma
 		ISP_WR_BITS(af, reg_isp_af_t, kickoff, af_enable, 0);
 		ISP_WR_BITS(af, reg_isp_af_t, dmi_enable, dmi_enable, 0);
@@ -2268,15 +2328,16 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 	uintptr_t raw_rdma = ctx->phys_regs[ISP_BLK_ID_RAW_RDMA0];
 
 	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //YUV sensor
+		// YUV raw top in
 		ISP_WR_BITS(rawtop, reg_raw_top_t, rdmi_enable, ch_num, 0);
 		ISP_WR_BITS(rawtop, reg_raw_top_t, rdmi_enable, rdmi_en, 1);
 		ISP_WO_BITS(rawtop, reg_raw_top_t, ctrl, ls_crop_dst_sel, 1);
-		ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 1);
+		// only at YUV->RAW->RGB pattern need set [reg_raw_top_t, raw_4, yuv_in_mode] = [0x1]
 
 		ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_mode, 0);
 		ISP_WR_BITS(rawtop, reg_raw_top_t, dpcm_mode, dpcm_xstr, 0);
 
-		if (_is_be_post_online(ctx)) {
+		if (_is_be_post_online(ctx)) { //	YUV raw top in
 			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, config, le_rdma_en, 1);
 			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, config, se_rdma_en, 0);
 			ISP_WR_BITS(raw_rdma, reg_raw_rdma_ctrl_t, rdma_size, rdmi_widthm1, ctx->img_width - 1);
@@ -2318,7 +2379,26 @@ void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 
 	u32 dma_enable;
 
-	if (!ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) { //RGB sensor
+	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
+		if (ctx->isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+			if (ctx->is_3dnr_on) {
+				dma_enable = 0xaa;
+				//Enable manr dma
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, force_dma_disable, dma_enable);
+				//Manr bypass
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, bypass, 0);
+				//Manr close Fusion path
+				// todo: fix 3dnr path
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_1_en, 0);
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_2_en, 0);
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_3_en, 0);
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_4_en, 0);
+
+				ISP_WR_BITS(manr, reg_isp_mmap_t, reg_d0, crop_enable_scalar, 1);
+			}
+			// todo: other ip need update
+		}
+	} else { //RGB sensor
 		if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) { // hdr mode
 			if (ctx->isp_pipe_cfg[raw_num].is_tnr_ai_isp)
 				dma_enable = 0x80;
@@ -2336,6 +2416,11 @@ void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_6c, force_dma_disable, dma_enable);
 			//Manr bypass
 			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, bypass, 0);
+			//Manr open Fusion path
+			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_1_en, 1);
+			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_2_en, 1);
+			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_3_en, 1);
+			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_00, inter_4_en, 1);
 			ISP_WR_BITS(manr, reg_isp_mmap_t, reg_d0, crop_enable_scalar, 1);
 		}
 	}
@@ -2399,14 +2484,28 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 			ISP_WR_BITS(cacp, reg_ca_t, reg_00, cacp_enable, 0);
 			//Disable ca_lite
 			ISP_WR_BITS(ca_lite, reg_ca_lite_t, reg_00, ca_lite_enable, 0);
-		}
-
-		if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
-			ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y, true, false);
-			ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C, true, false);
 		} else {
-			ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y, false, false);
-			ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C, false, false);
+			ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, swap, 3);
+			ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, reg_422_444, 1);
+			ISP_WR_REG(ynr, reg_isp_ynr_t, out_sel, ISP_YNR_OUT_Y_DELAY);
+
+			if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
+				ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y, true, false);
+				ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C, true, false);
+			} else {
+				ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y, false, false);
+				ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C, false, false);
+			}
+			if (ctx->is_3dnr_on) {
+				ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_8, force_dma_disable,
+					(ctx->isp_pipe_cfg[raw_num].tnr_mode == ISP_TNR_TYPE_NEW_MODE) ? 0x0 :
+					((ctx->isp_pipe_cfg[raw_num].tnr_mode == ISP_TNR_TYPE_OLD_MODE) ? 0x24 : 0x3f));
+				ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, reg_422_444, 1);
+				ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_5, tdnr_enable, ctx->isp_pipe_cfg[raw_num].tnr_mode);
+				// for debug, this set [reg_8, force_dma_disable] = [0x3f]
+				// for debug, this set [reg_0, bypass_en] = [0x1]
+			}
+			_ispblk_ldci_cfg_update(ctx, raw_num);
 		}
 	} else { //RGB sensor
 		//Enable 3DNR dma
@@ -2431,7 +2530,7 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 void ispblk_post_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	_ispblk_isptop_cfg_update(ctx, raw_num);
-	//_ispblk_be_yuv_cfg_update(ctx, raw_num);
+	_ispblk_be_yuv_cfg_update(ctx, raw_num);
 	_ispblk_rawtop_cfg_update(ctx, raw_num);
 	_ispblk_rgbtop_cfg_update(ctx, raw_num);
 	_ispblk_yuvtop_cfg_update(ctx, raw_num);
@@ -2938,8 +3037,8 @@ int isp_frm_err_handler(struct isp_ctx *ctx, const enum sop_isp_raw err_raw_num,
 u32 ispblk_dma_yuv_bypass_config(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr,
 				 const enum sop_isp_raw raw_num)
 {
-	// uintptr_t dmab = ctx->phys_regs[dmaid];
-	u32 len = 0, /* stride = 0, */ num = 0;
+	uintptr_t dmab = ctx->phys_regs[dmaid];
+	u32 len = 0, stride = 0, num = 0;
 
 	switch (dmaid) {
 	/* csibdg */
@@ -2970,13 +3069,96 @@ u32 ispblk_dma_yuv_bypass_config(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr,
 	/* preraw_be */
 	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE:
 	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE:
-	/* raw_top */
-	case ISP_BLK_ID_DMA_CTL_RAW_RDMA0:
-	case ISP_BLK_ID_DMA_CTL_RAW_RDMA1:
 	{
 		/* csibdg */
 		len = ctx->isp_pipe_cfg[raw_num].csibdg_width * 2;
 		num = ctx->isp_pipe_cfg[raw_num].csibdg_height;
+		stride = len;
+
+		break;
+	}
+	/* raw_top */
+	case ISP_BLK_ID_DMA_CTL_RAW_RDMA0:
+	case ISP_BLK_ID_DMA_CTL_RAW_RDMA1:
+	{
+		len = ctx->isp_pipe_cfg[raw_num].csibdg_width * 2;
+		num = ctx->isp_pipe_cfg[raw_num].csibdg_height;
+		stride = ctx->isp_pipe_cfg[raw_num].csibdg_width * 2;
+
+		break;
+	}
+	/* yuv_top to dram */
+	case ISP_BLK_ID_DMA_CTL_YUV_CROP_Y:
+	{
+		if (ctx->isp_pipe_cfg[raw_num].is_tile) {
+			if (ctx->isp_pipe_cfg[raw_num].is_postout_crop) {
+				if (!ctx->is_work_on_r_tile) { //left tile
+					len = (ctx->isp_pipe_cfg[raw_num].postout_crop.x +
+						ctx->isp_pipe_cfg[raw_num].postout_crop.w > ctx->tile_cfg.r_out.start)
+						? ctx->tile_cfg.r_out.start - ctx->isp_pipe_cfg[raw_num].postout_crop.x
+						: ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+				} else { //right tile
+					len = (ctx->isp_pipe_cfg[raw_num].postout_crop.x < ctx->tile_cfg.r_out.start)
+						? (ctx->isp_pipe_cfg[raw_num].postout_crop.x +
+						ctx->isp_pipe_cfg[raw_num].postout_crop.w - ctx->tile_cfg.r_out.start)
+						: ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+				}
+
+				stride = ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+			} else {
+				len = (!ctx->is_work_on_r_tile)
+					? (ctx->tile_cfg.l_out.end - ctx->tile_cfg.l_out.start + 1)
+					: (ctx->tile_cfg.r_out.end - ctx->tile_cfg.r_out.start + 1);
+				//stride need 16byte align
+				stride = ctx->isp_pipe_cfg[raw_num].max_width;
+			}
+		} else {
+			//yuvtop y out
+			len = (ctx->isp_pipe_cfg[raw_num].postout_crop.w) ?
+				ctx->isp_pipe_cfg[raw_num].postout_crop.w : ctx->img_width;
+			stride = len;
+		}
+
+		num = (ctx->isp_pipe_cfg[raw_num].postout_crop.h) ?
+				ctx->isp_pipe_cfg[raw_num].postout_crop.h : ctx->img_height;
+
+		vi_pr(VI_DBG, "cropout raw_num len=%d stride=%d buffer_addr=0x%llx\n", len, stride, buf_addr);
+
+		break;
+	}
+	case ISP_BLK_ID_DMA_CTL_YUV_CROP_C:
+	{
+		if (ctx->isp_pipe_cfg[raw_num].is_tile) {
+			if (ctx->isp_pipe_cfg[raw_num].is_postout_crop) {
+				if (!ctx->is_work_on_r_tile) { //left tile
+					len = (ctx->isp_pipe_cfg[raw_num].postout_crop.x
+						+ ctx->isp_pipe_cfg[raw_num].postout_crop.w) > ctx->tile_cfg.r_out.start
+						? ctx->tile_cfg.r_out.start - ctx->isp_pipe_cfg[raw_num].postout_crop.x
+						: ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+				} else { //right tile
+					len = (ctx->isp_pipe_cfg[raw_num].postout_crop.x < ctx->tile_cfg.r_out.start)
+						? (ctx->isp_pipe_cfg[raw_num].postout_crop.x +
+						ctx->isp_pipe_cfg[raw_num].postout_crop.w - ctx->tile_cfg.r_out.start)
+						: ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+				}
+
+				stride = ctx->isp_pipe_cfg[raw_num].postout_crop.w;
+			} else {
+				len = (!ctx->is_work_on_r_tile)
+					? (ctx->tile_cfg.l_out.end - ctx->tile_cfg.l_out.start + 1)
+					: (ctx->tile_cfg.r_out.end - ctx->tile_cfg.r_out.start + 1);
+
+				stride = ctx->isp_pipe_cfg[raw_num].max_width;
+			}
+		} else {
+			//yuvtop uv out
+			len = (ctx->isp_pipe_cfg[raw_num].postout_crop.w) ?
+				ctx->isp_pipe_cfg[raw_num].postout_crop.w : ctx->img_width;
+			stride = len;
+		}
+
+		num = (ctx->isp_pipe_cfg[raw_num].postout_crop.h) ?
+				(ctx->isp_pipe_cfg[raw_num].postout_crop.h >> 1) : (ctx->img_height >> 1);
 
 		break;
 	}
@@ -2986,13 +3168,16 @@ u32 ispblk_dma_yuv_bypass_config(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr,
 
 	len = VI_ALIGN(len);
 
-	if (buf_addr)
-		ispblk_dma_setaddr(ctx, dmaid, buf_addr);
+	if (ispblk_dma_get_sw_mode(ctx, dmaid)) { //If sw mode
+		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_seglen, len);
+		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_stride, stride);
+		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_segnum, num);
+	}
 
-	// maybe will use sw control
-	// ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_seglen, len);
-	// ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_stride, stride);
-	// ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_segnum, num);
+	if (buf_addr) {
+		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, base_addr, (buf_addr & 0xFFFFFFFF));
+		ISP_WR_BITS(dmab, reg_isp_dma_ctl_t, sys_control, baseh, ((buf_addr >> 32) & 0xFFFFFFFF));
+	}
 
 	return len * num;
 }

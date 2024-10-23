@@ -47,15 +47,15 @@ struct mipi_tx_dev {
 	struct device *dev;
 	struct miscdevice miscdev[DISP_MAX_INST];
 	struct combo_dev_cfg_s dev_cfg[DISP_MAX_INST];
-	struct clk *clk_dsi_src[2];
+	struct clk *clk_mipipll[2];
 	struct clk *clk_dsi[4];
-	int reset_pin, reset_pin_active;
-	int pwm_pin, pwm_pin_active;
-	int power_ct_pin, power_ct_pin_active;
-	int irq_vbat;
-	void *vbat_addr[2];
 	int pid[DISP_MAX_INST];
+	bool enable[DISP_MAX_INST];
 } mipi_tx_dev_ctx;
+
+static const char *const clk_mipipll_name[] = {
+	"clk_vo_mipimpll0", "clk_vo_mipimpll1"
+};
 
 static const char *const clk_dsi_name[] = {
 	"clk_vo_dsi_mac0", "clk_vo_dsi_tx_esc0",
@@ -222,7 +222,19 @@ static int mipi_tx_set_combo_dev_cfg(struct mipi_tx_dev *tdev, struct combo_dev_
 	dphy_dsi_set_pll(devno, dev_cfg->pixel_clk, lane_num, bits);
 	disp_dsi_config(devno, lane_num, dsi_fmt, dev_cfg->sync_info.vid_hline_pixels);
 	disp_set_timing(devno, &timing);
+	disp_clk_enable(devno, true);
 	disp_tgen_enable(devno, true);
+
+	if (mipi_tx_dev_ctx.clk_mipipll[devno] && (!__clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[devno])))
+		clk_prepare_enable(mipi_tx_dev_ctx.clk_mipipll[devno]);
+
+	if (mipi_tx_dev_ctx.clk_dsi[devno * 2] && (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[devno * 2])))
+		clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[devno * 2]);
+
+	if (mipi_tx_dev_ctx.clk_dsi[devno * 2 + 1] && (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[devno * 2 + 1])))
+		clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[devno * 2 + 1]);
+
+	tdev->enable[devno] = true;
 
 	pr_debug("lane_num(%d) preamble_on(%d) dsi_fmt(%d) bits(%d)\n", lane_num, preamble_on, dsi_fmt, bits);
 
@@ -573,10 +585,14 @@ static long mipi_tx_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 			mipi_tx_disable(i);
 			dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
 			mipi_tx_enable(i);
-		}
 
-		for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
-			if (mipi_tx_dev_ctx.clk_dsi[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i]))
+			if (mipi_tx_dev_ctx.clk_mipipll[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i]))
+				clk_disable_unprepare(mipi_tx_dev_ctx.clk_mipipll[i]);
+
+			if (mipi_tx_dev_ctx.clk_dsi[i * 2] && __clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2]))
+				clk_disable_unprepare(mipi_tx_dev_ctx.clk_dsi[i]);
+
+			if (mipi_tx_dev_ctx.clk_dsi[i * 2 + 1] && __clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1]))
 				clk_disable_unprepare(mipi_tx_dev_ctx.clk_dsi[i]);
 		}
 	}
@@ -587,15 +603,24 @@ static long mipi_tx_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		u8 cmd = 0x29;
 		int i = 0;
 
-		for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
-			if (mipi_tx_dev_ctx.clk_dsi[i] && (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i])))
-				clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i]);
-		}
-
 		for (i = 0; i < DISP_MAX_INST; ++i) {
-			mipi_tx_disable(i);
-			dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
-			mipi_tx_enable(i);
+			if(tdev->enable[devno]) {
+				if (mipi_tx_dev_ctx.clk_mipipll[i] &&
+				    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i])))
+					clk_prepare_enable(mipi_tx_dev_ctx.clk_mipipll[i]);
+
+				if (mipi_tx_dev_ctx.clk_dsi[i * 2] &&
+				    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2])))
+					clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i * 2]);
+
+				if (mipi_tx_dev_ctx.clk_dsi[i * 2 + 1] &&
+				    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1])))
+					clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1]);
+
+				mipi_tx_disable(i);
+				dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
+				mipi_tx_enable(i);
+			}
 		}
 	}
 	break;
@@ -686,6 +711,15 @@ static int _init_resources(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
+	for (i = 0; i < ARRAY_SIZE(clk_mipipll_name); ++i) {
+		tdev->clk_mipipll[i] = devm_clk_get(&pdev->dev, clk_mipipll_name[i]);
+		if (IS_ERR(tdev->clk_mipipll[i])) {
+			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_mipipll_name[i]);
+			return PTR_ERR(tdev->clk_mipipll[i]);
+		}
+		clk_prepare_enable(tdev->clk_mipipll[i]);
+		clk_disable_unprepare(tdev->clk_mipipll[i]);
+	}
 
 	for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
 		tdev->clk_dsi[i] = devm_clk_get(&pdev->dev, clk_dsi_name[i]);
@@ -694,6 +728,7 @@ static int _init_resources(struct platform_device *pdev)
 			return PTR_ERR(tdev->clk_dsi[i]);
 		}
 		clk_prepare_enable(tdev->clk_dsi[i]);
+		clk_disable_unprepare(tdev->clk_dsi[i]);
 	}
 
 	return rc;
@@ -787,6 +822,10 @@ static int mipi_tx_remove(struct platform_device *pdev)
 	mutex_unlock(&reboot_lock);
 	_power_off(&mipi_tx_dev_ctx);
 
+	for (i = 0; i < ARRAY_SIZE(clk_mipipll_name); ++i) {
+		if (mipi_tx_dev_ctx.clk_mipipll[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i]))
+			clk_disable_unprepare(mipi_tx_dev_ctx.clk_mipipll[i]);
+	}
 
 	for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
 		if (mipi_tx_dev_ctx.clk_dsi[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i]))
@@ -819,6 +858,11 @@ static int mipi_tx_suspend(struct platform_device *pdev, pm_message_t state)
 		mipi_tx_enable(i);
 	}
 
+	for (i = 0; i < ARRAY_SIZE(clk_mipipll_name); ++i) {
+		if (mipi_tx_dev_ctx.clk_mipipll[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i]))
+			clk_disable_unprepare(mipi_tx_dev_ctx.clk_mipipll[i]);
+	}
+
 	for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
 		if (mipi_tx_dev_ctx.clk_dsi[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i]))
 			clk_disable_unprepare(mipi_tx_dev_ctx.clk_dsi[i]);
@@ -835,15 +879,24 @@ static int mipi_tx_resume(struct platform_device *pdev)
 
 	dev_warn(&pdev->dev, "mipi_tx_resume\n");
 
-	for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
-		if (mipi_tx_dev_ctx.clk_dsi[i] && (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i])))
-			clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i]);
-	}
-
 	for (i = 0; i < DISP_MAX_INST; ++i) {
-		mipi_tx_disable(i);
-		dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
-		mipi_tx_enable(i);
+		if(mipi_tx_dev_ctx.enable[i]) {
+			if (mipi_tx_dev_ctx.clk_mipipll[i] &&
+			    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i])))
+				clk_prepare_enable(mipi_tx_dev_ctx.clk_mipipll[i]);
+
+			if (mipi_tx_dev_ctx.clk_dsi[i * 2] &&
+			    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2])))
+				clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i * 2]);
+
+			if (mipi_tx_dev_ctx.clk_dsi[i * 2 + 1] &&
+			    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1])))
+				clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1]);
+
+			mipi_tx_disable(i);
+			dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
+			mipi_tx_enable(i);
+		}
 	}
 
 	return 0;

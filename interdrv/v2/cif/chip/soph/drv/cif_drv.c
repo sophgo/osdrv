@@ -1490,31 +1490,78 @@ void cif_set_rx_bus_config(struct cif_ctx *ctx, enum lane_id_e lane, uint32_t se
 	}
 }
 
-void set_rx0_enable(struct cif_ctx *ctx)
+void lane_enable(struct cif_ctx *ctx, enum phy_lane_id_e lane_num)
 {
 	uintptr_t wrap_top = ctx->wrap_phys_regs[CIF_WRAP_BLK_ID_TOP];
 
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_08, en_rxbus_clk,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_08, en_rxbus_clk) | 1);
+		reg_08, en_rxbus_clk,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_08, en_rxbus_clk) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_10, pd_ref_lane,
-				CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_10, pd_ref_lane) & ~1);
+		reg_1c, en_mipi_lprx,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_1c, en_mipi_lprx) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_1c, en_mipi_lprx,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_1c, en_mipi_lprx) | 1);
+		reg_1c, en_mipi_lprx,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_1c, en_mipi_lprx) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_20, en_demux,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_20, en_demux) | 1);
+		reg_20, en_demux,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_20, en_demux) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_24, en_preamp,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_24, en_preamp) | 1);
+		reg_24, en_preamp,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_24, en_preamp) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_28, en_vcm_det,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_28, en_vcm_det) | 1);
+		reg_28, en_vcm_det,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_28, en_vcm_det) | (1 << lane_num));
+
 	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
-			reg_48, en_mipi_data_ser,
-			CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_48, en_mipi_data_ser) | 1);
+		reg_48, en_mipi_data_ser,
+		CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t,
+			reg_48, en_mipi_data_ser) | (1 << lane_num));
+}
+
+void set_rx_frist_lane_enable(struct cif_ctx *ctx, int frist_lane_used)
+{
+	if (frist_lane_used == 1)
+		return ;
+
+	if (ctx->phy_mode == 0) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+	} else if (ctx->phy_mode == 1) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+		else if (ctx->mac_num == 3)
+			lane_enable(ctx, CIF_PHY_LANE_9);
+	} else if (ctx->phy_mode == 2) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+	} else if (ctx->phy_mode == 3) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+		else if (ctx->mac_num == 3)
+			lane_enable(ctx, CIF_PHY_LANE_6);
+		else if (ctx->mac_num == 4)
+			lane_enable(ctx, CIF_PHY_LANE_12);
+	} else if (ctx->phy_mode == 4) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+		if (ctx->mac_num == 3)
+			lane_enable(ctx, CIF_PHY_LANE_6);
+	} else if (ctx->phy_mode == 5) {
+		if (ctx->mac_num == 0)
+			lane_enable(ctx, CIF_PHY_LANE_0);
+	}
 }
 
 static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
@@ -1535,6 +1582,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_ck_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_ck_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 			break;
 	case CIF_LANE_0:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1543,6 +1593,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d0_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d0_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_1:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1551,6 +1604,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d1_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d1_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_2:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1559,6 +1615,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d2_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d2_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_3:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1567,6 +1626,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d3_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d3_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_4:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1575,6 +1637,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d4_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d4_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_5:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1583,6 +1648,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d5_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d4_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_6:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1591,6 +1659,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d6_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d6_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	case CIF_LANE_7:
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
@@ -1599,6 +1670,9 @@ static void cif_set_phy0_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
 				reg_08, csi_lane_d7_pnswap,
 				pn_swap);
+		CIF_WR_BITS(wrap_8l, reg_sensor_phy_8l_t,
+				reg_14, csi_lane_d7_sel_h,
+				select > CIF_PHY_LANE_15 ? 1 : 0);
 		break;
 	default:
 		break;
@@ -1712,6 +1786,7 @@ static void cif_set_phy3_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_4l, reg_sensor_phy_4l_t,
 				reg_08, csi_lane_ck_pnswap,
 				pn_swap);
+		break;
 	case CIF_LANE_0:
 		CIF_WR_BITS(wrap_4l, reg_sensor_phy_4l_t,
 				reg_04, csi_lane_d0_sel,
@@ -1767,6 +1842,7 @@ static void cif_set_phy4_lane_id(struct cif_ctx *ctx, enum lane_id_e lane,
 		CIF_WR_BITS(wrap_4l, reg_sensor_phy_4l_t,
 				reg_08, csi_lane_ck_pnswap,
 				pn_swap);
+		break;
 	case CIF_LANE_0:
 		CIF_WR_BITS(wrap_4l, reg_sensor_phy_4l_t,
 				reg_04, csi_lane_d0_sel,
@@ -1915,6 +1991,55 @@ void cif_set_group(struct cif_ctx *ctx, int gruop)
 				      CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_10, pd_pll) | 0x3);
 		}
 	}
+
+}
+
+void cif_set_pd(struct cif_ctx *ctx, short clock_lane)
+{
+	short frist_clock;
+	short mask;
+	uintptr_t wrap_top = ctx->wrap_phys_regs[CIF_WRAP_BLK_ID_TOP];
+
+	if (ctx->phy_mode == 0) {
+		frist_clock = CIF_PHY_LANE_0;
+	} else if (ctx->phy_mode == 1) {
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		}
+	} else if (ctx->phy_mode == 2) {
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		}
+	} else if (ctx->phy_mode == 3) {
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 4) {
+			frist_clock = CIF_PHY_LANE_12;
+		}
+	} else if (ctx->phy_mode == 4) {
+
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		}
+
+	} else if (ctx->phy_mode == 5) {
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		}
+	}
+	mask = ((1 << (clock_lane + 1)) - 1) & ~((1 << frist_clock) - 1);
+
+	CIF_WR_BITS(wrap_top, reg_sensor_phy_top_t,
+				reg_10, pd_mipi_lane,
+				CIF_RD_BITS(wrap_top, reg_sensor_phy_top_t, reg_10, pd_mipi_lane) & ~mask);
 
 }
 

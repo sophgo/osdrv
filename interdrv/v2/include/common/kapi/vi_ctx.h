@@ -12,11 +12,11 @@
 
 struct sop_vi_ctx {
 	vi_state_e vi_stt;
-	u8 total_chn_num;
-	u8 total_dev_num;
-	u8 is_chn_enable[VI_MAX_CHN_NUM + VI_MAX_EXT_CHN_NUM];
-	u8 is_dev_enable[VI_MAX_DEV_NUM];
-	u8 is_tile;
+	__u8 total_chn_num;
+	__u8 total_dev_num;
+	__u8 is_chn_enable[VI_MAX_CHN_NUM + VI_MAX_EXT_CHN_NUM];
+	__u8 is_dev_enable[VI_MAX_DEV_NUM];
+	__u8 is_tile;
 
 	// mod param
 	vi_mode_param_s mod_param;
@@ -28,8 +28,8 @@ struct sop_vi_ctx {
 	vi_dev_bind_pipe_s bind_pipe_attr[VI_MAX_DEV_NUM];
 
 	// pipe
-	u8 is_pipe_created[VI_MAX_PIPE_NUM];
-	u8 is_dis_enable[VI_MAX_PIPE_NUM];
+	__u8 is_pipe_created[VI_MAX_PIPE_NUM];
+	__u8 is_dis_enable[VI_MAX_PIPE_NUM];
 	vi_pipe_frame_source_e source[VI_MAX_PIPE_NUM];
 	vi_pipe_attr_s pipe_attr[VI_MAX_PIPE_NUM];
 	crop_info_s    pipe_crop[VI_MAX_PIPE_NUM];
@@ -43,15 +43,15 @@ struct sop_vi_ctx {
 	vi_ldc_attr_s ldc_attr[VI_MAX_CHN_NUM];
 	vi_early_interrupt_s ealy_int[VI_MAX_CHN_NUM];
 
-	u32 blk_size[VI_MAX_CHN_NUM];
-	u32 timeout_cnt;
-	u8 bypass_frm[VI_MAX_CHN_NUM];
+	__u32 blk_size[VI_MAX_CHN_NUM];
+	__u32 timeout_cnt;
+	__u8 bypass_frm[VI_MAX_CHN_NUM];
 #ifdef __arm__
-	u32 vi_raw_blk[2];
+	__u32 vi_raw_blk[2];
 #else
-	u64 vi_raw_blk[2];
+	__u64 vi_raw_blk[2];
 #endif
-	s32 chn_bind[VI_MAX_CHN_NUM][VI_MAX_EXTCHN_BIND_PER_CHN];
+	__s32 chn_bind[VI_MAX_CHN_NUM][VI_MAX_EXTCHN_BIND_PER_CHN];
 	vi_ext_chn_attr_s ext_chn_attr[VI_MAX_EXT_CHN_NUM];
 };
 

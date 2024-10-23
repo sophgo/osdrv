@@ -60,10 +60,12 @@ void ispblk_splt_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num, bool enab
 		sel_ctrl.bits.fe1_rdma_sel	 = ctx->isp_pipe_cfg[raw_num].is_tile;
 
 		dma_ctrl.bits.rdma_l_enable_fe0	 = 1;
-		dma_ctrl.bits.rdma_s_enable_fe0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+		dma_ctrl.bits.rdma_s_enable_fe0	 = ctx->isp_pipe_cfg[raw_num].is_hdr_on ||
+						ctx->isp_pipe_cfg[raw_num].is_yuv_sensor;
 		dma_ctrl.bits.rdma_l_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile;
 		dma_ctrl.bits.rdma_s_enable_fe1	 = ctx->isp_pipe_cfg[raw_num].is_tile &&
-						   ctx->isp_pipe_cfg[raw_num].is_hdr_on;
+						(ctx->isp_pipe_cfg[raw_num].is_hdr_on ||
+						ctx->isp_pipe_cfg[raw_num].is_yuv_sensor);
 	} else if (ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap) {
 		sel_ctrl.bits.fe0_sel		 = 0;
 		sel_ctrl.bits.fe1_sel		 = ctx->isp_pipe_cfg[raw_num].is_tile;
@@ -342,7 +344,8 @@ void ispblk_rawtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 
 	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
 		ISP_WO_BITS(rawtop, reg_raw_top_t, ctrl, ls_crop_dst_sel, 1);
-		ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 1);
+		/*only action at raw_top output pattern at yuvdata in raw_top*/
+		// ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 1);
 	} else {
 		ISP_WO_BITS(rawtop, reg_raw_top_t, ctrl, ls_crop_dst_sel, 0);
 		ISP_WO_BITS(rawtop, reg_raw_top_t, raw_4, yuv_in_mode, 0);
@@ -400,6 +403,8 @@ void ispblk_rgbtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 	reg_9.bits.rgbtop_imgh_m1 = ctx->img_height - 1;
 	ISP_WR_REG(rgbtop, reg_isp_rgb_top_t, reg_9, reg_9.raw);
 	ISP_WR_BITS(rgbtop, reg_isp_rgb_top_t, dbg_ip_s_vld, ip_dbg_en, 1);
+
+	// for debug, this set [patgen1, pg_enable] = [0x1]
 }
 
 void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
@@ -412,8 +417,6 @@ void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 
 	imgw_m1.raw = 0;
 	ai_isp_ctrl.raw = 0;
-
-	ISP_WO_BITS(yuvtop, reg_yuv_top_t, yuv_3, yonly_en, ctx->isp_pipe_cfg[raw_num].is_yuv_sensor);
 
 	imgw_m1.bits.yuv_top_imgw_m1 = width - 1;
 	imgw_m1.bits.yuv_top_imgh_m1 = height - 1;
@@ -439,7 +442,7 @@ void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 		ai_isp_ctrl.bits.ai_isp_mask        = true;
 		ISP_WR_REG(yuvtop, reg_yuv_top_t, ai_isp_rdma_ctrl, ai_isp_ctrl.raw);
 	} else {
-		ISP_WR_REG(yuvtop, reg_yuv_top_t, ai_isp_rdma_ctrl, 0);
+		// to do
 	}
 
 	if (_is_all_online(ctx) && !ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
@@ -449,6 +452,7 @@ void ispblk_yuvtop_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 		ISP_WR_BITS(yuvtop, reg_yuv_top_t, yuv_ctrl, bypass_v,
 					!ctx->isp_pipe_cfg[raw_num].is_offline_scaler);
 	}
+	// for debug, this set [patgen1, pg_enable] = [0x1]
 }
 
 void ispblk_isptop_config(struct isp_ctx *ctx)
@@ -532,7 +536,8 @@ void ispblk_isptop_config(struct isp_ctx *ctx)
 		post_trig_by_hw = 0x0;
 
 	//line_spliter intr ctrl, splt_ai_isp enable, otherwise disable
-	if (ctx->isp_pipe_cfg[first_raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT) {
+	if (ctx->isp_pipe_cfg[first_raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT ||
+	    ctx->isp_pipe_cfg[first_raw_num].is_raw_replay_fe) {
 		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe0	= 0xF;
 		ev0_en_fe345.bits.line_spliter_dma_done_enable_fe1	= 0xF;
 		ev2_en.bits.frame_err_line_spliter_enable_fe0		= 0x1;

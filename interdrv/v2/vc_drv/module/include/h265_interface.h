@@ -66,7 +66,6 @@ enum _CODEC_ {
 };
 
 typedef enum _NAL_TYPE_ {
-    NAL_NONE = 0,
     NAL_I,
     NAL_P,
     NAL_B,
@@ -518,6 +517,9 @@ typedef struct _VencIntialInfo_ {
 
     /* Caller must register at least this many framebuffers for source(GOP) */
      unsigned int min_num_src_fb;
+
+    /* (option) Caller can alloc extern buf as bitstream buffer */
+     unsigned int min_bs_buf_size;
 } VencIntialInfo;
 
 typedef struct _H265Sao_ {
@@ -544,6 +546,15 @@ typedef struct _VencSearchWindow_ {
     unsigned int u32Ver;
 } VencSearchWindow;
 
+typedef struct _ExternBufInfo_ {
+    unsigned int buf_size;
+    PhysicalAddress phys_addr;
+} ExternBufInfo;
+
+typedef struct _VencExternBuf_ {
+    unsigned int bs_buf_size;
+    PhysicalAddress bs_phys_addr;
+} VencExternBuf;
 
 #define DRV_H26X_OP_BASE 0x100
 #define DRV_H26X_OP_MASK 0xFF00
@@ -601,6 +612,8 @@ enum H26X_OP_NUM {
     H26X_OP_GET_H265_PRED_UNIT,
     H26X_OP_SET_SEARCH_WINDOW,
     H26X_OP_GET_SEARCH_WINDOW,
+    H26X_OP_SET_EXTERN_BS_BUF,
+    H26X_OP_GET_BS_PACKS_NUM,
     H26X_OP_MAX,
 };
 
@@ -657,6 +670,8 @@ typedef enum _VEncIoctlOp_ {
     DRV_H26X_OP_GET_H265_PRED_UNIT      = (H26X_OP_GET_H265_PRED_UNIT << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_SET_SEARCH_WINDOW       = (H26X_OP_SET_SEARCH_WINDOW << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_GET_SEARCH_WINDOW       = (H26X_OP_GET_SEARCH_WINDOW << DRV_H26X_OP_SHIFT),
+    DRV_H26X_OP_SET_EXTERN_BS_BUF       = (H26X_OP_SET_EXTERN_BS_BUF << DRV_H26X_OP_SHIFT),
+    DRV_H26X_OP_GET_BS_PACKS_NUM        = (H26X_OP_GET_BS_PACKS_NUM << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_MAX                     = (H26X_OP_MAX << DRV_H26X_OP_SHIFT),
 } VEncIoctlOp;
 
@@ -682,6 +697,16 @@ typedef struct _InitDecConfig_ {
     int wtl_enable;
     unsigned char cmdQueueDepth;
     int reorder_enable;
+    unsigned int picWidth;
+    unsigned int picHeight;
+
+    // alloc buffer by user
+    void* bitstream_buffer;
+    void* frame_buffer;
+    void* Ytable_buffer;
+    void* Ctable_buffer;
+    unsigned int numOfDecFbc;
+    unsigned int numOfDecwtl;
 } InitDecConfig;
 
 typedef struct _DecOnePicCfg_ {
@@ -746,7 +771,7 @@ int vdec_open(InitDecConfig *pInitDecCfg, void **pHandle);
 int vdec_close(void *pHandle);
 int vdec_reset(void *pHandle);
 int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms);
-int vdec_get_frame(void *pHandle, DispFrameCfg *pdfc, unsigned char is_peek);
+int vdec_get_frame(void *pHandle, DispFrameCfg *pdfc);
 void vdec_release_frame(void *pHandle, void *arg, PhysicalAddress addr);
 void vdec_attach_vb(void *pHandle, VB_INFO vb_info);
 void vdec_attach_callback(DRV_VDEC_DRV_CALLBACK pCbFunc);
@@ -759,7 +784,7 @@ int set_user_pic(void *pHandle, const DispFrameCfg *usr_pic);
 int enable_user_pic(void *pHandle, int instant);
 int disable_user_pic(void *pHandle);
 int set_display_mode(void *pHandle, int display_mode);
-
+int vdec_init_handle_pool(void);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

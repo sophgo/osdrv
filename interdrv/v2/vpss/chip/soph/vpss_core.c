@@ -9,6 +9,8 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/compat.h>
+#include <linux/dma-mapping.h>
+#include <linux/dma-buf.h>
 
 #include "base_ctx.h"
 
@@ -38,6 +40,7 @@ u32 vpss_log_lv = DBG_WARN;
 int hw_mask = 0x3ff; //default vpss_v + vpss_t + vpss_d
 
 static atomic_t open_count = ATOMIC_INIT(0);
+struct device *device;
 static const char *const vpss_name[] = {"vpss_v0", "vpss_v1", "vpss_v2",
 										"vpss_v3", "vpss_t0", "vpss_t1",
 										"vpss_t2", "vpss_t3", "vpss_d0",
@@ -63,12 +66,15 @@ void vpss_timer_core_update(void *data)
 {
 	u8 i;
 	u32 duration;
+	static u32 duration_long = 0;
+	static u32 hw_duration_total_long[VPSS_MAX] = {0};
 	struct vpss_device *dev = (struct vpss_device *)data;
 	struct timespec64 cur_time;
 	static struct timespec64 pre_time = {0};
 
 	ktime_get_ts64(&cur_time);
 	duration = get_diff_in_us(pre_time, cur_time);
+	duration_long += duration;
 	pre_time = cur_time;
 
 	if (duration > 2000000)
@@ -76,6 +82,8 @@ void vpss_timer_core_update(void *data)
 
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		dev->vpss_cores[i].duty_ratio = (dev->vpss_cores[i].hw_duration_total * 100) / duration;
+		hw_duration_total_long[i] += dev->vpss_cores[i].hw_duration_total;
+		dev->vpss_cores[i].duty_ratio_long = (hw_duration_total_long[i] * 100) / duration_long;
 		dev->vpss_cores[i].hw_duration_total = 0;
 	}
 }
@@ -353,6 +361,8 @@ static void vpss_dev_init(struct vpss_device *dev)
 			atomic_set(&core->state, VIP_RUNNING);
 		}
 
+		if (core->clk_apb)
+			clk_disable(core->clk_apb);
 		if (core->clk_vpss)
 			clk_disable(core->clk_vpss);
 	}
@@ -485,6 +495,8 @@ static int vpss_open(struct inode *inode, struct file *filep)
 		container_of(filep->private_data, struct vpss_device, miscdev);
 	int i;
 
+	struct vpss_core *core;
+
 	TRACE_VPSS(DBG_INFO, "vpss_open\n");
 
 	if (!dev) {
@@ -497,6 +509,13 @@ static int vpss_open(struct inode *inode, struct file *filep)
 		TRACE_VPSS(DBG_INFO, "vpss_open: open %d times\n", i);
 		return 0;
 	}
+
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		core = &dev->vpss_cores[i];
+		if (core->clk_apb)
+			clk_enable(core->clk_apb);
+	}
+
 	vpss_mode_init();
 
 	return 0;
@@ -507,6 +526,7 @@ static int vpss_release(struct inode *inode, struct file *filep)
 	struct vpss_device *dev =
 		container_of(filep->private_data, struct vpss_device, miscdev);
 	int i;
+	struct vpss_core *core;
 
 	TRACE_VPSS(DBG_INFO, "vpss_release\n");
 
@@ -522,6 +542,13 @@ static int vpss_release(struct inode *inode, struct file *filep)
 	}
 	vpss_release_grp();
 	vpss_mode_deinit();
+
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		core = &dev->vpss_cores[i];
+
+		if (core->clk_apb)
+			clk_disable(core->clk_apb);
+	}
 
 	return 0;
 }
@@ -592,7 +619,13 @@ static int vpss_probe(struct platform_device *pdev)
 
 	rc = vpss_proc_init(dev);
 	if (rc) {
-		TRACE_VPSS(DBG_ERR, "Failed to init proc\n");
+		TRACE_VPSS(DBG_ERR, "Failed to init vpss proc\n");
+		goto err_proc;
+	}
+
+	rc = vpp_proc_init(dev);
+	if (rc) {
+		TRACE_VPSS(DBG_ERR, "Failed to init vpss proc\n");
 		goto err_proc;
 	}
 
@@ -614,12 +647,19 @@ static int vpss_probe(struct platform_device *pdev)
 	vpss_dev_init(dev);
 	vpss_set_sys_config();
 
+	device = &pdev->dev;
+
+	// Set DMA mask here
+	device->coherent_dma_mask = DMA_BIT_MASK(64);
+	device->dma_mask = &device->coherent_dma_mask;
+
 	TRACE_VPSS(DBG_WARN, "vpss probe done\n");
 
 	return rc;
 
 err_irq:
 	vpss_proc_remove(dev);
+	vpp_proc_remove(dev);
 err_proc:
 	misc_deregister(&dev->miscdev);
 err_dev:
@@ -657,6 +697,7 @@ static int vpss_remove(struct platform_device *pdev)
 		devm_free_irq(&pdev->dev, dev->vpss_cores[i].irq_num, &dev->vpss_cores[i]);
 
 	vpss_proc_remove(dev);
+	vpp_proc_remove(dev);
 	misc_deregister(&dev->miscdev);
 	dev_set_drvdata(&pdev->dev, NULL);
 	sclr_deinit_sys_top_addr();
@@ -778,6 +819,40 @@ static void __exit vpss_core_exit(void)
 	#if (!DEVICE_FROM_DTS)
 	platform_device_unregister(&vpss_pdev);
 	#endif
+}
+
+unsigned long vpss_dmabuf_fd_to_paddr(int dmabuf_fd){
+	struct dma_buf *dma_buf = NULL;
+	struct dma_buf_attachment *dma_attach = NULL;
+	struct sg_table *sgt = NULL;
+	unsigned long paddr = 0;
+	dma_buf = dma_buf_get(dmabuf_fd);
+	if (IS_ERR(dma_buf)) {
+		TRACE_VPSS(DBG_ERR, "get dmabuf failed\n");
+		dma_buf_put(dma_buf);
+		return paddr;
+	}
+	dma_attach = dma_buf_attach(dma_buf, device);
+	if (IS_ERR(dma_attach)) {
+		TRACE_VPSS(DBG_ERR, "get dma_buf_attach failed\n");
+		goto fail_detach;
+	}
+	sgt = dma_buf_map_attachment(dma_attach, DMA_BIDIRECTIONAL);
+	if (IS_ERR(sgt)) {
+		TRACE_VPSS(DBG_ERR, "get dma_buf_map_attachment failed\n");
+		goto fail_unmap;
+	}
+	if (IS_ERR(sgt->sgl)) {
+		TRACE_VPSS(DBG_ERR, "get sgl failed\n");
+		goto fail_unmap;
+	}
+	paddr = sg_dma_address(sgt->sgl);
+fail_unmap:
+	dma_buf_unmap_attachment(dma_attach, sgt, DMA_BIDIRECTIONAL);
+fail_detach:
+	dma_buf_detach(dma_buf, dma_attach);
+	dma_buf_put(dma_buf);
+	return paddr;
 }
 
 MODULE_DESCRIPTION("Cvitek Video Driver");

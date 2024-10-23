@@ -488,15 +488,16 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 
 	// DPU Run Time STATUS
 	seq_puts(m, "\n-------------------------------DPU RUN TIME STATUS-----------------------\n");
-	seq_printf(m, "%20s%20s%20s%20s%20s%20s\n",
-		"DevID", "cnt_per_sec","max_cnt_per_sec","total_int_cnt", "Hwcost_tm(us)", "HwMaxcost_tm(us)");
-			seq_printf(m, "%20d%20d%20d%20d%20d%20d\n",
+	seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s\n",
+		"DevID", "cnt_per_sec","max_cnt_per_sec","total_int_cnt", "Hwcost_tm(us)", "HwMaxcost_tm(us)","duty_ratio(%)");
+			seq_printf(m, "%20d%20d%20d%20d%20d%20d%20d\n",
 				0,
 				dev->run_time_info.cnt_per_sec,
 				dev->run_time_info.max_cnt_per_sec,
 				dev->run_time_info.total_int_cnt,
 				dev->run_time_info.cost_tm,
-				dev->run_time_info.max_cost_tm
+				dev->run_time_info.max_cost_tm,
+				dev->duty_ratio
 			);
 	return 0;
 }

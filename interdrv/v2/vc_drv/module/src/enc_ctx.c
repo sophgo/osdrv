@@ -109,9 +109,15 @@ static void _set_src_info(DRVFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
                       pvecb->x / 2;
         break;
     }
+    if (pvecb->x || pvecb->y )
+    {
+        psi->width = pvecb->width;
+        psi->height = pvecb->height;
+    } else {
+        psi->width = pstVFrame->width;
+        psi->height = pstVFrame->height;
+    }
 
-    psi->width = pstVFrame->width;
-    psi->height = pstVFrame->height;
 
     psi->vbY.virt_addr = (void *)pstVFrame->viraddr[0] +
                  (psi->vbY.phys_addr - pstVFrame->phyaddr[0]);
@@ -275,13 +281,27 @@ static int jpege_open(void *handle, void *pchnctx)
         venc_mjpeg_fixqp_s *pstMJPEGFixQp = &prcatt->stMjpegFixQp;
 
         config.u.enc.quality = pstMJPEGFixQp->u32Qfactor;
-    } else {
+    } else if (prcatt->enRcMode == VENC_RC_MODE_MJPEGCBR) {
         venc_mjpeg_cbr_s *pstMJPEGCbr = &prcatt->stMjpegCbr;
         int frameRateDiv, frameRateRes;
 
         config.u.enc.bitrate = pstMJPEGCbr->u32BitRate;
         frameRateDiv = (pstMJPEGCbr->fr32DstFrameRate >> 16);
         frameRateRes = pstMJPEGCbr->fr32DstFrameRate & 0xFFFF;
+
+        if (frameRateDiv == 0) {
+            config.u.enc.framerate = frameRateRes;
+        } else {
+            config.u.enc.framerate =
+                ((frameRateDiv - 1) << 16) + frameRateRes;
+        }
+    } else {
+        venc_mjpeg_vbr_s *pstMJPEGVbr = &prcatt->stMjpegVbr;
+        int frameRateDiv, frameRateRes;
+
+        config.u.enc.bitrate = pstMJPEGVbr->u32MaxBitRate;
+        frameRateDiv = (pstMJPEGVbr->fr32DstFrameRate >> 16);
+        frameRateRes = pstMJPEGVbr->fr32DstFrameRate & 0xFFFF;
 
         if (frameRateDiv == 0) {
             config.u.enc.framerate = frameRateRes;
@@ -315,11 +335,14 @@ static int jpege_enc_one_pic(void *ctx,
 
     _set_src_info(psi, pEncCtx, pstFrame);
 
-    status = jpeg_enc_send_frame(pHandle, &srcInfo);
+    status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
     if (status == ENC_TIMEOUT) {
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
-        return DRV_ERR_VENC_BUSY;
+        //retry, workaround for https://jira.sophgo.com/browse/SE9SW-1454
+        status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
+        if (status == ENC_TIMEOUT)
+            return DRV_ERR_VENC_BUSY;
     }
 
     if (status != 0) {
@@ -618,7 +641,6 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
         H264E_NALU_ISLICE,
         H264E_NALU_PSLICE,
         H264E_NALU_BSLICE,
-        H264E_NALU_BUTT,
         H264E_NALU_IDRSLICE,
         H264E_NALU_SPS,
         H264E_NALU_PPS,
@@ -638,7 +660,7 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
 
     naluType = ppack->pu8Addr[4] & 0x1f;
 
-    if (NalType < NAL_NONE || NalType >= NAL_MAX) {
+    if (NalType < NAL_I || NalType >= NAL_MAX) {
         DRV_VENC_ERR("NalType = %d\n", NalType);
         return -1;
     }
@@ -762,7 +784,6 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
         H265E_NALU_ISLICE,
         H265E_NALU_PSLICE,
         H265E_NALU_BSLICE,
-        H265E_NALU_BUTT,
         H265E_NALU_IDRSLICE,
         H265E_NALU_SPS,
         H265E_NALU_PPS,
@@ -783,7 +804,7 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
 
     naluType = (ppack->pu8Addr[4] & 0x7f) >> 1;
 
-    if (NalType < NAL_NONE || NalType >= NAL_MAX) {
+    if (NalType < NAL_I || NalType >= NAL_MAX) {
         DRV_VENC_ERR("NalType = %d\n", NalType);
         return -1;
     }
@@ -922,10 +943,17 @@ static int vid_enc_get_stream(void *ctx, venc_stream_s *pstStream,
         }
 
         memset(ppack, 0, sizeof(venc_pack_s));
-        pqpacks = Queue_Dequeue(psp);
+        pqpacks = Queue_Peek(psp);
         if (!pqpacks) {
             continue;
         }
+
+        // only sei packs, return no packs
+        if (totalPacks == 1 && pqpacks->NalType == NAL_SEI) {
+            return DRV_ERR_VENC_BUSY;
+        }
+
+        pqpacks = Queue_Dequeue(psp);
 
         // psp->pack[idx].bUsed = 1;
         ppack->u64PhyAddr = pqpacks->u64PhyAddr;
@@ -944,7 +972,17 @@ static int vid_enc_get_stream(void *ctx, venc_stream_s *pstStream,
             return status;
         }
         pstStream->u32PackCount++;
+
+        // 1. division [B], [P], [I]/[IDR]
+        // 2. division [P] + [VPS SPS PPS I]
+        // 3. division [SEI P] + [SEI B] + [VPS SPS PPS SEI I]
+        if (pqpacks->NalType >= NAL_I
+            && pqpacks->NalType <= NAL_IDR) {
+            break;
+        }
     }
+
+    DRV_VENC_DBG("packcnt:%d, type:%d\n", pstStream->u32PackCount, pstStream->pstPack[0].DataType.enH264EType);
     pEncCtx->base.u64EncHwTime = (uint64_t)encHwTimeus;
 
     return status;
@@ -964,6 +1002,10 @@ static int vid_enc_release_stream(void *ctx, venc_stream_s *pstStream)
         if ( pstStream->pstPack[idx].DataType.enH264EType == H264E_NALU_SEI
             || pstStream->pstPack[idx].DataType.enH265EType == H265E_NALU_SEI) {
             vencPack[idx].NalType = NAL_SEI;
+        } else if (pstStream->pstPack[idx].DataType.enH264EType == H264E_NALU_SPS) {
+            vencPack[idx].NalType = NAL_SPS;
+        } else if (pstStream->pstPack[idx].DataType.enH265EType == H265E_NALU_VPS) {
+            vencPack[idx].NalType = NAL_VPS;
         }
     }
 

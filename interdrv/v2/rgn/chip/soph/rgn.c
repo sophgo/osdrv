@@ -266,7 +266,7 @@ int _rgn_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 		&& hdls[0] != RGN_INVALID_HANDLE) {
 		CVI_TRACE_RGN(RGN_ERR, "cannot insert hdl(%d), only allow one ow when odec on\n",
 			hdl);
-		return -1;
+		return ERR_RGN_NOT_PERM;
 	}
 	if (_rgn_get_rect(ctx, &rect_new) != 0) {
 		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) can't get rect.\n", hdl);

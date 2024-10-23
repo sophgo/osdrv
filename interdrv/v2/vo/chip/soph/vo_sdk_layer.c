@@ -15,8 +15,6 @@
 #include "vo_sdk_layer.h"
 #include "vo_interfaces.h"
 
-extern const char *const disp_irq_name[DISP_MAX_INST];
-
 /****************************************************************************
  * Global parameters
  ****************************************************************************/
@@ -896,7 +894,7 @@ int vo_disable(vo_dev dev)
 	dev_ctx = &g_vo_ctx->dev_ctx[dev];
 	if (!dev_ctx->is_dev_enable) {
 		TRACE_VO(DBG_ERR, "vo_dev(%d) already disabled.\n", dev);
-		return 0;
+		return ERR_VO_DEV_NOT_ENABLED;
 	}
 
 	dev_ctx->is_dev_enable = false;
@@ -1054,7 +1052,7 @@ int vo_disablevideolayer(vo_layer layer)
 
 	if (!layer_ctx->is_layer_enable) {
 		TRACE_VO(DBG_ERR, "layer(%d) isn't enabled yet.\n", layer);
-		return 0;
+		return ERR_VO_VIDEO_NOT_ENABLED;
 	}
 
 	mutex_lock(&layer_ctx->layer_lock);
@@ -1967,7 +1965,8 @@ static int vo_set_chn_zoom(vo_layer layer, vo_chn chn, const vo_chn_zoom_attr_s 
 
 	//notice : rect/zoom_ratio is for src pic
 	if (chn_zoom_attr->zoom_type == VO_CHN_ZOOM_IN_RECT) {
-		if ((chn_zoom_attr->rect.width < VO_MIN_CHN_WIDTH && chn_zoom_attr->rect.width != 0) ||
+		if ((chn_zoom_attr->rect.x < 0) || (chn_zoom_attr->rect.y < 0) ||
+			(chn_zoom_attr->rect.width < VO_MIN_CHN_WIDTH && chn_zoom_attr->rect.width != 0) ||
 		    (chn_zoom_attr->rect.height < VO_MIN_CHN_HEIGHT && chn_zoom_attr->rect.height != 0) ||
 		    (chn_zoom_attr->rect.width & 0x01) || (chn_zoom_attr->rect.height & 0x01)) {
 			TRACE_VO(DBG_ERR, "layer(%d) chn(%d) Zoom rect(%d %d %d %d) invalid.\n",
@@ -3235,7 +3234,6 @@ static int vo_release_wbc_frame(vo_wbc wbc_dev, video_frame_info_s *video_frame,
 static int vo_resume(struct vo_core_dev *vdev)
 {
 	int ret = -1;
-	int i;
 	vo_wbc wbc_dev;
 	vo_layer layer;
 	vo_dev dev = 0;
@@ -3258,10 +3256,6 @@ static int vo_resume(struct vo_core_dev *vdev)
 			}
 		}
 
-	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
-		if ((vdev->clk_vo[i]) && (!__clk_is_enabled(vdev->clk_vo[i])))
-			clk_prepare_enable(vdev->clk_vo[i]);
-	}
 
 	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
 		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
@@ -3272,10 +3266,6 @@ static int vo_resume(struct vo_core_dev *vdev)
 			}
 		}
 
-	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
-		ret = devm_request_irq(vdev->dev, vdev->vo_core[i].irq_num, vo_irq_handler, 0,
-				       disp_irq_name[i], (void *)&vdev->vo_core[i]);
-
 	g_vo_ctx->suspend = false;
 
 	return ret;
@@ -3283,7 +3273,7 @@ static int vo_resume(struct vo_core_dev *vdev)
 
 static int vo_suspend(struct vo_core_dev *vdev)
 {
-	int ret = -1, i = 0;
+	int ret = -1;
 	vo_wbc wbc_dev;
 	vo_layer layer;
 	vo_dev dev = 0;
@@ -3317,13 +3307,6 @@ static int vo_suspend(struct vo_core_dev *vdev)
 			}
 		}
 
-	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
-		devm_free_irq(vdev->dev, vdev->vo_core[i].irq_num, (void *)&vdev->vo_core[i]);
-
-	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
-		if ((vdev->clk_vo[i]) && __clk_is_enabled(vdev->clk_vo[i]))
-			clk_disable_unprepare(vdev->clk_vo[i]);
-	}
 
 	return ret;
 }

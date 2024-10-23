@@ -65,7 +65,7 @@ static struct dpu_ctx_s *dpu_ctx[DPU_MAX_GRP_NUM] = { [0 ... DPU_MAX_GRP_NUM - 1
 //Get Available Grp lock
 static struct mutex dpu_get_grp_lock;
 static unsigned char dpu_grp_used[DPU_MAX_GRP_NUM];
-
+extern bool __clk_is_enabled(struct clk *clk);
 struct dpu_jobs_ctx {
 	struct vb_jobs_t ins[DPU_PIPE_IN_NUM];
 	struct vb_jobs_t outs[DPU_MAX_CHN_NUM];
@@ -92,6 +92,24 @@ struct dpu_dev_s *dpu_get_dev(void)
 	return dpu_dev;
 }
 //EXPORT_SYMBOL_GPL(dpu_get_dev);
+
+static void dpu_enable_clk(void)
+{
+	if(dpu_dev->clk_sys[0])
+		clk_prepare_enable(dpu_dev->clk_sys[0]);
+
+	if(dpu_dev->clk_sys[1] && !__clk_is_enabled(dpu_dev->clk_sys[1]))
+		clk_prepare_enable(dpu_dev->clk_sys[1]);
+}
+
+static void dpu_disable_clk(void)
+{
+	if(dpu_dev->clk_sys[0])
+		clk_disable_unprepare(dpu_dev->clk_sys[0]);
+
+	if(dpu_dev->clk_sys[1] && __clk_is_enabled(dpu_dev->clk_sys[1]))
+		clk_disable_unprepare(dpu_dev->clk_sys[1]);
+}
 
 static void print_vbq_size(dpu_grp dpu_grp_id)
 {
@@ -2545,7 +2563,7 @@ static unsigned char dpu_handler_is_idle(void)
 	return TRUE;
 }
 
-static int32_t dpu_base_get_frame_info(vb_cal_config_s vb_config,pixel_format_e fmt, size_s size, struct video_buffer *buf, unsigned long long mem_base)
+static int32_t dpu_base_get_frame_info(vb_cal_config_s vb_config,pixel_format_e fmt, size_s size, struct video_buffer *buf, unsigned long long mem_base,unsigned int blk_size)
 {
 	unsigned char i = 0;
 	memset(buf, 0, sizeof(*buf));
@@ -2553,8 +2571,7 @@ static int32_t dpu_base_get_frame_info(vb_cal_config_s vb_config,pixel_format_e 
 	buf->pixel_format = fmt;
 	for (i = 0; i < vb_config.plane_num; ++i) {
 		buf->phy_addr[i] = mem_base;
-		buf->length[i] = ALIGN((i == 0) ? vb_config.main_y_size : vb_config.main_c_size,
-					vb_config.addr_align);
+		buf->length[i] = blk_size;
 		buf->stride[i] = (i == 0) ? vb_config.main_stride : vb_config.c_stride;
 		mem_base += buf->length[i];
 
@@ -2569,14 +2586,17 @@ static void _dpu_fill_buffer(mmf_chn_s chn, struct vb_s *grp_vb_in,
 {
 
 	size_s size;
+	unsigned int blk_size;
 	TRACE_DPU(DBG_INFO, "dpu_fill_buffer          +\n");
 	size.width = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.width;
 	size.height = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.height;
+	blk_size = ctx->chn_cfgs[chn.chn_id].blk_size;
 	dpu_base_get_frame_info( ctx->chn_cfgs[chn.chn_id].vb_config
 			   , ctx->chn_cfgs[chn.chn_id].pixel_format
 			   , size
 			   , buf
-			   , phy_addr);
+			   , phy_addr
+			   , blk_size);
 	buf->offset_top = 0;
 	buf->offset_bottom =0;
 	buf->offset_left = 0;
@@ -2835,7 +2855,6 @@ static int dpu_try_schedule_offline(struct dpu_handler_ctx_s *ctx)
 	dpu_ctx[working_grp]->grp_work_wtatus.start_cnt ++;
 	TRACE_DPU(DBG_INFO, "dpu_try_schedule_offline          +\n");
 	ktime_get_ts64(&ctx->time);
-	dpu_reset();
 
 	// sc's mask
 	working_mask = get_work_mask(dpu_ctx[working_grp]);
@@ -2861,7 +2880,8 @@ static int dpu_try_schedule_offline(struct dpu_handler_ctx_s *ctx)
 
 		goto dpu_next_job;
 	}
-
+	dpu_enable_clk();
+	dpu_reset();
 	// commit hw settings of this dpu-grp.
 	TRACE_DPU(DBG_INFO, "reg_base(0x%llx) .\n",reg_base );
 	TRACE_DPU(DBG_INFO, "reg_dma_sgbm_ld1(0x%llx) .\n",reg_base_sgbm_ld1_dma);
@@ -3098,6 +3118,7 @@ static void dpu_handle_frame_done(struct dpu_handler_ctx_s *ctx)
 		}
 	}
 	dpu_dev->hw_busy = FALSE;
+	dpu_disable_clk();
 	TRACE_DPU(DBG_INFO, "dpu_handle_frame_done          -\n");
 }
 
@@ -3191,10 +3212,12 @@ static int dpu_event_handler(void *arg)
 {
 	struct timespec64 time;
 	unsigned int hwduration;
+	unsigned int total_duration;
 	int i, ret;
 	unsigned long idle_timeout = msecs_to_jiffies(IDLE_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(EOF_WAIT_TIMEOUT_MS);
 	unsigned long hw_timeout = msecs_to_jiffies(hw_wait_time);
+	static struct timespec64 pre_time = {0};
 	dpu_dev = (struct dpu_dev_s *)arg;
 	timeout = idle_timeout;
 	//TRACE_DPU(DBG_INFO, "dpu_event_handler           +\n");
@@ -3220,7 +3243,11 @@ static int dpu_event_handler(void *arg)
 		if(handler_ctx[0].events == CTX_EVENT_EOF){
 			ktime_get_ts64(&time);
 			hwduration = get_diff_in_us(dpu_dev->time_start, time);
+			total_duration = get_diff_in_us(pre_time,time);
+			memset(&pre_time,0,sizeof(struct timespec64));
 			dpu_dev->cost_time_for_sec += hwduration;
+			dpu_dev->total_hwduration += hwduration;
+			dpu_dev->duty_ratio = dpu_dev->total_hwduration *100 / total_duration;
 			if(dpu_dev->cost_time_for_sec <=(1000*1000)){
 				dpu_dev->int_time_per_sec += hwduration;
 				dpu_dev->int_num_per_sec += 1;
@@ -3397,11 +3424,8 @@ void dpu_init(void *arg)
 	mutex_unlock(&dpu_get_grp_lock);
 
 	// SYS_Init()
-	if(dpu_dev->clk_sys[0])
-		clk_prepare_enable(dpu_dev->clk_sys[0]);
-
-	if(dpu_dev->clk_sys[1])
-		clk_prepare_enable(dpu_dev->clk_sys[1]);
+	dpu_enable_clk();
+	dpu_disable_clk();
 	init_waitqueue_head(&dpu_dev->wait);
 	init_waitqueue_head(&dpu_dev->reset_wait);
 	init_waitqueue_head(&dpu_dev->send_frame_wait);
@@ -3426,11 +3450,6 @@ void dpu_deinit(void *arg)
 	// base_ion_free(dpu_dev->phyaddr_chfh);
 	// TRACE_DPU(DBG_INFO, "phyaddr_chfh(0x%llx)", dpu_dev->phyaddr_chfh);
 
-	if(dpu_dev->clk_sys[0])
-		clk_disable_unprepare(dpu_dev->clk_sys[0]);
-
-	if(dpu_dev->clk_sys[1])
-		clk_disable_unprepare(dpu_dev->clk_sys[1]);
 	if (!dpu_dev->thread) {
 		pr_err("dpu thread not initialized yet\n");
 		return ;

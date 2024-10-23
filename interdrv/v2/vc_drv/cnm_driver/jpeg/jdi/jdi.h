@@ -99,6 +99,8 @@ int jdi_allocate_dma_memory(jpu_buffer_t *vb);
 int jdi_invalidate_cache(jpu_buffer_t *vb);
 int jdi_flush_cache(jpu_buffer_t *vb);
 void jdi_free_dma_memory(jpu_buffer_t *vb);
+int jdi_insert_external_memory(jpu_buffer_t *vb);
+void jdi_remove_external_memory(jpu_buffer_t *vb);
 int jdi_wait_interrupt(int core_idx, int timeout, unsigned long instIdx);
 int jdi_hw_reset(int core_idx);
 int jdi_wait_inst_ctrl_busy(int core_idx, int timeout, unsigned int addr_flag_reg, unsigned int flag);

@@ -3198,6 +3198,15 @@ A profile indicator (HEVC only)
 @* 3 : Main still picture profile
 
 NOTE: In AVC encoder, a profile cannot be set by host application. The firmware decides it based on internalbitdepth. It is HIGH profile for bitdepth of 8 and HIGH10 profile for bitdepth of 10.
+
+By chip & media:
+If set the profile to 0, the FW will determine PROFILE_IDC based on BIT_DEPTH.
+The pre-defined profile base is as follows:
+    AVC_ENC_PROFILE_BASE              = 1,
+    AVC_ENC_PROFILE_MAIN              = 2,
+    AVC_ENC_PROFILE_EXTENDED          = 3,
+    AVC_ENC_PROFILE_HIGH              = 4,
+    AVC_ENC_PROFILE_HIGH10            = 5,
 @endverbatim
 */
     int profile;
@@ -4989,27 +4998,30 @@ VPU core index number
     BOOL addrRemapEn;
 
     // following parameters for  rate control in sdk
-    int statTime;
-    int maxIprop;
-    int minIprop;
-    int ipQpDelta;
-    int bgQpDelta;
-    Uint32 rcMode;
-    int frmLostOpen;
-    int frmLostMode;
-    int encFrmGaps;
-    int frmLostBpsThr;
-    int avbrFrmLostOpen;
-    int avbrFrmGaps;
-    int changePos;
-    int minStillPercent;
-    Uint32 u32FrameQp;
-    Uint32 u32FrameBits;
-    int pureStillThr;
-    int picMotionLevel;
-    int motionSensitivy;
-    int maxStillQp;
-    BOOL RcEn;
+    Uint32          hostRcmode;
+    Uint32          enableHierarchy;
+    int             rcIpQpDelta;
+    Uint32          rcLastClip;
+    Uint32          rcLevelClip;
+    Uint32          rcPicNormalClip;
+    Uint32          statTime;
+    Uint32          minIprop;
+    Uint32          maxIprop;
+    Uint32          changePos;
+    Uint32          minStillPercent;
+    Uint32          maxStillQp;
+    Uint32          motionSensitivity;
+    Uint32          avbrPureStillThr;
+
+    int             frmLostOpen;
+    int             frmLostMode;
+    int             encFrmGaps;
+    int             frmLostBpsThr;
+    int             avbrFrmLostOpen;
+    int             avbrFrmGaps;
+
+    int             rcBgQpDelta;
+    int             picMotionLevel;
 } EncOpenParam;
 
 /**
@@ -5145,6 +5157,7 @@ This is only for CODA9.
 
     // custom
     BOOL is_idr_frame;
+    int picMotionLevel;
 } EncParam;
 
 #define AR_PAGE_SIZE_OFFSET			17

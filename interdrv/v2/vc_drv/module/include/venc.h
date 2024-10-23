@@ -139,13 +139,13 @@ typedef struct _venc_context {
 
 #define Q_TABLE_MAX 99
 #define Q_TABLE_CUSTOM 50
-#define Q_TABLE_MIN 0
-#define Q_TABLE_DEFAULT 0 // 0 = backward compatible
+#define Q_TABLE_MIN 1
+#define Q_TABLE_DEFAULT 1 // 0 = backward compatible
 #define SRC_FRAMERATE_DEF 30
-#define SRC_FRAMERATE_MAX 240
+#define SRC_FRAMERATE_MAX 300
 #define SRC_FRAMERATE_MIN 1
 #define DEST_FRAMERATE_DEF 30
-#define DEST_FRAMERATE_MAX 60
+#define DEST_FRAMERATE_MAX 300
 #define DEST_FRAMERATE_MIN 1
 #define DRV_VENC_NO_INPUT -10
 #define DRV_VENC_INPUT_ERR -11

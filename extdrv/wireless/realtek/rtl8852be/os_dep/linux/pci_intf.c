@@ -69,11 +69,17 @@ struct pci_device_id rtw_pci_id_tbl[] = {
 #ifdef CONFIG_RTL8852BP
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xA85C), .driver_data = RTL8852BP},/*FPGA*/
 #endif
+#ifdef CONFIG_RTL8852BT
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB520), .driver_data = RTL8852BT},/*FPGA*/
+#endif
 #ifdef CONFIG_RTL8851B
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB851), .driver_data = RTL8851B},
 #endif
 #ifdef CONFIG_RTL8852C
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xC852), .driver_data = RTL8852C},
+#endif
+#ifdef CONFIG_RTL8852D
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0x885D), .driver_data = RTL8852D},
 #endif
 	{},
 };
@@ -738,6 +744,9 @@ static int rtw_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 		goto exit;
 	}
 
+#ifdef CONFIG_WOWLAN
+	device_set_wakeup_enable(&pdev->dev, true);
+#endif
 	pci_disable_device(pdev);
 
 #ifdef CONFIG_WOWLAN
@@ -795,6 +804,10 @@ static int rtw_pci_resume(struct pci_dev *pdev)
 		RTW_INFO("%s Failed on pci_restore_state (%d)\n", __func__, err);
 		goto exit;
 	}
+#endif
+
+#ifdef CONFIG_WOWLAN
+	device_set_wakeup_enable(&pdev->dev, false);
 #endif
 
 	if (pwrpriv->wowlan_mode || pwrpriv->wowlan_ap_mode) {
@@ -979,6 +992,13 @@ static int rtw_dev_probe(struct pci_dev *pdev, const struct pci_device_id *pdid)
 	hostapd_mode_init(padapter);
 #endif
 
+#ifdef CONFIG_RTW_CSI_NETLINK
+	rtw_csi_nl_init(dvobj);
+#endif
+#ifdef CONFIG_CSI_TIMER_POLLING
+	rtw_csi_poll_init(dvobj);
+#endif
+
 	/* alloc irq */
 	if (pci_alloc_irq(dvobj) != _SUCCESS) {
 		RTW_ERR("pci_alloc_irq Failed!\n");
@@ -1053,6 +1073,12 @@ static void rtw_dev_remove(struct pci_dev *pdev)
 	rtw_phl_disable_interrupt(GET_PHL_INFO(dvobj));
 #endif
 
+#ifdef CONFIG_CSI_TIMER_POLLING
+	rtw_csi_poll_timer_cancel(dvobj);
+#endif
+#ifdef CONFIG_RTW_CSI_NETLINK
+	rtw_csi_nl_exit(dvobj);
+#endif
 	/* TODO: use rtw_os_ndevs_deinit instead at the first stage of driver's dev deinit function */
 	rtw_os_ndevs_unregister(dvobj);
 

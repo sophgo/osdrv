@@ -15,6 +15,8 @@
 #else
 #include <linux/types.h>
 #include <linux/version.h>
+#include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/dma-buf.h>
 #include <asm/cacheflush.h>
@@ -23,6 +25,7 @@
 #endif
 #endif  // ENV_CVITEST
 
+#include "vo_defines.h"
 #include "vo_common.h"
 #include "disp.h"
 #include "vo_reg.h"
@@ -43,6 +46,7 @@ static uintptr_t reg_oenc_base[DISP_MAX_INST];
 static spinlock_t disp_mask_spinlock;
 static void *gp_reg;
 static void *retrain_reg;
+extern struct vo_core_dev *g_core_dev;
 /****************************************************************************
  * Initial info
  ****************************************************************************/
@@ -1151,6 +1155,18 @@ void disp_reg_force_up(u8 inst)
 {
 	_reg_write_mask(REG_DISP_CFG(inst), BIT(16), BIT(16));
 }
+
+void disp_clk_enable(u8 inst, bool enable)
+{
+	struct vo_core_dev *vdev = g_core_dev;
+
+	if(enable && (vdev->clk_vo[inst * 2]) && (!__clk_is_enabled(vdev->clk_vo[inst * 2]))) {
+		clk_prepare_enable(vdev->clk_vo[inst * 2]);
+	} else if (!enable && (vdev->clk_vo[inst * 2]) && __clk_is_enabled(vdev->clk_vo[inst * 2])) {
+		clk_disable_unprepare(vdev->clk_vo[inst * 2]);
+	}
+}
+EXPORT_SYMBOL_GPL(disp_clk_enable);
 
 /**
  * disp_tgen_enable - enable timing-generator on disp.

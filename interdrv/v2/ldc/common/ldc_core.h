@@ -23,6 +23,8 @@ enum ldc_dev_state {
 enum ldc_type {
 	DEV_LDC_0 = 0,
 	DEV_LDC_1,
+	DEV_DWA_0,
+	DEV_DWA_1,
 	DEV_LDC_MAX,
 };
 
@@ -33,18 +35,17 @@ enum ldc_wait_evt {
 	LDC_EVENT_RST =  0x4,
 };
 
-struct ldc_tsk_list {
-	struct list_head work_list;
-	struct list_head done_list;
-};
 
 struct ldc_core {
+	spinlock_t core_lock;
 	enum ldc_type dev_type;
 	int irq_num;
-	struct clk *clk_sys;
-	struct clk *clk;
+	struct clk *clk_src;
+	struct clk *clk_apb;
+	struct clk *clk_ldc;
+	unsigned int clk_sys_freq;
 	atomic_t state;//ldc_core_state
-	struct ldc_tsk_list list;
+	struct list_head list;
 #if LDC_USE_WORKQUEUE
 	struct work_struct work_frm_done;
 #endif
@@ -52,10 +53,6 @@ struct ldc_core {
 	bool cmdq_evt;
 };
 
-struct ldc_job_list {
-	struct list_head work_list[LDC_DEV_MAX_CNT];
-	struct list_head done_list[LDC_DEV_MAX_CNT];
-};
 
 struct ldc_vdev {
 	struct miscdevice miscdev;
@@ -63,19 +60,15 @@ struct ldc_vdev {
 	struct ldc_core core[LDC_DEV_MAX_CNT];
 	int core_num;
 	//atomic_t cur_irq_core_id;
-	struct clk *clk_src[LDC_DEV_MAX_CNT];
-	struct clk *clk_apb[LDC_DEV_MAX_CNT];
-	struct clk *clk_ldc[LDC_DEV_MAX_CNT];
-	unsigned int clk_sys_freq[LDC_DEV_MAX_CNT];
+	atomic_t clk_en;
 	void *shared_mem;
 	struct task_struct *thread;
 	wait_queue_head_t wait;
 	enum ldc_wait_evt evt;
-	spinlock_t job_lock;
 	struct list_head job_list;
 	int job_cnt;
+	spinlock_t wdev_lock;
 	//struct workqueue_struct *workqueue;
-	struct ldc_job_list list;
 	struct ldc_vb_doneq vb_doneq;
 	vb_pool vb_pool;
 	struct semaphore sem;
@@ -91,5 +84,7 @@ void ldc_dev_deinit(struct ldc_vdev *dev);
 int ldc_suspend(struct device *dev);
 int ldc_resume(struct device *dev);
 bool is_ldc_suspended(void);
+void ldc_clk_init(struct ldc_vdev *dev);
+void ldc_clk_deinit(struct ldc_vdev *dev);
 
 #endif /* _VIP_LDC_H_ */

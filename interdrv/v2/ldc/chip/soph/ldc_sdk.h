@@ -8,13 +8,15 @@
 #include "base_cb.h"
 #include "ldc_core.h"
 
+#define DEFAULT_MESH_PADDR	0x80000000
+
 enum ldc_op_id { LDC_OP_MESH_JOB = 0, LDC_OP_MAX };
 
 int ldc_exec_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg);
 int ldc_rm_cb(void);
 int ldc_reg_cb(struct ldc_vdev *wdev);
 
-void ldc_work_handle_frm_done(struct ldc_vdev *dev, struct ldc_core *core);
+void ldc_wkup_frm_done_work(void *data);
 
 /* Begin a ldc job,then add task into the job,ldc will finish all the task in the job.
  *
@@ -48,6 +50,11 @@ int ldc_get_work_job(struct ldc_vdev *wdev, struct gdc_handle_data *data);
  */
 int ldc_add_rotation_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_add_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_cor_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_warp_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_affine_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_ldc_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
+int ldc_add_dwa_rot_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 	, video_frame_info_s *pstvideo_frame, int s32milli_sec);
 
@@ -74,6 +81,10 @@ int ldc_resume_handler(void);
 #define LDC_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_NV21) || (fmt == PIXEL_FORMAT_NV12) || (fmt == PIXEL_FORMAT_YUV_400))
 
+#define DWA_SUPPORT_FMT(fmt) \
+	((fmt == PIXEL_FORMAT_YUV_PLANAR_420) || (fmt == PIXEL_FORMAT_YUV_PLANAR_444) ||           \
+	 (fmt == PIXEL_FORMAT_RGB_888_PLANAR) || PIXEL_FORMAT_BGR_888_PLANAR || (fmt == PIXEL_FORMAT_YUV_400))
+
 static inline int ldc_check_null_ptr(const void *ptr)
 {
 	if (!ptr) {
@@ -83,7 +94,7 @@ static inline int ldc_check_null_ptr(const void *ptr)
 	return 0;
 }
 
-static inline int check_ldc_format(video_frame_info_s imgIn, video_frame_info_s imgOut)
+static inline int check_ldc_format(video_frame_info_s imgIn, video_frame_info_s imgOut, unsigned long long mesh_addr)
 {
 	if (imgIn.video_frame.pixel_format !=
 		imgOut.video_frame.pixel_format) {
@@ -92,11 +103,20 @@ static inline int check_ldc_format(video_frame_info_s imgIn, video_frame_info_s 
 			imgOut.video_frame.pixel_format);
 		return ERR_GDC_ILLEGAL_PARAM;
 	}
-	if (!LDC_SUPPORT_FMT(imgIn.video_frame.pixel_format)) {
-		TRACE_LDC(DBG_ERR, "pixelformat(%d) unsupported\n",
-			imgIn.video_frame.pixel_format);
-		return ERR_GDC_ILLEGAL_PARAM;
+	if (!mesh_addr || mesh_addr == DEFAULT_MESH_PADDR) {
+		if (!LDC_SUPPORT_FMT(imgIn.video_frame.pixel_format)) {
+			TRACE_LDC(DBG_ERR, "pixelformat(%d) unsupported\n",
+				imgIn.video_frame.pixel_format);
+			return ERR_GDC_ILLEGAL_PARAM;
+		}
+	} else {
+		if (!DWA_SUPPORT_FMT(imgIn.video_frame.pixel_format)) {
+			TRACE_LDC(DBG_ERR, "pixelformat(%d) unsupported\n",
+				imgIn.video_frame.pixel_format);
+			return ERR_GDC_ILLEGAL_PARAM;
+		}
 	}
+
 	return 0;
 }
 
@@ -112,7 +132,7 @@ static inline int ldc_check_param_is_valid(struct ldc_vdev *wdev, struct gdc_tas
 	if (ret)
 		return false;
 
-	ret = check_ldc_format(attr->img_in, attr->img_out);
+	ret = check_ldc_format(attr->img_in, attr->img_out, attr->private_data[0]);
 	if (ret)
 		return false;
 

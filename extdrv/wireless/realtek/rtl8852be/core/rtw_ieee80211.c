@@ -344,6 +344,23 @@ inline u8 *rtw_set_ie_secondary_ch_offset(u8 *buf, u32 *buf_len, u8 secondary_ch
 	return rtw_set_ie(buf, WLAN_EID_SECONDARY_CHANNEL_OFFSET,  1, &secondary_ch_offset, buf_len);
 }
 
+inline u8 *rtw_set_ie_wide_bw_ch_switch(u8 *buf, u32 *buf_len,
+	u8 ch_width, u8 seg_0, u8 seg_1)
+{
+	u8 csw_data[3] = {0};
+
+	/*
+	* [0] : New Channel Width
+	* [1] : New Channel Center Frequency Segment 0
+	* [2] : New Channel Center Frequency Segment 1
+	*/
+	csw_data[0] = ch_width;
+	csw_data[1] = seg_0;
+	csw_data[2] = seg_1;
+
+	return rtw_set_ie(buf, WLAN_EID_VHT_WIDE_BW_CHSWITCH, 3, csw_data, buf_len);
+}
+
 inline u8 *rtw_set_ie_mesh_ch_switch_parm(u8 *buf, u32 *buf_len, u8 ttl,
 		u8 flags, u16 reason, u16 precedence)
 {
@@ -1956,6 +1973,14 @@ static ParseRes _rtw_ieee802_11_parse_elems(u8 *start, uint len,
 			elems->rm_en_cap = pos;
 			elems->rm_en_cap_len = elen;
 			break;
+		case WLAN_EID_AP_CHANNEL_RPT:
+			elems->ap_channel_rpt= pos;
+			elems->ap_channel_rpt_len = elen;
+			break;
+		case WLAN_EID_COUNTRY:
+			elems->country_info= pos;
+			elems->country_info_len = elen;
+			break;
 #ifdef CONFIG_RTW_MESH
 		case WLAN_EID_PREQ:
 			elems->preq = pos;
@@ -2218,7 +2243,7 @@ extern char *rtw_initmac;
 void rtw_macaddr_cfg(u8 *out, const u8 *hw_mac_addr)
 {
 #define DEFAULT_RANDOM_MACADDR 1
-	u8 mac[ETH_ALEN];
+	u8 mac[ETH_ALEN] = {0};
 
 	if (out == NULL) {
 		rtw_warn_on(1);
@@ -2528,8 +2553,8 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 			if (band)
 				*band = BAND_ON_6G;
 			if (!rtw_get_offset_by_bchbw(BAND_ON_6G, *chan, *bw, offset)) {
-				RTW_INFO("%s get 6ghz channel offset fail, band=%u, chan=%u, bw=%u\n",
-					__func__, *band, *chan, *bw);
+				RTW_INFO("%s get 6ghz channel offset fail, chan=%u, bw=%u\n",
+					__func__, *chan, *bw);
 			}
 		}
 	}
@@ -2699,6 +2724,51 @@ u8 *rtw_get_p2p_ie(const u8 *in_ie, int in_len, u8 *p2p_ie, uint *p2p_ielen)
 	}
 
 	return (u8 *)p2p_ie_ptr;
+}
+
+u8 *rtw_get_vendor_ie(const u8 *in_ie, int in_len, u8 *vendor_ie, uint *vendor_ielen)
+{
+	uint cnt;
+	const u8 *vendor_ie_ptr = NULL;
+	u8 eid, vendor_oui[4] = {0xC8, 0x3A, 0x6B, 0x01};
+
+	if (vendor_ielen)
+		*vendor_ielen = 0;
+
+	if (!in_ie || in_len < 0) {
+		rtw_warn_on(1);
+		return (u8 *)vendor_ie_ptr;
+	}
+
+	if (in_len <= 0)
+		return (u8 *)vendor_ie_ptr;
+
+	cnt = 0;
+
+	while (cnt + 1 + 4 < in_len) {
+		eid = in_ie[cnt];
+
+		if (cnt + 1 + 4 >= MAX_IE_SZ) {
+			rtw_warn_on(1);
+			return NULL;
+		}
+
+		if (eid == WLAN_EID_VENDOR_SPECIFIC && _rtw_memcmp(&in_ie[cnt + 2], vendor_oui, 4) == _TRUE) {
+			vendor_ie_ptr = in_ie + cnt;
+
+			if (vendor_ie)
+				_rtw_memcpy(vendor_ie, &in_ie[cnt], in_ie[cnt + 1] + 2);
+
+			if (vendor_ielen)
+				*vendor_ielen = in_ie[cnt + 1] + 2;
+
+			break;
+		} else
+			cnt += in_ie[cnt + 1] + 2;
+
+	}
+
+	return (u8 *)vendor_ie_ptr;
 }
 
 /**

@@ -142,8 +142,8 @@ static jpudrv_buffer_t  s_video_memory = {0};
 static int jpu_hw_reset(int idx);
 #ifdef JPU_SUPPORT_CLOCK_CONTROL
 struct clk *jpu_clk_get(struct device *dev);
-static void jpu_clk_disable(int core_idx);
-static void jpu_clk_enable(int core_idx);
+void jpu_clk_disable(int core_idx);
+void jpu_clk_enable(int core_idx);
 #endif
 // end customer definition
 
@@ -731,12 +731,6 @@ int jpeg_platform_init(struct platform_device *pdev)
     int err = 0;
     struct resource *res = NULL;
     unsigned long size;
-    u32 originValue = 0;
-    u32 highPart = 1;
-    struct device_node *target_ion = NULL;
-    struct device_node *target_ion_heap_vpp = NULL;
-    struct device_node *target_ion_heap_vpp_mem = NULL;
-    u32 reg;
 
     DPRINTK("[JPUDRV] begin jpeg_platform_init\n");
 
@@ -778,8 +772,8 @@ int jpeg_platform_init(struct platform_device *pdev)
     }
 
 #ifdef JPU_SUPPORT_ISR
-#ifdef JPU_SUPPORT_PLATFORM_DRIVER_REGISTER
         for(i = 0; i < MAX_NUM_JPU_CORE; i++) {
+#ifdef JPU_SUPPORT_PLATFORM_DRIVER_REGISTER
             if(pdev)
                 res = platform_get_resource(pdev, IORESOURCE_IRQ, i);
             if (res) {/* if platform driver is implemented */
@@ -796,30 +790,6 @@ int jpeg_platform_init(struct platform_device *pdev)
                 printk(KERN_ERR "[JPUDRV] :  fail to register interrupt handler\n");
                 goto ERROR_PROVE_DEVICE;
             }
-        }
-#endif
-
-#ifdef JPU_SUPPORT_ION_MEMORY
-        target_ion = of_find_compatible_node(NULL, NULL, "cvitek,cvitek-ion");
-        if (target_ion) {
-            target_ion_heap_vpp = of_find_compatible_node(target_ion, NULL, "cvitek,carveout_vpp");
-            if (target_ion_heap_vpp) {
-                target_ion_heap_vpp_mem = of_find_compatible_node(target_ion_heap_vpp, NULL, "vpp-region");
-                if (target_ion_heap_vpp_mem) {
-                    if (!of_property_read_u32(target_ion_heap_vpp_mem, "reg", &reg)) {
-                        DPRINTK("[JPUDRV] : vpp memory-region reg[0]=%lu\n", reg);
-                        highPart = reg & 0xf;
-                    } else {
-                        DPRINTK("[JPUDRV] : can't acquire memory-region\n");
-                    }
-                } else {
-                    DPRINTK("[JPUDRV] : vpp memory-region not found\n");
-                }
-            } else {
-                DPRINTK("[JPUDRV] : vpp heap not found\n");
-            }
-        } else {
-            DPRINTK("[JPUDRV] : ion node not found\n");
         }
 #endif
 
@@ -924,7 +894,8 @@ void  jpu_clk_disable(int core_idx)
     if (__clk_is_enabled(jpu_pwm_ctrl.jpu_sys_clk[core_idx]))
         clk_disable_unprepare(jpu_pwm_ctrl.jpu_sys_clk[core_idx]);
 
-    clk_disable_unprepare(jpu_pwm_ctrl.jpu_src);
+    if (__clk_is_enabled(jpu_pwm_ctrl.jpu_src))
+        clk_disable_unprepare(jpu_pwm_ctrl.jpu_src);
 
     if (__clk_is_enabled(jpu_pwm_ctrl.jpu_apb_clk[core_idx]))
         clk_disable_unprepare(jpu_pwm_ctrl.jpu_apb_clk[core_idx]);

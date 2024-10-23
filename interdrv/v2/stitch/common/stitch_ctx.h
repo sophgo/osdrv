@@ -13,6 +13,7 @@
 #include <comm_stitch.h>
 #include <base_ctx.h>
 #include "comm_vb.h"
+#include <linux/semaphore.h>
 
 enum stitch_handler_state {
 	STITCH_HANDLER_STATE_STOP = 0,
@@ -26,11 +27,13 @@ enum stitch_handler_state {
 };
 
 struct stitch_work_status {
+	//xkliu
+	unsigned char grp_id;
 	unsigned int recv_cnt;
 	unsigned int done_cnt;
 	unsigned int lost_cnt;
 	unsigned int fail_recv_cnt; //start job fail cnt
-	unsigned int cost_time; // current job cost time in us
+	unsigned int cost_time;// current job cost time in us
 	unsigned int max_cost_time;
 	unsigned int hw_cost_time; // current job Hw cost time in us
 	unsigned int hw_max_cost_time;
@@ -47,7 +50,6 @@ enum stitch_job_state {
 	STITCH_JOB_END,
 	STITCH_JOB_INVALID,
 };
-
 enum stitch_update_status {
 	STITCH_UPDATE_SRC = 1 << 0,
 	STITCH_UPDATE_CHN = 1 << 1,
@@ -56,6 +58,7 @@ enum stitch_update_status {
 };
 
 struct stitch_job {
+	size_s img_size;
 	stitch_job_cb fn_job_cb;
 	void *data;
 	atomic_t job_state; //stitch_job_state
@@ -85,8 +88,24 @@ struct __stitch_ctx {
 	struct timespec64 time;
 	struct vb_s *vb_out;
 	atomic_t enable_count;
-	struct mutex io_lock;
+	//struct mutex io_lock;
+	int core_id;	// index of handler_ctx
+	stitch_grp grp_id;
 };
+
+enum stitch_evt_state {
+	STITCH_EVT_STATE_IDLE,
+	STITCH_EVT_STATE_RUNNING,
+	STITCH_EVT_STATE_RUNNING_STAGE2,
+	STITCH_EVT_STATE_END,
+	STITCH_EVT_STATE_MAX,
+};
+
+struct grp_work {
+	stitch_grp grp;
+	void *private;
+};
+FIFO_HEAD(grp_work_queue, grp_work*);
 
 struct stitch_handler_ctx {
 	spinlock_t lock;
@@ -97,6 +116,10 @@ struct stitch_handler_ctx {
 	enum stitch_src_id src_id;
 	unsigned char prepared_flag;//bit[n] set 1, mean src[n] prepared
 	unsigned char events;
+	unsigned char core_id;	// index of handler_ctx
+	stitch_grp working_grp;
+	atomic_t evt_state;//specific enum stitch_evt_state
+	struct grp_work_queue grp_workq;
 };
 
 #ifdef __cplusplus

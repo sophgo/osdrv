@@ -76,6 +76,7 @@ void disp_hdmi_gen(dtd_t *mdtd)
 
 	_fill_disp_timing(&timing, mdtd);
 	disp_set_timing(DISP1, &timing);
+	disp_clk_enable(DISP1, TRUE);
 	disp_tgen_enable(DISP1, TRUE);
 }
 

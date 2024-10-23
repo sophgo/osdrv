@@ -75,6 +75,7 @@ typedef int vpss_chn;
 typedef int dpu_grp;
 typedef int dpu_chn;
 typedef int stitch_src_idx;
+typedef int stitch_grp;
 
 #define INVALID_CHN (-1)
 #define INVALID_LAYER (-1)
@@ -120,7 +121,6 @@ typedef int stitch_src_idx;
 	MOD(LOG)    \
 	MOD(H264D)  \
 	MOD(GDC)    \
-	MOD(DWA)    \
 	MOD(PHOTO)  \
 	MOD(FB)	    \
 	MOD(DPU)	\

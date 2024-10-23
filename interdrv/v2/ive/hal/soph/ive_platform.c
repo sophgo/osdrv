@@ -3471,7 +3471,7 @@ s32 set_img_src1(ive_src_image_s *src_img, img_in_c *img_in_c, ive_top_c *ive_to
 		break;
 	// api already stride[0] * 3
 	case IVE_IMAGE_TYPE_U8C3_PACKAGE:
-		img_in_c->reg_03.reg_src_y_pitch = src_img->stride[0] * 3;
+		img_in_c->reg_03.reg_src_y_pitch = src_img->stride[0];
 		writel(img_in_c->reg_03.val,
 				(IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_03));
 		img_in_c->reg_04.reg_src_c_pitch = 0;

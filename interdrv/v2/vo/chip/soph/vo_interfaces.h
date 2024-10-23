@@ -8,10 +8,6 @@
 #include "base_cb.h"
 #include "dsi_phy.h"
 
-static const char *const clk_disp_name[2] = {"clk_disp0", "clk_disp1"};
-static const char *const clk_bt_name[2] = {"clk_bt0", "clk_bt1"};
-static const char *const clk_dsi_name[2] = {"clk_dsi0", "clk_dsi1"};
-
 /*******************************************************
  *  File operations for core
  ******************************************************/

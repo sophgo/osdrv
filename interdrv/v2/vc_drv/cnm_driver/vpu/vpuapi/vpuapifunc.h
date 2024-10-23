@@ -279,6 +279,7 @@ typedef struct {
     Uint32          vlcBufSize;
     Uint32          paramBufSize;
     vpu_rpt_info_t  rpt_info;
+    Uint32          frameBufFlag;
 } DecInfo;
 
 

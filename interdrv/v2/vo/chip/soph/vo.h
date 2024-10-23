@@ -61,6 +61,7 @@ struct disp_pattern {
 };
 
 int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg);
+void vo_show_panttern(vo_dev dev);
 int vo_start_streaming(vo_dev dev);
 int vo_stop_streaming(vo_dev dev);
 int vo_create_thread(vo_layer layer);

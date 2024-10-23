@@ -9,7 +9,6 @@
 #include "vo_common.h"
 #include "vo_defines.h"
 
-extern bool __clk_is_enabled(struct clk *clk);
 extern struct vo_ctx *g_vo_ctx;
 
 static inline int check_video_layer_disable(vo_layer layer)

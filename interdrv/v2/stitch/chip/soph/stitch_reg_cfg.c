@@ -15,7 +15,7 @@
 #include "stitch_cfg.h"
 #include "stitch_debug.h"
 
-#define STITCH_RST_VI_SYS_APB 1
+#define STITCH_RST_VI_SYS_APB 0
 #define STITCH_RST_VI_SYS_STITCH 0
 #define STITCH_RST_STITCH 1
 

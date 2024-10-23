@@ -302,6 +302,7 @@ static int32_t _vb_destroy_pool(vb_pool poolid)
 		, poolid, FIFO_CAPACITY(&pool_ctx->freelist), FIFO_SIZE(&pool_ctx->freelist));
 	if (FIFO_CAPACITY(&pool_ctx->freelist) != FIFO_SIZE(&pool_ctx->freelist)) {
 		TRACE_BASE(DBG_INFO, "pool(%d) blk should be all released before destroy pool\n", poolid);
+		vb_print_pool(pool_ctx->poolid);
 		return -1;
 	}
 

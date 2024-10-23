@@ -58,10 +58,10 @@ void _isp_fe_be_raw_dump_cfg(struct sop_vi_dev *vdev, const enum sop_isp_raw raw
 			ispblk_csibdg_wdma_crop_config(ctx, raw_num, b->crop_le, 0);
 		}
 
-		ispblk_dma_setaddr(ctx, dmaid_le, b->addr);
+		ispblk_dma_setaddr(ctx, raw_num, dmaid_le, b->addr);
 		ispblk_csidbg_dma_wr_en(ctx, raw_num, ISP_FE_CH0, 1);
 		if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
-			ispblk_dma_setaddr(ctx, dmaid_se, b_se->addr);
+			ispblk_dma_setaddr(ctx, raw_num, dmaid_se, b_se->addr);
 			ispblk_csidbg_dma_wr_en(ctx, raw_num, ISP_FE_CH1, 1);
 		}
 
@@ -75,6 +75,11 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 	struct isp_buffer *b;
 	int ret = 0;
 	u8 raw_num = dump[0].raw_dump.raw_num;
+
+	if (ctx->isp_pipe_cfg[raw_num].is_tile && raw_num != ISP_PRERAW0) {
+		vi_pr(VI_ERR, "tile mode raw_num must be ISP_PRERAW0\n");
+		return -EINVAL;
+	}
 
 	if (isp_byr[raw_num] != 0 || isp_byr_se[raw_num] != 0) {
 		vi_pr(VI_ERR, "Release buffer first, call put pipe dump\n");
@@ -106,6 +111,9 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 	}
 
 	atomic_set(&vdev->isp_raw_dump_en[raw_num], 1);
+	if (ctx->isp_pipe_cfg[raw_num].is_tile)
+		atomic_set(&vdev->isp_raw_dump_en[raw_num + 1], 1);
+
 	ret = wait_event_interruptible_timeout(
 		vdev->isp_int_wait_q[raw_num], vdev->isp_int_flag[raw_num] != 0,
 		msecs_to_jiffies(dump->time_out));
@@ -230,6 +238,10 @@ int isp_start_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth
 
 	atomic_set(&vdev->isp_smooth_raw_dump_en[raw_num], 1);
 	atomic_set(&vdev->isp_raw_dump_en[raw_num], 1);
+	if (ctx->isp_pipe_cfg[raw_num].is_tile) {
+		atomic_set(&vdev->isp_smooth_raw_dump_en[raw_num + 1], 1);
+		atomic_set(&vdev->isp_raw_dump_en[raw_num + 1], 1);
+	}
 
 err:
 	if (ret == -1) {
@@ -383,6 +395,8 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 		wake_up_interruptible(&vdev->isp_int_wait_q[raw_num]);
 
 		atomic_set(&vdev->isp_raw_dump_en[raw_num], 0);
+		if (vdev->ctx.isp_pipe_cfg[raw_num].is_tile)
+			atomic_set(&vdev->isp_raw_dump_en[raw_num + 1], 0);
 		return;
 	}
 	case 1:
@@ -393,6 +407,8 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 		wake_up_interruptible(&vdev->isp_int_wait_q[raw_num]);
 
 		atomic_set(&vdev->isp_raw_dump_en[raw_num], 1);
+		if (vdev->ctx.isp_pipe_cfg[raw_num].is_tile)
+			atomic_set(&vdev->isp_raw_dump_en[raw_num + 1], 1);
 		return;
 	}
 	case 2:
@@ -412,6 +428,10 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 
 		atomic_set(&vdev->isp_raw_dump_en[raw_num], 0);
 		atomic_set(&vdev->isp_smooth_raw_dump_en[raw_num], 0);
+		if (vdev->ctx.isp_pipe_cfg[raw_num].is_tile) {
+			atomic_set(&vdev->isp_raw_dump_en[raw_num + 1], 0);
+			atomic_set(&vdev->isp_smooth_raw_dump_en[raw_num + 1], 0);
+		}
 		return;
 	}
 	}

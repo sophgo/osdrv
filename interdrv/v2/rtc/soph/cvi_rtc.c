@@ -95,6 +95,7 @@ static int cvi_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	struct cvi_rtc_info *info = dev_get_drvdata(dev);
 	unsigned long sec;
 	int ret;
+	int count = 0;
 	unsigned long sl_irq_flags;
 	/* convert tm to seconds. */
 	ret = rtc_valid_tm(tm);
@@ -122,9 +123,16 @@ static int cvi_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	writel(sec, info->rtc_base + CVI_RTC_SET_SEC_CNTR_VALUE);
 	writel(1, info->rtc_base + CVI_RTC_SET_SEC_CNTR_TRIG);
-	while(readl(info->rtc_base + CVI_RTC_SEC_CNTR_VALUE) != sec);
 	spin_unlock_irqrestore(&info->cvi_rtc_lock, sl_irq_flags);
-
+	// wait for set time active
+	while (readl(info->rtc_base + CVI_RTC_SEC_CNTR_VALUE) != sec) {
+		if (count++ > 500) {
+			//count = 250 break normaly
+			dev_err(NULL, "set inter-rtc timeout\n");
+			break;
+		}
+	}
+	// dev_err(NULL, "count = %d\n",count);
 	return ret;
 }
 

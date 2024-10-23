@@ -79,6 +79,10 @@ static void get_rc_mode_str(venc_rc_mode_e enRcMode, char *pRcMode)
     case VENC_RC_MODE_H265QPMAP:
         strcpy(pRcMode, "QPMAP");
         break;
+    case VENC_RC_MODE_H264UBR:
+    case VENC_RC_MODE_H265UBR:
+        strcpy(pRcMode, "UBR");
+        break;
     default:
         strcpy(pRcMode, "N/A");
         break;
@@ -233,6 +237,18 @@ static void get_framerate(venc_chn_attr_s *pstChnAttr, unsigned int *pu32SrcFram
         *pfr32DstFrameRate =
             pstChnAttr->stRcAttr.stH265QpMap.fr32DstFrameRate;
         break;
+    case VENC_RC_MODE_H264UBR:
+        *pu32SrcFrameRate =
+            pstChnAttr->stRcAttr.stH264Ubr.u32SrcFrameRate;
+        *pfr32DstFrameRate =
+            pstChnAttr->stRcAttr.stH264Ubr.fr32DstFrameRate;
+        break;
+    case VENC_RC_MODE_H265UBR:
+        *pu32SrcFrameRate =
+            pstChnAttr->stRcAttr.stH265Ubr.u32SrcFrameRate;
+        *pfr32DstFrameRate =
+            pstChnAttr->stRcAttr.stH265Ubr.fr32DstFrameRate;
+        break;
     default:
         break;
     }
@@ -251,20 +267,10 @@ static int venc_proc_show(struct seq_file *m, void *v)
             "-----MODULE PARAM---------------------------------------------\n");
         seq_printf(
             m,
-            "VencBufferCache: %u\t FrameBufRecycle: %d\t VencMaxChnNum: %u\n",
+            "VencBufferCache: %u\t FrameBufRecycle: %d\t VencMaxChnNum: %u\n\n",
             pVencModParam->stVencModParam.u32VencBufferCache,
             pVencModParam->stVencModParam.u32FrameBufRecycle,
             MaxVencChnNum);
-#ifdef CONFIG_ARCH_CV182X
-        seq_printf(
-            m, "H264/H265 share singleESBuf %d\n",
-            pVencModParam->stH264eModParam.bSingleEsBuf &&
-                pVencModParam->stH265eModParam.bSingleEsBuf &&
-                pVencModParam->stH264eModParam
-                        .u32SingleEsBufSize ==
-                    pVencModParam->stH265eModParam
-                        .u32SingleEsBufSize);
-#endif
 
         for (idx = 0; idx < MaxVencChnNum; idx++) {
             if (handle && handle->chn_handle[idx] != NULL) {
@@ -279,21 +285,15 @@ static int venc_proc_show(struct seq_file *m, void *v)
                 venc_chn_attr_s *pstChnAttr =
                     handle->chn_handle[idx]->pChnAttr;
                 venc_chn_param_s *pstChnParam =
-                    &handle->chn_handle[idx]
-                         ->pChnVars->stChnParam;
+                    &handle->chn_handle[idx]->pChnVars->stChnParam;
                 venc_chn_status_s *pchnStatus =
-                    &handle->chn_handle[idx]
-                         ->pChnVars->chnStatus;
+                    &handle->chn_handle[idx]->pChnVars->chnStatus;
                 venc_stream_s *pstStream =
-                    &handle->chn_handle[idx]
-                         ->pChnVars->stStream;
+                    &handle->chn_handle[idx]->pChnVars->stStream;
                 vcodec_perf_fps_s *pstFPS =
-                    &handle->chn_handle[idx]
-                         ->pChnVars->stFPS;
+                    &handle->chn_handle[idx]->pChnVars->stFPS;
                 video_frame_s *pstVFrame =
-                    &handle->chn_handle[idx]
-                         ->pChnVars->stFrameInfo
-                         .video_frame;
+                    &handle->chn_handle[idx]->pChnVars->stFrameInfo.video_frame;
 
                 get_codec_type_str(pstChnAttr->stVencAttr.enType,
                         cCodecType);
@@ -330,7 +330,7 @@ static int venc_proc_show(struct seq_file *m, void *v)
                     pchnStatus->u32LeftStreamFrames);
                 seq_printf(
                     m,
-                    "\t CurPacks: %u\t GopMode: %s\t Prio: %d\n",
+                    "\t CurPacks: %u\t GopMode: %s\t Prio: %d\n\n",
                     pchnStatus->u32CurPacks, cGopMode,
                     pstChnParam->u32Priority);
 
@@ -400,10 +400,9 @@ static int venc_proc_show(struct seq_file *m, void *v)
                     "-----VENC CROP INFO------------------------------------------------\n");
                 seq_printf(
                     m,
-                    "ID: %d\t CropEn: %s\t StartX: %d\t StartY: %d\t Width: %u\t Height: %u\n",
+                    "ID: %d\t CropEn: %s\t StartX: %d\t StartY: %d\t Width: %u\t Height: %u\n\n",
                     idx,
-                    pstChnParam->stCropCfg.bEnable ? "Y" :
-                                           "N",
+                    pstChnParam->stCropCfg.bEnable ? "Y" : "N",
                     pstChnParam->stCropCfg.stRect.x,
                     pstChnParam->stCropCfg.stRect.y,
                     pstChnParam->stCropCfg.stRect.width,
@@ -413,56 +412,26 @@ static int venc_proc_show(struct seq_file *m, void *v)
                     m,
                     "-----ROI INFO-----------------------------------------------------\n");
                 for (roiIdx = 0; roiIdx < 8; roiIdx++) {
-                    if (handle->chn_handle[idx]
-                            ->pChnVars
-                            ->stRoiAttr[roiIdx]
-                            .bEnable) {
+                    if (handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].bEnable) {
                         seq_printf(
                             m,
                             "ID: %d\t Index: %u\t bRoiEn: %s\t bAbsQp: %s\t Qp: %d",
                             idx,
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .u32Index,
-                            handle->chn_handle[idx]
-                                    ->pChnVars
-                                    ->stRoiAttr
-                                        [roiIdx]
-                                    .bEnable ?
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].u32Index,
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].bEnable ?
                                       "Y" :
                                       "N",
-                            handle->chn_handle[idx]
-                                    ->pChnVars
-                                    ->stRoiAttr
-                                        [roiIdx]
-                                    .bAbsQp ?
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].bAbsQp ?
                                       "Y" :
                                       "N",
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .s32Qp);
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].s32Qp);
                         seq_printf(
                             m,
-                            "\t Width: %u\t Height: %u\t StartX: %d\t StartY: %d\n",
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .stRect.width,
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .stRect
-                                .height,
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .stRect.x,
-                            handle->chn_handle[idx]
-                                ->pChnVars
-                                ->stRoiAttr[roiIdx]
-                                .stRect.y);
+                            "\t Width: %u\t Height: %u\t StartX: %d\t StartY: %d\n\n",
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].stRect.width,
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].stRect.height,
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].stRect.x,
+                            handle->chn_handle[idx]->pChnVars->stRoiAttr[roiIdx].stRect.y);
                     }
                 }
 
@@ -479,7 +448,7 @@ static int venc_proc_show(struct seq_file *m, void *v)
                     "-----VENC PTS STATE------------------------------------------------\n");
                 seq_printf(
                     m,
-                    "ID: %d\t RcvFirstFrmPts: %llu\t RcvFrmPts: %llu\n",
+                    "ID: %d\t RcvFirstFrmPts: %llu\t RcvFrmPts: %llu\n\n",
                     idx, 0LL, pstVFrame->pts);
 
                 seq_puts(
@@ -1649,7 +1618,11 @@ static int rc_proc_show(struct seq_file *m, void *v)
             if (pstChnAttr->stRcAttr.enRcMode ==
                     VENC_RC_MODE_H264CBR ||
                 pstChnAttr->stRcAttr.enRcMode ==
-                    VENC_RC_MODE_H265CBR) {
+                    VENC_RC_MODE_H265CBR ||
+                pstChnAttr->stRcAttr.enRcMode ==
+                    VENC_RC_MODE_H264UBR ||
+                pstChnAttr->stRcAttr.enRcMode ==
+                    VENC_RC_MODE_H265UBR) {
                 seq_puts(
                     m,
                     "-----SUPER FRAME PARAM -------------------------------------------\n");
@@ -1659,10 +1632,19 @@ static int rc_proc_show(struct seq_file *m, void *v)
                     idx, pstSuperFrmParam->enSuperFrmMode,
                     pstSuperFrmParam->u32SuperIFrmBitsThr,
                     pstSuperFrmParam->u32SuperPFrmBitsThr);
-
-                seq_puts(
+                if (pstChnAttr->stRcAttr.enRcMode ==
+                        VENC_RC_MODE_H264CBR ||
+                    pstChnAttr->stRcAttr.enRcMode ==
+                        VENC_RC_MODE_H265CBR) {
+                    seq_puts(
                     m,
                     "-----RUN CBR PARAM -------------------------------------------\n");
+                } else {
+                    seq_puts(
+                    m,
+                    "-----RUN UBR PARAM -------------------------------------------\n");
+                }
+
                 seq_printf(
                     m,
                     "ChnId: %d\t MinIprop: %u\t MaxIprop: %u\t MaxQp: %u\t MinQp: %u",
@@ -1673,6 +1655,14 @@ static int rc_proc_show(struct seq_file *m, void *v)
                     "\t MaxIQp: %u\t MinIQp: %u\t MaxReEncTimes: %d\n",
                     u32MaxIQp, u32MinIQp,
                     s32MaxReEncodeTimes);
+            } else if (pstChnAttr->stRcAttr.enRcMode == VENC_RC_MODE_MJPEGCBR) {
+                seq_puts(
+                    m,
+                    "-----RUN CBR PARAM -------------------------------------------\n");
+                seq_printf(
+                    m,
+                    "\t ChnId: %d\t MaxQfactor: %u\t MinQfactor: %u\n",
+                    idx, u32MaxQfactor, u32MinQfactor);
             } else if (pstChnAttr->stRcAttr.enRcMode ==
                        VENC_RC_MODE_H264VBR ||
                    pstChnAttr->stRcAttr.enRcMode ==
@@ -1690,6 +1680,14 @@ static int rc_proc_show(struct seq_file *m, void *v)
                     "\t MinQp: %u\t MaxIQp: %u\t MinIQp: %u\t MaxReEncTimes: %d\n",
                     u32MinQp, u32MaxIQp, u32MinIQp,
                     s32MaxReEncodeTimes);
+            } else if (pstChnAttr->stRcAttr.enRcMode == VENC_RC_MODE_MJPEGVBR) {
+                seq_puts(
+                    m,
+                    "-----RUN VBR PARAM -------------------------------------------\n");
+                seq_printf(
+                    m,
+                    "\t ChnId: %d\t ChgPs: %d\t MaxQfactor: %u\t MinQfactor: %u\n",
+                    idx, s32ChangePos, u32MaxQfactor, u32MinQfactor);
             } else if (pstChnAttr->stRcAttr.enRcMode ==
                        VENC_RC_MODE_H264AVBR ||
                    pstChnAttr->stRcAttr.enRcMode ==
@@ -1773,7 +1771,7 @@ static int vdec_proc_show(struct seq_file *m, void *v)
 
         seq_printf(
             m,
-            "VdecMaxChnNum: %u\t MiniBufMode: %u\t enVdecVBSource: %d\t ParallelMode: %u\n",
+            "VdecMaxChnNum: %u\t MiniBufMode: %u\t\t enVdecVBSource: %d\t ParallelMode: %u\n",
             MaxVdecChnNum, pVdecModParam->u32MiniBufMode,
             pVdecModParam->enVdecVBSource,
             pVdecModParam->u32ParallelMode);
@@ -1786,16 +1784,16 @@ static int vdec_proc_show(struct seq_file *m, void *v)
             pVdecModParam->stVideoModParam.u32MaxSliceNum);
         seq_printf(
             m,
-            "\t VdhMsgNum: %u\t VdhBinSize: %u\t VdhExtMemLevel: %u",
+            "\t VdhMsgNum: %u\t\t VdhBinSize: %u\t VdhExtMemLevel: %u",
             pVdecModParam->stVideoModParam.u32VdhMsgNum,
             pVdecModParam->stVideoModParam.u32VdhBinSize,
             pVdecModParam->stVideoModParam.u32VdhExtMemLevel);
-        seq_printf(m, "\t MaxJpegeWidth: %u\t MaxJpegeHeight: %u",
+        seq_printf(m, "\nMaxJpegeWidth: %u\t MaxJpegeHeight: %u",
                pVdecModParam->stPictureModParam.u32MaxPicWidth,
                pVdecModParam->stPictureModParam.u32MaxPicHeight);
         seq_printf(
             m,
-            "\t SupportProgressive: %d\t DynamicAllocate: %d\t CapStrategy: %d\n",
+            "\t SupportProgressive: %d\t DynamicAllocate: %d\t CapStrategy: %d\n\n",
             pVdecModParam->stPictureModParam.bSupportProgressive,
             pVdecModParam->stPictureModParam.bDynamicAllocate,
             pVdecModParam->stPictureModParam.enCapStrategy);
@@ -1840,22 +1838,12 @@ static int vdec_proc_show(struct seq_file *m, void *v)
                     break;
                 }
 
-                switch (pstChnParam->stVdecVideoParam
-                        .enOutputOrder) {
-                case VIDEO_OUTPUT_ORDER_DEC:
-                    strcpy(cOutputOrder, "DEC");
-                    break;
-                case VIDEO_OUTPUT_ORDER_BUTT:
-                    strcpy(cOutputOrder, "BUTT");
-                    break;
-                case VIDEO_OUTPUT_ORDER_DISP:
-                default:
+                if (pstChnAttr->u8ReorderEnable)
                     strcpy(cOutputOrder, "DISP");
-                    break;
-                }
+                else
+                    strcpy(cOutputOrder, "DEC");
 
-                switch (pstChnParam->stVdecVideoParam
-                        .enCompressMode) {
+                switch (pstChnParam->stVdecVideoParam.enCompressMode) {
                 case COMPRESS_MODE_TILE:
                     strcpy(cCompressMode, "TILE");
                     break;
@@ -1885,7 +1873,7 @@ static int vdec_proc_show(struct seq_file *m, void *v)
                     pstFrame->height);
                 seq_printf(
                     m,
-                    "\t Stride: %u\t PixelFormat: %s\t PTS: %llu\t PA: 0x%llx\n",
+                    "\t Stride: %u\t output pixel format: %s\t PTS: %llu\t PA: 0x%llx\n",
                     pstFrame->stride[0], cPixelFormat,
                     pstFrame->pts,
                     pstFrame->phyaddr[0]);
@@ -1894,17 +1882,15 @@ static int vdec_proc_show(struct seq_file *m, void *v)
                           cPixelFormat);
                 seq_printf(
                     m,
-                    "StrInputMode: %s\t StrBufSize: %u\t FrmBufSize: %u\t ParamPixelFormat %s",
-                    "FRAME/NOBLOCK",
+                    "InputMode: %s\t StreamBufSize: %u\t\t FrmBufSize: %u",
+                    pstChnAttr->enMode==VIDEO_MODE_STREAM ? "stream" : "frame",
                     pstChnAttr->u32StreamBufSize,
-                    pstChnAttr->u32FrameBufSize,
-                    cPixelFormat);
+                    pstChnAttr->u32FrameBufSize);
                 seq_printf(
                     m,
-                    "\t FrmBufCnt: %u\t TmvBufSize: %u\n",
+                    "\t extra FrmBufCnt: %u\t\t TmvBufSize: %u\n",
                     pstChnAttr->u32FrameBufCnt,
-                    pstChnAttr->stVdecVideoAttr
-                        .u32TmvBufSize);
+                    pstChnAttr->stVdecVideoAttr.u32TmvBufSize);
 
                 seq_printf(
                     m,
@@ -1912,8 +1898,10 @@ static int vdec_proc_show(struct seq_file *m, void *v)
                     idx, 2, "PLAYBACK", "N", "N");
                 seq_printf(
                     m,
-                    "\t Rotation: %u\t PicPoolId: %d\t TmvPoolId: %d\t STATE: %s\n",
-                    0, -1, -1, "START");
+                    "\t Rotation: %u\t PicPoolId: %d\t TmvPoolId: %d\t STATE: %s\n\n",
+                    (pstChnAttr->enType == PT_JPEG || pstChnAttr->enType == PT_MJPEG) ?
+                        pstChnParam->stVdecPictureParam.s32RotAngle : 0,
+                    pChnHandle->bHasVbPool ? pChnHandle->vbPool.hPicVbPool : -1, -1, "START");
 
                 seq_puts(
                     m,
@@ -1923,33 +1911,25 @@ static int vdec_proc_show(struct seq_file *m, void *v)
                     "ID: %d\t VfmwID: %d\t RefNum: %u\t TemporalMvp: %s\t ErrThr: %d",
                     idx,
                     pstChnAttr->enType == PT_H265 ? 0 : 1,
-                    pstChnAttr->stVdecVideoAttr
-                        .u32RefFrameNum,
-                    pstChnAttr->stVdecVideoAttr
-                            .bTemporalMvpEnable ?
+                    pstChnAttr->stVdecVideoAttr.u32RefFrameNum,
+                    pstChnAttr->stVdecVideoAttr.bTemporalMvpEnable ?
                               "Y" :
                               "N",
-                    pstChnParam->stVdecVideoParam
-                        .s32ErrThreshold);
+                    pstChnParam->stVdecVideoParam.s32ErrThreshold);
                 seq_printf(
                     m,
                     "\t DecMode: %s\t OutPutOrder: %s\t Compress: %s\t VideoFormat: %d",
                     cDecMode, cOutputOrder, cCompressMode,
-                    pstChnParam->stVdecVideoParam
-                        .enVideoFormat);
+                    pstChnParam->stVdecVideoParam.enVideoFormat);
                 seq_printf(
                     m,
-                    "\t MaxVPS: %u\t MaxSPS: %u\t MaxPPS: %u\t MaxSlice: %u\n",
-                    0, 0, 0,
-                    pVdecModParam->stVideoModParam
-                        .u32MaxSliceNum);
+                    "\t MaxVPS: %u\t MaxSPS: %u\t MaxPPS: %u\n\n",
+                    0, 0, 0);
 
                 seq_puts(
                     m,
                     "----- CHN PICTURE ATTR & PARAMS---------------------------------\n");
-                seq_printf(m, "ID: %d\t Alpha: %u\n", idx,
-                       pstChnParam->stVdecPictureParam
-                           .u32Alpha);
+                seq_printf(m, "ID: %d\t Alpha: %u\n\n", idx, pstChnParam->stVdecPictureParam.u32Alpha);
 
 // TODO: following info should be amended later
 #if 0

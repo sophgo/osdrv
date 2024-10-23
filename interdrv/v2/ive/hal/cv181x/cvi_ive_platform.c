@@ -7564,11 +7564,11 @@ s32 cvi_ive_map(struct cvi_ive_device *ndev, IVE_SRC_IMAGE_S *pstSrc,
 			u16Word = (0x00ff & *pu8Ptr);
 			pu8Ptr++;
 		} else {
-			// u16Word = *pu16Ptr;
-			if (l >= 0xB0 && l <= 0xBF)
-				u16Word = 0x470 + (l - 0xB0);
-			else
-				u16Word = (0x00ff & l);
+			u16Word = *pu16Ptr;
+			// if (l >= 0xB0 && l <= 0xBF)
+			// 	u16Word = 0x470 + (l - 0xB0);
+			// else
+			// 	u16Word = (0x00ff & l);
 			pu16Ptr++;
 		}
 		ive_map_c.REG_3.reg_lut_wdata = u16Word;

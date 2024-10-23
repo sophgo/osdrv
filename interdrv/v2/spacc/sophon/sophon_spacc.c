@@ -73,7 +73,12 @@ static int cvi_spacc_base64(u32 customer_code, u32 action)
 	phys_addr_t value_phys;
 
 	value_phys = virt_to_phys(g_spacc_dev.pool);
+	//for gcc 9.3.0
+	arch_sync_dma_for_device(value_phys
+		, g_spacc_dev.data_size, DMA_TO_DEVICE);
+#if 0
 	__dma_map_area(phys_to_virt(value_phys), g_spacc_dev.data_size, DMA_TO_DEVICE);
+#endif
 
 	arm_smccc_smc(OPTEE_SMC_CALL_CV_BASE64, (unsigned long)value_phys, g_spacc_dev.data_size,
 		      (unsigned long)value_phys, customer_code, action, 0, 0, &res);
@@ -85,13 +90,13 @@ static int cvi_spacc_base64(u32 customer_code, u32 action)
 static int cvi_spacc_base64_inner(struct cvi_spacc_base64_inner *b64)
 {
 	struct arm_smccc_res res = {0};
-
-	__dma_map_area(phys_to_virt(b64->src), b64->len, DMA_TO_DEVICE);
+	arch_sync_dma_for_device(b64->src, b64->len, DMA_TO_DEVICE);
+	// __dma_map_area(phys_to_virt(b64->src), b64->len, DMA_TO_DEVICE);
 
 	arm_smccc_smc(OPTEE_SMC_CALL_CV_BASE64, b64->src, b64->len,
 		      b64->dst, b64->customer_code, b64->action, 0, 0, &res);
-
-	__dma_map_area(phys_to_virt(b64->dst), res.a0, DMA_FROM_DEVICE);
+	arch_sync_dma_for_device(b64->dst, res.a0, DMA_FROM_DEVICE);
+	// __dma_map_area(phys_to_virt(b64->dst), res.a0, DMA_FROM_DEVICE);
 	pr_debug("res a0 : %lu\n", res.a0);
 
 	return res.a0;

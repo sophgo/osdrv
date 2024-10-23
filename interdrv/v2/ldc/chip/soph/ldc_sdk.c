@@ -5,6 +5,7 @@
 #include <linux/clk.h>
 #include <linux/mm.h>
 #include <uapi/linux/sched/types.h>
+#include <linux/delay.h>
 
 #include <linux/comm_video.h>
 #include <linux/comm_gdc.h>
@@ -29,6 +30,7 @@
 #define BGCOLOR_GRAY  (0x808080)
 #define BGCOLOR_GREEN  (YUV_8BIT(0, 128, 128))
 #define LDC_INTR_EN_ALL (0x01)
+#define DWA_INTR_EN_ALL (0x07)
 #define LDC_INTR_EN_NULL (0x0)
 #define LDC_INVALID_CORE_ID (LDC_DEV_MAX_CNT + 1)
 
@@ -191,11 +193,12 @@ static void ldc_hdl_hw_tsk_cb(struct ldc_vdev *wdev, struct ldc_job *job
 		if (!job->identity.sync_io && is_last) {
 			vb_done = kzalloc(sizeof(*vb_done), GFP_ATOMIC);
 
-			spin_lock_irqsave(&wdev->job_lock, flags);
 			memcpy(&vb_done->img_out, &tsk->attr.img_out, sizeof(vb_done->img_out));
 			memcpy(&vb_done->job, job, sizeof(*job));
+
+			spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
 			list_add_tail(&vb_done->node, &wdev->vb_doneq.doneq);
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
+			spin_unlock_irqrestore(&wdev->vb_doneq.lock, flags);
 
 			TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 			up(&wdev->vb_doneq.sem);
@@ -210,14 +213,19 @@ static void ldc_hdl_hw_tsk_cb(struct ldc_vdev *wdev, struct ldc_job *job
 }
 
 static void ldc_wkup_cmdq_tsk(struct ldc_core *core) {
+	unsigned long flags;
+
 #if USE_REAL_CMDQ
 	(void)(core);
 #else
-	TRACE_LDC(DBG_DEBUG, "ldc_wkup_cmdq_tsk\n");
+	spin_lock_irqsave(&core->core_lock, flags);
 
 	core->cmdq_evt = true;
+	spin_unlock_irqrestore(&core->core_lock, flags);
+
 	wake_up_interruptible(&core->cmdq_wq);
 #endif
+	TRACE_LDC(DBG_DEBUG, "ldc_wkup_cmdq_tsk\n");
 }
 
 static void ldc_notify_wkup_evt_kth(void *data, enum ldc_wait_evt evt)
@@ -230,12 +238,13 @@ static void ldc_notify_wkup_evt_kth(void *data, enum ldc_wait_evt evt)
 		return;
 	}
 
-	spin_lock_irqsave(&dev->job_lock, flags);
+	spin_lock_irqsave(&dev->wdev_lock, flags);
 	dev->evt |= evt;
-	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
 
 	wake_up_interruptible(&dev->wait);
+
+	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
 }
 
 static void ldc_clr_evt_kth(void *data)
@@ -249,51 +258,54 @@ static void ldc_clr_evt_kth(void *data)
 		return;
 	}
 
-	spin_lock_irqsave(&dev->job_lock, flags);
 	evt = dev->evt;
+	spin_lock_irqsave(&dev->wdev_lock, flags);
 	dev->evt &= ~evt;
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
 	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
 }
 
-static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job, unsigned char irq_coreid)
+static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job)
 {
 	unsigned long flags;
 	struct fasync_struct *fasync;
+	struct ldc_core *core;
+	int coreid;
 
-	if (!job) {
-		TRACE_LDC(DBG_ERR, "null job\n");
-		return;
-	}
+	coreid = job->coreid;
+	core = &dev->core[coreid];
 
 	atomic_set(&job->job_state, LDC_JOB_END);
 
 	ldc_proc_record_job_done(job);
 
-	spin_lock_irqsave(&dev->job_lock, flags);
-	dev->job_cnt--;
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-	ldc_notify_wkup_evt_kth(dev, LDC_EVENT_EOF);
+	spin_lock_irqsave(&job->lock, flags);
+	list_del(&job->node);
+	job->job_done_evt = true;
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_INFO, "job [%px] done\n", job);
+
+	atomic_set(&core->state, LDC_CORE_STATE_IDLE);
 
 	if (job->identity.sync_io) {
-		TRACE_LDC(DBG_INFO, "job[%px]\n", job);
-		job->job_done_evt = true;
+		TRACE_LDC(DBG_INFO, "job[%px] wake endjob\n", job);
 		wake_up(&job->job_done_wq);
 	} else {
 		kfree(job);
-		job = NULL;
 		fasync = ldc_get_dev_fasync();
 		kill_fasync(&fasync, SIGIO, POLL_IN);
 	}
-	TRACE_LDC(DBG_DEBUG, "job done\n");
+
+	ldc_notify_wkup_evt_kth(dev, LDC_EVENT_EOF);
 }
 
 static void ldc_work_handle_tsk_done(struct ldc_vdev *dev
-	, struct ldc_task *tsk, struct ldc_job *job, unsigned char irq_coreid, bool is_last_tsk)
+	, struct ldc_task *tsk, struct ldc_job *job, bool is_last_tsk)
 {
 	unsigned long flags;
 
-	if (!tsk) {
+	if (unlikely(!tsk)) {
 		TRACE_LDC(DBG_ERR, "null tsk\n");
 		return;
 	}
@@ -306,15 +318,15 @@ static void ldc_work_handle_tsk_done(struct ldc_vdev *dev
 
 		ldc_proc_record_hw_tsk_done(job, tsk);
 
-		spin_lock_irqsave(&dev->job_lock, flags);
-		TRACE_LDC(DBG_DEBUG, "tsk[%px]\n", tsk);
-		kfree(tsk);
-		tsk = NULL;
-		spin_unlock_irqrestore(&dev->job_lock, flags);
+		TRACE_LDC(DBG_INFO, "tsk[%px] done, is last tsk[%d]\n", tsk, is_last_tsk);
 
-		TRACE_LDC(DBG_DEBUG, "tsk done, is last tsk[%d]\n", is_last_tsk);
+		spin_lock_irqsave(&job->lock, flags);
+		list_del(&tsk->node);
+		spin_unlock_irqrestore(&job->lock, flags);
+		kfree(tsk);
+
 		if (is_last_tsk) {
-			ldc_work_handle_job_done(dev, job, irq_coreid);
+			ldc_work_handle_job_done(dev, job);
 		}
 	} else {
 		TRACE_LDC(DBG_ERR, "invalid tsk state(%d).\n"
@@ -322,49 +334,35 @@ static void ldc_work_handle_tsk_done(struct ldc_vdev *dev
 	}
 }
 
-void ldc_work_handle_frm_done(struct ldc_vdev *dev, struct ldc_core *core)
+static void ldc_work_handle_frm_done(int coreid)
 {
+	struct ldc_vdev *dev = ldc_get_dev();
+	struct ldc_core *core = &dev->core[coreid];
 	struct ldc_job *job;
 	struct ldc_task *tsk;
 	unsigned long flags;
-	unsigned char irq_coreid;
-	bool is_last_tsk = false;
+	bool is_last_tsk;
 
-	if(!dev) {
-		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
+	spin_lock_irqsave(&core->core_lock, flags);
+	job = list_first_entry_or_null(&core->list, struct ldc_job, node);
+	spin_unlock_irqrestore(&core->core_lock, flags);
+
+	if (unlikely(!job)) {
+		TRACE_LDC(DBG_ERR, "core[%d] null job", coreid);
 		return;
 	}
 
-	atomic_set(&core->state, LDC_CORE_STATE_IDLE);
-	irq_coreid = (u8)core->dev_type;
-	TRACE_LDC(DBG_INFO, "core(%d) state set(%d)\n", irq_coreid, LDC_CORE_STATE_IDLE);
-
-	if (unlikely(irq_coreid) >= DEV_LDC_MAX)
-		return;
-
-	spin_lock_irqsave(&dev->job_lock, flags);
-	job = list_first_entry_or_null(&dev->list.done_list[irq_coreid], struct ldc_job, node);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-
-	if (unlikely(!job))
-		return;
-
 	if (atomic_read(&job->job_state) == LDC_JOB_WORKING) {
-		spin_lock_irqsave(&dev->job_lock, flags);
-		tsk = list_first_entry_or_null(&dev->core[irq_coreid].list.done_list, struct ldc_task, node);
-		if (unlikely(!tsk)) {
-			spin_unlock_irqrestore(&dev->job_lock, flags);
-			return;
-		}
-		is_last_tsk = (atomic_read(&job->task_num) > 1 ? false : true);
-		list_del(&tsk->node);
-		list_del(&job->node);
-		spin_unlock_irqrestore(&dev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
+		tsk = list_first_entry_or_null(&job->task_list, struct ldc_task, node);
+		spin_unlock_irqrestore(&job->lock, flags);
 
-		ldc_work_handle_tsk_done(dev, tsk, job, irq_coreid, is_last_tsk);
+		is_last_tsk = ((atomic_read(&job->task_num) > 1) ? false : true);
+
+		ldc_work_handle_tsk_done(dev, tsk, job, is_last_tsk);
 
 		if (job && job->use_cmdq && !is_last_tsk)
-			ldc_wkup_cmdq_tsk(&dev->core[irq_coreid]);
+			ldc_wkup_cmdq_tsk(core);
 	} else {
 		TRACE_LDC(DBG_ERR, "invalid job(%px) state(%d).\n"
 			, job, (enum ldc_job_state)atomic_read(&job->job_state));
@@ -375,107 +373,29 @@ void ldc_work_handle_frm_done(struct ldc_vdev *dev, struct ldc_core *core)
 static void ldc_work_frm_done(struct work_struct *work)//intr post handle
 {
 	struct ldc_core *core = container_of(work, struct ldc_core, work_frm_done);
-	struct ldc_vdev *dev = ldc_get_dev();
 
-	if(!core || !dev) {
-		TRACE_LDC(DBG_ERR, "ldc vdev or core isn't created yet.\n");
-		return;
-	}
-
-	ldc_work_handle_frm_done(dev, core);
+	ldc_work_handle_frm_done((int)core->dev_type);
 }
 #endif
 
-static void ldc_wkup_frm_done_work(void *data, int top_id)
+//wakeup post handle
+void ldc_wkup_frm_done_work(void *data)
 {
 	struct ldc_core *core = (struct ldc_core *)data;
-	(void)top_id;
-
-	if (!core) {
-		TRACE_LDC(DBG_ERR, "ldc core isn't created yet.\n");
-		return;
-	}
 
 #if LDC_USE_WORKQUEUE
-	//queue_work(dev->workqueue, &dev->work_frm_done);//wakeup post handle
+	//queue_work(dev->workqueue, &dev->work_frm_done);
 	schedule_work(&core->work_frm_done);
 #else
-	ldc_work_handle_frm_done(ldc_get_dev(), core);
+	ldc_work_handle_frm_done((int)core->dev_type);
 #endif
 }
 
-static void ldc_reset_cur_abord_job(struct ldc_vdev *dev, unsigned char coreid, struct ldc_job *job)
-{
-#if USE_EXCEPTION_HDL
-	struct ldc_task *tsk, tsk_tmp;
-
-	if (unlikely(!dev)) {
-		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
-		return;
-	}
-
-	if (unlikely(!job)) {
-		TRACE_LDC(DBG_ERR, "err job is null\n");
-		return;
-	}
-
-	if (list_empty(&job->task_list)) {
-		TRACE_LDC(DBG_ERR, "err tsklist is null\n");
-		return;
-	}
-
-	list_for_each_entry_safe(tsk, tsk_tmp, &job->task_list, node) {
-		if (unlikely(!tsk)) {
-			TRACE_LDC(DBG_ERR, "cur job(%px) cur tsk is null\n", job);
-			continue;
-		}
-
-		if (unlikely(tsk->tsk_id < 0 || tsk->tsk_id >= LDC_JOB_MAX_TSK_NUM)) {
-			TRACE_LDC(DBG_ERR, "cur job(%px) cur tsk id(%d) invalid\n", job, tsk->tsk_id);
-			continue;
-		}
-
-		ldc_intr_ctrl(LDC_INTR_EN_NULL, coreid);
-		ldc_disable(coreid);
-		ldc_reset(coreid);
-
-		atomic_set(&dev->core[coreid]->state, LDC_CORE_STATE_IDLE);
-
-		ldc_notify_wkup_evt_kth(dev, LDC_EVENT_RST);
-		up(&tsk->sem);
-	}
-
-	atomic_set(&dev->state, LDC_DEV_STATE_RUNNING);
-#else
-	(void) dev;
-	(void) coreid;
-	(void) job;
-	return;
-#endif
-}
-
-static void ldc_try_reset_abort_job(struct ldc_vdev *wdev)
-{
-	unsigned char coreid;
-	unsigned long flags;
-	struct ldc_job *work_job;
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	for (coreid = 0; coreid < wdev->core_num; coreid++) {
-		work_job = list_first_entry_or_null(&wdev->list.work_list[coreid], struct ldc_job, node);
-		if (unlikely(!work_job)) {
-			TRACE_LDC(DBG_NOTICE, "ldc vdev core[%d] select timeout,hw busy\n", coreid);
-			ldc_reset_cur_abord_job(wdev, coreid, work_job);
-		}
-	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
-}
 
 static void ldc_set_tsk_run_status(struct ldc_vdev *wdev, int top_id
 	, struct ldc_job *job, struct ldc_task *tsk)
 {
 	atomic_set(&wdev->core[top_id].state, LDC_CORE_STATE_RUNNING);
-	TRACE_LDC(DBG_INFO, "core(%d) state set(%d)\n", top_id, LDC_CORE_STATE_RUNNING);
 
 	atomic_set(&tsk->state, LDC_TASK_STATE_RUNNING);
 
@@ -490,104 +410,152 @@ static void ldc_submit_hw(struct ldc_vdev *wdev, int top_id
 	pixel_format_e pix_format;
 	rotation_e rotation;
 	unsigned long long mesh_addr;
-	unsigned char num_of_plane, extend_haddr;
+	unsigned char num_of_plane, extend_haddr, i;
 	unsigned long flags;
-	struct ldc_job *work_job;
-	struct ldc_task *work_tsk;
+	unsigned int bg_color;
 
 	ldc_set_tsk_run_status(wdev, top_id, job, tsk);
 
-	mesh_addr = tsk->attr.private_data[0];
-	mesh_addr = (mesh_addr != DEFAULT_MESH_PADDR) ? mesh_addr : 0;
+	bg_color = tsk->attr.private_data[3];
+	mesh_addr = (tsk->attr.private_data[0] != DEFAULT_MESH_PADDR)
+		     ? tsk->attr.private_data[0] : 0;
 	in_frame = &tsk->attr.img_in.video_frame;
 	out_frame = &tsk->attr.img_out.video_frame;
 	pix_format = in_frame->pixel_format;
 	rotation = tsk->rotation;
 
 	memset(&cfg, 0, sizeof(cfg));
-	switch (out_frame->pixel_format) {
-	case PIXEL_FORMAT_YUV_400:
-		cfg.pix_fmt = YUV400;
-		num_of_plane = 1;
-		break;
-	case PIXEL_FORMAT_NV12:
-	case PIXEL_FORMAT_NV21:
-	default:
-		cfg.pix_fmt = NV21;
-		num_of_plane = 2;
-		break;
-	};
 
-	switch (rotation) {
-	case ROTATION_90:
-		cfg.dst_mode = LDC_DST_ROT_270;
+	if (!job->devs_type)	{
+		switch (out_frame->pixel_format) {
+		case PIXEL_FORMAT_YUV_400:
+			cfg.pix_fmt = YUV400;
+			num_of_plane = 1;
+			break;
+		case PIXEL_FORMAT_NV12:
+		case PIXEL_FORMAT_NV21:
+		default:
+			cfg.pix_fmt = NV21;
+			num_of_plane = 2;
+			break;
+		};
+
+		switch (rotation) {
+		case ROTATION_90:
+			cfg.dst_mode = LDC_DST_ROT_270;
+			break;
+		case ROTATION_270:
+			cfg.dst_mode = LDC_DST_ROT_90;
+			break;
+		case ROTATION_XY_FLIP:
+			cfg.dst_mode = LDC_DST_XY_FLIP;
+			break;
+		default:
+			cfg.dst_mode = LDC_DST_FLAT;
+			break;
+		}
+
+		cfg.map_base = mesh_addr;
+		cfg.bgcolor = LDC_YUV_BLACK /*ctx->bgcolor*/;
+		cfg.src_width = ALIGN(in_frame->width, 64);
+		cfg.src_height = ALIGN(in_frame->height, 64);
+		cfg.ras_width = cfg.src_width;
+		cfg.ras_height = cfg.src_height;
+
+		if (cfg.map_base == 0)
+			cfg.map_bypass = true;
+		else
+			cfg.map_bypass = false;
+
+		cfg.src_xstart = 0;
+		cfg.src_xend = in_frame->width - 1;
+
+		extend_haddr = in_frame->phyaddr[0] >> 33;
+		cfg.extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
+
+		cfg.src_y_base = in_frame->phyaddr[0];
+		cfg.dst_y_base = out_frame->phyaddr[0];
+		if (num_of_plane == 2) {
+			cfg.src_c_base = in_frame->phyaddr[1];
+			cfg.dst_c_base = out_frame->phyaddr[1];
+		}
+	} else {
+		switch (out_frame->pixel_format) {
+		case PIXEL_FORMAT_YUV_PLANAR_420:
+			cfg.pix_fmt = YUV420p;
+			num_of_plane = 3;
 		break;
-	case ROTATION_270:
-		cfg.dst_mode = LDC_DST_ROT_90;
+		case PIXEL_FORMAT_YUV_400:
+			cfg.pix_fmt = 2;
+			num_of_plane = 1;
 		break;
-	case ROTATION_XY_FLIP:
-		cfg.dst_mode = LDC_DST_XY_FLIP;
+		case PIXEL_FORMAT_RGB_888_PLANAR:
+		case PIXEL_FORMAT_YUV_PLANAR_444:
+		default:
+			cfg.pix_fmt = RGB888p;
+			num_of_plane = 3;
 		break;
-	default:
-		cfg.dst_mode = LDC_DST_FLAT;
-		break;
+		};
+
+		cfg.mesh_id = mesh_addr;
+		cfg.map_base = mesh_addr;
+		cfg.output_target = 1;//dram or sclr
+		cfg.bgcolor = bg_color;;
+		cfg.bdcolor = (u32)BGCOLOR_GREEN;
+		//cfg.bgcolor_dwa = tsk->bgcolor;
+		//cfg.bdcolor_dwa = tsk->bdcolor;
+		cfg.src_width  = in_frame->width;
+		cfg.src_height = in_frame->height;
+		cfg.dst_width  = out_frame->width;
+		cfg.dst_height = out_frame->height;
+
+		for (i = 0; i < num_of_plane; ++i) {
+			unsigned long long addr = in_frame->phyaddr[i];
+
+			cfg.src_buf[i].addrl    = addr;
+			cfg.src_buf[i].addrh    = addr >> 32;
+			cfg.src_buf[i].pitch    = in_frame->stride[i];
+			cfg.src_buf[i].offset_x = cfg.src_buf[i].offset_y = 0;
+
+			addr = out_frame->phyaddr[i];
+
+			cfg.dst_buf[i].addrl    = addr;
+			cfg.dst_buf[i].addrh    = addr >> 32;
+			cfg.dst_buf[i].pitch    = out_frame->stride[i];
+			cfg.dst_buf[i].offset_x = cfg.src_buf[i].offset_y = 0;
+		}
 	}
 
-	cfg.map_base = mesh_addr;
-	cfg.bgcolor = (u16)LDC_YUV_BLACK /*ctx->bgcolor*/;
-	cfg.src_width = ALIGN(in_frame->width, 64);
-	cfg.src_height = ALIGN(in_frame->height, 64);
-	cfg.ras_width = cfg.src_width;
-	cfg.ras_height = cfg.src_height;
-
-	if (cfg.map_base == 0)
-		cfg.map_bypass = true;
-	else
-		cfg.map_bypass = false;
-
-	cfg.src_xstart = 0;
-	cfg.src_xend = in_frame->width - 1;
-
-	extend_haddr = in_frame->phyaddr[0] >> 33;
-	cfg.extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
-
-	cfg.src_y_base = in_frame->phyaddr[0];
-	cfg.dst_y_base = out_frame->phyaddr[0];
-	if (num_of_plane == 2) {
-		cfg.src_c_base = in_frame->phyaddr[1];
-		cfg.dst_c_base = out_frame->phyaddr[1];
-	}
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	//tsk->coreid = top_id;
+	spin_lock_irqsave(&job->lock, flags);
 	job->coreid = top_id;
+	spin_unlock_irqrestore(&job->lock, flags);
 
-	list_add_tail(&job->node, &wdev->list.work_list[top_id]);
-	work_job = list_first_entry_or_null(&wdev->list.work_list[top_id], struct ldc_job, node);
+	spin_lock_irqsave(&wdev->core[top_id].core_lock, flags);
+	list_add_tail(&job->node, &wdev->core[top_id].list);
+	spin_unlock_irqrestore(&wdev->core[top_id].core_lock, flags);
 
-	list_add_tail(&tsk->node, &wdev->core[top_id].list.work_list);
-	work_tsk = list_first_entry_or_null(&wdev->core[top_id].list.work_list, struct ldc_task, node);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
-
-	if (unlikely(!work_job || !work_tsk)) {
-		TRACE_LDC(DBG_WARN, "core_id:[%d] null work job tsk\n", top_id);
-		return;
-	}
-
-	ldc_reset(top_id);
-	ldc_init(top_id);
-	ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);
-	ldc_engine(&cfg, top_id);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	wdev->job_cnt--;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
 	TRACE_LDC(DBG_INFO, "job[%px]\n", job);
-	TRACE_LDC(DBG_DEBUG, "core_id:%d\n", top_id);
+	TRACE_LDC(DBG_INFO, "core_id:%d\n", top_id);
 	TRACE_LDC(DBG_DEBUG, "update size src(%d %d)\n", cfg.src_width, cfg.src_height);
 	TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx-%#llx\n",
 		in_frame->phyaddr[0], in_frame->phyaddr[1], in_frame->phyaddr[2]);
 	TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx-%#llx\n",
 		out_frame->phyaddr[0], out_frame->phyaddr[1], out_frame->phyaddr[2]);
-	TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg.map_base);
+	TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg.mesh_id);
+	TRACE_LDC(DBG_DEBUG, "update map_base(%#llx)\n", cfg.map_base);
 	TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n", cfg.bgcolor, cfg.pix_fmt);
+
+	ldc_reset(top_id);
+	ldc_init(top_id);
+	if (top_id >= DEV_DWA_0)
+		ldc_intr_ctrl(DWA_INTR_EN_ALL, top_id);
+	else
+		ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);
+	ldc_engine(&cfg, top_id);
 #if 0
 	ldc_dump_register(top_id);
 #endif
@@ -604,8 +572,8 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 	unsigned long long mesh_addr;
 	unsigned char num_of_plane, i, tsk_idx, extend_haddr;
 	int tsk_num, cmdq_wq_ret;
-	struct ldc_job *work_job;
-	struct ldc_task *work_tsk;
+	unsigned long flags;
+	unsigned int bg_color;
 
 	if (unlikely(!wdev || !job || !last_tsk || !tskq))
 		return;
@@ -618,90 +586,139 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 
 	cmdq_addr = kzalloc(sizeof(*cmdq_addr) * tsk_num * LDC_CMDQ_MAX_REG_CNT, GFP_ATOMIC);
 
+	spin_lock_irqsave(&job->lock, flags);
+	job->coreid = top_id;
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	spin_lock_irqsave(&wdev->core[top_id].core_lock, flags);
+	list_add_tail(&job->node, &wdev->core[top_id].list);
+	wdev->core[top_id].cmdq_evt = false;
+	spin_unlock_irqrestore(&wdev->core[top_id].core_lock, flags);
+
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	wdev->job_cnt--;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
 	for (tsk_idx = 0; tsk_idx < tsk_num; tsk_idx++) {
-		unsigned long flags;
 
 		ldc_set_tsk_run_status(wdev, top_id, job, tskq[tsk_idx]);
 
 		cfg_q[tsk_idx] = kzalloc(sizeof(struct ldc_cfg), GFP_ATOMIC);
 
-		mesh_addr = tskq[tsk_idx]->attr.private_data[0];
-		mesh_addr = (mesh_addr != DEFAULT_MESH_PADDR) ? mesh_addr : 0;
+		bg_color = tskq[tsk_idx]->attr.private_data[3];
+		mesh_addr = (tskq[tsk_idx]->attr.private_data[0] != DEFAULT_MESH_PADDR)
+			     ? tskq[tsk_idx]->attr.private_data[0] : 0;
 		in_frame = &tskq[tsk_idx]->attr.img_in.video_frame;
 		out_frame = &tskq[tsk_idx]->attr.img_out.video_frame;
 		pix_format = in_frame->pixel_format;
 		rotation = tskq[tsk_idx]->rotation;
 
-		switch (out_frame->pixel_format) {
-		case PIXEL_FORMAT_YUV_400:
-			cfg_q[tsk_idx]->pix_fmt = YUV400;
-			num_of_plane = 1;
-			break;
-		case PIXEL_FORMAT_NV12:
-		case PIXEL_FORMAT_NV21:
-		default:
-			cfg_q[tsk_idx]->pix_fmt = NV21;
-			num_of_plane = 2;
-			break;
-		};
+		if (!job->devs_type) {
+			switch (out_frame->pixel_format) {
+			case PIXEL_FORMAT_YUV_400:
+				cfg_q[tsk_idx]->pix_fmt = YUV400;
+				num_of_plane = 1;
+				break;
+			case PIXEL_FORMAT_NV12:
+			case PIXEL_FORMAT_NV21:
+			default:
+				cfg_q[tsk_idx]->pix_fmt = NV21;
+				num_of_plane = 2;
+				break;
+			};
 
-		switch (rotation) {
-		case ROTATION_90:
-			cfg_q[tsk_idx]->dst_mode = LDC_DST_ROT_270;
+			switch (rotation) {
+			case ROTATION_90:
+				cfg_q[tsk_idx]->dst_mode = LDC_DST_ROT_270;
+				break;
+			case ROTATION_270:
+				cfg_q[tsk_idx]->dst_mode = LDC_DST_ROT_90;
+				break;
+			case ROTATION_XY_FLIP:
+				cfg_q[tsk_idx]->dst_mode = LDC_DST_XY_FLIP;
+				break;
+			default:
+				cfg_q[tsk_idx]->dst_mode = LDC_DST_FLAT;
+				break;
+			}
+
+			cfg_q[tsk_idx]->map_base = mesh_addr;
+			cfg_q[tsk_idx]->bgcolor = LDC_YUV_BLACK /*ctx->bgcolor*/;
+			cfg_q[tsk_idx]->src_width = ALIGN(in_frame->width, LDC_SIZE_ALIGN);
+			cfg_q[tsk_idx]->src_height = ALIGN(in_frame->height, LDC_SIZE_ALIGN);
+			cfg_q[tsk_idx]->ras_width = cfg_q[tsk_idx]->src_width;
+			cfg_q[tsk_idx]->ras_height = cfg_q[tsk_idx]->src_height;
+
+			if (cfg_q[tsk_idx]->map_base == 0)
+				cfg_q[tsk_idx]->map_bypass = true;
+			else
+				cfg_q[tsk_idx]->map_bypass = false;
+
+			cfg_q[tsk_idx]->src_xstart = 0;
+			cfg_q[tsk_idx]->src_xend = in_frame->width - 1;
+
+			extend_haddr = in_frame->phyaddr[0] >> 33;
+			cfg_q[tsk_idx]->extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
+
+			cfg_q[tsk_idx]->src_y_base = in_frame->phyaddr[0];
+			cfg_q[tsk_idx]->dst_y_base = out_frame->phyaddr[0];
+			if (num_of_plane == 2) {
+				cfg_q[tsk_idx]->src_c_base = in_frame->phyaddr[1];
+				cfg_q[tsk_idx]->dst_c_base = out_frame->phyaddr[1];
+			}
+		} else {
+			switch (out_frame->pixel_format) {
+			case PIXEL_FORMAT_YUV_PLANAR_420:
+				cfg_q[tsk_idx]->pix_fmt = YUV420p;
+				num_of_plane = 3;
 			break;
-		case ROTATION_270:
-			cfg_q[tsk_idx]->dst_mode = LDC_DST_ROT_90;
+			case PIXEL_FORMAT_YUV_400:
+				cfg_q[tsk_idx]->pix_fmt = 2;
+				num_of_plane = 1;
 			break;
-		case ROTATION_XY_FLIP:
-			cfg_q[tsk_idx]->dst_mode = LDC_DST_XY_FLIP;
+			case PIXEL_FORMAT_RGB_888_PLANAR:
+			case PIXEL_FORMAT_YUV_PLANAR_444:
+			default:
+				cfg_q[tsk_idx]->pix_fmt = RGB888p;
+				num_of_plane = 3;
 			break;
-		default:
-			cfg_q[tsk_idx]->dst_mode = LDC_DST_FLAT;
-			break;
+			};
+
+			cfg_q[tsk_idx]->mesh_id = mesh_addr;
+			cfg_q[tsk_idx]->output_target = 1;//dram or sclr
+			cfg_q[tsk_idx]->bgcolor = bg_color;
+			cfg_q[tsk_idx]->bdcolor = (u32)BGCOLOR_GREEN;
+			//cfg_q[tsk_idx]->bgcolor = tsk->bgcolor;
+			//cfg_q[tsk_idx]->bdcolor = tsk->bdcolor;
+			cfg_q[tsk_idx]->src_width  = in_frame->width;
+			cfg_q[tsk_idx]->src_height = in_frame->height;
+			cfg_q[tsk_idx]->dst_width  = out_frame->width;
+			cfg_q[tsk_idx]->dst_height = out_frame->height;
+
+			for (i = 0; i < num_of_plane; ++i) {
+				unsigned long long addr = in_frame->phyaddr[i];
+
+				cfg_q[tsk_idx]->src_buf[i].addrl    = addr;
+				cfg_q[tsk_idx]->src_buf[i].addrh    = addr >> 32;
+				cfg_q[tsk_idx]->src_buf[i].pitch    = in_frame->stride[i];
+				cfg_q[tsk_idx]->src_buf[i].offset_x = cfg_q[tsk_idx]->src_buf[i].offset_y = 0;
+
+				addr = out_frame->phyaddr[i];;
+
+				cfg_q[tsk_idx]->dst_buf[i].addrl    = addr;
+				cfg_q[tsk_idx]->dst_buf[i].addrh    = addr >> 32;
+				cfg_q[tsk_idx]->dst_buf[i].pitch    = out_frame->stride[i];
+				cfg_q[tsk_idx]->dst_buf[i].offset_x = cfg_q[tsk_idx]->src_buf[i].offset_y = 0;
+			}
 		}
-
-		cfg_q[tsk_idx]->map_base = mesh_addr;
-		cfg_q[tsk_idx]->bgcolor = (u16)LDC_YUV_BLACK /*ctx->bgcolor*/;
-		cfg_q[tsk_idx]->src_width = ALIGN(in_frame->width, LDC_SIZE_ALIGN);
-		cfg_q[tsk_idx]->src_height = ALIGN(in_frame->height, LDC_SIZE_ALIGN);
-		cfg_q[tsk_idx]->ras_width = cfg_q[tsk_idx]->src_width;
-		cfg_q[tsk_idx]->ras_height = cfg_q[tsk_idx]->src_height;
-
-		if (cfg_q[tsk_idx]->map_base == 0)
-			cfg_q[tsk_idx]->map_bypass = true;
-		else
-			cfg_q[tsk_idx]->map_bypass = false;
-
-		cfg_q[tsk_idx]->src_xstart = 0;
-		cfg_q[tsk_idx]->src_xend = in_frame->width - 1;
-
-		extend_haddr = in_frame->phyaddr[0] >> 33;
-		cfg_q[tsk_idx]->extend_haddr = ((extend_haddr << 28) | (extend_haddr << 13) | extend_haddr);
-
-		cfg_q[tsk_idx]->src_y_base = in_frame->phyaddr[0];
-		cfg_q[tsk_idx]->dst_y_base = out_frame->phyaddr[0];
-		if (num_of_plane == 2) {
-			cfg_q[tsk_idx]->src_c_base = in_frame->phyaddr[1];
-			cfg_q[tsk_idx]->dst_c_base = out_frame->phyaddr[1];
-		}
-
-		spin_lock_irqsave(&wdev->job_lock, flags);
-		//tskq[tsk_idx]->coreid = top_id;
-		job->coreid = top_id;
-
-		list_add_tail(&job->node, &wdev->list.work_list[top_id]);
-		work_job = list_first_entry_or_null(&wdev->list.work_list[top_id], struct ldc_job, node);
-
-		list_add_tail(&tskq[tsk_idx]->node, &wdev->core[top_id].list.work_list);
-		work_tsk = list_first_entry_or_null(&wdev->core[top_id].list.work_list, struct ldc_task, node);
-
-		wdev->core[top_id].cmdq_evt = false;
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 #if !USE_REAL_CMDQ //fake cmdq
 		ldc_reset(top_id);
 		ldc_init(top_id);
-		ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);//0x0 cmdq need disable ldc intr
+		if (top_id >= DEV_DWA_0)
+			ldc_intr_ctrl(DWA_INTR_EN_ALL, top_id);
+		else
+			ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);
 		ldc_engine(cfg_q[tsk_idx], top_id);
 
 		if (tsk_idx != (tsk_num - 1)) {
@@ -709,7 +726,6 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 				, wdev->core[top_id].cmdq_evt, LDC_EOF_WAIT_TIMEOUT_MS);
 			if (cmdq_wq_ret <= 0) {
 				TRACE_LDC(DBG_WARN, "ldc cdmq wait timeout, ret(%d)\n", cmdq_wq_ret);
-				tsk_idx++;
 				goto FREE_CMDQ_RES;
 			}
 			TRACE_LDC(DBG_DEBUG, "ldc cdmq wait done, ret(%d)\n", cmdq_wq_ret);
@@ -721,25 +737,48 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 	(void)cmdq_wq_ret;
 	ldc_reset(top_id);
 	ldc_init(top_id);
-	ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);//0x0 cmdq need disable ldc intr
+	if (top_id >= DEV_DWA_0)
+		ldc_intr_ctrl(DWA_INTR_EN_ALL, top_id);
+	else
+		ldc_intr_ctrl(LDC_INTR_EN_ALL, top_id);
 	ldc_engine_cmdq(top_id, (void *)cmdq_addr, cfg_q, tsk_num);
 	goto FREE_CMDQ_RES;
 #endif
 
 FREE_CMDQ_RES:
-	//last_tsk->coreid = top_id;
-
 	TRACE_LDC(DBG_DEBUG, "cmd_start(%px)\n",cmdq_addr);
 	for (i = 0; i < tsk_idx; i++) {
 		TRACE_LDC(DBG_DEBUG, "tsk_id[%d]-core_id[%d]\n", i,  top_id);
-		TRACE_LDC(DBG_DEBUG, "update size src(%d %d)\n", cfg_q[i]->src_width, cfg_q[i]->src_height);
-		TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx\n",
-			cfg_q[i]->src_y_base, cfg_q[i]->src_c_base);
-		TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx\n",
-			cfg_q[i]->dst_y_base, cfg_q[i]->dst_c_base);
-		TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg_q[i]->map_base);
-		TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n"
-			, cfg_q[i]->bgcolor, cfg_q[i]->pix_fmt);
+		if (top_id >= DEV_DWA_0) {
+			TRACE_LDC(DBG_DEBUG, "update size src(%d %d) dst(%d %d)\n",
+				cfg_q[i]->src_width, cfg_q[i]->src_height
+				, cfg_q[i]->dst_width, cfg_q[i]->dst_height);
+			TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx-%#llx\n"
+				, tskq[i]->attr.img_in.video_frame.phyaddr[0]
+				, tskq[i]->attr.img_in.video_frame.phyaddr[1]
+				, tskq[i]->attr.img_in.video_frame.phyaddr[2]);
+			TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx-%#llx\n"
+				, tskq[i]->attr.img_out.video_frame.phyaddr[0]
+				, tskq[i]->attr.img_out.video_frame.phyaddr[1]
+				, tskq[i]->attr.img_out.video_frame.phyaddr[2]);
+			TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg_q[i]->mesh_id);
+			TRACE_LDC(DBG_DEBUG, "update output_target(%d)\n", cfg_q[i]->output_target);
+			TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n"
+				, cfg_q[i]->bgcolor, cfg_q[i]->pix_fmt);
+			TRACE_LDC(DBG_DEBUG, "update src pitch(%d %d %d)\n"
+				, cfg_q[i]->src_buf[0].pitch, cfg_q[i]->src_buf[1].pitch, cfg_q[i]->src_buf[2].pitch);
+			TRACE_LDC(DBG_DEBUG, "update dst pitch(%d %d %d)\n"
+				, cfg_q[i]->dst_buf[0].pitch, cfg_q[i]->dst_buf[1].pitch, cfg_q[i]->dst_buf[2].pitch);
+		} else {
+			TRACE_LDC(DBG_DEBUG, "update size src(%d %d)\n", cfg_q[i]->src_width, cfg_q[i]->src_height);
+			TRACE_LDC(DBG_DEBUG, "update src-buf: %#llx-%#llx\n",
+				cfg_q[i]->src_y_base, cfg_q[i]->src_c_base);
+			TRACE_LDC(DBG_DEBUG, "update dst-buf: %#llx-%#llx\n",
+				cfg_q[i]->dst_y_base, cfg_q[i]->dst_c_base);
+			TRACE_LDC(DBG_DEBUG, "update mesh_id_addr(%#llx)\n", cfg_q[i]->map_base);
+			TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n"
+				, cfg_q[i]->bgcolor, cfg_q[i]->pix_fmt);
+		}
 
 		if (cfg_q[i])
 			kfree(cfg_q[i]);
@@ -747,28 +786,28 @@ FREE_CMDQ_RES:
 
 if (cmdq_addr)
 	kfree(cmdq_addr);
-
-#if 0
-	ldc_dump_register(top_id);
-	//ldc_dump_cmdq(top_id);
-#endif
 }
 
 static int ldc_try_submit_hw(struct ldc_vdev *wdev, struct ldc_job *job
 	, struct ldc_task *tsk, unsigned char use_cmdq, struct ldc_task **tskq)
 {
-	int i, top_id, ret = -1;
+	int coreid, top_id, ret = -1;
 	enum ldc_core_state state;
-	bool finish;
+	unsigned char core_num;
 
-	for (i = 0; i < wdev->core_num; i++) {
-		finish = ldc_is_finish(i);
-		state = atomic_read(&wdev->core[i].state);
+	if (!job->devs_type) {
+		coreid = DEV_LDC_0;
+		core_num = wdev->core_num - 2;
+	} else {
+		coreid = DEV_DWA_0;
+		core_num = wdev->core_num;
+	}
 
-		TRACE_LDC(DBG_INFO, "core[%d]-state[%d]-isfinish[%d]\n", i, state, finish);
+	for (; coreid < core_num; coreid++) {
+		state = atomic_read(&wdev->core[coreid].state);
 
-		if ((state == LDC_CORE_STATE_IDLE) && finish) {
-			top_id = i;
+		if ((state == LDC_CORE_STATE_IDLE)) {
+			top_id = coreid;
 			//ldc_enable_dev_clk(top_id, true);
 			if (use_cmdq)
 				ldc_submit_hw_cmdq(wdev, top_id, job, tsk, tskq);
@@ -803,37 +842,76 @@ static unsigned char ldc_is_tsk_ready(struct ldc_task *tsk)
 		return false;
 	}
 
-	if (unlikely(down_trylock(&tsk->sem))) {
-		TRACE_LDC(DBG_ERR, "cur tsk(%px) get sem fail\n", tsk);
-		return false;
-	}
 	return true;
 }
 
-static unsigned char ldc_get_idle_coreid(struct ldc_vdev *wdev)
+/*
+static unsigned char ldc_get_idle_coreid(struct ldc_vdev *wdev, enum ldc_job_devs_type devs_type)
 {
 	unsigned char coreid;
+	unsigned char core_num;
 	enum ldc_core_state state;
 
-	for (coreid = 0; coreid < wdev->core_num; coreid++) {
+	if (devs_type == DEVS_LDC) {
+		coreid = DEV_LDC_0;
+		core_num = wdev->core_num - 2;
+	} else {
+		coreid = DEV_DWA_0;
+		core_num = wdev->core_num;
+	}
+
+	for (; coreid < core_num; coreid++) {
 		state = atomic_read(&wdev->core[coreid].state);
 		if (state == LDC_CORE_STATE_IDLE)
-			break;
+			return coreid;
 	}
-	return coreid;
+	return wdev->core_num;
 }
+*/
 
-static bool ldc_have_idle_core(struct ldc_vdev *wdev)
+static bool ldc_have_idle_core(struct ldc_vdev *wdev, enum ldc_job_devs_type devs_type)
 {
 	unsigned char coreid;
+	unsigned char core_num;
 	enum ldc_core_state state;
 
-	for (coreid = 0; coreid < wdev->core_num; coreid++) {
+	if (devs_type == DEVS_LDC) {
+		coreid = DEV_LDC_0;
+		core_num = wdev->core_num - 2;
+	} else {
+		coreid = DEV_DWA_0;
+		core_num = wdev->core_num;
+	}
+
+	for (; coreid < core_num; coreid++) {
 		state = atomic_read(&wdev->core[coreid].state);
 		if (state == LDC_CORE_STATE_IDLE)
 			return true;
 	}
 	return false;
+}
+
+static bool ldc_vdev_idle(struct ldc_vdev *wdev)
+{
+	unsigned char coreid;
+	enum ldc_core_state state;
+
+	for (coreid = 0; coreid < LDC_DEV_MAX_CNT; coreid++) {
+		state = atomic_read(&wdev->core[coreid].state);
+		if (state != LDC_CORE_STATE_IDLE)
+			return false;
+	}
+
+	return true;
+}
+
+static void ldc_set_vdev_stt(struct ldc_vdev *wdev)
+{
+	if (ldc_vdev_idle(wdev)) {
+		atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
+		ldc_clk_deinit(ldc_get_dev());
+		up(&wdev->sem);
+	}
 }
 
 static void ldc_try_commit_job(struct ldc_vdev *wdev, struct ldc_job *job)
@@ -849,32 +927,24 @@ static void ldc_try_commit_job(struct ldc_vdev *wdev, struct ldc_job *job)
 	if (atomic_read(&job->job_state) != LDC_JOB_WORKING)
 		return;
 
-	if (!ldc_have_idle_core(wdev))
-		return;
-
 	tsk_num = atomic_read(&job->task_num);
-	if (unlikely(tsk_num <= 0)) {
-		TRACE_LDC(DBG_ERR, "cur job(%px) tsk_num(%d) invalid\n"
-			, job, tsk_num);
-		return;
-	}
 
 	if (tsk_num == 1) {
 		use_cmdq = false;
-		spin_lock_irqsave(&wdev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
 		tsk = list_first_entry_or_null(&job->task_list, struct ldc_task, node);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		spin_unlock_irqrestore(&job->lock, flags);
 		is_ready = ldc_is_tsk_ready(tsk);
 	} else {
 		use_cmdq = true;
 		i = 0;
-		spin_lock_irqsave(&wdev->job_lock, flags);
+		spin_lock_irqsave(&job->lock, flags);
 		list_for_each_entry_safe(tskq[i], tmp_tsk, &job->task_list, node) {
 			is_ready &= ldc_is_tsk_ready(tskq[i]);
 			last_tsk = tskq[i];
 			i++;
 		}
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		spin_unlock_irqrestore(&job->lock, flags);
 	}
 
 	if (!is_ready) {
@@ -892,15 +962,8 @@ static void ldc_try_commit_job(struct ldc_vdev *wdev, struct ldc_job *job)
 			TRACE_LDC(DBG_ERR, "invalid last_tsk,is not last node\n");
 			return;
 		}
-#if USE_REAL_CMDQ
-		last_tsk->fn_tsk_cb = ldc_wkup_frm_done_work;
-#else
-		for (i = 0; i < atomic_read(&job->task_num); i++)
-			tskq[i]->fn_tsk_cb = ldc_wkup_frm_done_work;
-#endif
 		ldc_try_submit_hw_cmdq(wdev, job, tskq, last_tsk);
 	} else {
-		tsk->fn_tsk_cb = ldc_wkup_frm_done_work;
 		ldc_try_submit_hw(wdev, job, tsk, false, NULL);
 	}
 }
@@ -909,13 +972,11 @@ static int ldc_event_handler_th(void *data)
 {
 	struct ldc_vdev *wdev = (struct ldc_vdev *)data;
 	unsigned long flags;
-	struct ldc_job *job, *job_tmp;
+	struct ldc_job *job;
 	int ret;
 	unsigned long idle_timeout = msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(LDC_EOF_WAIT_TIMEOUT_MS);
 	unsigned long timeout = idle_timeout;
-	unsigned char idle_coreid;
-	bool have_idle_job;
 
 	if (!wdev) {
 		TRACE_LDC(DBG_ERR, "ldc vdev isn't created yet.\n");
@@ -939,59 +1000,38 @@ static int ldc_event_handler_th(void *data)
 
 		/* timeout */
 		if (!ret) {
-			if (atomic_read(&wdev->state) == LDC_DEV_STATE_STOP) {
+			if (list_empty(&wdev->job_list)) {
+				ldc_set_vdev_stt(wdev);
 				timeout = idle_timeout;
 				continue;
-			} else if((atomic_read(&wdev->state) == LDC_DEV_STATE_RUNNING)
-				&& list_empty(&wdev->job_list)) {
-				timeout = idle_timeout;
-				atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
-				up(&wdev->sem);
-				continue;
-			} else {
-				ldc_try_reset_abort_job(wdev);
-				continue;
-			}
-		}
-
-		idle_coreid = ldc_get_idle_coreid(wdev);
-		if (idle_coreid >= wdev->core_num) {
-			TRACE_LDC(DBG_INFO, "ldc vdev hw busy, no idle core\n");
-			goto continue_th;
+			} else
+				TRACE_LDC(DBG_NOTICE, "timeout but job list not empty\n");
 		}
 
 		if (list_empty(&wdev->job_list)) {
 			TRACE_LDC(DBG_DEBUG, "job list empty\n");
-			atomic_set(&wdev->state, LDC_DEV_STATE_STOP);
-			up(&wdev->sem);
+			ldc_set_vdev_stt(wdev);
 			goto continue_th;
 		}
 
-		have_idle_job = false;
-		spin_lock_irqsave(&wdev->job_lock, flags);
-		list_for_each_entry_safe(job, job_tmp, &wdev->job_list, node) {
-			if (job->coreid == LDC_INVALID_CORE_ID) {
-				TRACE_LDC(DBG_DEBUG, "got idle job[%px]\n", job);
-				have_idle_job = true;
-				break;
-			}
-		}
-
-		if (!have_idle_job) { //have idle core but cur job is doing
-			TRACE_LDC(DBG_INFO, "no idle job, job[%px] job_tmp[%px] coreid[%d]\n"
-				, job, job_tmp, job_tmp->coreid);
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
+		if (!ldc_have_idle_core(wdev, job->devs_type)) {
+			TRACE_LDC(DBG_INFO, "core busy, not have idle core\n");
 			goto continue_th;
 		}
+
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		job = list_first_entry_or_null(&wdev->job_list, struct ldc_job, node);
+		list_del(&job->node);
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+		TRACE_LDC(DBG_INFO, "send job[[%px]]\n", job);
 
 		atomic_set(&job->job_state, LDC_JOB_WORKING);
-		list_del(&job->node);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
+		atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
 
 		ldc_proc_record_job_start(job);
-		atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
+		ldc_clk_init(ldc_get_dev());
 		ldc_try_commit_job(wdev, job);
-
 continue_th:
 		ldc_clr_evt_kth(wdev);
 
@@ -1002,36 +1042,12 @@ continue_th:
 	return 0;
 }
 
-static void ldc_cancel_cur_tsk(struct ldc_job *job)
-{
-	struct ldc_task *tsk = NULL;
-	unsigned char i;
-
-	if (unlikely(!job))
-		return;
-	if (unlikely(list_empty(&job->task_list))) {
-		TRACE_LDC(DBG_NOTICE, "null tsk list\n");
-		return;
-	}
-
-	for (i = 0; i < atomic_read(&job->task_num); i++) {
-		tsk = list_first_entry_or_null(&job->task_list, struct ldc_task, node);
-		if (tsk) {
-			TRACE_LDC(DBG_DEBUG, "free tsk[%px]\n", tsk);
-			list_del(&tsk->node);
-			kfree(tsk);
-			tsk = NULL;
-		}
-	}
-}
-
 /**************************************************************************
  *   Public APIs.
  **************************************************************************/
 int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 {
 	struct ldc_job *job;
-	unsigned long flags;
 	int ret = 0;
 
 	ret = ldc_check_null_ptr(wdev) ||
@@ -1050,12 +1066,12 @@ int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 		return ERR_GDC_NOBUF;
 	}
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	INIT_LIST_HEAD(&job->task_list);
+	spin_lock_init(&job->lock);
 	atomic_set(&job->job_state, LDC_JOB_CREAT);
 	atomic_set(&job->task_num, 0);
 	job->identity.sync_io = true;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	job->devs_type = DEVS_MAX;
 
 	data->handle = (u64)(uintptr_t)job;
 
@@ -1066,7 +1082,7 @@ int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 
 int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 {
-	int ret = 0, sync_io_ret = 1;
+	int ret = 0, sync_io_ret;
 	struct ldc_job *job = (struct ldc_job *)(uintptr_t)handle;
 	unsigned long flags;
 	int tsk_num = 0;
@@ -1082,104 +1098,154 @@ int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 		TRACE_LDC(DBG_DEBUG, "no task in job.\n");
 		return ERR_GDC_NOT_PERMITTED;
 	}
-	TRACE_LDC(DBG_INFO, "job[%px]\n", job);
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	atomic_set(&job->job_state, LDC_JOB_WAIT);
-	list_add_tail(&job->node, &wdev->job_list);
-	wdev->job_cnt++;
+	if (wdev->job_cnt >= END_JOB_MAX_LEN) {
+		TRACE_LDC(DBG_ERR, "job_cnt is full.\n");
+		kfree(job);
+		return ERR_GDC_BUF_FULL;
+	}
+
+	//mutex_lock(&g_io_lock);
+	spin_lock_irqsave(&job->lock, flags);
 
 	list_for_each_entry_safe(tsk, tmp_tsk, &job->task_list, node) {
-		up(&tsk->sem);
 		tsk_num++;
 		tsk->tsk_id = tsk_num - 1;
 	}
-	atomic_set(&job->task_num, tsk_num);
+
 	job->coreid = LDC_INVALID_CORE_ID;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	atomic_set(&job->job_state, LDC_JOB_WAIT);
+	atomic_set(&job->task_num, tsk_num);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	ldc_proc_commit_job(job);
 
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	list_add_tail(&job->node, &wdev->job_list);
+	wdev->job_cnt++;
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
 	ldc_notify_wkup_evt_kth(wdev, LDC_EVENT_WKUP);
+	//mutex_unlock(&g_io_lock);
+
+	TRACE_LDC(DBG_INFO, "job[%px] name[%s] sync_io=%d\n", job, job->identity.name, job->identity.sync_io);
 
 	if (job->identity.sync_io) {
+		spin_lock_irqsave(&job->lock, flags);
 		init_waitqueue_head(&job->job_done_wq);
 		job->job_done_evt = false;
+		spin_unlock_irqrestore(&job->lock, flags);
+
 		sync_io_ret = wait_event_timeout(job->job_done_wq, job->job_done_evt, timeout);
 		if (sync_io_ret <= 0) {
 			TRACE_LDC(DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
-			ret = -1;
-			spin_lock_irqsave(&wdev->job_lock, flags);
-			wdev->job_cnt--;
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
-		} else
-			ret = 0;
-	}
+			return -1;
+		}
 
-	TRACE_LDC(DBG_INFO, "jobname[%s] sync_io=%d, ret=%d\n", job->identity.name, job->identity.sync_io, ret);
-
-	if (job->identity.sync_io) {
 		kfree(job);
-		job = NULL;
 	}
 
 	return ret;
 }
 
-int ldc_cancel_job(struct ldc_vdev *wdev, unsigned long long handle)
+static int ldc_cancel_wait_job(struct ldc_vdev *wdev, struct ldc_job *job_handle)
 {
-	int ret = 0;
-	struct ldc_job *job = (struct ldc_job *)(uintptr_t)handle;
-	struct ldc_job *job_tmp, *work_job, *wait_job;
+	struct ldc_job* tmp, *job;
+	bool wait_flag = false;
 	unsigned long flags;
-	unsigned char coreid;
-	bool needfreeJob = false;
 
-	ret = ldc_check_null_ptr(wdev) ||
-		ldc_check_null_ptr(job);
-	if (ret)
-		return ret;
-
-	spin_lock_irqsave(&wdev->job_lock, flags);
-	if (atomic_read(&job->job_state) == LDC_JOB_CREAT) {
-		needfreeJob = true;
-		goto FREE_JOB;
-	}
-
-	list_for_each_entry_safe(wait_job, job_tmp, &wdev->job_list, node) {
-		if (job == wait_job) {
-			TRACE_LDC(DBG_DEBUG, "cancel wait job(%px)\n", wait_job);
-			atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
-			needfreeJob = true;
-			ldc_cancel_cur_tsk(job);
-			list_del(&job->node);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	list_for_each_entry_safe(job, tmp, &wdev->job_list, node) {
+		if (job == job_handle) {
+			wait_flag = true;
 			break;
 		}
 	}
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+	if (wait_flag) {
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		list_del(&job_handle->node);
+		wdev->job_cnt--;
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+		kfree(job_handle);
+		TRACE_LDC(DBG_NOTICE, "cancel wdev job_list job[%px]\n", job_handle);
+		return 0;
+	}
+
+	return -1;
+}
+
+static int ldc_cancel_work_job(struct ldc_vdev *wdev, struct ldc_job *job_handle)
+{
+	unsigned long flags;
+	bool work_flag = false;
+	struct ldc_core *core;
+	struct ldc_job* tmp, *job;
+	int coreid;
+	int state;
+	int count = 5000;
 
 	for (coreid = 0; coreid < LDC_DEV_MAX_CNT; coreid++) {
-		list_for_each_entry_safe(work_job, job_tmp, &wdev->list.work_list[coreid], node) {
-			if (job == work_job) {
-				TRACE_LDC(DBG_DEBUG, "cancel work job(%px)\n", wait_job);
-				atomic_set(&wdev->state, LDC_DEV_STATE_RUNNING);
-				atomic_set(&wdev->core[coreid].state, LDC_CORE_STATE_IDLE);
-				ldc_core_deinit(coreid);
-				needfreeJob = true;
-				ldc_cancel_cur_tsk(job);
-				list_del(&job->node);
+		core = &wdev->core[coreid];
+		if (list_empty(&core->list))
+			continue;
+
+		spin_lock_irqsave(&core->core_lock, flags);
+		list_for_each_entry_safe(job, tmp, &core->list, node) {
+			if (job == job_handle) {
+				work_flag = true;
 				break;
 			}
 		}
+		spin_unlock_irqrestore(&core->core_lock, flags);
+
+		if (work_flag)
+			break;
 	}
 
-FREE_JOB:
-	if (needfreeJob) {
-		TRACE_LDC(DBG_DEBUG, "free job[%px]\n", job);
-		// kfree(job);
-	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
-	TRACE_LDC(DBG_DEBUG, "++\n");
+	if (work_flag) {
+		while (--count > 0) {
+			state = atomic_read(&core->state);
+			if (state == LDC_CORE_STATE_RUNNING)
+				usleep_range(100, 200);
+			else
+				break;
+		}
 
+		if (state == LDC_CORE_STATE_RUNNING) {
+			atomic_set(&core->state, LDC_CORE_STATE_IDLE);
+
+			spin_lock_irqsave(&core->core_lock, flags);
+			list_del(&job_handle->node);
+			spin_unlock_irqrestore(&core->core_lock, flags);
+
+			kfree(job_handle);
+			ldc_core_deinit(coreid);
+			TRACE_LDC(DBG_NOTICE, "cancel core[%d] workjob[%px]\n", job_handle->coreid, job_handle);
+			TRACE_LDC(DBG_NOTICE, "cur core if timeout, need reset\n");
+		} else
+			TRACE_LDC(DBG_NOTICE, "core[%d] irq have cancel this job[%px] done\n", job_handle->coreid, job_handle);
+	}
+
+	return 0;
+}
+
+int ldc_cancel_job(struct ldc_vdev *wdev, unsigned long long handle)
+{
+	int ret = 0;
+	struct ldc_job *job_handle = (struct ldc_job *)(uintptr_t)handle;
+
+	ret = ldc_check_null_ptr(wdev) ||
+		ldc_check_null_ptr(job_handle);
+	if (ret)
+		return ret;
+
+	if (ldc_cancel_wait_job(wdev, job_handle) == 0)
+		return ret;
+
+	ret = ldc_cancel_work_job(wdev, job_handle);
 	return ret;
 }
 
@@ -1195,14 +1261,14 @@ int ldc_get_work_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
-		job = list_first_entry_or_null(&wdev->list.work_list[coreid], struct ldc_job, node);
-		if (job) {
+		spin_lock_irqsave(&wdev->core[coreid].core_lock, flags);
+		job = list_first_entry_or_null(&wdev->core[coreid].list, struct ldc_job, node);
+		spin_unlock_irqrestore(&wdev->core[coreid].core_lock, flags);
+
+		if (job)
 			break;
-		}
 	}
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	data->handle = (u64)(uintptr_t)job;
 
@@ -1225,19 +1291,111 @@ int ldc_set_identity(struct ldc_vdev *wdev,
 	}
 	handle = identity->handle;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct ldc_job *)(uintptr_t)handle;
 	if (!job) {
 		TRACE_LDC(DBG_ERR, "null job handle\n");
 		return -1;
 	}
 
+	spin_lock_irqsave(&job->lock, flags);
 	memcpy(&job->identity, &identity->attr, sizeof(identity->attr));
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "sync_io:%d, name:%s, id:%d\n"
 		, job->identity.sync_io, job->identity.name, job->identity.id);
 	return 0;
+}
+
+static inline int ldc_cor_check_param(struct gdc_task_attr *ptask)
+{
+	const fisheye_attr_s *pfisheye_attr = &ptask->fisheye_attr;
+	int ret = 0;
+	int i;
+
+	if (pfisheye_attr->enable) {
+		if(!pfisheye_attr->grid_info_attr.enable) {
+			if (pfisheye_attr->region_num == 0) {
+				TRACE_LDC(DBG_ERR, "RegionNum(%d) can't be 0 if enable fisheye.\n",
+						pfisheye_attr->region_num);
+				//gdc_proc_ctx->fisheye_status.add_task_fail++;
+				return ERR_GDC_ILLEGAL_PARAM;
+			}
+			if (((u32)pfisheye_attr->hor_offset > ptask->img_in.video_frame.width) ||
+				((u32)pfisheye_attr->mount_mode > ptask->img_in.video_frame.height)) {
+				TRACE_LDC(DBG_ERR, "center pos(%d %d) out of frame size(%d %d).\n",
+						pfisheye_attr->hor_offset, pfisheye_attr->mount_mode,
+						ptask->img_in.video_frame.width, ptask->img_in.video_frame.height);
+				//gdc_proc_ctx->fisheye_status.add_task_fail++;
+				return ERR_GDC_ILLEGAL_PARAM;
+			}
+			for (i = 0; i < pfisheye_attr->region_num; ++i) {
+				if ((pfisheye_attr->mount_mode == FISHEYE_WALL_MOUNT) &&
+					(pfisheye_attr->fisheye_region_attr[i].view_mode == FISHEYE_VIEW_360_PANORAMA)) {
+					TRACE_LDC(DBG_ERR, "Rgn(%d): WALL_MOUNT not support Panorama_360.\n", i);
+					//gdc_proc_ctx->fisheye_status.add_task_fail++;
+					return ERR_GDC_ILLEGAL_PARAM;
+				}
+				if ((pfisheye_attr->mount_mode == FISHEYE_CEILING_MOUNT) &&
+					(pfisheye_attr->fisheye_region_attr[i].view_mode == FISHEYE_VIEW_180_PANORAMA)) {
+					TRACE_LDC(DBG_ERR, "Rgn(%d): CEILING_MOUNT not support Panorama_180.\n", i);
+					//gdc_proc_ctx->fisheye_status.add_task_fail++;
+					return ERR_GDC_ILLEGAL_PARAM;
+				}
+				if ((pfisheye_attr->mount_mode == FISHEYE_DESKTOP_MOUNT) &&
+					(pfisheye_attr->fisheye_region_attr[i].view_mode == FISHEYE_VIEW_180_PANORAMA)) {
+					TRACE_LDC(DBG_ERR, "Rgn(%d): DESKTOP_MOUNT not support Panorama_180.\n", i);
+					//gdc_proc_ctx->fisheye_status.add_task_fail++;
+					return ERR_GDC_ILLEGAL_PARAM;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+static inline int ldc_affine_check_param(struct gdc_task_attr *ptask)
+{
+	const affine_attr_s *paffine_attr = &ptask->affine_attr;
+	int ret = 0;
+
+	if (paffine_attr->region_num == 0) {
+		TRACE_LDC(DBG_ERR, "region_num(%d) can't be zero.\n", paffine_attr->region_num);
+		return ERR_GDC_ILLEGAL_PARAM;
+	}
+
+	if (paffine_attr->dest_size.width > ptask->img_out.video_frame.width) {
+		TRACE_LDC(DBG_ERR, "dest's width(%d) can't be larger than frame's width(%d)\n",
+			paffine_attr->dest_size.width, ptask->img_out.video_frame.width);
+		return ERR_GDC_ILLEGAL_PARAM;
+	}
+#if 0 //not float type(cflag:-mgeneral-regs-only)
+	for (i = 0; i < paffine_attr->region_num; ++i) {
+		TRACE_LDC(DBG_INFO, "region_num(%d) (%f, %f) (%f, %f) (%f, %f) (%f, %f)\n", i,
+			paffine_attr->astRegionAttr[i][0].x, paffine_attr->astRegionAttr[i][0].y,
+			paffine_attr->astRegionAttr[i][1].x, paffine_attr->astRegionAttr[i][1].y,
+			paffine_attr->astRegionAttr[i][2].x, paffine_attr->astRegionAttr[i][2].y,
+			paffine_attr->astRegionAttr[i][3].x, paffine_attr->astRegionAttr[i][3].y);
+		if ((paffine_attr->astRegionAttr[i][0].x < 0) || (paffine_attr->astRegionAttr[i][0].y < 0) ||
+			(paffine_attr->astRegionAttr[i][1].x < 0) || (paffine_attr->astRegionAttr[i][1].y < 0) ||
+			(paffine_attr->astRegionAttr[i][2].x < 0) || (paffine_attr->astRegionAttr[i][2].y < 0) ||
+			(paffine_attr->astRegionAttr[i][3].x < 0) || (paffine_attr->astRegionAttr[i][3].y < 0)) {
+			TRACE_LDC(DBG_ERR, "region_num(%d) affine point can't be negative\n", i);
+			return ERR_GDC_ILLEGAL_PARAM;
+		}
+		if ((paffine_attr->astRegionAttr[i][1].x < paffine_attr->astRegionAttr[i][0].x) ||
+			(paffine_attr->astRegionAttr[i][3].x < paffine_attr->astRegionAttr[i][2].x)) {
+			TRACE_LDC(DBG_ERR, "region_num(%d) point1/3's x should be bigger thant 0/2's\n", i);
+			return ERR_GDC_ILLEGAL_PARAM;
+		}
+		if ((paffine_attr->astRegionAttr[i][2].y < paffine_attr->astRegionAttr[i][0].y) ||
+			(paffine_attr->astRegionAttr[i][3].y < paffine_attr->astRegionAttr[i][1].y)) {
+			TRACE_LDC(DBG_ERR, "region_num(%d) point2/3's y should be bigger thant 0/1's\n", i);
+			return ERR_GDC_ILLEGAL_PARAM;
+		}
+	}
+#endif
+	return ret;
 }
 
 int ldc_add_rotation_task(struct ldc_vdev *wdev,
@@ -1257,18 +1415,26 @@ int ldc_add_rotation_task(struct ldc_vdev *wdev,
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct ldc_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
+
+	if (job->devs_type == DEVS_DWA) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_LDC;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = LDC_TASK_TYPE_ROT;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1293,18 +1459,237 @@ int ldc_add_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
 		return ret;
 #endif
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	job = (struct ldc_job *)(uintptr_t)handle;
 	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
-	sema_init(&tsk->sem, 0);
+
+	if (job->devs_type == DEVS_LDC) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_DWA;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
 
 	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
 	tsk->type = LDC_TASK_TYPE_LDC;
 	tsk->rotation = attr->rotation;
 	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
 	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
 	list_add_tail(&tsk->node, &job->task_list);
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+
+	return ret;
+}
+
+int ldc_add_cor_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
+{
+	struct ldc_job *job;
+	struct ldc_task *tsk;
+	unsigned long long handle;
+	unsigned long flags;
+	int ret = 0;
+
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
+
+	handle = attr->handle;
+
+	ret = ldc_cor_check_param(attr);
+	if (ret)
+		return ret;
+
+	job = (struct ldc_job *)(uintptr_t)handle;
+	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
+
+	if (job->devs_type == DEVS_LDC) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_DWA;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
+
+
+	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
+	tsk->type = LDC_TASK_TYPE_FISHEYE;
+	tsk->rotation = attr->rotation;
+	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
+	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_add_tail(&tsk->node, &job->task_list);
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+
+	return ret;
+}
+
+int ldc_add_warp_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
+{
+	struct ldc_job *job;
+	struct ldc_task *tsk;
+	unsigned long long handle;
+	unsigned long flags;
+	int ret = 0;
+
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
+
+	handle = attr->handle;
+
+	job = (struct ldc_job *)(uintptr_t)handle;
+	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
+
+	if (job->devs_type == DEVS_LDC) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_DWA;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
+
+	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
+	tsk->type = LDC_TASK_TYPE_WARP;
+	tsk->rotation = attr->rotation;
+	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
+	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_add_tail(&tsk->node, &job->task_list);
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+
+	return ret;
+}
+
+int ldc_add_affine_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
+{
+	struct ldc_job *job;
+	struct ldc_task *tsk;
+	unsigned long long handle;
+	unsigned long flags;
+	int ret = 0;
+
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
+	handle = attr->handle;
+
+	ret = ldc_affine_check_param(attr);
+	if (ret)
+		return ret;
+
+	job = (struct ldc_job *)(uintptr_t)handle;
+	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
+
+	if (job->devs_type == DEVS_LDC) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_DWA;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
+
+	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
+	tsk->type = LDC_TASK_TYPE_AFFINE;
+	tsk->rotation = attr->rotation;
+	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
+	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_add_tail(&tsk->node, &job->task_list);
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+
+	return ret;
+}
+
+int ldc_add_ldc_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
+{
+	struct ldc_job *job;
+	struct ldc_task *tsk;
+	unsigned long long handle;
+	unsigned long flags;
+	int ret = 0;
+
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
+	handle = attr->handle;
+
+#if 0
+	ret = ldc_rot_check_size(attr->rotation, attr);
+	if (ret)
+		return ret;
+#endif
+
+	job = (struct ldc_job *)(uintptr_t)handle;
+	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
+
+	if (job->devs_type == DEVS_DWA) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_LDC;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
+
+	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
+	tsk->type = LDC_TASK_TYPE_LDC;
+	tsk->rotation = attr->rotation;
+	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
+	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_add_tail(&tsk->node, &job->task_list);
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
+
+	return ret;
+}
+
+int ldc_add_dwa_rot_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
+{
+	struct ldc_job *job;
+	struct ldc_task *tsk;
+	unsigned long long handle;
+	unsigned long flags;
+	int ret = 0;
+
+	if (!ldc_check_param_is_valid(wdev, attr))
+		return -1;
+	handle = attr->handle;
+
+	ret = ldc_rot_check_size(attr->rotation, attr);
+	if (ret)
+		return ret;
+
+	job = (struct ldc_job *)(uintptr_t)handle;
+	tsk = kzalloc(sizeof(*tsk), GFP_ATOMIC);
+
+	if (job->devs_type == DEVS_LDC) {
+		TRACE_LDC(DBG_ERR, "A job is not allowed to use different types of hardware\n");
+		return ERR_GDC_NOT_PERMITTED;
+	}
+
+	job->devs_type = DEVS_DWA;
+	TRACE_LDC(DBG_INFO, "job[%px], job->devs_type is %d\n", job, job->devs_type);
+
+	memcpy(&tsk->attr, attr, sizeof(tsk->attr));
+	tsk->type = LDC_TASK_TYPE_ROT;
+	tsk->rotation = attr->rotation;
+	atomic_set(&tsk->state, LDC_TASK_STATE_WAIT);
+	atomic_add(1, &job->task_num);
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_add_tail(&tsk->node, &job->task_list);
+	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "job[%px] tsk(%px)\n", job, tsk);
 
@@ -1323,7 +1708,7 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 	ret = ldc_check_null_ptr(pstvideo_frame)
 		|| ldc_check_null_ptr(wdev)
 		|| ldc_check_null_ptr(identity);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	memset(pstvideo_frame, 0, sizeof(*pstvideo_frame));
@@ -1342,20 +1727,13 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 		TRACE_LDC(DBG_DEBUG, "sem.count[%d]\n", wdev->vb_doneq.sem.count);
 	}
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
 	if (list_empty(&wdev->vb_doneq.doneq)) {
 		TRACE_LDC(DBG_ERR, "vb_doneq is empty\n");
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
 		return ERR_GDC_NOBUF;
 	}
 
+	spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
 	list_for_each_entry_safe(vb_done, vb_done_tmp, &wdev->vb_doneq.doneq, node) {
-		if (!vb_done) {
-			TRACE_LDC(DBG_ERR, "vb_done is null\n");
-			spin_unlock_irqrestore(&wdev->job_lock, flags);
-			return ERR_GDC_NOBUF;
-		}
-
 		if (ldc_identity_is_match(&vb_done->job.identity, &identity->attr)) {
 			TRACE_LDC(DBG_DEBUG, "vb_doneq identity[%d-%d-%s] is match [%d-%d-%s]\n"
 				, vb_done->job.identity.mod_id, vb_done->job.identity.id, vb_done->job.identity.name
@@ -1364,23 +1742,19 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 			break;
 		}
 	}
+	if (ismatch)
+		list_del(&vb_done->node);
+	spin_unlock_irqrestore(&wdev->vb_doneq.lock, flags);
 
 	if (!ismatch) {
 		TRACE_LDC(DBG_DEBUG, "vb_doneq[%px] identity[%d-%d-%s] not match [%d-%d-%s]\n"
 			, vb_done_tmp, vb_done_tmp->job.identity.mod_id, vb_done_tmp->job.identity.id, vb_done_tmp->job.identity.name
 			, identity->attr.mod_id, identity->attr.id, identity->attr.name);
-		up(&wdev->vb_doneq.sem);
-		spin_unlock_irqrestore(&wdev->job_lock, flags);
 		return ERR_GDC_NOBUF;
 	}
 
-	list_del(&vb_done->node);
-
 	memcpy(pstvideo_frame, &vb_done->img_out, sizeof(*pstvideo_frame));
 	kfree(vb_done);
-	vb_done = NULL;
-
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "end to get pstvideo_frame width:%d height:%d buf:0x%llx\n"
 		, pstvideo_frame->video_frame.width
@@ -1388,7 +1762,7 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 		, pstvideo_frame->video_frame.phyaddr[0]);
 	TRACE_LDC(DBG_DEBUG, "--\n");
 
-	return ret;
+	return 0;
 }
 
 int ldc_attach_vb_pool(vb_pool vb_pool)
@@ -1399,9 +1773,9 @@ int ldc_attach_vb_pool(vb_pool vb_pool)
 	if (!wdev)
 		return -1;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
 	wdev->vb_pool = vb_pool;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "attach vb pool(%d)\n", vb_pool);
 	return 0;
@@ -1415,9 +1789,9 @@ int ldc_detach_vb_pool(void)
 	if (!wdev)
 		return -1;
 
-	spin_lock_irqsave(&wdev->job_lock, flags);
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
 	wdev->vb_pool = VB_INVALID_POOLID;
-	spin_unlock_irqrestore(&wdev->job_lock, flags);
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
 	TRACE_LDC(DBG_DEBUG, "dettach vb pool\n");
 	return 0;
@@ -1436,30 +1810,28 @@ int ldc_sw_init(struct ldc_vdev *wdev)
 	if (ret)
 		return ret;
 
-	INIT_LIST_HEAD(&wdev->job_list);
 	INIT_LIST_HEAD(&wdev->vb_doneq.doneq);
-	init_waitqueue_head(&wdev->wait);
 	sema_init(&wdev->vb_doneq.sem, 0);
+	spin_lock_init(&wdev->vb_doneq.lock);
 	sema_init(&wdev->sem, 0);
-
-	spin_lock_init(&wdev->job_lock);
+	init_waitqueue_head(&wdev->wait);
+	spin_lock_init(&wdev->wdev_lock);
+	INIT_LIST_HEAD(&wdev->job_list);
 	wdev->core_num = LDC_DEV_MAX_CNT;
 	wdev->evt = LDC_EVENT_BUSY_OR_NOT_STAT;
 	wdev->vb_pool = VB_INVALID_POOLID;
+	wdev->job_cnt = 0;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 #if LDC_USE_WORKQUEUE
 		INIT_WORK(&wdev->core[coreid].work_frm_done, ldc_work_frm_done);
 #endif
-		INIT_LIST_HEAD(&wdev->list.work_list[coreid]);
-		INIT_LIST_HEAD(&wdev->list.done_list[coreid]);
-		INIT_LIST_HEAD(&wdev->core[coreid].list.work_list);
-		INIT_LIST_HEAD(&wdev->core[coreid].list.done_list);
-	#if !USE_REAL_CMDQ
+		INIT_LIST_HEAD(&wdev->core[coreid].list);
+#if !USE_REAL_CMDQ
 		init_waitqueue_head(&wdev->core[coreid].cmdq_wq);
-	#endif
+#endif
+		spin_lock_init(&wdev->core[coreid].core_lock);
 	}
-	wdev->job_cnt = 0;
 
 	wdev->thread = kthread_run(ldc_event_handler_th, (void *)wdev, "ldc_event_handler_th");
 	if (IS_ERR(wdev->thread)) {
@@ -1497,13 +1869,9 @@ void ldc_sw_deinit(struct ldc_vdev *wdev)
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {
 		flush_work(&wdev->core[coreid].work_frm_done);
 		cancel_work_sync(&wdev->core[coreid].work_frm_done);
-		list_del_init(&wdev->list.work_list[coreid]);
-		list_del_init(&wdev->list.work_list[coreid]);
-		list_del_init(&wdev->core[coreid].list.work_list);
-		list_del_init(&wdev->core[coreid].list.done_list);
+		list_del_init(&wdev->core[coreid].list);
 	}
 #endif
-	(void)coreid;
 	if (!IS_ERR(wdev->thread)) {
 		if (kthread_stop(wdev->thread))
 			TRACE_LDC(DBG_ERR, "fail to stop ldc kthread\n");
@@ -1517,7 +1885,8 @@ int ldc_suspend_handler(void)
 {
 	int ret;
 	struct ldc_vdev * dev = ldc_get_dev();
-	struct ldc_job *job;
+	int job_cnt;
+	unsigned long flags;
 
 	if (unlikely(!dev)) {
 		TRACE_LDC(DBG_ERR, "ldc_dev is null\n");
@@ -1529,7 +1898,11 @@ int ldc_suspend_handler(void)
 		return ERR_GDC_SYS_NOTREADY;
 	}
 
-	if (dev->job_cnt > 0 || !list_empty(&dev->job_list) || atomic_read(&dev->state) == LDC_DEV_STATE_RUNNING) {
+	spin_lock_irqsave(&dev->wdev_lock, flags);
+	job_cnt = dev->job_cnt;
+	spin_unlock_irqrestore(&dev->wdev_lock, flags);
+
+	if (job_cnt > 0 || atomic_read(&dev->state) == LDC_DEV_STATE_RUNNING) {
 		sema_init(&dev->sem, 0);
 		ret = down_timeout(&dev->sem, msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS));
 		if (ret == -ETIME) {
@@ -1538,13 +1911,6 @@ int ldc_suspend_handler(void)
 		}
 	}
 	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
-	spin_lock(&dev->job_lock);
-	while(!list_empty(&dev->job_list)) {
-		job = list_first_entry_or_null(&dev->job_list, struct ldc_job, node);
-		list_del(&job->node);
-	}
-	dev->job_cnt = 0;
-	spin_unlock(&dev->job_lock);
 
 	TRACE_LDC(DBG_WARN, "suspend handler+\n");
 	return 0;

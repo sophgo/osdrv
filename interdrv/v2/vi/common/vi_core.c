@@ -149,6 +149,8 @@ static int vi_core_clk_init(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_sys_name[i]);
 			return PTR_ERR(dev->clk_sys[i]);
 		}
+		clk_prepare_enable(dev->clk_sys[i]);
+		clk_disable_unprepare(dev->clk_sys[i]);
 	}
 
 	for (i = 0; i < ARRAY_SIZE(clk_isp_name); ++i) {
@@ -157,6 +159,8 @@ static int vi_core_clk_init(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_isp_name[i]);
 			return PTR_ERR(dev->clk_isp[i]);
 		}
+		clk_prepare_enable(dev->clk_isp[i]);
+		clk_disable_unprepare(dev->clk_isp[i]);
 	}
 
 	for (i = 0; i < ARRAY_SIZE(clk_mac_name); ++i) {
@@ -165,6 +169,8 @@ static int vi_core_clk_init(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_mac_name[i]);
 			return PTR_ERR(dev->clk_mac[i]);
 		}
+		clk_prepare_enable(dev->clk_mac[i]);
+		clk_disable_unprepare(dev->clk_mac[i]);
 	}
 
 	return 0;

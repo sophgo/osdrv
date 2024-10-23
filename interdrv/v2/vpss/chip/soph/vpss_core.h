@@ -8,7 +8,7 @@
 #include <linux/miscdevice.h>
 
 #include <linux/iommu.h>
-
+#include "base_ctx.h"
 #include <linux/defines.h>
 #include <linux/vpss_uapi.h>
 
@@ -68,6 +68,7 @@ struct vpss_core {
 	u32 hw_duration;
 	u32 hw_duration_total;
 	u32 duty_ratio;
+	u32 duty_ratio_long;
 	u8 intr_status;
 	u8 tile_mode;
 	u8 map_chn;
@@ -84,5 +85,6 @@ struct vpss_device {
 	struct vpss_core vpss_cores[VPSS_MAX];
 };
 
+unsigned long vpss_dmabuf_fd_to_paddr(int dmabuf_fd);
 
 #endif /* _VPSS_CORE_H_ */

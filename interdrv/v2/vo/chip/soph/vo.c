@@ -5,6 +5,7 @@
 #include <linux/sys.h>
 #include <linux/of_gpio.h>
 #include <linux/timer.h>
+#include <linux/clk-provider.h>
 
 #include <linux/common.h>
 #include <linux/defines.h>
@@ -63,6 +64,7 @@ struct vo_stitch_cb_data {
 struct vo_ctx *g_vo_ctx;
 struct vo_core_dev *g_core_dev;
 static atomic_t  dev_open_cnt;
+extern const char *const disp_irq_name[DISP_MAX_INST];
 
 //update proc info
 static void _update_vo_real_frame_rate(struct timer_list *timer);
@@ -659,7 +661,7 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 	chn = cb_param->chn;
 	chn_ctx = &g_vo_ctx->layer_ctx[chn.dev_id].chn_ctx[chn.chn_id];
 
-	if (!chn_ctx->is_chn_enable) {
+	if (!chn_ctx->is_chn_enable || g_vo_ctx->suspend) {
 		TRACE_VO(DBG_INFO, "layer(%d) chn(%d) disable.\n", chn.dev_id, chn.chn_id);
 		mutex_unlock(&chn_ctx->gdc_lock);
 		vb_release_block(blk);
@@ -1617,10 +1619,45 @@ int vo_wbc_destroy_thread(vo_wbc wbc_dev)
 	return 0;
 }
 
+void vo_show_panttern(vo_dev dev)
+{
+	struct vo_core_dev *vdev = g_core_dev;
+
+	if ((vdev->clk_vo[dev * 2]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2])))
+		clk_prepare_enable(vdev->clk_vo[dev * 2]);
+
+	if(!(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & (VO_INTF_MIPI | VO_INTF_LVDS | VO_INTF_HDMI))) {
+		if ((vdev->clk_vo[dev * 2 + 1]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2 + 1])))
+			clk_prepare_enable(vdev->clk_vo[dev * 2 + 1]);
+	}
+
+	if(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & VO_INTF_LVDS) {
+		if ((vdev->clk_lvds[dev]) && (!__clk_is_enabled(vdev->clk_lvds[dev])))
+			clk_prepare_enable(vdev->clk_lvds[dev]);
+	}
+
+	disp_tgen_enable(dev, true);
+
+	return;
+}
+
 int vo_start_streaming(vo_dev dev)
 {
 	int rc = 0;
 	struct vo_core_dev *vdev = g_core_dev;
+
+	if ((vdev->clk_vo[dev * 2]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2])))
+		clk_prepare_enable(vdev->clk_vo[dev * 2]);
+
+	if(!(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & (VO_INTF_MIPI | VO_INTF_LVDS | VO_INTF_HDMI))) {
+		if ((vdev->clk_vo[dev * 2 + 1]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2 + 1])))
+			clk_prepare_enable(vdev->clk_vo[dev * 2 + 1]);
+	}
+
+	if(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & VO_INTF_LVDS) {
+		if ((vdev->clk_lvds[dev]) && (!__clk_is_enabled(vdev->clk_lvds[dev])))
+			clk_prepare_enable(vdev->clk_lvds[dev]);
+	}
 
 	disp_enable_window_bgcolor(dev, true);
 
@@ -1631,6 +1668,13 @@ int vo_start_streaming(vo_dev dev)
 
 	atomic_set(&vdev->vo_core[dev].disp_streamon, 1);
 	TRACE_VO(DBG_INFO, "[dev%d]start streaming.\n", dev);
+
+	rc = devm_request_irq(vdev->dev, vdev->vo_core[dev].irq_num, vo_irq_handler, 0,
+			      disp_irq_name[dev], (void *)&vdev->vo_core[dev]);
+	if (rc) {
+		TRACE_VO(DBG_ERR, "Failed to vo request irq\n");
+		return -EAGAIN;
+	}
 
 	return rc;
 }
@@ -1647,6 +1691,23 @@ int vo_stop_streaming(vo_dev dev)
 	memset(&vdev->vo_core[dev].compose_out, 0, sizeof(vdev->vo_core[dev].compose_out));
 	TRACE_VO(DBG_INFO, "[dev%d]stop streaming.\n", dev);
 	TRACE_VO(DBG_DEBUG, "end...\n");
+
+	devm_free_irq(vdev->dev, vdev->vo_core[dev].irq_num,
+		      (void *)&vdev->vo_core[dev]);
+
+	if ((vdev->clk_vo[dev * 2]) && __clk_is_enabled(vdev->clk_vo[dev * 2]))
+		clk_disable_unprepare(vdev->clk_vo[dev * 2]);
+
+
+	if(!(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & (VO_INTF_MIPI | VO_INTF_LVDS | VO_INTF_HDMI))) {
+		if ((vdev->clk_vo[dev * 2 + 1]) && __clk_is_enabled(vdev->clk_vo[dev * 2 + 1]))
+			clk_disable_unprepare(vdev->clk_vo[dev * 2 + 1]);
+	}
+
+	if(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & VO_INTF_LVDS) {
+		if ((vdev->clk_lvds[dev]) && __clk_is_enabled(vdev->clk_lvds[dev]))
+			clk_disable_unprepare(vdev->clk_lvds[dev]);
+	}
 
 	return rc;
 }
@@ -1811,21 +1872,22 @@ static long _vo_s_ctrl(struct vo_core_dev *vdev, struct vo_ext_control *p)
 
 	case VO_IOCTL_PATTERN: {
 		vo_layer dev = p->reserved[0];
-
 		if (dev >= VO_MAX_DEV_NUM || dev < 0) {
 			rc = -EINVAL;
 			TRACE_VO(DBG_ERR, "Invalid vo device(%d)!\n", dev);
 			break;
 		}
+
 		if (p->value >= VO_PAT_MAX) {
 			TRACE_VO(DBG_ERR, "invalid disp-pattern(%d)\n", p->value);
 			rc = -EFAULT;
 			break;
 		}
+
 		disp_set_pattern(dev, patterns[p->value].type, patterns[p->value].color,
 				 patterns[p->value].rgb);
-		if (!disp_check_tgen_enable(dev))
-			disp_tgen_enable(dev, true);
+
+		vo_show_panttern(dev);
 	}
 	break;
 

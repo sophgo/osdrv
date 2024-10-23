@@ -36,8 +36,8 @@ struct vo_core_dev {
 	struct class *vo_class;
 	struct cdev cdev;
 	dev_t cdev_id;
-	struct clk *clk_sys[2];
 	struct clk *clk_vo[6];
+	struct clk *clk_lvds[2];
 	//vo_mac, disp, dsi_mac, dsi_phy, oenc
 	void __iomem *reg_base[10];
 	struct vo_core vo_core[VO_MAX_DEV_NUM];

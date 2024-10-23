@@ -79,5 +79,29 @@ typedef enum {
 
 #define VDI_NUM_LOCK_HANDLES                6
 
+int vpu_op_open(int core_idx);
+int vpu_op_close(int core_idx);
+ssize_t vpu_op_read(char *buf, size_t len);
+ssize_t vpu_op_write(const char *buf, size_t len);
+
+long vpu_get_common_memory(vpudrv_buffer_t *vdb);
+long vpu_get_instance_pool(vpudrv_buffer_t *info);
+long vpu_open_instance(vpudrv_inst_info_t *inst_info);
+long vpu_close_instance(vpudrv_inst_info_t *inst_info);
+
+int vpu_hw_reset(int core_idx);
+long vpu_flush_dcache(vpudrv_buffer_t *info);
+long vpu_invalidate_dcache(vpudrv_buffer_t *info);
+long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb);
+long vpu_free_physical_memory(vpudrv_buffer_t *vdb);
+long vpu_get_free_mem_size(unsigned long *size);
+long vpu_set_clock_gate(int core_idx, unsigned int *clkgate);
+long vpu_wait_interrupt(vpudrv_intr_info_t *info);
+
+long vpu_allocate_extern_memory(vpudrv_buffer_t *vdb);
+long vpu_free_extern_memory(vpudrv_buffer_t *vdb);
+int  vpu_free_extern_buffers(int core_idx);
+void vpu_clk_disable(int core_idx);
+void vpu_clk_enable(int core_idx);
 #endif
 

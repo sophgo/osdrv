@@ -732,6 +732,7 @@ void disp_set_pattern(u8 inst, enum disp_pat_type type,
 void disp_set_frame_bgcolor(u8 inst, u16 r, u16 g, u16 b);
 void disp_set_window_bgcolor(u8 inst, u16 r, u16 g, u16 b);
 void disp_enable_window_bgcolor(u8 inst, bool enable);
+void disp_clk_enable(u8 inst, bool enable);
 bool disp_tgen_enable(u8 inst, bool enable);
 bool disp_check_tgen_enable(u8 inst);
 bool disp_check_i80_enable(u8 inst);

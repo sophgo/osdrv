@@ -62,18 +62,18 @@ typedef struct _vdec_attr_video_s {
 } vdec_attr_video_s;
 
 typedef struct _buffer_info_s {
-    unsigned int size;
-    unsigned long phys_addr;
-    unsigned long virt_addr;
+	unsigned int  size;
+	unsigned long phys_addr;
+	unsigned long virt_addr;
 } buffer_info_s;
 
 typedef struct _vdec_buffer_info_s {
-    buffer_info_s* bitstream_buffer;
-    buffer_info_s* frame_buffer;
-    buffer_info_s* Ytable_buffer;
-    buffer_info_s* Ctable_buffer;
-    int numOfDecFbc;
-    int numOfDecwtl;
+	buffer_info_s* bitstream_buffer;
+	buffer_info_s* frame_buffer;
+	buffer_info_s* Ytable_buffer;
+	buffer_info_s* Ctable_buffer;
+	unsigned int numOfDecFbc;
+	unsigned int numOfDecwtl;
 } vdec_buffer_info_s;
 
 typedef struct _vdec_chn_attr_s {
@@ -91,7 +91,7 @@ typedef struct _vdec_chn_attr_s {
 		vdec_attr_video_s
 		stVdecVideoAttr; /* structure with video ( h264/h265) */
 	};
-    vdec_buffer_info_s stBufferInfo;
+	vdec_buffer_info_s stBufferInfo;
 } vdec_chn_attr_s;
 
 typedef struct _vdec_stream_s {
@@ -157,6 +157,7 @@ typedef struct _vdec_chn_status_s {
 	int u32LeftStreamBytes; /* R; left stream bytes waiting for decode */
 	int u32LeftStreamFrames; /* R; left frames waiting for decode,only valid for VIDEO_MODE_FRAME */
 	int u32LeftPics; /* R; pics waiting for output */
+	int u32EmptyStreamBufSzie;
 	unsigned char bStartRecvStream; /* R; had started recv stream? */
 	unsigned int u32RecvStreamFrames; /* R; how many frames of stream has been received. valid when send by frame. */
 	unsigned int u32DecodeStreamFrames; /* R; how many frames of stream has been decoded. valid when send by frame. */
@@ -209,6 +210,10 @@ typedef struct _vdec_param_picture_s {
 	int s32ROIHeight;
 	int s32RotAngle;
 	int s32MirDir;
+    int s32MaxFrameWidth;
+    int s32MaxFrameHeight;
+    int s32MinFrameWidth;
+    int s32MinFrameHeight;
 } vdec_param_picture_s;
 
 typedef struct _vdec_chn_param_s {

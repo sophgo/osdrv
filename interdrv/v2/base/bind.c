@@ -42,20 +42,24 @@ static int32_t bind(mmf_chn_s *src_chn, mmf_chn_s *dest_chn)
 		dest_chn->mod_id, dest_chn->dev_id, dest_chn->chn_id);
 
 	mutex_lock(&bind_lock);
-	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
-		if (!CHN_MATCH(&item->node->src, src_chn))
-			continue;
 
-		// check if dst already bind to src
+	// check if dst already bind to src
+	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
 		for (i = 0; i < item->node->dsts.num; ++i) {
 			if (CHN_MATCH(&item->node->dsts.mmf_chn[i], dest_chn)) {
-				TRACE_BASE(DBG_DEBUG, "Duplicate Dst(%d-%d-%d) to Src(%d-%d-%d)\n",
+				TRACE_BASE(DBG_ERR, "Dst(%d-%d-%d) already bind to Src(%d-%d-%d)\n",
 					dest_chn->mod_id, dest_chn->dev_id, dest_chn->chn_id,
-					src_chn->mod_id, src_chn->dev_id, src_chn->chn_id);
+					item->node->src.mod_id, item->node->src.dev_id, item->node->src.chn_id);
 				ret = -1;
 				goto BIND_EXIT;
 			}
 		}
+	}
+
+	TAILQ_FOREACH_SAFE(item, &binds, tailq, item_tmp) {
+		if (!CHN_MATCH(&item->node->src, src_chn))
+			continue;
+
 		// check if dsts have enough space for one more bind
 		if (item->node->dsts.num >= BIND_DEST_MAXNUM) {
 			TRACE_BASE(DBG_ERR, "Over max bind Dst number\n");
@@ -152,6 +156,7 @@ int32_t bind_get_dst(mmf_chn_s *src_chn, mmf_bind_dest_s *bind_dest)
 		}
 	}
 	mutex_unlock(&bind_lock);
+
 	return -1;
 }
 EXPORT_SYMBOL_GPL(bind_get_dst);
@@ -176,6 +181,7 @@ int32_t bind_get_src(mmf_chn_s *dest_chn, mmf_chn_s *src_chn)
 		}
 	}
 	mutex_unlock(&bind_lock);
+
 	return -1;
 }
 EXPORT_SYMBOL_GPL(bind_get_src);
@@ -240,8 +246,11 @@ int32_t bind_get_cfg_user(unsigned long arg)
 	else
 		ret = bind_get_src(&ioctl_arg.mmf_chn_dst, &ioctl_arg.mmf_chn_src);
 
-	if (ret)
-		TRACE_BASE(DBG_ERR, "sys_ctx_getbind failed\n");
+	if (ret) {
+		TRACE_BASE(DBG_ERR, "sys_ctx_getbind %s failed\n",
+			ioctl_arg.get_by_src ? "dst" : "src");
+		return ret;
+	}
 
 	ret = copy_to_user((struct sys_bind_cfg __user *)arg,
 			     &ioctl_arg,

@@ -8,11 +8,13 @@
 
 #define VIP_ALIGNMENT 0x40
 #define LDC_ALIGNMENT (VIP_ALIGNMENT)
+#define DWA_ALIGNMENT 0x20
 
 #define LDC_USE_WORKQUEUE 1
 #define LDC_USE_THREADED_IRQ 0
 
-#define LDC_YUV_BLACK 0x808000
+#define LDC_YUV_BLACK 0x8000
+#define BGCOLOR_GREEN  (YUV_8BIT(0, 128, 128))
 #define LDC_RGB_BLACK 0x0
 
 #undef BIT
@@ -30,8 +32,9 @@
 #define VIP_64_ALIGN(x) (((x) + 0x3F) & ~0x3F)   // for 64byte alignment
 #define VIP_ALIGN(x) (((x) + 0xF) & ~0xF)   // for 16byte alignment
 
-#define LDC_DEV_MAX_CNT (2)
+#define LDC_DEV_MAX_CNT (4)
 #define VIP_MAX_PLANES (3)
+#define END_JOB_MAX_LEN (16)
 
 #define LDC_IP_NUM                 (2)
 #define LDC_PROC_JOB_INFO_NUM      (16)
@@ -39,13 +42,13 @@
 #define LDC_JOB_MAX_TSK_NUM        (16)
 
 #ifndef FPGA_PORTING
+#define LDC_IDLE_WAIT_TIMEOUT_MS    1000
+#define LDC_SYNC_IO_WAIT_TIMEOUT_MS 1000*2
+#define LDC_EOF_WAIT_TIMEOUT_MS     200
+#else
 #define LDC_IDLE_WAIT_TIMEOUT_MS    1000*5
 #define LDC_SYNC_IO_WAIT_TIMEOUT_MS 1000*10
 #define LDC_EOF_WAIT_TIMEOUT_MS     1000*1
-#else
-#define LDC_IDLE_WAIT_TIMEOUT_MS    1000*50
-#define LDC_SYNC_IO_WAIT_TIMEOUT_MS 1000*100
-#define LDC_EOF_WAIT_TIMEOUT_MS     1000*10
 #endif
 
 #define R_IDX 0
@@ -68,6 +71,7 @@ enum ldc_task_type {
 	LDC_TASK_TYPE_FISHEYE,
 	LDC_TASK_TYPE_AFFINE,
 	LDC_TASK_TYPE_LDC,
+	LDC_TASK_TYPE_WARP,
 	LDC_TASK_TYPE_MAX,
 };
 
@@ -89,9 +93,7 @@ struct ldc_task {
 	enum ldc_task_type type;
 	rotation_e rotation;
 	atomic_t state;//ldc_task_state
-	ldc_tsk_cb fn_tsk_cb;
 	int tsk_id;
-	struct semaphore sem;
 	//char coreid;
 };
 
@@ -112,7 +114,14 @@ enum ldc_job_state {
 	LDC_JOB_INVALID,
 };
 
+enum ldc_job_devs_type {
+	DEVS_LDC = 0,
+	DEVS_DWA,
+	DEVS_MAX,
+};
+
 struct ldc_job {
+	spinlock_t lock;
 	struct ldc_data cap_data, out_data;
 	atomic_t job_state; //ldc_job_state
 	struct list_head node;//add to ldc_vdev job_list
@@ -123,11 +132,14 @@ struct ldc_job {
 	char coreid;
 	wait_queue_head_t job_done_wq;
 	bool job_done_evt;
+	enum ldc_job_devs_type devs_type; // job dev type
+	int proc_idx;
 };
 
 struct ldc_vb_doneq {
 	struct semaphore sem;
 	struct list_head doneq;
+	spinlock_t lock;
 };
 
 struct ldc_vb_done {
@@ -187,6 +199,7 @@ struct ldc_proc_job_info {
 	unsigned int hw_time; // HW cost time
 	unsigned int busy_time; // From job submitted to job commit to driver
 	unsigned long long submit_time; // us
+	int core_id;
 };
 
 struct ldc_proc_operation_status {

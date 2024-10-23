@@ -795,12 +795,7 @@ static void ive_submit_hw(struct ive_device *ndev, int top_id, struct ive_task *
 					(struct ive_query_arg *) g_kdata;
 
 			start_ioctl_time(&g_time_infos[MOD_QUERY], "QUERY");
-			ret = copy_from_user(&bFinish,
-							(void __user *)val->pbFinish,
-							sizeof(bool));
 			ret = ive_query(ndev, &bFinish, val->bBlock, task->dev_id);
-			ret = copy_to_user((void __user *)val->pbFinish,
-						&bFinish, sizeof(bool));
 			stop_ioctl_time(&g_time_infos[MOD_QUERY]);
 		} break;
 		case IVE_IOC_RESET: {

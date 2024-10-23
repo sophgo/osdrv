@@ -16,6 +16,9 @@
 #include "vdi_debug.h"
 #include "vpuconfig.h"
 #include "vputypes.h"
+#if defined(linux) || defined(__linux)
+#include "linux/driver/vpu.h"
+#endif
 
 /************************************************************************/
 /* COMMON REGISTERS                                                     */
@@ -125,7 +128,8 @@ extern int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb);
 extern void vdi_free_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex);
 extern int vdi_get_sram_memory(unsigned long core_idx, vpu_buffer_t *vb);
 extern int vdi_dettach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb);
-
+extern int vdi_insert_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex);
+extern void vdi_remove_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex);
 
 extern int vdi_wait_interrupt(unsigned long coreIdx, unsigned int instIdx, int timeout);
 extern int vdi_wait_vpu_busy(unsigned long core_idx, int timeout, unsigned int addr_bit_busy_flag);

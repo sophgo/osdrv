@@ -232,6 +232,8 @@ int drv_venc_get_encode_header(venc_chn VeChn, venc_encode_header_s *pstEncodeHe
 int drv_venc_set_search_window(venc_chn VeChn, const venc_search_window_s *pstVencSearchWindow);
 int drv_venc_get_search_window(venc_chn VeChn, venc_search_window_s *pstVencSearchWindow);
 
+int drv_venc_set_extern_buf(venc_chn VeChn, const venc_extern_buf_s *pstExternBuf);
+
 #define DRV_VENC_MASK_ERR		0x1
 #define DRV_VENC_MASK_WARN		0x2
 #define DRV_VENC_MASK_INFO		0x3

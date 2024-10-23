@@ -77,6 +77,7 @@ struct gdc_task_attr {
 		fisheye_attr_s fisheye_attr;
 		affine_attr_s affine_attr;
 		ldc_attr_s ldc_attr;
+		warp_attr_s warp_attr;
 	};
 
 	unsigned long long mesh_handle;
@@ -118,12 +119,17 @@ struct ldc_vb_pool_cfg {
 #define LDC_GET_WORK_JOB _IOR('L', 0x08, struct gdc_handle_data)
 #define LDC_GET_CHN_FRM _IOWR('L', 0x09, struct gdc_chn_frm_cfg)
 
-#define LDC_SET_BUF_WRAP _IOW('L', 0x0a, struct ldc_buf_wrap_cfg)
-#define LDC_GET_BUF_WRAP _IOWR('L', 0x0b, struct ldc_buf_wrap_cfg)
+// #define LDC_SET_BUF_WRAP _IOW('L', 0x0a, struct ldc_buf_wrap_cfg)
+// #define LDC_GET_BUF_WRAP _IOWR('L', 0x0b, struct ldc_buf_wrap_cfg)
 #define LDC_ATTACH_VB_POOL _IOW('L', 0x0c, struct ldc_vb_pool_cfg)
 #define LDC_DETACH_VB_POOL _IO('L', 0x0d)
 #define LDC_SUSPEND _IO('L',0x0e)
 #define LDC_RESUME _IO('L',0x0f)
+#define LDC_ADD_COR_TASK _IOW('D', 0x10, struct gdc_task_attr)
+#define LDC_ADD_AFF_TASK _IOW('D', 0x11, struct gdc_task_attr)
+#define LDC_ADD_WAR_TASK _IOW('D', 0x12, struct gdc_task_attr)
+#define LDC_ADD_LDC_LDC_TASK _IOW('D', 0x13, struct gdc_task_attr)
+#define LDC_ADD_DWA_ROT_TASK _IOW('D', 0x14, struct gdc_task_attr)
 
 #ifdef __cplusplus
 }

@@ -479,11 +479,15 @@ static int cvifb_set_par(struct fb_info *info)
 	// Clear the new dmabuf
 	memset(info->screen_base, 0, info->screen_size);
 	// Flush cache data into DRAM
+#if 0
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
 	arch_sync_dma_for_device(virt_to_phys(info->screen_base), info->screen_size, DMA_TO_DEVICE);
 #else
 	__dma_map_area(info->screen_base, info->screen_size, DMA_TO_DEVICE);
 #endif
+#endif
+	//for gcc 9.3.0
+	arch_sync_dma_for_device(virt_to_phys(info->screen_base), info->screen_size, DMA_TO_DEVICE);
 
 	info->fix.line_length =
 		FB_LINE_SIZE(info->var.xres_virtual, info->var.bits_per_pixel);
@@ -600,12 +604,15 @@ static int cvifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info
 	cfg->ow_cfg[0].addr = par->mem_base + par->mem_offset;
 
 	// Flush cache data into DRAM
-
+#if 0
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
 	arch_sync_dma_for_device(par->mem_base, par->mem_len, DMA_TO_DEVICE);
 #else
 	__dma_map_area(phys_to_virt(par->mem_base), par->mem_len, DMA_TO_DEVICE);
 #endif
+#endif
+	//for gcc9.3.0
+	arch_sync_dma_for_device(par->mem_base, par->mem_len, DMA_TO_DEVICE);
 
 	ow_number = 0;
 	disp_gop_ow_set_cfg(vo_inst, layer, ow_number, &cfg->ow_cfg[0], true);
@@ -771,12 +778,17 @@ int cvifb_probe(struct platform_device *pdev)
 		// Clear the new dmabuf
 		memset(info[vo_inst]->screen_base, 0, info[vo_inst]->screen_size);
 		// Flush cache data into DRAM
+#if 0
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
 		arch_sync_dma_for_device(virt_to_phys(info[vo_inst]->screen_base),
 				info[vo_inst]->screen_size, DMA_TO_DEVICE);
 #else
 		__dma_map_area(info[vo_inst]->screen_base, info[vo_inst]->screen_size, DMA_TO_DEVICE);
 #endif
+#endif
+	//for gcc 9.3.0
+	arch_sync_dma_for_device(virt_to_phys(info[vo_inst]->screen_base),
+			info[vo_inst]->screen_size, DMA_TO_DEVICE);
 
 		ret = fb_alloc_cmap(&info[vo_inst]->cmap, 256, 0);
 		if (ret) {

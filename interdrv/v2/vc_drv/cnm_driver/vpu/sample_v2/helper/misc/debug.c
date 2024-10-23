@@ -264,7 +264,7 @@ Uint32 ReadRegVCE(
     if (vdi_fio_read_register(0, VCORE_DBG_READY(vce_core_idx)) == 1)
         udata= vdi_fio_read_register(0, VCORE_DBG_DATA(vce_core_idx));
     else {
-        VLOG(ERR, "failed to read VCE register: %d, 0x%04x\n", vce_core_idx, vce_addr);
+        VLOG(INFO, "failed to read VCE register: %d, 0x%04x\n", vce_core_idx, vce_addr);
         udata = -2;//-1 can be a valid value
     }
 

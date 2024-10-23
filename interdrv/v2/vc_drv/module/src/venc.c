@@ -502,7 +502,6 @@ static int _check_venc_chn_handle(venc_chn VeChn)
     return 0;
 }
 
-
 static void _drv_venc_init_mod_param(drv_venc_param_mod_s *pModParam)
 {
     if (!pModParam)
@@ -793,6 +792,15 @@ static int _drv_check_rcmode_attr(venc_chn_context *pChnHandle)
                 pChnHandle, &pstMjpegeFixQp->u32SrcFrameRate,
                 &pstMjpegeFixQp->fr32DstFrameRate,
                 pstMjpegeFixQp->bVariFpsEn);
+        } else if (pChnAttr->stRcAttr.enRcMode ==
+            VENC_RC_MODE_MJPEGVBR) {
+            venc_mjpeg_vbr_s *pstMjpegeVbr =
+                &pChnAttr->stRcAttr.stMjpegVbr;
+
+            s32Ret = _drv_check_framerate(
+                pChnHandle, &pstMjpegeVbr->u32SrcFrameRate,
+                &pstMjpegeVbr->fr32DstFrameRate,
+                pstMjpegeVbr->bVariFpsEn);
         } else {
             s32Ret = DRV_ERR_VENC_NOT_SUPPORT;
             DRV_VENC_ERR("enRcMode = %d, not support\n",
@@ -1147,6 +1155,19 @@ static int _drv_set_default_rcparam(venc_chn_context *pChnHandle)
 
             SET_DEFAULT_RC_PARAM(pstParamH265Ubr);
         }
+    }  else if (pVencAttr->enType == PT_MJPEG) {
+        if (prcatt->enRcMode == VENC_RC_MODE_MJPEGCBR) {
+            venc_param_mjpeg_cbr_s *pstParamMjpegCbr = &prcparam->stParamMjpegCbr;
+
+            pstParamMjpegCbr->u32MaxQfactor = Q_TABLE_MAX;
+            pstParamMjpegCbr->u32MinQfactor = Q_TABLE_MIN;
+        } else if (prcatt->enRcMode == VENC_RC_MODE_MJPEGVBR) {
+            venc_param_mjpeg_vbr_s *pstParamMjpegVbr = &prcparam->stParamMjpegVbr;
+
+            pstParamMjpegVbr->s32ChangePos = 100;
+            pstParamMjpegVbr->u32MaxQfactor = Q_TABLE_MAX;
+            pstParamMjpegVbr->u32MinQfactor = Q_TABLE_MIN;
+        }
     }
 
     return s32Ret;
@@ -1268,6 +1289,10 @@ static int _drv_set_rcparam_to_drv(venc_chn_context *pChnHandle)
 
     if (pEncCtx->base.ioctl) {
         RcParam rcp, *prcp = &rcp;
+        jpeg_enc_rc_param  jrcp, *pjrcp = &jrcp;
+
+        memset(prcp, 0, sizeof(RcParam));
+        memset(pjrcp, 0, sizeof(jpeg_enc_rc_param));
 
         prcp->u32RowQpDelta = prcparam->u32RowQpDelta;
         prcp->firstFrmstartQp = prcparam->s32FirstFrameStartQp;
@@ -1358,12 +1383,29 @@ static int _drv_set_rcparam_to_drv(venc_chn_context *pChnHandle)
 
                 SET_COMMON_RC_PARAM(prcp, pstParamH265Ubr);
             }
+        } else if (pVencAttr->enType == PT_MJPEG) {
+            if (prcatt->enRcMode == VENC_RC_MODE_MJPEGCBR) {
+                venc_param_mjpeg_cbr_s *pstParamMjpegCbr =
+                    &prcparam->stParamMjpegCbr;
+                pjrcp->chg_pos = 100;
+                pjrcp->max_qfactor = pstParamMjpegCbr->u32MaxQfactor;
+                pjrcp->min_qfactor = pstParamMjpegCbr->u32MinQfactor;
+            } else if (prcatt->enRcMode == VENC_RC_MODE_MJPEGVBR) {
+                venc_param_mjpeg_vbr_s *pstParamMjpegVbr =
+                    &prcparam->stParamMjpegVbr;
+                pjrcp->chg_pos = pstParamMjpegVbr->s32ChangePos;
+                pjrcp->max_qfactor = pstParamMjpegVbr->u32MaxQfactor;
+                pjrcp->min_qfactor = pstParamMjpegVbr->u32MinQfactor;
+            }
         }
 
-        s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_H26X_OP_SET_RC_PARAM,
-                         (void *)prcp);
+        if (pVencAttr->enType == PT_H264 || pVencAttr->enType == PT_H265)
+            s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_H26X_OP_SET_RC_PARAM, (void *)prcp);
+        else if (pVencAttr->enType == PT_MJPEG)
+            s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_JPEG_OP_SET_RC_PARAM, (void *)pjrcp);
+
         if (s32Ret != 0) {
-            DRV_VENC_ERR("DRV_H26X_OP_SET_RC_PARAM, %d\n", s32Ret);
+            DRV_VENC_ERR("OP_SET_RC_PARAM, %d\n", s32Ret);
             return s32Ret;
         }
     } else {
@@ -2540,7 +2582,11 @@ static int _drv_process_result(venc_chn_context *pChnHandle,
     pChnAttr = pChnHandle->pChnAttr;
     pVencAttr = &pChnAttr->stVencAttr;
 
-    pChnVars->u32GetStreamCnt += pstStream->u32PackCount;
+    if (pVencAttr->enType == PT_JPEG || pVencAttr->enType == PT_MJPEG)
+        pChnVars->u32GetStreamCnt += pstStream->u32PackCount/2;
+    else
+        pChnVars->u32GetStreamCnt += pstStream->u32PackCount;
+
     s32Ret = _drv_set_venc_perfattr_to_proc(pChnHandle);
     if (s32Ret != 0) {
         DRV_VENC_ERR("(chn %d) _drv_set_venc_perfattr_to_proc fail\n",
@@ -2849,6 +2895,46 @@ static int _drv_check_rc_param(venc_chn_context *pChnHandle,
                 return s32Ret;
             }
         }
+    } else if (pVencAttr->enType == PT_MJPEG) {
+        if (prcatt->enRcMode == VENC_RC_MODE_MJPEGCBR) {
+            const venc_param_mjpeg_cbr_s *pstParamJpgCbr =
+                &pstRcParam->stParamMjpegCbr;
+            if (pstParamJpgCbr->u32MinQfactor <= 0 ||
+                pstParamJpgCbr->u32MinQfactor > Q_TABLE_MAX) {
+                DRV_VENC_ERR("error, %s = %d\n",
+                        "cbr u32MinQfactor", pstParamJpgCbr->u32MinQfactor);
+                return DRV_ERR_VENC_RC_PARAM;
+            }
+            if (pstParamJpgCbr->u32MaxQfactor < pstParamJpgCbr->u32MinQfactor ||
+                pstParamJpgCbr->u32MaxQfactor > Q_TABLE_MAX) {
+                DRV_VENC_ERR("error, %s = %d\n",
+                    "cbr u32MaxQfactor", pstParamJpgCbr->u32MaxQfactor);
+                return DRV_ERR_VENC_RC_PARAM;
+            }
+        } else if (prcatt->enRcMode == VENC_RC_MODE_MJPEGVBR) {
+            const venc_param_mjpeg_vbr_s *pstParamJpgVbr =
+                &pstRcParam->stParamMjpegVbr;
+            if (pstParamJpgVbr->u32MinQfactor <= 0 ||
+                pstParamJpgVbr->u32MinQfactor > Q_TABLE_MAX) {
+                DRV_VENC_ERR("error, %s = %d\n",
+                    "vbr u32MinQfactor", pstParamJpgVbr->u32MinQfactor);
+                return DRV_ERR_VENC_RC_PARAM;
+            }
+
+            if (pstParamJpgVbr->u32MaxQfactor < pstParamJpgVbr->u32MinQfactor ||
+                pstParamJpgVbr->u32MaxQfactor > Q_TABLE_MAX) {
+                DRV_VENC_ERR("error, %s = %d\n",
+                    "vbr u32MaxQfactor", pstParamJpgVbr->u32MaxQfactor);
+                return DRV_ERR_VENC_RC_PARAM;
+            }
+
+            if (pstParamJpgVbr->s32ChangePos < 50 ||
+                pstParamJpgVbr->s32ChangePos > 100) {
+                DRV_VENC_ERR("error, %s = %d\n",
+                    "vbr s32ChangePos", pstParamJpgVbr->s32ChangePos);
+                return DRV_ERR_VENC_RC_PARAM;
+            }
+        }
     }
 
     return s32Ret;
@@ -3103,7 +3189,8 @@ int drv_venc_start_recvframe(venc_chn VeChn,
     pVencAttr = &pChnHandle->pChnAttr->stVencAttr;
 
     pChnVars->s32RecvPicNum = pstRecvParam->s32RecvPicNum;
-
+    if (pChnVars->chnState == venc_chn_STATE_START_ENC)
+        return 0;
     if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
         DRV_VENC_ERR("can not lock chnMutex\n");
         return -1;
@@ -3321,6 +3408,7 @@ int drv_venc_get_stream(venc_chn VeChn, venc_stream_s *pstStream,
     venc_chn_attr_s *pChnAttr;
     venc_vb_ctx *pVbCtx = NULL;
     venc_attr_s *pVencAttr = NULL;
+    int32_t curr_packs_num = 0;
 
     s32Ret = _check_venc_chn_handle(VeChn);
     if (s32Ret != 0) {
@@ -3338,6 +3426,23 @@ int drv_venc_get_stream(venc_chn VeChn, venc_stream_s *pstStream,
     if (pChnHandle->bSbSkipFrm == true) {
         //DRV_VENC_ERR("SbSkipFrm\n");
         return DRV_ERR_VENC_BUSY;
+    }
+
+    if (S32MilliSec == 0 && (pVencAttr->enType == PT_H264 || pVencAttr->enType == PT_H265)) {
+        if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
+            DRV_VENC_ERR("can not lock chnMutex\n");
+            return -1;
+        }
+        s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_H26X_OP_GET_BS_PACKS_NUM,
+                        (void *)&curr_packs_num);
+        MUTEX_UNLOCK(&pChnHandle->chnMutex);
+        if (curr_packs_num == -1) {
+            return DRV_ERR_VENC_GET_STREAM_END;
+        }
+
+        if (curr_packs_num == 0) {
+            return DRV_ERR_VENC_BUSY;
+        }
     }
 
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
@@ -4762,15 +4867,17 @@ int drv_venc_set_chn_param(venc_chn VeChn,
     pvecb = &pChnHandle->encCtx.base;
 
     memcpy(&pChnVars->stChnParam, pstChnParam, sizeof(venc_chn_param_s));
-
-    if ((prect->x & 0xF) || (prect->y & 0xF)) {
-        prect->x &= (~0xF);
-        prect->y &= (~0xF);
-    }
-
     pvecb->x = prect->x;
     pvecb->y = prect->y;
 
+    if (prect->x & 0xF)
+        pvecb->x &= (~0xF);
+
+    if (prect->y & 0xF)
+        pvecb->y &= (~0xF);
+
+    pvecb->width = prect->width;
+    pvecb->height = prect->height;
     return s32Ret;
 }
 
@@ -5122,7 +5229,7 @@ int drv_venc_set_h265_trans(venc_chn VeChn,
         return DRV_ERR_VENC_NULL_PTR;
     }
 
-    memcpy(&h265Trans, pstH265Trans, sizeof(venc_h265_trans_s));
+    memcpy(&h265Trans, pstH265Trans, sizeof(venc_h264_trans_s));
     s32Ret = _drv_venc_h265_set_trans(pChnHandle, &h265Trans);
 
     if (s32Ret == 0) {
@@ -5803,7 +5910,6 @@ int drv_venc_set_h265_dblk(venc_chn VeChn, const venc_h265_dblk_s *pstH265Dblk)
     venc_chn_context *pChnHandle;
     venc_enc_ctx *pEncCtx;
     payload_type_e enType;
-    venc_h265_dblk_s h265Dblk;
 
     s32Ret = _check_venc_chn_handle(VeChn);
     if (s32Ret != 0) {
@@ -5831,8 +5937,6 @@ int drv_venc_set_h265_dblk(venc_chn VeChn, const venc_h265_dblk_s *pstH265Dblk)
         return -1;
     }
 
-    memcpy(&h265Dblk, pstH265Dblk, sizeof(venc_h265_dblk_s));
-
     if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
         DRV_VENC_ERR("can not lock chnMutex\n");
         return -1;
@@ -5841,7 +5945,7 @@ int drv_venc_set_h265_dblk(venc_chn VeChn, const venc_h265_dblk_s *pstH265Dblk)
     s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_H26X_OP_SET_H265_DBLK, (void *)(pstH265Dblk));
     MUTEX_UNLOCK(&pChnHandle->chnMutex);
     if (s32Ret == 0) {
-        memcpy(&pChnHandle->h264Dblk, pstH265Dblk, sizeof(venc_h265_dblk_s));
+        memcpy(&pChnHandle->h265Dblk, pstH265Dblk, sizeof(venc_h265_dblk_s));
     } else {
         DRV_VENC_ERR("failed to set h265 dblk %d", s32Ret);
     }
@@ -6255,6 +6359,47 @@ int drv_venc_get_search_window(venc_chn VeChn, venc_search_window_s *pstVencSear
     } else {
         DRV_VENC_ERR("failed to get search window %d", s32Ret);
         s32Ret = DRV_ERR_VENC_SEARCH_WINDOW;
+    }
+
+    return s32Ret;
+}
+
+int drv_venc_set_extern_buf(venc_chn VeChn, const venc_extern_buf_s *pstExternBuf)
+{
+    int s32Ret = -1;
+    venc_chn_context *pChnHandle;
+    venc_enc_ctx *pEncCtx;
+
+    s32Ret = _check_venc_chn_handle(VeChn);
+    if (s32Ret != 0) {
+        DRV_VENC_ERR("check_chn_handle, %d\n", s32Ret);
+        return s32Ret;
+    }
+
+    if (pstExternBuf == NULL) {
+        DRV_VENC_ERR("invalid param\n");
+        return -2;
+    }
+
+    pChnHandle = handle->chn_handle[VeChn];
+    pEncCtx = &pChnHandle->encCtx;
+
+    if (!pEncCtx->base.ioctl) {
+        DRV_VENC_ERR("base.ioctl is NULL\n");
+        return -1;
+    }
+
+    if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
+        DRV_VENC_ERR("can not lock chnMutex\n");
+        return -1;
+    }
+    s32Ret = pEncCtx->base.ioctl(pEncCtx, DRV_H26X_OP_SET_EXTERN_BS_BUF,
+                  (void *)(pstExternBuf));
+    MUTEX_UNLOCK(&pChnHandle->chnMutex);
+
+    if (s32Ret) {
+        DRV_VENC_ERR("failed to set h265 sao %d", s32Ret);
+        s32Ret = DRV_ERR_VENC_SET_EXTERN_BUF;
     }
 
     return s32Ret;

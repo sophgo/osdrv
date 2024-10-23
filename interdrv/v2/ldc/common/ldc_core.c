@@ -31,8 +31,12 @@
 #define LDC_CLK_SYS_NAME "clk_sys_3"
 #define LDC0_REG_NAME "ldc0"
 #define LDC1_REG_NAME "ldc1"
+#define LDC2_REG_NAME "dwa0"
+#define LDC3_REG_NAME "dwa1"
 #define LDC0_INTR_NAME "ldc0"
 #define LDC1_INTR_NAME "ldc1"
+#define LDC2_INTR_NAME "dwa0"
+#define LDC3_INTR_NAME "dwa1"
 
 #define LDC_SHARE_MEM_SIZE (0x8000)
 
@@ -107,6 +111,7 @@ void ldc_dev_init(struct ldc_vdev *dev)
 
 	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
 		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
+		dev->core[i].dev_type = (enum ldc_type)i;
 		ldc_core_init(i);
 	}
 
@@ -134,17 +139,17 @@ void ldc_enable_dev_clk(int coreid, bool en)
 {
 	struct ldc_vdev *dev = ldc_get_dev();
 
-	if (!dev || !dev->clk_ldc[coreid]) {
+	if (!dev || !dev->core[coreid].clk_ldc) {
 		TRACE_LDC(DBG_ERR, "null dev or null clk_ldc[%d]\n", coreid);
 		return;
 	}
 
 	if (en) {
-		if (!__clk_is_enabled(dev->clk_ldc[coreid]))
-			clk_enable(dev->clk_ldc[coreid]);
+		if (!__clk_is_enabled(dev->core[coreid].clk_ldc))
+			clk_enable(dev->core[coreid].clk_ldc);
 	} else {
-		if (__clk_is_enabled(dev->clk_ldc[coreid]))
-			clk_disable(dev->clk_ldc[coreid]);
+		if (__clk_is_enabled(dev->core[coreid].clk_ldc))
+			clk_disable(dev->core[coreid].clk_ldc);
 	}
 }
 
@@ -282,24 +287,56 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = ldc_add_ldc_task(wdev, attr);
 			break;
 		}
-#if 0
 		case LDC_ADD_COR_TASK: {
 			struct gdc_task_attr *attr = (struct gdc_task_attr *)kdata;
 
 			TRACE_LDC(DBG_DEBUG, "LDC_ADD_COR_TASK, handle=0x%llx\n",
 					  (unsigned long long)attr->handle);
+			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
+
 			ret = ldc_add_cor_task(wdev, attr);
+			break;
+		}
+		case LDC_ADD_WAR_TASK: {
+			struct gdc_task_attr *attr = (struct gdc_task_attr *)kdata;
+
+			TRACE_LDC(DBG_DEBUG, "LDC_ADD_WAR_TASK, handle=0x%llx\n",
+					  (unsigned long long)attr->handle);
+			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
+
+			ret = ldc_add_warp_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_AFF_TASK: {
 			struct gdc_task_attr *attr = (struct gdc_task_attr *)kdata;
 
-			TRACE_LDC(DBG_DEBUG, "LDC_ADD_COR_TASK, handle=0x%llx\n",
+			TRACE_LDC(DBG_DEBUG, "LDC_ADD_AFF_TASK, handle=0x%llx\n",
 					  (unsigned long long)attr->handle);
+			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
+
 			ret = ldc_add_affine_task(wdev, attr);
 			break;
 		}
-#endif
+		case LDC_ADD_LDC_LDC_TASK: {
+			struct gdc_task_attr *attr = (struct gdc_task_attr *)kdata;
+
+			TRACE_LDC(DBG_DEBUG, "LDC_ADD_LDC_LDC_TASK, handle=0x%llx\n",
+					  (unsigned long long)attr->handle);
+			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
+
+			ret = ldc_add_ldc_ldc_task(wdev, attr);
+			break;
+		}
+		case LDC_ADD_DWA_ROT_TASK: {
+			struct gdc_task_attr *attr = (struct gdc_task_attr *)kdata;
+
+			TRACE_LDC(DBG_DEBUG, "LDC_ADD_DWA_ROT_TASK, handle=0x%llx\n",
+					  (unsigned long long)attr->handle);
+			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
+
+			ret = ldc_add_dwa_rot_task(wdev, attr);
+			break;
+		}
 		case LDC_SET_JOB_IDENTITY: {
 			struct gdc_identity_attr *identity = (struct gdc_identity_attr *)kdata;
 
@@ -321,14 +358,14 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = ldc_get_chn_frame(wdev, identity, video_frame, milli_sec);
 			break;
 		}
-		case LDC_SET_BUF_WRAP: {
-			TRACE_LDC(DBG_NOTICE, "LDC_SET_BUF_WRAP not support\n");
-			break;
-		}
-		case LDC_GET_BUF_WRAP: {
-			TRACE_LDC(DBG_NOTICE, "LDC_GET_BUF_WRAP not support\n");
-			break;
-		}
+		// case LDC_SET_BUF_WRAP: {
+		// 	TRACE_LDC(DBG_NOTICE, "LDC_SET_BUF_WRAP not support\n");
+		// 	break;
+		// }
+		// case LDC_GET_BUF_WRAP: {
+		// 	TRACE_LDC(DBG_NOTICE, "LDC_GET_BUF_WRAP not support\n");
+		// 	break;
+		// }
 		case LDC_ATTACH_VB_POOL: {
 			struct ldc_vb_pool_cfg *cfg = (struct ldc_vb_pool_cfg *)kdata;
 			vb_pool pool = (vb_pool)cfg->vb_pool;
@@ -448,38 +485,16 @@ static const struct file_operations ldc_fops = {
 static void ldc_tsk_finish(struct ldc_vdev *dev, int top_id)
 {
 	struct ldc_core *core = &dev->core[top_id];
-	struct ldc_task *done_tsk;
-	unsigned long flags;
-	struct ldc_job *done_job;
-
-	if (atomic_read(&core->state) != LDC_CORE_STATE_END)
-		return;
-
-	spin_lock_irqsave(&dev->job_lock, flags);
-	done_tsk = list_first_entry_or_null(&core->list.done_list, struct ldc_task, node);
-	done_job = list_first_entry_or_null(&dev->list.done_list[top_id], struct ldc_job, node);
-	spin_unlock_irqrestore(&dev->job_lock, flags);
-
-	TRACE_LDC(DBG_DEBUG, "job [%px]\n", done_job);
-	if (unlikely(!done_tsk)) {
-		TRACE_LDC(DBG_ERR, "null core[%d] done tsk\n", top_id);
-		return;
-	}
-
-	if (atomic_read(&done_tsk->state) == LDC_TASK_STATE_RUNNING) {
-		if (done_tsk->fn_tsk_cb)
-			done_tsk->fn_tsk_cb(core, top_id);
-		else
-			TRACE_LDC(DBG_WARN, "null pfntskCB\n");
-	}
+	ldc_wkup_frm_done_work(core);
 }
 
 #if LDC_USE_THREADED_IRQ
 static irqreturn_t ldc_tsk_finish_thread_func(int irq, void *data)
 {
-	struct ldc_vdev *dev = (struct ldc_vdev *)data;
+	struct ldc_vdev *dev = (struct ldc_job *)data;
 	struct ldc_core *core;
 	int i, top_id = -1;
+	struct ldc_job *done_job;
 
 	if (!dev) {
 		TRACE_LDC(DBG_ERR, "invalid ldc_dev\n");
@@ -502,9 +517,9 @@ static irqreturn_t ldc_tsk_finish_thread_func(int irq, void *data)
 }
 #endif
 
-static void ldc_irq_handler(unsigned char intr_status, struct ldc_vdev *dev, int top_id, bool use_cmdq)
+static void ldc_irq_handler(unsigned char intr_status, struct ldc_vdev *dev, int top_id, struct ldc_job *done_job)
 {
-	if (!dev)
+	if (!dev || !done_job)
 		return;
 
 	if (top_id < 0 || top_id >= LDC_DEV_MAX_CNT) {
@@ -512,7 +527,7 @@ static void ldc_irq_handler(unsigned char intr_status, struct ldc_vdev *dev, int
 		return;
 	}
 
-	if (use_cmdq) {
+	if (done_job->use_cmdq) {
 		TRACE_LDC(DBG_DEBUG, "core(%d) cmdq status(%#x)\n", top_id, intr_status);
 	} else {
 		if (!(intr_status & BIT(0))) {
@@ -535,9 +550,7 @@ static irqreturn_t ldc_isr(int irq, void *data)
 	struct ldc_core *core;
 	int top_id, i;
 	unsigned char intr_status;
-	unsigned long flags;
 	struct ldc_job *done_job;
-	struct ldc_task *done_tsk;
 
 	if (!dev) {
 		TRACE_LDC(DBG_ERR, "invalid ldc_dev\n");
@@ -548,28 +561,19 @@ static irqreturn_t ldc_isr(int irq, void *data)
 		core = &dev->core[i];
 		if (core->irq_num == irq) {
 			top_id = i;
-			spin_lock_irqsave(&dev->job_lock, flags);
-			done_job = list_first_entry_or_null(&dev->list.work_list[top_id], struct ldc_job, node);
-			done_tsk = list_first_entry_or_null(&dev->core[top_id].list.work_list, struct ldc_task, node);
-			spin_unlock_irqrestore(&dev->job_lock, flags);
+			spin_lock(&core->core_lock);
+			done_job = list_first_entry_or_null(&core->list, struct ldc_job, node);
+			spin_unlock(&core->core_lock);
 
-			if (unlikely(!done_job || !done_tsk)) {
-				TRACE_LDC(DBG_ERR, "null done_job done_tsk\n");
-				intr_status = ldc_intr_status(top_id);
-				ldc_intr_clr(intr_status, top_id);
-				ldc_intr_ctrl(0x00, top_id);
-				ldc_disable(top_id);
-				//ldc_enable_dev_clk(top_id, false);
-				return IRQ_HANDLED;
+			if (unlikely(!done_job)) {
+				TRACE_LDC(DBG_NOTICE, "null done job\n");
+				goto CMDQ_STATUS_UNKOWN;
 			}
 
-			spin_lock_irqsave(&dev->job_lock, flags);
-			list_del(&done_job->node);
-			list_add_tail(&done_job->node, &dev->list.done_list[top_id]);
-
-			list_del(&done_tsk->node);
-			list_add_tail(&done_tsk->node, &dev->core[top_id].list.done_list);
-			spin_unlock_irqrestore(&dev->job_lock, flags);
+			if (unlikely(done_job->coreid != top_id)) {
+				TRACE_LDC(DBG_NOTICE, "done job core[%d] not match with [%d]\n", done_job->coreid, top_id);
+				goto CMDQ_STATUS_UNKOWN;
+			}
 
 			if (done_job->use_cmdq) {
 				intr_status = ldc_cmdq_intr_status(top_id);
@@ -594,9 +598,8 @@ CMDQ_STATUS_UNKOWN:
 			}
 			ldc_intr_ctrl(0x00, top_id);
 			ldc_disable(top_id);
-			//ldc_enable_dev_clk(top_id, false);
 
-			ldc_irq_handler(intr_status, dev, top_id, done_job->use_cmdq);
+			ldc_irq_handler(intr_status, dev, top_id, done_job);
 		}
 	}
 #if LDC_USE_THREADED_IRQ
@@ -629,9 +632,9 @@ static int ldc_init_resources(struct platform_device *pdev)
 #if (DEVICE_FROM_DTS)
 	int i;
 	int irq_num[LDC_DEV_MAX_CNT];
-	const char * const irq_name[LDC_DEV_MAX_CNT] = {LDC0_INTR_NAME, LDC1_INTR_NAME};
-	const char ldc_clk_name[LDC_DEV_MAX_CNT][16] = {"clk_ldc0", "clk_ldc1"};
-	const char ldc_clk_sys_name[LDC_DEV_MAX_CNT][16] = {"clk_sys_3", "clk_sys_3"};
+	const char * const irq_name[LDC_DEV_MAX_CNT] = {LDC0_INTR_NAME, LDC1_INTR_NAME, LDC2_INTR_NAME, LDC3_INTR_NAME};
+	const char ldc_clk_name[LDC_DEV_MAX_CNT][16] = {"clk_ldc0", "clk_ldc1", "clk_dwa0", "clk_dwa1"};
+	const char ldc_clk_sys_name[LDC_DEV_MAX_CNT][16] = {"clk_sys_3", "clk_sys_3", "clk_sys_3", "clk_sys_3"};
 
 	struct resource *res[LDC_DEV_MAX_CNT];
 	void __iomem *reg_base[LDC_DEV_MAX_CNT];
@@ -664,7 +667,7 @@ static int ldc_init_resources(struct platform_device *pdev)
 
 		irq_num[i] = platform_get_irq_byname(pdev, irq_name[i]);
 		if (irq_num[i] < 0) {
-			dev_err(&pdev->dev, "No IRQ resource for %s\n", irq_name[i]);
+			dev_err(&pdev->dev, "(%d)No IRQ resource for %s\n", i, irq_name[i]);
 			return -ENODEV;
 		}
 
@@ -672,18 +675,18 @@ static int ldc_init_resources(struct platform_device *pdev)
 			, i, irq_num[i], irq_name[i]);
 
 		//clk res
-		dev->clk_src[i] = devm_clk_get(&pdev->dev, ldc_clk_sys_name[i]);
-		if (IS_ERR(dev->clk_src[i])) {
-			TRACE_LDC(DBG_ERR, "Cannot get clk for clk_sys_3 for stitch\n");
-			dev->clk_src[i] = NULL;
+		dev->core[i].clk_src = devm_clk_get(&pdev->dev, ldc_clk_sys_name[i]);
+		if (IS_ERR(dev->core[i].clk_src)) {
+			TRACE_LDC(DBG_ERR, "Cannot get clk for clk_sys_3 for ldc[%d]\n", i);
+			dev->core[i].clk_src = NULL;
 		}
-		dev->clk_ldc[i] = devm_clk_get(&pdev->dev, ldc_clk_name[i]);
-		if (IS_ERR(dev->clk_ldc[i])) {
-			TRACE_LDC(DBG_ERR, "Cannot get clk for clk_stitch\n");
-			dev->clk_ldc[i] = NULL;
+		dev->core[i].clk_ldc = devm_clk_get(&pdev->dev, ldc_clk_name[i]);
+		if (IS_ERR(dev->core[i].clk_ldc)) {
+			TRACE_LDC(DBG_ERR, "Cannot get clk for clk_ldc[%d]\n", i);
+			dev->core[i].clk_ldc = NULL;
 		}
 		if (clk_sys_freq[i])
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 
 #if LDC_USE_WORKQUEUE
 		if (devm_request_irq(&pdev->dev, irq_num[i], ldc_isr, IRQF_SHARED
@@ -698,8 +701,6 @@ static int ldc_init_resources(struct platform_device *pdev)
 		}
 
 		dev->core[i].irq_num = irq_num[i];
-		dev->core[i].dev_type = (enum ldc_type)i;
-		atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
 	}
 
 	// clk_ldc_src_sel default 1(clk_src_vip_sys_2), 600 MHz
@@ -721,7 +722,7 @@ static int ldc_init_resources(struct platform_device *pdev)
 	return rc;
 }
 
-static void ldc_clk_init(struct ldc_vdev *dev)
+void ldc_clk_init(struct ldc_vdev *dev)
 {
 	int i;
 
@@ -729,23 +730,26 @@ static void ldc_clk_init(struct ldc_vdev *dev)
 		TRACE_LDC(DBG_ERR, "null dev.\n");
 		return;
 	}
-
+	if (atomic_read(&dev->clk_en))
+		return;
 	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
-		if (dev->clk_src[i])
-			clk_prepare_enable(dev->clk_src[i]);
-		if (dev->clk_apb[i])
-			clk_prepare_enable(dev->clk_apb[i]);
-		if (dev->clk_ldc[i] && !__clk_is_enabled(dev->clk_ldc[i]))
-			clk_prepare_enable(dev->clk_ldc[i]);
+		if (dev->core[i].clk_src)
+			clk_prepare_enable(dev->core[i].clk_src);
+		if (dev->core[i].clk_apb)
+			clk_prepare_enable(dev->core[i].clk_apb);
+		if (dev->core[i].clk_ldc && !__clk_is_enabled(dev->core[i].clk_ldc))
+			clk_prepare_enable(dev->core[i].clk_ldc);
 
 		ldc_enable_dev_clk(i, true);
 
 		if (clk_sys_freq[i])
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 	}
+	//TRACE_LDC(DBG_WARN, "ldc_clk_init\n");
+	atomic_set(&dev->clk_en, true);
 }
 
-static void ldc_clk_deinit(struct ldc_vdev *dev)
+void ldc_clk_deinit(struct ldc_vdev *dev)
 {
 	int i;
 
@@ -753,20 +757,23 @@ static void ldc_clk_deinit(struct ldc_vdev *dev)
 		TRACE_LDC(DBG_ERR, "null dev.\n");
 		return;
 	}
-
+	if (!atomic_read(&dev->clk_en))
+		return;
 	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
-		if (dev->clk_ldc[i] && __clk_is_enabled(dev->clk_ldc[i]))
-			clk_disable_unprepare(dev->clk_ldc[i]);
-		if (dev->clk_apb[i])
-			clk_disable_unprepare(dev->clk_apb[i]);
-		if (dev->clk_src[i])
-			clk_disable_unprepare(dev->clk_src[i]);
+		if (dev->core[i].clk_ldc && __clk_is_enabled(dev->core[i].clk_ldc))
+			clk_disable_unprepare(dev->core[i].clk_ldc);
+		if (dev->core[i].clk_apb)
+			clk_disable_unprepare(dev->core[i].clk_apb);
+		if (dev->core[i].clk_src)
+			clk_disable_unprepare(dev->core[i].clk_src);
 
 		if (clk_sys_freq[i]) {
-			dev->clk_sys_freq[i] = clk_sys_freq[i];
+			dev->core[i].clk_sys_freq = clk_sys_freq[i];
 			clk_sys_freq[i] = 0;
 		}
 	}
+	//TRACE_LDC(DBG_WARN, "ldc_clk_deinit\n");
+	atomic_set(&dev->clk_en, false);
 }
 
 static int ldc_create_instance(struct platform_device *pdev)
@@ -796,7 +803,7 @@ static int ldc_create_instance(struct platform_device *pdev)
 		goto err_proc;
 	}
 #endif
-
+	atomic_set(&wdev->clk_en, false);
 	ldc_clk_init(wdev);
 	ldc_dev_init(wdev);
 
@@ -915,7 +922,7 @@ static int ldc_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id ldc_dt_match[] = {
-	{ .compatible = "cvitek,ldc" },
+	{ .compatible = "cvitek,gdc" },
 	{}
 };
 

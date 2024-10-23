@@ -11,7 +11,7 @@
 #include <linux/comm_vpss.h>
 #include <linux/comm_gdc.h>
 #include <linux/comm_sys.h>
-#include "base_ctx.h"
+#include <linux/base_uapi.h>
 
 #ifdef __cplusplus
 extern "C" {

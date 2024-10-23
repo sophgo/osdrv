@@ -4,6 +4,8 @@
 #include <linux/mod_devicetable.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#include <linux/slab.h>
+#include <linux/hashtable.h>
 #include <asm/cacheflush.h>
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 #include <linux/dma-map-ops.h>
@@ -24,92 +26,69 @@ struct mem_mapping {
 	void *vir_addr;
 	void *dmabuf;
 	pid_t fd_pid;
+	struct hlist_node node;
 };
-
-
-#define MEM_MAPPING_MAX 4096
-static struct mem_mapping ctx_mem_mgr[MEM_MAPPING_MAX] = {0};
 
 static int ion_debug_alloc_free;
 module_param(ion_debug_alloc_free, int, 0644);
 
-static DEFINE_SPINLOCK(mem_lock);
+static DEFINE_SPINLOCK(ion_lock);
+static DEFINE_HASHTABLE(ion_hash, 8);
 
 static int32_t mem_put(struct mem_mapping *mem_info)
 {
-	int32_t i = 0;
-	int8_t find_hit = 0;
+	struct mem_mapping *p;
 
-	spin_lock(&mem_lock);
-	for (i = 0; i < MEM_MAPPING_MAX; i++) {
-		if (ctx_mem_mgr[i].phy_addr == 0) {
-			memcpy(&ctx_mem_mgr[i], mem_info, sizeof(struct mem_mapping));
-
-			TRACE_BASE(DBG_DEBUG, "sys_ctx_mem_put() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
-							ctx_mem_mgr[i].phy_addr,
-							ctx_mem_mgr[i].dmabuf_fd,
-							ctx_mem_mgr[i].vir_addr,
-							ctx_mem_mgr[i].dmabuf);
-
-			find_hit = 1;
-			break;
-		}
-	}
-	spin_unlock(&mem_lock);
-
-	if (!find_hit) {
-		TRACE_BASE(DBG_ERR, "sys_ctx_mem_put() overflow\n");
+	p = kmalloc(sizeof(*p), GFP_KERNEL);
+	if (!p) {
+		TRACE_BASE(DBG_ERR, "kmalloc failed\n");
 		return -1;
 	}
+	memcpy(p, mem_info, sizeof(*p));
+
+	spin_lock(&ion_lock);
+	hash_add(ion_hash, &p->node, p->phy_addr);
+	spin_unlock(&ion_lock);
+
 	return 0;
 }
 
 static int32_t mem_get(struct mem_mapping *mem_info)
 {
-	int32_t i = 0;
-	int8_t find_hit = 0;
+	int32_t ret = -1;
+	struct mem_mapping *obj;
+	struct hlist_node *tmp;
+	uint64_t key = mem_info->phy_addr;
 
-	spin_lock(&mem_lock);
-	for (i = 0; i < MEM_MAPPING_MAX; i++) {
-		if (ctx_mem_mgr[i].phy_addr == mem_info->phy_addr) {
-			memcpy(mem_info, &ctx_mem_mgr[i], sizeof(struct mem_mapping));
-			TRACE_BASE(DBG_DEBUG, "sys_ctx_mem_get() p_addr=0x%llx, fd=%d, v_addr=%p, dmabuf=%p\n",
-							ctx_mem_mgr[i].phy_addr,
-							ctx_mem_mgr[i].dmabuf_fd,
-							ctx_mem_mgr[i].vir_addr,
-							ctx_mem_mgr[i].dmabuf);
-
-			memset(&ctx_mem_mgr[i], 0, sizeof(struct mem_mapping));
-
-			find_hit = 1;
+	spin_lock(&ion_lock);
+	hash_for_each_possible_safe(ion_hash, obj, tmp, node, key) {
+		if (obj->phy_addr == key) {
+			memcpy(mem_info, obj, sizeof(*mem_info));
+			hash_del(&obj->node);
+			kfree(obj);
+			ret = 0;
 			break;
 		}
 	}
-	spin_unlock(&mem_lock);
+	spin_unlock(&ion_lock);
 
-	if (!find_hit) {
-		TRACE_BASE(DBG_ERR, "sys_ctx_mem_get() can't find it\n");
-		return -1;
-	}
-
-	return 0;
+	return ret;
 }
 
 static int32_t mem_dump(void)
 {
-	int32_t i = 0, cnt = 0;
+	int32_t cnt = 0, bkt;
+	struct mem_mapping *obj;
 
-	spin_lock(&mem_lock);
-	for (i = 0; i < MEM_MAPPING_MAX; i++) {
-		if (ctx_mem_mgr[i].phy_addr) {
-			TRACE_BASE(DBG_ERR, "p_addr=0x%llx, dmabuf_fd=%d\n",
-				ctx_mem_mgr[i].phy_addr, ctx_mem_mgr[i].dmabuf_fd);
-			cnt++;
-		}
+	spin_lock(&ion_lock);
+	hash_for_each(ion_hash, bkt, obj, node) {
+		TRACE_BASE(DBG_INFO, "ion addr=0x%llx, dmabuf_fd=%d\n",
+			obj->phy_addr, obj->dmabuf_fd);
+		cnt++;
 	}
-	spin_unlock(&mem_lock);
+	spin_unlock(&ion_lock);
 
-	TRACE_BASE(DBG_ERR, "sys_ctx_mem_dump() total=%d\n", cnt);
+	TRACE_BASE(DBG_INFO, "ion block total=%d\n", cnt);
 	return cnt;
 }
 
@@ -171,15 +150,10 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t len,
 	}
 
 	if (ion_debug_alloc_free) {
-		TRACE_BASE(DBG_INFO, "%s: ion alloc: name=%s\n", __func__, ionbuf->name);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
-		TRACE_BASE(DBG_INFO, "%s: current->pid=%d\n", __func__, current->pid);
-		TRACE_BASE(DBG_INFO, "%s: current->comm=%s\n", __func__, current->comm);
+		TRACE_BASE(DBG_INFO, "ion alloc: pid=%d name=%s phy_addr=0x%llx size=%d\n",
+			mem_info.fd_pid, ionbuf->name, mem_info.phy_addr, mem_info.size);
 	}
+
 	*addr_p = ionbuf->paddr;
 	*addr_v = vmap_addr;
 
@@ -204,14 +178,8 @@ static int32_t _base_ion_free(uint64_t addr_p, int32_t *size)
 	ionbuf = (struct ion_buffer *)dmabuf->priv;
 
 	if (ion_debug_alloc_free) {
-		TRACE_BASE(DBG_INFO, "%s: ion free: name=%s\n", __func__, ionbuf->name);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf=%p\n", __func__, mem_info.dmabuf);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.dmabuf_fd=%d\n", __func__, mem_info.dmabuf_fd);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.vir_addr=%p\n", __func__, mem_info.vir_addr);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.phy_addr=0x%llx\n", __func__, mem_info.phy_addr);
-		TRACE_BASE(DBG_INFO, "%s: mem_info.fd_pid=%d\n", __func__, mem_info.fd_pid);
-		TRACE_BASE(DBG_INFO, "%s: current->pid=%d\n", __func__, current->pid);
-		TRACE_BASE(DBG_INFO, "%s: current->comm=%s\n", __func__, current->comm);
+		TRACE_BASE(DBG_INFO, "ion free: pid=%d name=%s phy_addr=0x%llx size=%d\n",
+			mem_info.fd_pid, ionbuf->name, mem_info.phy_addr, mem_info.size);
 	}
 
 	dma_buf_end_cpu_access(dmabuf, DMA_TO_DEVICE);
@@ -243,11 +211,7 @@ EXPORT_SYMBOL_GPL(base_ion_alloc);
 
 int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t len)
 {
-#if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE) && defined(__riscv)
 	arch_sync_dma_for_device(addr_p, len, DMA_FROM_DEVICE);
-#else
-	__dma_map_area(phys_to_virt(addr_p), len, DMA_FROM_DEVICE);
-#endif
 
 	/*	*/
 	smp_mb();
@@ -257,11 +221,7 @@ EXPORT_SYMBOL_GPL(base_ion_cache_invalidate);
 
 int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t len)
 {
-#if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE) && defined(__riscv)
 	arch_sync_dma_for_device(addr_p, len, DMA_TO_DEVICE);
-#else
-	__dma_map_area(phys_to_virt(addr_p), len, DMA_TO_DEVICE);
-#endif
 
 	/*	*/
 	smp_mb();

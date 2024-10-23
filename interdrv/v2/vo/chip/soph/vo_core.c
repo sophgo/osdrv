@@ -8,12 +8,14 @@
 #define VO_CLASS_NAME          "soph-vo"
 
 const char *const disp_irq_name[DISP_MAX_INST] = {"disp0", "disp1"};
-static const char *const clk_sys_name[] = {
-	"clk_vo_mipimpll0", "clk_vo_mipimpll1"
-};
 static const char *const clk_vo_name[] = {
 	"clk_vo_disp0", "clk_vo_mac0",
 	"clk_vo_disp1", "clk_vo_mac1"
+};
+
+static const char *const clk_dsi_name[] = {
+	"clk_vo_dsi_mac0",
+	"clk_vo_dsi_mac1"
 };
 
 static long vo_core_ioctl(struct file *filp, u_int cmd, u_long arg)
@@ -149,14 +151,6 @@ static int vo_core_clk_init(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(clk_sys_name); ++i) {
-		dev->clk_sys[i] = devm_clk_get(&pdev->dev, clk_sys_name[i]);
-		if (IS_ERR(dev->clk_sys[i])) {
-			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_sys_name[i]);
-			return PTR_ERR(dev->clk_sys[i]);
-		}
-		clk_prepare_enable(dev->clk_sys[i]);
-	}
 
 	for (i = 0; i < ARRAY_SIZE(clk_vo_name); ++i) {
 		dev->clk_vo[i] = devm_clk_get(&pdev->dev, clk_vo_name[i]);
@@ -165,6 +159,17 @@ static int vo_core_clk_init(struct platform_device *pdev)
 			return PTR_ERR(dev->clk_vo[i]);
 		}
 		clk_prepare_enable(dev->clk_vo[i]);
+		clk_disable_unprepare(dev->clk_vo[i]);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(clk_dsi_name); ++i) {
+		dev->clk_lvds[i] = devm_clk_get(&pdev->dev, clk_dsi_name[i]);
+		if (IS_ERR(dev->clk_lvds[i])) {
+			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_dsi_name[i]);
+			return PTR_ERR(dev->clk_lvds[i]);
+		}
+		clk_prepare_enable(dev->clk_lvds[i]);
+		clk_disable_unprepare(dev->clk_lvds[i]);
 	}
 
 	return 0;
@@ -291,16 +296,6 @@ static int vo_core_probe(struct platform_device *pdev)
 		goto vo_create_instance_err;
 	}
 
-	for (i = 0; i < DISP_MAX_INST; ++i) {
-		ret = devm_request_irq(&pdev->dev, dev->vo_core[i].irq_num, vo_irq_handler, 0,
-					disp_irq_name[i], (void *)&dev->vo_core[i]);
-		if (ret) {
-			dev_err(&pdev->dev, "Failed to request irq_num(%d) ret(%d)\n",
-					dev->vo_core[i].irq_num, ret);
-			ret = -EINVAL;
-			goto err_req_irq;
-		}
-	}
 
 	ret = vo_core_register_cb(dev);
 	if (ret) {
@@ -310,9 +305,6 @@ static int vo_core_probe(struct platform_device *pdev)
 
 	return ret;
 
-err_req_irq:
-	for (--i; i >= 0; --i)
-		devm_free_irq(&pdev->dev, dev->vo_core[i].irq_num, (void *)&dev->vo_core[i]);
 vo_core_register_cb_err:
 	vo_destroy_instance(pdev);
 vo_create_instance_err:
@@ -337,13 +329,14 @@ static int vo_core_remove(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to rm vo cb, err %d\n", ret);
 	}
 
-	for (i = 0; i < ARRAY_SIZE(dev->clk_sys); ++i) {
-		if ((dev->clk_sys[i]) && __clk_is_enabled(dev->clk_sys[i]))
-			clk_disable_unprepare(dev->clk_sys[i]);
-	}
 	for (i = 0; i < ARRAY_SIZE(dev->clk_vo); ++i) {
 		if ((dev->clk_vo[i]) && __clk_is_enabled(dev->clk_vo[i]))
 			clk_disable_unprepare(dev->clk_vo[i]);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(dev->clk_lvds); ++i) {
+		if ((dev->clk_lvds[i]) && __clk_is_enabled(dev->clk_lvds[i]))
+			clk_disable_unprepare(dev->clk_lvds[i]);
 	}
 
 	device_destroy(dev->vo_class, dev->cdev_id);
@@ -362,11 +355,9 @@ err_destroy_instance:
 int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	int ret = -1;
-	int i;
 	vo_wbc wbc_dev;
 	vo_layer layer;
 	vo_dev dev = 0;
-	struct vo_core_dev *vdev = dev_get_drvdata(&pdev->dev);
 
 	g_vo_ctx->suspend = true;
 
@@ -394,13 +385,6 @@ int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 			}
 		}
 
-	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
-		devm_free_irq(vdev->dev, vdev->vo_core[i].irq_num, (void *)&vdev->vo_core[i]);
-
-	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
-		if ((vdev->clk_vo[i]) && __clk_is_enabled(vdev->clk_vo[i]))
-			clk_disable_unprepare(vdev->clk_vo[i]);
-	}
 
 	TRACE_VO(DBG_WARN, "vo suspended\n");
 
@@ -410,11 +394,9 @@ int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 int vo_core_resume(struct platform_device *pdev)
 {
 	int ret = -1;
-	int i;
 	vo_wbc wbc_dev;
 	vo_layer layer;
 	vo_dev dev = 0;
-	struct vo_core_dev *vdev = dev_get_drvdata(&pdev->dev);
 
 	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
 		if (g_vo_ctx->layer_ctx[layer].is_layer_enable && g_vo_ctx->suspend) {
@@ -432,10 +414,6 @@ int vo_core_resume(struct platform_device *pdev)
 			}
 		}
 
-	for (i = 0; i < ARRAY_SIZE(vdev->clk_vo); ++i) {
-		if ((vdev->clk_vo[i]) && (!__clk_is_enabled(vdev->clk_vo[i])))
-			clk_prepare_enable(vdev->clk_vo[i]);
-	}
 
 	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
 		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
@@ -444,10 +422,6 @@ int vo_core_resume(struct platform_device *pdev)
 				TRACE_VO(DBG_ERR, "Failed to vo start streaming\n");
 			}
 		}
-
-	for (i = 0; i < VO_MAX_DEV_NUM; ++i)
-		ret = devm_request_irq(vdev->dev, vdev->vo_core[i].irq_num, vo_irq_handler, 0,
-				       disp_irq_name[i], (void *)&vdev->vo_core[i]);
 
 	g_vo_ctx->suspend = false;
 	TRACE_VO(DBG_WARN, "vo resumed\n");

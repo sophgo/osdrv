@@ -71,9 +71,11 @@ void stitch_enable_dev_clk(bool en)
 	if (en) {
 		if (!__clk_is_enabled(dev->clk_stitch))
 			clk_enable(dev->clk_stitch);
+		//TRACE_STITCH(DBG_WARN, "stitch_enable_dev_clk\n");
 	} else {
 		if (__clk_is_enabled(dev->clk_stitch))
 			clk_disable(dev->clk_stitch);
+		//sTRACE_STITCH(DBG_WARN, "stitch_disable_dev_clk\n");
 	}
 }
 
@@ -144,11 +146,13 @@ static irqreturn_t stitch_isr(int irq, void *_dev)
 {
 	unsigned char intr_status;
 	struct stitch_dev *dev = (struct stitch_dev *)_dev;
-	struct __stitch_ctx *p_stitch_ctx = stitch_get_ctx();
+	struct __stitch_ctx **stitch_ctx = stitch_get_ctx();
+	struct stitch_handler_ctx *evt_hdl_ctx = stitch_get_evt_hdl_ctx();
+	stitch_grp grp_id = evt_hdl_ctx->working_grp;
 
 	if (dev && (dev->irq_num == irq)) {
 		intr_status = stitch_intr_status();
-		TRACE_STITCH(DBG_DEBUG, "irq(%d), status(0x%x)\n", irq, intr_status);
+		TRACE_STITCH(DBG_DEBUG, "irq(%d) for grp(%d), status(0x%x)\n", irq, grp_id, intr_status);
 
 		stitch_intr_clr();
 		stitch_disable();
@@ -157,8 +161,8 @@ static irqreturn_t stitch_isr(int irq, void *_dev)
 		//stitch_reset_init(); //if neessary, but intr must clr,otherwise cpu hang
 		//stitch_enable_dev_clk(false);
 
-		if (p_stitch_ctx) {
-			dev->job = &p_stitch_ctx->job;
+		if (stitch_ctx[grp_id]) {
+			dev->job = &stitch_ctx[grp_id]->job;
 			stitch_irq_handler(intr_status, dev);
 		}
 	}
@@ -300,10 +304,7 @@ static int stitch_open(struct inode *inode, struct file *filep)
 		return 0;
 	}
 
-	//stitch_reset_init();
-	stitch_disable();
-	stitch_invalid_param(0);
-	stitch_invalid_param(1);
+	stitch_reset();
 	stitch_dma_cfg_clr_all();
 
 	return 0;
@@ -328,10 +329,7 @@ static int stitch_release(struct inode *inode, struct file *filep)
 		return 0;
 	}
 
-	//stitch_reset_init();
-	stitch_disable();
-	stitch_invalid_param(0);
-	stitch_invalid_param(1);
+	stitch_reset();
 	stitch_dma_cfg_clr_all();
 
 	return 0;

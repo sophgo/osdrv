@@ -35,6 +35,7 @@ struct stitch_dev {
 	unsigned int clk_sys_freq;
 	spinlock_t lock;
 	struct stitch_job *job;
+	atomic_t working_grp;
 };
 
 atomic_t * stitch_get_open_count(void);

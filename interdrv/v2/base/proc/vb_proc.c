@@ -32,7 +32,7 @@ static void _show_vb_status(struct seq_file *m)
 	uint32_t show_cnt;
 	uint32_t max_pool_cnt, max_blk_cnt;
 	uint32_t show_mod_ids[] = {ID_VI, ID_VPSS, ID_VO, ID_RGN, ID_GDC,
-		ID_DWA, ID_DPU, ID_STITCH, ID_IVE, ID_VENC, ID_VDEC,
+		ID_DPU, ID_STITCH, ID_IVE, ID_VENC, ID_VDEC,
 		ID_USER};
 
 	show_cnt = sizeof(show_mod_ids) / sizeof(show_mod_ids[0]);

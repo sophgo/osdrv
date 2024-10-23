@@ -53,7 +53,7 @@ void halbb_supportability_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 		 "\n================================\n");
 
-	if (val[0] == 100) {
+	if (val[0] == 100 || (_os_strcmp(input[1], "-h") == 0)) {
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "[Supportability] Selection\n");
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
@@ -82,6 +82,9 @@ void halbb_supportability_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "07. (( %s ))PWR_CTRL\n",
 			 ((comp & BB_PWR_CTRL) ? ("V") : (".")));
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			 "09. (( %s ))AUTO_DBG\n",
+			 ((comp & DBG_AUTO_DBG) ? ("V") : (".")));
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "10. (( %s ))ANT_DIV\n",
 			 ((comp & DBG_ANT_DIV) ? ("V") : (".")));
@@ -299,7 +302,7 @@ void halbb_media_status_update(struct bb_info *bb_0,
 
 		#ifdef HALBB_DBCC_SUPPORT
 		#ifdef BB_8852C_SUPPORT
-		if (bb->ic_type == BB_RTL8852C) {
+		if (bb->ic_type == BB_RTL8852C && bb->ic_sub_type == BB_IC_SUB_TYPE_8852C_8852C) {
 			if (bb->bb_sta_cnt == 0 && bb->bb_phy_idx == HW_PHY_1) {
 				halbb_bfee_en_8852c(bb, true);
 			}
@@ -320,7 +323,7 @@ void halbb_media_status_update(struct bb_info *bb_0,
 
 		#ifdef HALBB_DBCC_SUPPORT
 		#ifdef BB_8852C_SUPPORT
-		if (bb->ic_type == BB_RTL8852C) {
+		if (bb->ic_type == BB_RTL8852C && bb->ic_sub_type == BB_IC_SUB_TYPE_8852C_8852C) {
 			if (bb->bb_sta_cnt == 1 && bb->bb_phy_idx == HW_PHY_1) {
 				halbb_bfee_en_8852c(bb, false);
 			}
@@ -341,7 +344,7 @@ void halbb_sta_info_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	u32 val[10] = {0};
 	u32 tmp = 0;
 	u16 curr_tx_rt = 0;
-	u8 i = 0, j = 0;
+	u16 i = 0, j = 0;
 	enum phl_phy_idx phy_idx = HW_PHY_0;
 	#if 0 /*wait for phl mu ra declaration*/
 	struct rtw_phl_com_t *phl = bb->phl_com;
@@ -596,7 +599,7 @@ u8 halbb_get_rssi_min(struct bb_info *bb)
 	struct rtw_rssi_info *sta_rssi = NULL;
 	u8 sta_cnt = 0;
 	u8 rssi_min = 0xff, rssi_curr = 0;
-	u32 i = 0;
+	u16 i = 0;
 
 	if (hal->assoc_sta_cnt == 0) {
 		BB_WARNING("[%s] assoc_sta_cnt=0\n", __func__);
@@ -664,7 +667,7 @@ void halbb_cmn_info_self_update(struct bb_info *bb)
 	u8 sta_cnt = 0, num_active_client = 0;
 	u8 rssi_min = 0xff, rssi_max = 0, rssi_curr = 0;
 	u16 wlan_mode_all = 0;
-	u32 i = 0, one_entry_macid_tmp = 0;
+	u16 i = 0, one_entry_macid_tmp = 0;
 	u32 trx_tp = 0;
 	u32 tp_diff = 0;
 	u8 per_phy_sta_cnt = 0;
@@ -897,6 +900,8 @@ void halbb_reset(struct bb_info *bb)
 	halbb_statistics_reset(bb);
 	#endif
 	halbb_cmn_info_rpt_reset(bb);
+
+	halbb_physts_cnt_reset(bb);
 }
 
 void halbb_watchdog_normal(struct bb_info *bb, enum phl_phy_idx phy_idx)
@@ -953,7 +958,11 @@ void halbb_watchdog_normal(struct bb_info *bb, enum phl_phy_idx phy_idx)
 	#ifdef HALBB_DIG_MCC_SUPPORT
 	halbb_mccdm_switch(bb);
 	#endif
+	#ifdef HALBB_SR_SUPPORT
+	halbb_spatial_reuse(bb);
+	#endif
 	/*[Rest all counter]*/
+	halbb_auto_debug_watchdog(bb);
 	halbb_reset(bb);
 }
 
@@ -1028,6 +1037,7 @@ void halbb_watchdog_dbcc(struct bb_info *bb)
 #ifdef HALBB_RA_SUPPORT
 	halbb_ra_watchdog(bb);
 #endif
+	halbb_auto_debug_watchdog(bb);
 	/*[Rest all counter]*/
 	halbb_reset(bb);
 #endif
@@ -1204,12 +1214,31 @@ u8 halbb_wifi_event_notify(struct bb_info *bb_0, enum phl_msg_evt_id event, enum
 	} else if (event == MSG_EVT_DBG_RX_DUMP || event == MSG_EVT_DBG_TX_DUMP) {
 		halbb_dump_bb_reg(bb, &val[0], &val_char, &val[0], false, FRC_DUMP_ALL);
 		halbb_dump_bb_reg(bb, &val[0], &val_char, &val[0], false, FRC_DUMP_ALL);
+	} else if (event == MSG_EVT_PS_LPS_LEAVE) {
+		halbb_watchdog(bb, BB_WATCHDOG_LOW_IO, phy_idx);
 	}
 	#ifdef HALBB_DBCC_SUPPORT
 	else if (event == MSG_EVT_DBCC_DISABLE) {
 		halbb_dbcc_band_switch_notify(bb);
 	}
 	#endif
+	#ifdef HALBB_DIG_TDMA_SUPPORT
+	else if (event == MSG_EVT_AP_START_END) {
+		halbb_dig_mode_update(bb, DIG_TDMA, bb->bb_phy_idx);
+	}
+	else if (event == MSG_EVT_P2P_SESSION_LINKED) {
+		halbb_dig_mode_update(bb, DIG_ORIGIN, bb->bb_phy_idx);
+	}
+	else if (event == MSG_EVT_P2P_SESSION_NO_LINK) {
+		halbb_dig_mode_update(bb, DIG_TDMA, bb->bb_phy_idx);
+	}
+	else if (event == MSG_EVT_AP_STOP_END) {
+		halbb_dig_mode_update(bb, DIG_ORIGIN, bb->bb_phy_idx);
+	}
+	#endif
+	else if (event == MSG_EVT_PS_LPS_ENTER) {
+		halbb_lps_save_ch_info(bb);
+	}
 	#ifdef HALBB_FW_OFLD_SUPPORT
 	bb->bb_phl_evt = event;
 	#endif
@@ -1308,6 +1337,21 @@ u8 halbb_pause_func(struct bb_info *bb, enum habb_fun_t pause_func,
 		bkp_val = (u32 *)(&bb->bb_path_div_i.rvrt_val);
 		/*@function pointer hook*/
 		func_t->pause_bb_dm_handler = halbb_set_pathdiv_pause_val;
+	}
+#endif
+#ifdef HALBB_ANT_DIV_SUPPORT
+	else if (pause_func == F_ANT_DIV) {
+		BB_DBG(bb, DBG_DBG_API, "[AntDiv]\n");
+
+		if (val_lehgth > 1) {
+			BB_WARNING("AntDiv length > 1\n");
+			return PAUSE_FAIL;
+		}
+		ori_val[0] = (u32)(bb->bb_ant_div_i.antdiv_mode);
+		pause_lv_pre = &bb->pause_lv_table.lv_ant_div;
+		bkp_val = (u32 *)(&bb->bb_ant_div_i.rvrt_val);
+		/*@function pointer hook*/
+		func_t->pause_bb_dm_handler = halbb_set_antdiv_pause_val;
 	}
 #endif
 	else {
@@ -1415,7 +1459,9 @@ void halbb_pause_func_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
 			    "{Func} {p:pause, pn:pause_no_set, r:Resume, rnc: Resume_no_recov} {lv:0~3} Val[0],...,Val[5]\n");
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
-			    "{dig} {p/pn/r} {lv} {Pwr(|dBm|),hex} {0:apply to ofdm, 1:apply to cck and ofdm}\n");
+			    "{dig} {p/pn/r} {lv} {PD low TH (|dBm|,hex)} {0:apply to ofdm, 1:apply to cck and ofdm}\n");
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			    "{ant_div} {p/pn/r} {lv} {1:Fix Main ant, 2:Fix Aux ant}\n");
 		for (i = 0; i < halbb_ary_size; i++)
 			BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
 				    "*%s\n", halbb_func_i[i].name);
@@ -1468,6 +1514,8 @@ void halbb_pause_func_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	} else if (id == F_EDCCA) {
 		len = 1;
 	} else if (id == F_PATH_DIV) {
+		len = 1;
+	} else if (id == F_ANT_DIV) {
 		len = 1;
 	} else {
 		return;

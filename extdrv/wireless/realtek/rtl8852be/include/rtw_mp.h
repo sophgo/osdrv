@@ -26,11 +26,7 @@
 #define TX_POWER_BASE 4  /* dbm * 4 */
 #define TX_POWER_CODE_WORD_BASE 8 /* dbm * 8 */
 
-struct rtw_mp_ax_tx_cnt {
-	u8 band;
-	u8 sel;
-	u16 txcnt[11];
-};
+#define RTW_IWD_MAX_LEN	128
 
 struct mp_xmit_frame {
 	_list	list;
@@ -473,6 +469,7 @@ struct mp_priv {
 	u32 rtw_mp_ru_tone;
 	u8 ru_tone_sel_list[6];
 	u8 ru_alloc_list[68];
+	u8 rtw_coding;
 
 	struct rtw_mp_giltf_data st_giltf[5];
 	struct rtw_plcp_user mp_plcp_user[4];
@@ -491,6 +488,7 @@ struct mp_priv {
 
 	u8 loopbk_speed;
 	u8 mac_iotest_res;
+	u16 rx_rate;
 };
 
 #define PPDU_TYPE_STR(idx)\
@@ -837,10 +835,14 @@ enum rtw_mp_config_cmdid {
 	RTW_MP_CONFIG_CMD_GET_UUID,
 	RTW_MP_CONFIG_CMD_SET_REGULATION,
 	RTW_MP_CONFIG_CMD_SET_BT_UART,
+	RTW_MP_CONFIG_CMD_SWITCH_ANTENNA,
 	RTW_MP_CONFIG_CMD_SET_MAC_LOOPBK_ENTER,
+	RTW_MP_CONFIG_CMD_SET_HCI_SPEED,
+	RTW_MP_CONFIG_CMD_GET_HCI_SPEED,
+	RTW_MP_CONFIG_CMD_SET_MAC_GENERNAL_IO_TEST,
+	RTW_MP_CONFIG_CMD_SET_MAC_L1SS_ENABLE,
 	RTW_MP_CONFIG_CMD_SET_GPIO,
 	RTW_MP_CONFIG_CMD_SET_MAC_LOOPBK_SPEED,
-	RTW_MP_CONFIG_CMD_SET_MAC_GENERNAL_IO_TEST,
 	RTW_MP_CONFIG_CMD_MAX,
 };
 
@@ -857,6 +859,8 @@ enum rtw_mp_rx_cmd {
 	RTW_MP_RX_CMD_GET_PHYSTS = 8,
 	RTW_MP_RX_CMD_TRIGGER_RXEVM = 9,
 	RTW_MP_RX_CMD_SET_GAIN_OFFSET = 10,
+	RTW_MP_RX_CMD_GET_RSSI_EX = 11,
+	RTW_MP_RX_CMD_SET_RX_FLTR = 12,
 	RTW_MP_RX_CMD_MAX,
 
 };
@@ -980,6 +984,22 @@ typedef enum _mp_ant_path {
 	MP_ANTENNA_ABCD	= 15
 } mp_ant_path;
 
+struct rtw_mp_mac_lbk_tx_rpt {
+	u32 total_cnt;
+	u32 idle_cnt;
+	u32 busy_cnt;
+};
+
+struct rtw_gpio_config_arg {
+	u8 gpio_mode;
+	u8 gpio_id;
+	u8 gpio_enable;
+};
+
+struct rtw_pwr_config_arg {
+	u8 pwr_state;
+	u8 pwr_lvl;
+};
 struct rtw_mp_cmd_arg {
 	u8 mp_class;
 	u8 cmd;
@@ -1034,8 +1054,9 @@ struct rtw_mp_config_arg {
 	u8 phy_idx;
 	u8 is_bt_uart;
 	u8 ant_sw;
-	u8 gpio_id;
-	u8 gpio_enable;
+	u8 hci_speed;
+	struct rtw_gpio_config_arg gpio_cfg;
+	struct rtw_pwr_config_arg pwr_cfg;
 };
 
 struct rtw_mp_tx_arg {
@@ -1138,13 +1159,28 @@ struct rtw_mp_tx_arg {
 	u8 is_dgt;
 	u8 cck_lbk_en;
 	u8 is_bt_link;
-	
+
 	u32 puncture;
 	/* txsb */
 	u32 txsb;
 	u32 eht_mcs_sig;
-};
 
+	/* sw tx*/
+	u8 mac_addr_0;
+	u8 mac_addr_1;
+	u8 mac_addr_2;
+	u8 mac_addr_3;
+	u8 mac_addr_4;
+	u8 mac_addr_5;
+	u32 sw_tx_payload_size;
+
+	/* ampdu control */
+	u8 ampdu_num;
+	u8 sw_tx_en;
+
+	/* mac loop back */
+	struct rtw_mp_mac_lbk_tx_rpt tx_rpt;
+};
 
 struct rtw_mp_rx_arg {
 	u8 mp_class;
@@ -1169,6 +1205,8 @@ struct rtw_mp_rx_arg {
 	u8 iscck;
 	s32 rssi_ex[4];
 	u8 rx_phy_idx;
+	u8 rx_fltr_addr[6];
+	u8 rx_fltr_enable;
 };
 
 enum rtw_mp_tssi_pwrtrk_type{
@@ -1287,17 +1325,28 @@ enum rtw_mp_nss
 	(idx == MP_RU_TONE_106) ? "106-Tone" :\
 	(idx == MP_RU_TONE_242) ? "242-Tone" :\
 	(idx == MP_RU_TONE_484) ? "484-Tone" :\
-	(idx == MP_RU_TONE_966) ? "966-Tone" :\
+	(idx == MP_RU_TONE_996) ? "996-Tone" :\
 	"UNknow"
 
 enum rtw_mp_resourceUnit
 {
-	MP_RU_TONE_26 = 0,
+	MP_RU_TONE_26,
 	MP_RU_TONE_52,
 	MP_RU_TONE_106,
 	MP_RU_TONE_242,
 	MP_RU_TONE_484,
-	MP_RU_TONE_966
+	MP_RU_TONE_996,
+	MP_RU_TONE_996X2,
+	MP_RU_TONE_HESIGB,
+	MP_RU_TONE_996X4,
+	MP_RU_TONE_52_26,
+	MP_RU_TONE_106_26,
+	MP_RU_TONE_484_242,
+	MP_RU_TONE_996_484,
+	MP_RU_TONE_996_484_242,
+	MP_RU_TONE_996X2_484,
+	MP_RU_TONE_996X3,
+	MP_RU_TONE_996X3_484
 };
 /* SYNC to PHL MP define END */
 
@@ -1484,6 +1533,7 @@ void VHT_SIG_B_generator(
 void VHT_Delimiter_generator(
 	PRT_PMAC_TX_INFO	pPMacTxInfo);
 
+u8 rtw_do_mp_iwdata_len_chk(const char *caller, u32 len);
 
 int rtw_mp_write_reg(struct net_device *dev,
 		struct iw_request_info *info,
@@ -1696,4 +1746,7 @@ int rtw_mp_get_he(struct net_device *dev,
 int rtw_mp_band(struct net_device *dev,
 			 struct iw_request_info *info,
 			 union iwreq_data *wrqu, char *extra);
+void rtw_mp_phl_rx_reset_fltr(_adapter *padapter,
+			struct rtw_mp_rx_arg *rx_arg,
+			bool bstart);
 #endif /* _RTW_MP_H_ */

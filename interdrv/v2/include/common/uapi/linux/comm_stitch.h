@@ -24,6 +24,7 @@ extern "C" {
 #define STITCH_B_IDX 2
 
 #define STITCH_ALIGN 16
+#define STITCH_INVALID_GRP     (-1)
 
 enum stitch_src_id {
 	STITCH_SRC_ID_0 = 0,
@@ -62,7 +63,7 @@ typedef struct _stitch_src_ovlp_attr {
 	short ovlp_rx[STITCH_MAX_SRC_NUM -1];
 } stitch_src_ovlp_attr;
 
-//bd_lx[0]: left boardWidth of img1
+//bd_lx[0]: left boardWidth of img0
 //bd_rx[0]: right boardWidth of img1
 typedef struct _stitch_src_bd_attr {
 	short bd_lx[STITCH_MAX_SRC_NUM];
@@ -85,6 +86,7 @@ typedef struct _stitch_src_attr {
 //size_wgt[2]: size of wgt34(alpha, beta)
 typedef struct _stitch_bld_wgt_attr {
 	unsigned long long phy_addr_wgt[STITCH_MAX_SRC_NUM -1][2];
+	//void *vir_addr_wgt[STITCH_MAX_SRC_NUM -1][2];
 	size_s size_wgt[STITCH_MAX_SRC_NUM -1];
 } stitch_bld_wgt_attr;
 
@@ -97,6 +99,8 @@ typedef struct _stitch_op_attr {
 	enum stitch_wgt_mode wgt_mode;
 	enum stitch_data_src data_src;
 } stitch_op_attr;
+
+
 
 #ifdef __cplusplus
 #if __cplusplus

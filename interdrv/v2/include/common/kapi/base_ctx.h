@@ -7,6 +7,7 @@
 #include <linux/wait.h>
 #include <linux/version.h>
 #include <linux/common.h>
+#include <linux/base_uapi.h>
 #include <queue.h>
 
 #define GDC_SHARE_MEM_SIZE          (0x8000)
@@ -88,13 +89,6 @@
 	}
 
 #define MO_TBL_SIZE 256
-
-struct vip_rect {
-	__s32 left;
-	__s32 top;
-	__u32 width;
-	__u32 height;
-};
 
 struct vip_point {
 	__u16 x;
@@ -290,50 +284,6 @@ enum vip_pattern {
 	VIP_PAT_MAX,
 };
 
-enum rgn_format {
-	RGN_FMT_ARGB8888,
-	RGN_FMT_ARGB4444,
-	RGN_FMT_ARGB1555,
-	RGN_FMT_256LUT,
-	RGN_FMT_16LUT,
-	RGN_FMT_FONT,
-	RGN_FMT_MAX
-};
-struct rgn_param {
-	enum rgn_format fmt;
-	struct vip_rect rect;
-	__u32 stride;
-	__u64 phy_addr;
-};
-
-struct rgn_odec {
-	__u8 enable;
-	__u8 attached_ow;
-	__u8 canvas_updated;
-	__u32 bso_sz;
-	__u64 canvas_mutex_lock;
-	__u64 rgn_canvas_waitq;
-	__u64 rgn_canvas_doneq;
-};
-
-struct rgn_lut_cfg {
-	__u16 lut_length;
-	__u16 lut_addr[256];
-	__u8 lut_layer;
-	// __u8 rgnex_en;
-	__u8 is_updated;
-};
-struct rgn_cfg {
-	struct rgn_param param[8];
-	struct rgn_lut_cfg rgn_lut_cfg;
-	struct rgn_odec odec;
-	__u8 num_of_rgn;
-	__u8 hscale_x2;
-	__u8 vscale_x2;
-	__u8 colorkey_en;
-	__u32 colorkey;
-};
-
 struct rgn_ex_cfg {
 	struct rgn_param rgn_ex_param[16];
 	struct rgn_odec odec;
@@ -342,26 +292,6 @@ struct rgn_ex_cfg {
 	__u8 vscale_x2;
 	__u8 colorkey_en;
 	__u32 colorkey;
-};
-
-struct rgn_coverex_param {
-	struct vip_rect rect;
-	__u32 color;
-	__u8 enable;
-};
-
-struct rgn_coverex_cfg {
-	struct rgn_coverex_param rgn_coverex_param[4];
-};
-
-struct rgn_mosaic_cfg {
-	__u8 enable;
-	__u8 blk_size;	//0: 8x8   1:16x16
-	__u16 start_x;
-	__u16 start_y;
-	__u16 end_x;
-	__u16 end_y;
-	__u64 phy_addr;
 };
 
 struct vpss_rgnex_cfg {

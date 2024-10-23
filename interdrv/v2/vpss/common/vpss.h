@@ -7,8 +7,8 @@
 #include <linux/comm_vpss.h>
 #include <linux/comm_region.h>
 #include <linux/comm_errno.h>
+#include "base_ctx.h"
 #include <linux/vpss_uapi.h>
-
 #include <vpss_ctx.h>
 #include <base_ctx.h>
 #include <base_cb.h>
@@ -120,7 +120,6 @@ void vpss_mode_init(void);
 void vpss_mode_deinit(void);
 
 void register_timer_fun(vpss_timer_cb cb, void *data);
-
 
 struct vpss_ctx **vpss_get_ctx(void);
 

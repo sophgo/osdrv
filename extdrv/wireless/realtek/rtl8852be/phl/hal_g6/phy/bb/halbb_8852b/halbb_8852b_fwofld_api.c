@@ -1045,13 +1045,7 @@ bool halbb_fwofld_ctrl_bw_ch_8852b(struct bb_info *bb, u8 pri_ch, u8 central_ch,
 	/*==== [CCK Enable / Disable] ====*/
 	halbb_fwofld_ctrl_cck_en_8852b(bb, cck_en, phy_idx);
 	/*==== [Spur elimination] ====*/
-	halbb_fwofld_csi_tone_idx(bb, central_ch, bw, band, phy_idx);
-	if (phy_idx == HW_PHY_0) {
-		/*============== [Path A] ==============*/
-		halbb_fwofld_nbi_tone_idx(bb, central_ch, pri_ch, bw, band, RF_PATH_A);
-		/*============== [Path B] ==============*/
-		halbb_fwofld_nbi_tone_idx(bb, central_ch, pri_ch, bw, band, RF_PATH_B);
-	}
+		//TBD
 	/*==== [BTG Ctrl] ====*/
 	if (is_5g_ch){
 		// Path A

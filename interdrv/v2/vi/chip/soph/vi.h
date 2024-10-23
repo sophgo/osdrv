@@ -31,12 +31,12 @@
 
 #include <vi_raw_dump.h>
 
-#define BNR_AI_ISP_BUF_NUM	2
+#define BNR_AI_ISP_BUF_NUM		2
 #define OFFLINE_SPLT_BUF_NUM	4
-#define OFFLINE_RAW_BUF_NUM	2
+#define OFFLINE_RAW_BUF_NUM		2
 #define OFFLINE_PRE_BE_BUF_NUM	2
-#define OFFLINE_YUV_BUF_NUM	2
-#define MAX_RGBMAP_BUF_NUM	3
+#define OFFLINE_YUV_BUF_NUM		2
+#define MAX_RGBMAP_BUF_NUM		3
 
 // fixed cmd from bmtpu driver
 #define BMDEV_SEND_API	      _IOW('p', 0x20, unsigned long)
@@ -1617,7 +1617,9 @@ static int _vi_vblank_handler_thread(void *arg);
 static int _vi_err_handler_thread(void *arg);
 static int _vi_event_handler_thread(void *arg);
 static void _splt_hw_enque(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num);
-
+static inline void _vi_wake_up_tpu_th(struct sop_vi_dev *vdev,
+				      const enum sop_isp_raw raw_num,
+				      const enum ai_isp_type_e type);
 #ifdef __cplusplus
 }
 #endif

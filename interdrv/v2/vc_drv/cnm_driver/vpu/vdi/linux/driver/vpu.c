@@ -209,8 +209,8 @@ static int vpu_do_sw_reset(u32 core, u32 inst, u32 error_reason);
 static int vpu_close_instance_internal(u32 core, u32 inst);
 static int vpu_check_is_decoder(u32 core, u32 inst);
 #ifdef VPU_SUPPORT_CLOCK_CONTROL
-static void vpu_clk_disable(int core_idx);
-static void vpu_clk_enable(int core_idx);
+void vpu_clk_disable(int core_idx);
+void vpu_clk_enable(int core_idx);
 struct clk *vpu_clk_get(struct device *dev);
 void vpu_clk_put(struct clk *clk);
 #endif
@@ -224,7 +224,7 @@ static struct device *vpu_dev;
 #ifdef VPU_SUPPORT_CLOCK_CONTROL
 struct clk *s_vpu_clk;
 #endif
-static int s_vpu_open_ref_count;
+
 #ifdef VPU_SUPPORT_ISR
 static int s_vpu_irq[MAX_NUM_VPU_CORE] = {45,39,42};
 #endif
@@ -260,7 +260,6 @@ static vpu_statistic_info_t s_vpu_usage_info;
 static struct task_struct *s_vpu_monitor_task = NULL;
 
 vpudrv_buffer_t s_vpu_register[MAX_NUM_VPU_CORE] = {0};
-EXPORT_SYMBOL(s_vpu_register);
 static struct file *gfilp[MAX_NUM_VPU_CORE];
 
 // for multi instance interrupt, SUPPORT_MULTI_INST_INTR
@@ -273,8 +272,11 @@ static spinlock_t s_kfifo_lock = __SPIN_LOCK_UNLOCKED(s_kfifo_lock);
 
 // static spinlock_t s_vpu_lock = __SPIN_LOCK_UNLOCKED(s_vpu_lock);
 static DEFINE_MUTEX(s_vpu_lock);
+static DEFINE_MUTEX(s_extern_buffer_lock);
+
 static struct list_head s_vbp_head = LIST_HEAD_INIT(s_vbp_head);
 static struct list_head s_inst_list_head = LIST_HEAD_INIT(s_inst_list_head);
+static struct list_head s_vbp_extern = LIST_HEAD_INIT(s_vbp_extern);
 
 static vpu_bit_firmware_info_t s_bit_firmware_info[MAX_NUM_VPU_CORE] = {0};
 static int vpu_show_fps = 0;
@@ -392,7 +394,7 @@ void vpu_clear_stat_info(int coreIdx)
     s_vpu_usage_info.vpu_total_time_in_ms[coreIdx] = 0;
     s_vpu_usage_info.vpu_status_index[coreIdx] = 0;
     s_vpu_usage_info.vpu_instant_usage[coreIdx] = 0;
-    memset(s_vpu_usage_info.vpu_working_array[coreIdx], 0, MAX_VPU_STAT_WIN_SIZE);
+    memset(s_vpu_usage_info.vpu_working_array[coreIdx], 0, MAX_VPU_STAT_WIN_SIZE*sizeof(int));
     s_vpu_usage_info.vpu_stat_enable[coreIdx] = 0;
 }
 
@@ -408,8 +410,6 @@ int vpu_hw_reset(int core_idx)
     vpu_top_reset(core_idx);
     return 0;
 }
-EXPORT_SYMBOL(vpu_hw_reset);
-
 
 static vpudrv_instance_pool_t *get_instance_pool_handle(u32 core)
 {
@@ -428,127 +428,9 @@ static vpudrv_instance_pool_t *get_instance_pool_handle(u32 core)
 
     return (vpudrv_instance_pool_t *)vip_base;
 }
-static void *get_mutex_base(u32 core, unsigned int type)
-{
-    int instance_pool_size_per_core;
-    void *vip_base;
-    void *vdi_mutexes_base;
-    void *mutex;
 
-    if (core > MAX_NUM_VPU_CORE) {
-        return NULL;
-    }
-
-    mutex_lock(&s_vpu_lock);
-    if (s_instance_pool[core].base == 0) {
-        mutex_unlock(&s_vpu_lock);
-        return NULL;
-    }
-
-    instance_pool_size_per_core = (s_instance_pool[core].size); /* s_instance_pool.size  assigned to the size of all core once call VDI_IOCTL_GET_INSTANCE_POOL by user. */
-    //vip_base = (void *)(s_instance_pool[core].base + (instance_pool_size_per_core*core));
-    vip_base = (void *)(s_instance_pool[core].base);
-    mutex_unlock(&s_vpu_lock);
-    vdi_mutexes_base = (vip_base + (instance_pool_size_per_core - (sizeof(void *)*VDI_NUM_LOCK_HANDLES)));
-    // DPRINTK("[VPUDRV]+%s vip_base=%p, vdi_mutexes_base=%p, instance_pool_size_per_core=%d, sizeof=%d, sizeof2=%d\n", __FUNCTION__, vip_base, vdi_mutexes_base, instance_pool_size_per_core, sizeof(void *), (sizeof(void *)*VDI_NUM_LOCK_HANDLES));
-    if (type == VPUDRV_MUTEX_VPU) {
-        mutex = (void *)(vdi_mutexes_base + 0*(sizeof(void *)));
-    }
-    else if (type == VPUDRV_MUTEX_DISP_FALG) {
-        mutex = (void *)(vdi_mutexes_base + 1*(sizeof(void *)));
-    }
-    else if (type == VPUDRV_MUTEX_VMEM) {
-        mutex = (void *)(vdi_mutexes_base + 2*(sizeof(void *)));
-    }
-    else if (type == VPUDRV_MUTEX_RESET) {
-        mutex = (void *)(vdi_mutexes_base + 3*(sizeof(void *)));
-    }
-    else if (type == VPUDRV_MUTEX_REV1) {
-        mutex = (void *)(vdi_mutexes_base + 4*(sizeof(void *)));
-    }
-    else if (type == VPUDRV_MUTEX_REV2) {
-        mutex = (void *)(vdi_mutexes_base + 5*(sizeof(void *)));
-    }
-    else {
-        printk(KERN_ERR "[VPUDRV]%s unknown MUTEX_TYPE type=%d\n", __FUNCTION__, type);
-        return NULL;
-    }
-    return mutex;
-}
-static int vdi_lock(u32 core, unsigned int type)
-{
-    int ret = 0;
-    void *mutex;
-    int count;
-    int sync_ret;
-    int sync_val = task_pid_nr(current);//current->tgid;
-    volatile int *sync_lock_ptr = NULL;
-
-    mutex = get_mutex_base(core, type);
-    if (mutex == NULL) {
-        printk(KERN_ERR "[VPUDRV]%s fail to get mutex base, core=%d, type=%d\n", __FUNCTION__, core, type);
-        return -1;
-    }
-
-    ret = 0;
-    count = 0;
-    sync_lock_ptr = (volatile int *)mutex;
-    // DPRINTK("[VPUDRV]+%s type=%d, lock_ptr=%p, lock_data=%d, pid=%d, tgid=%d\n", __FUNCTION__, type, sync_lock_ptr, *sync_lock_ptr, current->pid, current->tgid);
-    while((sync_ret = __sync_val_compare_and_swap(sync_lock_ptr, 0, sync_val)) != 0)
-    {
-        count++;
-        if (count > ATOMIC_SYNC_TIMEOUT) {
-            printk(KERN_ERR "[VPUDRV]%s failed to get lock type=%d, sync_ret=%d, sync_val=%d, sync_ptr=%d, pid=%d, tgid=%d \n", __FUNCTION__, type, sync_ret, sync_val, (int)*sync_lock_ptr, current->pid, current->tgid);
-            ret = -ETIME;
-            break;
-        }
-        msleep(1);
-    }
-    // DPRINTK("[VPUDRV]-%s, type=%d, ret=%d\n", __FUNCTION__, type, ret);
-    return ret;
-}
-static void vdi_unlock(u32 core, unsigned int type)
-{
-    // DPRINTK("[VPUDRV]+%s, type=%d\n", __FUNCTION__, type);
-    void *mutex;
-    volatile int *sync_lock_ptr = NULL;
-
-    mutex = get_mutex_base(core, type);
-    if (mutex == NULL) {
-        printk(KERN_ERR "[VPUDRV]%s fail to get mutex base, core=%d, type=%d\n", __FUNCTION__, core, type);
-        return;
-    }
-
-    sync_lock_ptr = (volatile int *)mutex;
-    __sync_lock_release(sync_lock_ptr);
-
-    // DPRINTK("[VPUDRV]-%s, type=%d\n", __FUNCTION__, type);
-}
-
-static void vdi_lock_release(u32 core, unsigned int type)
-{
-#if 0
-    // DPRINTK("[VPUDRV]+%s, type=%d\n", __FUNCTION__, type);
-    void *mutex;
-    volatile int *sync_lock_ptr = NULL;
-
-    mutex = get_mutex_base(core, type);
-    if (mutex == NULL) {
-        printk(KERN_ERR "[VPUDRV]%s fail to get mutex base, core=%d, type=%d\n", __FUNCTION__, core, type);
-        return;
-    }
-
-    sync_lock_ptr = (volatile int *)mutex;
-    DPRINTK("[VPUDRV]-%s core=%d, type=%d, lock_pid=%d, current_pid=%d, tgid=%d \n", __FUNCTION__, core, type, (volatile int)*sync_lock_ptr, current->pid, current->tgid);
-    if (*sync_lock_ptr == current->tgid) {
-        __sync_lock_release(sync_lock_ptr);
-    }
-    // DPRINTK("[VPUDRV]-%s\n", __FUNCTION__);
-#endif
-}
 #define	ReadVpuRegister(addr)         *(volatile unsigned int *)(s_vpu_register[core].virt_addr + s_bit_firmware_info[core].reg_base_offset + addr)
 #define	WriteVpuRegister(addr, val)   *(volatile unsigned int *)(s_vpu_register[core].virt_addr + s_bit_firmware_info[core].reg_base_offset + addr) = (unsigned int)val
-
 
 static int vpu_alloc_dma_buffer(vpudrv_buffer_t *vb)
 {
@@ -631,7 +513,6 @@ static int vpu_free_instances(struct file *filp)
     vpudrv_instanace_list_t *vil, *n;
     vpudrv_instance_pool_t *vip;
     void *vip_base;
-    int i;
 
     DPRINTK("[VPUDRV]+%s\n", __FUNCTION__);
 
@@ -642,13 +523,10 @@ static int vpu_free_instances(struct file *filp)
             DPRINTK("[VPUDRV] vpu_free_instances detect instance crash instIdx=%d, coreIdx=%d, vip_base=%p, instance_pool_size_per_core=%d\n", (int)vil->inst_idx, (int)vil->core_idx, vip_base, (int)instance_pool_size_per_core);
             vip = (vpudrv_instance_pool_t *)vip_base;
             if (vip) {
-                for (i=0; i < VPUDRV_MUTEX_MAX; i++) {
-                    vdi_lock_release((u32)vil->core_idx, i);
-                }
                 vpu_close_instance_internal((u32)vil->core_idx, (u32)vil->inst_idx);
                 memset(&vip->codecInstPool[vil->inst_idx], 0x00, 4);    /* only first 4 byte is key point(inUse of CodecInst in vpuapi) to free the corresponding instance. */
             }
-            s_vpu_open_ref_count--;
+
             s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]--;
             list_del(&vil->list);
             kfree(vil);
@@ -658,7 +536,7 @@ static int vpu_free_instances(struct file *filp)
     return 1;
 }
 
-static int vpu_free_buffers(struct file *filp)
+static int vpu_free_buffers(int core_idx)
 {
     vpudrv_buffer_pool_t *pool, *n;
     vpudrv_buffer_t vb;
@@ -667,7 +545,7 @@ static int vpu_free_buffers(struct file *filp)
 
     list_for_each_entry_safe(pool, n, &s_vbp_head, list)
     {
-        if (pool->filp == filp) {
+        if (pool->vb.core_idx == core_idx) {
             vb = pool->vb;
             if (vb.base) {
                 vpu_free_dma_buffer(&vb);
@@ -982,7 +860,6 @@ int vpu_op_open(int core_idx)
 
     return ret;
 }
-EXPORT_SYMBOL(vpu_op_open);
 
 long vpu_get_common_memory(vpudrv_buffer_t *vdb)
 {
@@ -1006,7 +883,6 @@ long vpu_get_common_memory(vpudrv_buffer_t *vdb)
 
     return ret;
 }
-EXPORT_SYMBOL(vpu_get_common_memory);
 
 long vpu_get_instance_pool(vpudrv_buffer_t *info)
 {
@@ -1050,7 +926,6 @@ long vpu_get_instance_pool(vpudrv_buffer_t *info)
     mutex_unlock(&s_vpu_lock);
     return -EFAULT;
 }
-EXPORT_SYMBOL(vpu_get_instance_pool);
 
 long vpu_open_instance(vpudrv_inst_info_t *inst_info)
 {
@@ -1083,7 +958,7 @@ long vpu_open_instance(vpudrv_inst_info_t *inst_info)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_open_instance);
+
 long vpu_close_instance(vpudrv_inst_info_t *inst_info)
 {
     vpudrv_instanace_list_t *vil, *n;
@@ -1113,7 +988,6 @@ long vpu_close_instance(vpudrv_inst_info_t *inst_info)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_close_instance);
 
 long vpu_flush_dcache(vpudrv_buffer_t *info)
 {
@@ -1122,7 +996,6 @@ long vpu_flush_dcache(vpudrv_buffer_t *info)
 #endif
     return 0;
 }
-EXPORT_SYMBOL(vpu_flush_dcache);
 
 long vpu_invalidate_dcache(vpudrv_buffer_t *info)
 {
@@ -1132,7 +1005,6 @@ long vpu_invalidate_dcache(vpudrv_buffer_t *info)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_invalidate_dcache);
 
 long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb)
 {
@@ -1193,7 +1065,6 @@ long vpu_allocate_physical_memory(vpudrv_buffer_t *vdb)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_allocate_physical_memory);
 
 long vpu_free_physical_memory(vpudrv_buffer_t *vdb)
 {
@@ -1222,7 +1093,90 @@ long vpu_free_physical_memory(vpudrv_buffer_t *vdb)
     DPRINTK("[VPUDRV][-]VDI_IOCTL_FREE_PHYSICALMEMORY\n");
     return 0;
 }
-EXPORT_SYMBOL(vpu_free_physical_memory);
+
+long vpu_allocate_extern_memory(vpudrv_buffer_t *vdb)
+{
+    long ret;
+    vpudrv_buffer_pool_t *vbp;
+
+    vbp = kzalloc(sizeof(*vbp), GFP_KERNEL);
+    if (!vbp) {
+        return -ENOMEM;
+    }
+
+    memcpy(&(vbp->vb), vdb, sizeof(vpudrv_buffer_t));
+    vbp->vb.offset = 0;
+    ret = vpu_alloc_dma_buffer(&(vbp->vb));
+    if (ret == -1) {
+        ret = -ENOMEM;
+        kfree(vbp);
+        return ret;
+    }
+
+    mutex_lock(&s_extern_buffer_lock);
+    list_add(&vbp->list, &s_vbp_extern);
+    mutex_unlock(&s_extern_buffer_lock);
+
+    memcpy(vdb, &(vbp->vb), sizeof(vpudrv_buffer_t));
+
+    DPRINTK("alloc vbp:0x%lx,0x%lx vdb:0x%lx,0x%lx"
+        , vbp->vb.base, vbp->vb.phys_addr, vdb->base, vdb->phys_addr);
+
+    DPRINTK("[VPUDRV][-]VDI_IOCTL_ALLOCATE_PHYSICAL_MEMORY\n");
+
+    return 0;
+}
+
+long vpu_free_extern_memory(vpudrv_buffer_t *vdb)
+{
+    vpudrv_buffer_pool_t *vbp, *n;
+    int find_buffer = 0;
+    DPRINTK("[VPUDRV][+]VDI_IOCTL_FREE_PHYSICALMEMORY\n");
+
+    // Check if the buffer has been released
+    mutex_lock(&s_extern_buffer_lock);
+    list_for_each_entry_safe(vbp, n, &s_vbp_extern, list)
+    {
+        if (vbp->vb.phys_addr == vdb->phys_addr) {
+            find_buffer = 1;
+            vpu_free_dma_buffer(vdb);
+            list_del(&vbp->list);
+            kfree(vbp);
+            break;
+        }
+    }
+    mutex_unlock(&s_extern_buffer_lock);
+
+    DPRINTK("[VPUDRV][-]VDI_IOCTL_FREE_PHYSICALMEMORY\n");
+    return 0;
+}
+
+int vpu_free_extern_buffers(int core_idx)
+{
+    vpudrv_buffer_pool_t *pool, *n;
+    vpudrv_buffer_t vb;
+
+    DPRINTK("[VPUDRV] vpu_free_extern_buffers\n");
+    if (s_vpu_usage_info.vpu_open_ref_count[core_idx]) {
+        return 0;
+    }
+
+    mutex_lock(&s_extern_buffer_lock);
+    list_for_each_entry_safe(pool, n, &s_vbp_extern, list)
+    {
+        if (pool->vb.core_idx == core_idx) {
+            vb = pool->vb;
+            if (vb.base) {
+                vpu_free_dma_buffer(&vb);
+                list_del(&pool->list);
+                kfree(pool);
+            }
+        }
+    }
+    mutex_unlock(&s_extern_buffer_lock);
+
+    return 0;
+}
 
 long vpu_get_free_mem_size(unsigned long *size)
 {
@@ -1238,9 +1192,8 @@ long vpu_get_free_mem_size(unsigned long *size)
 #endif
     return 0;
 }
-EXPORT_SYMBOL(vpu_get_free_mem_size);
 
-long vpu_set_clock_gate(int core_idx, u32 *clkgate)
+long vpu_set_clock_gate(int core_idx, unsigned int *clkgate)
 {
     DPRINTK("[VPUDRV][+]VDI_IOCTL_SET_CLOCK_GATE\n");
 
@@ -1253,7 +1206,6 @@ long vpu_set_clock_gate(int core_idx, u32 *clkgate)
     DPRINTK("[VPUDRV][-]VDI_IOCTL_SET_CLOCK_GATE\n");
     return 0;
 }
-EXPORT_SYMBOL(vpu_set_clock_gate);
 
 static uint64_t vpu_gettime(void)
 {
@@ -1286,12 +1238,21 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
     atomic_inc(&s_vpu_usage_info.vpu_busy_status[core_idx]);
 
+    intr_reason_in_q = 0;
+    interrupt_flag_in_q = kfifo_out_spinlocked(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], &intr_reason_in_q, sizeof(u32), &s_kfifo_lock);
+    if (interrupt_flag_in_q > 0)
+    {
+        dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = intr_reason_in_q;
+        DPRINTK("[VPUDRV] Interrupt Remain : core=%d, intr_inst_index=%d, intr_reason_in_q=0x%x, interrupt_flag_in_q=%d\n", core_idx, intr_inst_index, intr_reason_in_q, interrupt_flag_in_q);
+        goto INTERRUPT_REMAIN_IN_QUEUE;
+    }
+
 #ifdef SUPPORT_MULTI_INST_INTR
 #ifdef SUPPORT_TIMEOUT_RESOLUTION
     kt =  ktime_set(0, info->timeout*1000*1000);
     ret = wait_event_interruptible_hrtimeout(s_interrupt_wait_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] != 0, kt);
 #else
-    ret = wait_event_interruptible_timeout(s_interrupt_wait_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] != 0, msecs_to_jiffies(info->timeout));
+    ret = wait_event_interruptible_timeout(s_interrupt_wait_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] != 0, usecs_to_jiffies(info->timeout));
 #endif
 #else
     ret = wait_event_interruptible_timeout(s_interrupt_wait_q[core_idx], s_interrupt_flag[core_idx] != 0, msecs_to_jiffies(info->timeout));
@@ -1319,7 +1280,7 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
 #ifdef SUPPORT_MULTI_INST_INTR
     intr_reason_in_q = 0;
-    interrupt_flag_in_q = kfifo_out(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], &intr_reason_in_q, sizeof(u32));
+    interrupt_flag_in_q = kfifo_out_spinlocked(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], &intr_reason_in_q, sizeof(u32), &s_kfifo_lock);
     if (interrupt_flag_in_q > 0) {
         dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = intr_reason_in_q;
     }
@@ -1334,6 +1295,7 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
     DPRINTK("[VPUDRV]    s_interrupt_flag(%d), reason(0x%08lx)\n", s_interrupt_flag[core_idx], dev->interrupt_reason[core_idx]);
 #endif
 
+INTERRUPT_REMAIN_IN_QUEUE:
 #ifdef SUPPORT_MULTI_INST_INTR
     info->intr_reason = dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index];
     s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
@@ -1364,7 +1326,6 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_wait_interrupt);
 
 ssize_t vpu_op_write(const char *buf, size_t len)
 {
@@ -1400,7 +1361,6 @@ ssize_t vpu_op_write(const char *buf, size_t len)
 
     return ret;
 }
-EXPORT_SYMBOL(vpu_op_write);
 
 void vpu_top_reset(unsigned long core_idx)
 {
@@ -1440,7 +1400,7 @@ int vpu_op_close(int core_idx)
     mutex_lock(&s_vpu_lock);
 
     /* found and free the not handled buffer by user applications */
-    vpu_free_buffers(filp);
+    vpu_free_buffers(core_idx);
 
     /* found and free the not closed instance by user applications */
     vpu_free_instances(filp);
@@ -1487,7 +1447,6 @@ int vpu_op_close(int core_idx)
 
     return 0;
 }
-EXPORT_SYMBOL(vpu_op_close);
 
 #if defined(CONFIG_PM)
 
@@ -1515,6 +1474,7 @@ int vpu_drv_suspend(struct platform_device *pdev, pm_message_t state)
 
     return 0;
 }
+
 int vpu_drv_resume(struct platform_device *pdev)
 {
     int core;
@@ -1541,7 +1501,7 @@ int vpu_drv_resume(struct platform_device *pdev)
 
     return 0;
 }
-#endif				/* !CONFIG_PM */
+#endif /* !CONFIG_PM */
 
 int check_vpu_core_busy(vpu_statistic_info_t *vpu_usage_info, int coreIdx)
 {

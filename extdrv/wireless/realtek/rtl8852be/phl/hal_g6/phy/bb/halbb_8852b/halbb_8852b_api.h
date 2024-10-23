@@ -40,6 +40,22 @@
 #define GAIN_HIDE_EFUSE_B_5GL_8852B 0x58F
 #define GAIN_HIDE_EFUSE_B_5GM_8852B 0x58E
 #define GAIN_HIDE_EFUSE_B_5GH_8852B 0x58D
+#define GAIN_HIDE_EFUSE_A_6GH_0_8852BP 0x5B7
+#define GAIN_HIDE_EFUSE_A_6GH_1_8852BP 0x5B6
+#define GAIN_HIDE_EFUSE_A_6GH_2_8852BP 0x5B5
+#define GAIN_HIDE_EFUSE_A_6GH_3_8852BP 0x5B4
+#define GAIN_HIDE_EFUSE_A_6GH_4_8852BP 0x5B3
+#define GAIN_HIDE_EFUSE_A_6GH_5_8852BP 0x5B2
+#define GAIN_HIDE_EFUSE_A_6GH_6_8852BP 0x5B1
+#define GAIN_HIDE_EFUSE_A_6GH_7_8852BP 0x5B0
+#define GAIN_HIDE_EFUSE_B_6GH_0_8852BP 0x58C
+#define GAIN_HIDE_EFUSE_B_6GH_1_8852BP 0x58B
+#define GAIN_HIDE_EFUSE_B_6GH_2_8852BP 0x58A
+#define GAIN_HIDE_EFUSE_B_6GH_3_8852BP 0x589
+#define GAIN_HIDE_EFUSE_B_6GH_4_8852BP 0x588
+#define GAIN_HIDE_EFUSE_B_6GH_5_8852BP 0x587
+#define GAIN_HIDE_EFUSE_B_6GH_6_8852BP 0x586
+#define GAIN_HIDE_EFUSE_B_6GH_7_8852BP 0x585
 
 /*@--------------------------[Enum]------------------------------------------*/
 /*@--------------------------[Structure]-------------------------------------*/
@@ -100,6 +116,9 @@ void halbb_dfs_en_8852b(struct bb_info *bb, bool en);
 
 void halbb_adc_en_8852b(struct bb_info *bb, bool en);
 
+bool halbb_adc_cfg_8852bt(struct bb_info *bb, enum channel_width bw,
+			 enum rf_path path);
+
 void halbb_tssi_cont_en_8852b(struct bb_info *bb, bool en, enum rf_path path);
 
 void halbb_bb_reset_en_8852b(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
@@ -115,10 +134,6 @@ u32 halbb_read_rf_reg_8852b(struct bb_info *bb, enum rf_path path, u32 reg_addr,
 
 bool halbb_write_rf_reg_8852b_a(struct bb_info *bb, enum rf_path path,
 				u32 reg_addr, u32 bit_mask, u32 data);
-
-bool halbb_spur_location_8852b(struct bb_info *bb, u8 central_ch,
-                               enum channel_width bw, enum band_type band,
-			       u32 *intf);
 
 bool halbb_write_rf_reg_8852b_d(struct bb_info *bb, enum rf_path path,
 				u32 reg_addr, u32 bit_mask, u32 data);

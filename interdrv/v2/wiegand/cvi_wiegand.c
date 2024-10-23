@@ -134,7 +134,7 @@ static int cvi_wiegand_set_rx_cfg(struct cvi_wiegand_device *ndev, struct wgn_rx
 	pr_debug("cvi_wiegand_set_rx_cfg\n");
 
 	if (rx_cfg_ptr->rx_debounce > 0xFFFF)
-		rx_cfg_ptr->rx_debounce = 0xFFFFF;
+		rx_cfg_ptr->rx_debounce = 0xFFFF;
 	writel(rx_cfg_ptr->rx_debounce, ndev->wiegand_vaddr + RX_CONFIG0);
 
 	if (rx_cfg_ptr->rx_idle_timeout > 0xFFFFFFFF)
@@ -188,14 +188,23 @@ static int cvi_wiegand_get_rx_cfg(struct cvi_wiegand_device *ndev, struct wgn_rx
 
 static int cvi_wiegand_tx(struct cvi_wiegand_device *ndev, unsigned long arg)
 {
+	u32 timeout_num = 0;
 	pr_debug("cvi_wiegand_tx\n");
 	pr_debug("low tx_data: %#X\n", (uint32_t)(ndev->tx_data));
 	pr_debug("high tx_data: %#X\n", (uint32_t)(ndev->tx_data >> 32));
 
 	writel((uint32_t)(ndev->tx_data), ndev->wiegand_vaddr + TX_BUFFER);
 	writel((uint32_t)(ndev->tx_data >> 32), ndev->wiegand_vaddr + TX_BUFFER1);
-	while (readl(ndev->wiegand_vaddr + TX_BUSY))
-		;
+
+	while (readl(ndev->wiegand_vaddr + TX_BUSY)) {
+		if (timeout_num >= 100000) {
+			pr_err("TX_BUSY\n");
+			return -EBUSY;
+		}
+		timeout_num++;
+		usleep_range(10, 11);
+	}
+
 	writel(1, ndev->wiegand_vaddr + TX_TRIGGER);
 	return 0;
 }
@@ -315,7 +324,8 @@ static long cvi_wiegand_ioctl(struct file *filp, unsigned int cmd, unsigned long
 
 	case IOCTL_WGN_GET_VAL:
 		//check data
-		if ((readl(ndev->wiegand_vaddr + RX_BUFFER_VALID) & 0x1) == 0) {
+		if ((readl(ndev->wiegand_vaddr + RX_BUFFER_VALID) & 0x1) == 0 ||
+		    (readl(ndev->wiegand_vaddr + RX_BUFFER_FLAG) & 0x180) != 0) {
 			pr_debug("RX buffer is INVALID\n");
 			rx_data = 0;
 		} else {

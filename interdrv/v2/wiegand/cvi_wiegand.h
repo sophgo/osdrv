@@ -19,6 +19,7 @@
 #define RX_CONFIG2			0x28
 #define RX_BUFFER			0x2C
 #define RX_BUFFER1			0x30
+#define RX_BUFFER_FLAG		0x34
 #define RX_BUFFER_VALID		0x38
 #define RX_BUFFER_CLEAR		0x3C
 

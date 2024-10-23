@@ -55,11 +55,31 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 		case STITCH_INIT: {
-			ret = stitch_init();
+			//ret = stitch_init();
 			break;
 		}
 		case STITCH_DEINIT: {
-			ret = stitch_deinit();
+			//ret = stitch_deinit();
+			break;
+		}
+		case STITCH_INIT_GRP: {
+			stitch_grp grp_id;
+			stitch_grp *cfg = (stitch_grp *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_grp);
+
+			grp_id = *cfg;
+			ret = stitch_init_grp(grp_id);
+			break;
+		}
+		case STITCH_DEINIT_GRP: {
+			stitch_grp grp_id;
+			stitch_grp *cfg = (stitch_grp *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_grp);
+
+			grp_id = *cfg;
+			ret = stitch_deinit_grp(grp_id);
 			break;
 		}
 		case STITCH_RST: {
@@ -67,67 +87,99 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		case STITCH_SET_SRC_ATTR: {
-			stitch_src_attr *src_attr = (stitch_src_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_src_attr *src_attr;
+			stitch_grp_src_attr *cfg = (stitch_grp_src_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_src_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_src_attr);
 
-			ret = stitch_set_src_attr(src_attr);
+			grp_id = cfg->grp_id;
+			src_attr = &cfg->src_attr;
+			ret = stitch_set_src_attr(grp_id, src_attr);
 			break;
 		}
 		case STITCH_GET_SRC_ATTR: {
-			stitch_src_attr *src_attr = (stitch_src_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_src_attr *src_attr;
+			stitch_grp_src_attr *cfg = (stitch_grp_src_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_src_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_src_attr);
 
-			stitch_get_src_attr(src_attr);
+			grp_id = cfg->grp_id;
+			src_attr = &cfg->src_attr;
+			ret = stitch_get_src_attr(grp_id, src_attr);
 			break;
 		}
 		case STITCH_SET_CHN_ATTR: {
-			stitch_chn_attr *chn_attr = (stitch_chn_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_chn_attr *chn_attr ;
+			stitch_grp_chn_attr *cfg = (stitch_grp_chn_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_chn_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_chn_attr);
 
-			ret = stitch_set_chn_attr(chn_attr);
+			grp_id = cfg->grp_id;
+			chn_attr = &cfg->chn_attr;
+			ret = stitch_set_chn_attr(grp_id, chn_attr);
 			break;
 		}
 		case STITCH_GET_CHN_ATTR: {
-			stitch_chn_attr *chn_attr = (stitch_chn_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_chn_attr *chn_attr ;
+			stitch_grp_chn_attr *cfg = (stitch_grp_chn_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_chn_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_chn_attr);
 
-			ret = stitch_get_chn_attr(chn_attr);
+			grp_id = cfg->grp_id;
+			chn_attr = &cfg->chn_attr;
+			ret = stitch_get_chn_attr(grp_id, chn_attr);
 			break;
 		}
 		case STITCH_SET_OP_ATTR: {
-			stitch_op_attr *op_attr = (stitch_op_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_op_attr *op_attr;
+			stitch_grp_op_attr *cfg = (stitch_grp_op_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_op_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_op_attr);
 
-			ret = stitch_set_op_attr(op_attr);
+			grp_id = cfg->grp_id;
+			op_attr = &cfg->opt_attr;
+			ret = stitch_set_op_attr(grp_id, op_attr);
 			break;
 		}
 		case STITCH_GET_OP_ATTR: {
-			stitch_op_attr *op_attr = (stitch_op_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_op_attr *op_attr;
+			stitch_grp_op_attr *cfg = (stitch_grp_op_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_op_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_op_attr);
 
-			ret = stitch_get_op_attr(op_attr);
+			grp_id = cfg->grp_id;
+			op_attr = &cfg->opt_attr;
+			ret = stitch_get_op_attr(grp_id, op_attr);
 			break;
 		}
 		case STITCH_SET_WGT_ATTR: {
-			stitch_bld_wgt_attr *wgt_attr = (stitch_bld_wgt_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_bld_wgt_attr *bld_wgt_attr;
+			stitch_grp_bld_wgt_attr *cfg = (stitch_grp_bld_wgt_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_bld_wgt_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_bld_wgt_attr);
 
-			ret = stitch_set_wgt_attr(wgt_attr);
+			grp_id = cfg->grp_id;
+			bld_wgt_attr = &cfg->bld_wgt_attr;
+			ret = stitch_set_wgt_attr(grp_id, bld_wgt_attr);
 			break;
 		}
 		case STITCH_GET_WGT_ATTR: {
-			stitch_bld_wgt_attr *wgt_attr = (stitch_bld_wgt_attr *)kdata;
+			stitch_grp grp_id;
+			stitch_bld_wgt_attr *bld_wgt_attr;
+			stitch_grp_bld_wgt_attr *cfg = (stitch_grp_bld_wgt_attr *)kdata;
 
-			CHECK_IOCTL_CMD(cmd, stitch_bld_wgt_attr);
+			CHECK_IOCTL_CMD(cmd, stitch_grp_bld_wgt_attr);
 
-			ret = stitch_get_wgt_attr(wgt_attr);
+			grp_id = cfg->grp_id;
+			bld_wgt_attr = &cfg->bld_wgt_attr;
+			ret = stitch_get_wgt_attr(grp_id, bld_wgt_attr);
 			break;
 		}
 		case STITCH_SET_REGX: {
@@ -139,55 +191,102 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		//case STITCH_GET_REGX: {
 			//break;
 		//}
-		case STITCH_DEV_ENABLE: {
-			ret = stitch_enable_dev();
+		case STITCH_GRP_ENABLE: {
+			stitch_grp grp_id;
+			stitch_grp *cfg = (stitch_grp *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_grp);
+
+			grp_id = *cfg;
+			ret = stitch_enable_grp(grp_id);
 			break;
 		}
-		case STITCH_DEV_DISABLE: {
-			ret = stitch_disable_dev();
+		case STITCH_GRP_DISABLE: {
+			stitch_grp grp_id;
+			stitch_grp *cfg = (stitch_grp *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, stitch_grp);
+
+			grp_id = *cfg;
+			ret = stitch_disable_grp(grp_id);
 			break;
 		}
 		case STITCH_SEND_SRC_FRM: {
-			struct stitch_src_frm_cfg *cfg = (struct stitch_src_frm_cfg *)kdata;
-			video_frame_info_s *video_frame = &cfg->video_frame;
-			int milli_sec = cfg->milli_sec;
-			stitch_src_idx src_idx = cfg->src_id;
+			stitch_grp grp_id;
+			video_frame_info_s *video_frame;
+			int milli_sec;
+			stitch_src_idx src_idx;
+			struct stitch_grp_src_frm_cfg *cfg = (struct stitch_grp_src_frm_cfg *)kdata;
 
-			ret = stitch_send_frame(src_idx, video_frame, milli_sec);
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_src_frm_cfg);
+
+			grp_id = cfg->grp_id;
+			video_frame = &cfg->cfg.video_frame;
+			milli_sec = cfg->cfg.milli_sec;
+			src_idx = (stitch_src_idx)cfg->cfg.src_id;
+			ret = stitch_send_frame(grp_id, src_idx, video_frame, milli_sec);
 			break;
 		}
 		case STITCH_SEND_CHN_FRM: {
-			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			video_frame_info_s *video_frame = &cfg->video_frame;
-			int milli_sec = cfg->milli_sec;
+			stitch_grp grp_id;
+			video_frame_info_s *video_frame;
+			int milli_sec;
+			struct stitch_grp_chn_frm_cfg *cfg = (struct stitch_grp_chn_frm_cfg *)kdata;
 
-			ret = stitch_send_chn_frame(video_frame, milli_sec);
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_chn_frm_cfg);
+
+			grp_id = cfg->grp_id;
+			video_frame = &cfg->cfg.video_frame;
+			milli_sec = cfg->cfg.milli_sec;
+			ret = stitch_send_chn_frame(grp_id, video_frame, milli_sec);
 			break;
 		}
 		case STITCH_GET_CHN_FRM: {
-			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			video_frame_info_s *video_frame = &cfg->video_frame;
-			int milli_sec = cfg->milli_sec;
+			stitch_grp grp_id;
+			video_frame_info_s *video_frame;
+			int milli_sec;
+			struct stitch_grp_chn_frm_cfg *cfg = (struct stitch_grp_chn_frm_cfg *)kdata;
 
-			ret = stitch_get_chn_frame(video_frame, milli_sec);
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_chn_frm_cfg);
+
+			grp_id = cfg->grp_id;
+			video_frame = &cfg->cfg.video_frame;
+			milli_sec = cfg->cfg.milli_sec;
+			ret = stitch_get_chn_frame(grp_id, video_frame, milli_sec);
 			break;
 		}
 		case STITCH_RLS_CHN_FRM: {
-			struct stitch_chn_frm_cfg *cfg = (struct stitch_chn_frm_cfg *)kdata;
-			const video_frame_info_s *video_frame = &cfg->video_frame;
+			stitch_grp grp_id;
+			const video_frame_info_s *video_frame;
+			struct stitch_grp_chn_frm_cfg *cfg = (struct stitch_grp_chn_frm_cfg *)kdata;
 
-			ret = stitch_release_chn_frame(video_frame);
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_chn_frm_cfg);
+
+			grp_id = cfg->grp_id;
+			video_frame = &cfg->cfg.video_frame;
+			ret = stitch_release_chn_frame(grp_id, video_frame);
 			break;
 		}
 		case STITCH_ATTACH_VB_POOL: {
-			struct stitch_vb_pool_cfg *cfg = (struct stitch_vb_pool_cfg *)kdata;
-			vb_pool pool = (vb_pool)cfg->vb_pool;
+			stitch_grp grp_id;
+			vb_pool pool;
+			struct stitch_grp_vb_pool_cfg *cfg = (struct stitch_grp_vb_pool_cfg *)kdata;
 
-			ret = stitch_attach_vb_pool(pool);
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_vb_pool_cfg);
+
+			grp_id = cfg->grp_id;
+			pool = (vb_pool)cfg->vb_pool_cfg.vb_pool;
+			ret = stitch_attach_vb_pool(grp_id, pool);
 			break;
 		}
 		case STITCH_DETACH_VB_POOL: {
-			ret = stitch_detach_vb_pool();
+			stitch_grp grp_id;
+			struct stitch_grp_vb_pool_cfg *cfg = (struct stitch_grp_vb_pool_cfg *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, struct stitch_grp_vb_pool_cfg);
+
+			grp_id = (stitch_grp)cfg->grp_id;
+			ret = stitch_detach_vb_pool(grp_id);
 			break;
 		}
 		case STITCH_DUMP_REGS: {
@@ -206,6 +305,16 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				= container_of(filp->private_data, struct stitch_dev, miscdev);
 
 			ret = stitch_resume(dev->miscdev.this_device);
+			break;
+		}
+		case STITCH_GET_AVAIL_GROUP: {
+			stitch_grp grp;
+
+			CHECK_IOCTL_CMD(cmd, stitch_grp);
+
+			grp = stitch_get_available_grp();
+			*((stitch_grp *)kdata) = grp;
+			ret = 0;
 			break;
 		}
 		default: {

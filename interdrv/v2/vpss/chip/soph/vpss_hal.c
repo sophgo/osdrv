@@ -1269,7 +1269,7 @@ void vpss_clk_disable(void)
 	for (i = 0; i < VPSS_MAX; i++) {
 		if (vpss_dev->vpss_cores[i].clk_src)
 			clk_disable(vpss_dev->vpss_cores[i].clk_src);
-		if (vpss_dev->vpss_cores[i].clk_apb)
+		if (vpss_dev->vpss_cores[i].clk_apb && __clk_is_enabled(vpss_dev->vpss_cores[i].clk_apb))
 			clk_disable(vpss_dev->vpss_cores[i].clk_apb);
 	}
 }
@@ -1281,7 +1281,12 @@ void vpss_clk_enable(void)
 	for (i = 0; i < VPSS_MAX; i++) {
 		if (vpss_dev->vpss_cores[i].clk_src)
 			clk_enable(vpss_dev->vpss_cores[i].clk_src);
-		if (vpss_dev->vpss_cores[i].clk_apb)
+		if (vpss_dev->vpss_cores[i].clk_apb && !__clk_is_enabled(vpss_dev->vpss_cores[i].clk_apb))
 			clk_enable(vpss_dev->vpss_cores[i].clk_apb);
 	}
+}
+
+bool vpss_check_suspend(void)
+{
+	return task_ctx.is_suspend == 1;
 }

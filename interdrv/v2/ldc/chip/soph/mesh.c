@@ -253,48 +253,227 @@ FAIL_ALLOC:
 
 }
 
-static int mesh_gdc_do_ldc(struct ldc_vdev *wdev, struct vb_s *vb_in
-	, pixel_format_e pix_format, unsigned long long mesh_addr, bool sync_io, void *cb_param
-	, unsigned int cb_param_size, mod_id_e mod_id, rotation_e rotation)
+static int mesh_dwa_do_ldc_fisheye_gridinfo(struct ldc_vdev *wdev, enum ldc_usage usage
+	, grid_info_attr_s *pst_gridinfo_attr, struct vb_s *vb_in, pixel_format_e en_pixformat, unsigned long long mesh_addr
+	, bool sync_io, void *cb_param, unsigned int cb_param_size, mod_id_e en_mod_id)
 {
 	struct gdc_handle_data data;
-	struct ldc_job *job;
-	struct gdc_task_attr *ptask[2] = {NULL, NULL};
+	struct gdc_task_attr *pst_task = NULL;
 	vb_blk blk;
-	struct vb_s *vb_out[2];
+	struct vb_s *vb_out;
 	unsigned int buf_size;
 	int ret;
-	size_s size_out[2];
-	rotation_e rotationOut[2];
-	unsigned int mesh_1st_size;
+	size_s size_out;
+	void *_p_cb_param;
+	unsigned char i;
+	struct ldc_job *job;
 	struct _gdc_cb_param *p_cb_param;
 
-	ptask[0] = vmalloc(sizeof(struct gdc_task_attr));
-	ptask[1] = vmalloc(sizeof(struct gdc_task_attr));
-	if (!ptask[0] || !ptask[1]) {
+	pst_task = vmalloc(sizeof(*pst_task));
+	if (!pst_task) {
 		TRACE_LDC(DBG_ERR, "vmalloc failed\n");
 		ret = ERR_GDC_NOMEM;
 		goto FAIL_ALLOC;
 	}
 
-	// Rotate 90/270 for 1st job
-	size_out[0].width = ALIGN(vb_in->buf.size.height, DEFAULT_ALIGN);
-	size_out[0].height = ALIGN(vb_in->buf.size.width, DEFAULT_ALIGN);
-
-	if (rotation == ROTATION_0 || rotation == ROTATION_180) {
-		size_out[1].width = ALIGN(vb_in->buf.size.width, DEFAULT_ALIGN);
-		size_out[1].height = ALIGN(vb_in->buf.size.height, DEFAULT_ALIGN);
+	if (pst_gridinfo_attr->grid_out.width && pst_gridinfo_attr->grid_out.height) {
+		size_out.width = ALIGN(pst_gridinfo_attr->grid_out.width, DWA_ALIGNMENT);
+		size_out.height = pst_gridinfo_attr->grid_out.height;
 	} else {
-		size_out[1].width = ALIGN(vb_in->buf.size.height, DEFAULT_ALIGN);
-		size_out[1].height = ALIGN(vb_in->buf.size.width, DEFAULT_ALIGN);
+		size_out.width = ALIGN(vb_in->buf.size.height, DEFAULT_ALIGN / 2);
+		size_out.height = vb_in->buf.size.width;
 	}
 
 	// get buf for gdc output.
-	buf_size = common_getpicbuffersize(size_out[0].width, size_out[0].height
-		, PIXEL_FORMAT_NV21, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DEFAULT_ALIGN);
+	buf_size = common_getpicbuffersize(size_out.width, size_out.height
+		, en_pixformat, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DWA_ALIGNMENT);
 	blk = vb_get_block_with_id(wdev->vb_pool, buf_size, ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		TRACE_LDC(DBG_ERR, "get vb fail\n");
+		vb_release_block((vb_blk)vb_in);
+		ret = ERR_GDC_NOBUF;
+		goto FAIL_GET_VB;
+	}
+
+	atomic_long_fetch_and(~BIT(en_mod_id), &vb_in->mod_ids);
+	atomic_long_fetch_or(BIT(ID_GDC), &vb_in->mod_ids);
+
+	vb_out = (struct vb_s *)blk;
+	base_get_frame_info(en_pixformat, size_out, &vb_out->buf, vb_out->phy_addr, DWA_ALIGNMENT);
+
+	TRACE_LDC(DBG_DEBUG, "LDC usage(%d) src phy-addr(0x%llx) size(%d-%d) dst phy-addr(0x%llx) size(%d-%d)\n"
+		, usage, vb_in->phy_addr, vb_in->buf.size.width, vb_in->buf.size.height
+		, vb_out->phy_addr, size_out.width, size_out.height);
+
+	ret = ldc_begin_job(wdev, &data);
+	if (ret) {
+		TRACE_LDC(DBG_ERR, "ldc_begin_job fail, ret=%d, DWA usage(%d)\n", ret, usage);
+		goto FAIL_EXIT;
+	}
+
+	memset(pst_task, 0, sizeof(*pst_task));
+	pst_task->handle = data.handle;
+	pst_task->rotation = ROTATION_0;
+
+	// prepare the in/out image info of the gdc task.
+	pst_task->img_in.video_frame.pixel_format = en_pixformat;
+	pst_task->img_in.video_frame.width = vb_in->buf.size.width;
+	pst_task->img_in.video_frame.height = vb_in->buf.size.height;
+	pst_task->img_in.video_frame.pts = vb_in->buf.pts;
+	for (i = 0; i < 3; ++i) {
+		pst_task->img_in.video_frame.phyaddr[i] = vb_in->buf.phy_addr[i];
+		pst_task->img_in.video_frame.length[i] = vb_in->buf.length[i];
+		pst_task->img_in.video_frame.stride[i] = vb_in->buf.stride[i];
+	}
+
+	pst_task->img_out.video_frame.pixel_format = en_pixformat;
+	pst_task->img_out.video_frame.width = vb_out->buf.size.width;
+	pst_task->img_out.video_frame.height = vb_out->buf.size.height;
+	for (i = 0; i < 3; ++i) {
+		pst_task->img_out.video_frame.phyaddr[i] = vb_out->buf.phy_addr[i];
+		pst_task->img_out.video_frame.length[i] = vb_out->buf.length[i];
+		pst_task->img_out.video_frame.stride[i] = vb_out->buf.stride[i];
+	}
+
+	pst_task->img_out.video_frame.pts = pst_task->img_in.video_frame.pts;
+	pst_task->img_out.video_frame.private_data = vb_out;
+
+	switch (pst_task->rotation) {
+	default:
+	case ROTATION_0:
+		pst_task->img_out.video_frame.offset_top = vb_in->buf.offset_top;
+		pst_task->img_out.video_frame.offset_left = vb_in->buf.offset_left;
+		pst_task->img_out.video_frame.offset_bottom = vb_in->buf.offset_bottom;
+		pst_task->img_out.video_frame.offset_right = vb_in->buf.offset_right;
+		break;
+	case ROTATION_90:
+		pst_task->img_out.video_frame.offset_top = vb_in->buf.offset_left;
+		pst_task->img_out.video_frame.offset_left = vb_in->buf.offset_bottom;
+		pst_task->img_out.video_frame.offset_bottom = vb_in->buf.offset_right;
+		pst_task->img_out.video_frame.offset_right = vb_in->buf.offset_top;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.frame_crop.start_y;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.size.width - vb_in->buf.frame_crop.end_x;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.size.width - vb_in->buf.frame_crop.start_x;
+		break;
+	case ROTATION_180:
+		pst_task->img_out.video_frame.offset_top = vb_in->buf.offset_bottom;
+		pst_task->img_out.video_frame.offset_left = vb_in->buf.offset_right;
+		pst_task->img_out.video_frame.offset_bottom = vb_in->buf.offset_top;
+		pst_task->img_out.video_frame.offset_right = vb_in->buf.offset_left;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.size.width - vb_in->buf.frame_crop.end_x;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.size.width - vb_in->buf.frame_crop.start_x;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.size.height - vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.size.height - vb_in->buf.frame_crop.start_y;
+		break;
+	case ROTATION_270:
+		pst_task->img_out.video_frame.offset_top = vb_in->buf.offset_right;
+		pst_task->img_out.video_frame.offset_left = vb_in->buf.offset_top;
+		pst_task->img_out.video_frame.offset_bottom = vb_in->buf.offset_left;
+		pst_task->img_out.video_frame.offset_right = vb_in->buf.offset_bottom;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.size.height - vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.size.height - vb_in->buf.frame_crop.start_y;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.frame_crop.start_x;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.frame_crop.end_x;
+		break;
+	}
+
+	vb_out->buf.offset_top = pst_task->img_out.video_frame.offset_top;
+	vb_out->buf.offset_bottom = pst_task->img_out.video_frame.offset_bottom;
+	vb_out->buf.offset_left = pst_task->img_out.video_frame.offset_left;
+	vb_out->buf.offset_right = pst_task->img_out.video_frame.offset_right;
+	vb_out->buf.pts = pst_task->img_out.video_frame.pts;
+	vb_out->buf.frm_num = vb_in->buf.frm_num;
+	vb_out->buf.motion_lv = vb_in->buf.motion_lv;
+	memcpy(vb_out->buf.motion_table, vb_in->buf.motion_table, MO_TBL_SIZE);
+
+	_p_cb_param = vmalloc(cb_param_size);
+	if (!_p_cb_param) {
+		TRACE_LDC(DBG_ERR, "vmalloc failed, cb_param_size=%d\n", cb_param_size);
+		ret = ERR_GDC_NOMEM;
+		goto FAIL_EXIT;
+	}
+	memcpy(_p_cb_param, cb_param, cb_param_size);
+	pst_task->private_data[0] = mesh_addr;
+	pst_task->private_data[1] = (__u64)true;
+	pst_task->private_data[2] = (uintptr_t)_p_cb_param;
+	pst_task->reserved = GDC_MAGIC;
+
+	if (usage == LDC_USAGE_LDC)
+		ret = ldc_add_ldc_task(wdev, pst_task);
+	else
+		ret = ldc_add_cor_task(wdev, pst_task);
+	if (ret) {
+		TRACE_LDC(DBG_ERR, "ldc_add_xxx_tsk fail, ret=%d, DWA usage(%d)\n", ret, usage);
+		goto FAIL_EXIT;
+	}
+
+	job = (struct ldc_job *)(uintptr_t)data.handle;
+	job->identity.sync_io = sync_io;
+	job->identity.mod_id = en_mod_id;
+	job->identity.id = vb_in->buf.frm_num;
+	p_cb_param = (struct _gdc_cb_param *)_p_cb_param;
+	snprintf(job->identity.name, sizeof(job->identity.name)
+		, "dev_%d_chn_%d", p_cb_param->chn.dev_id, p_cb_param->chn.chn_id);
+
+	ret = ldc_end_job(wdev, data.handle);
+	if (ret) {
+		TRACE_LDC(DBG_ERR, "ldc_end_job fail, ret=%d, DWA usage(%d)\n", ret, usage);
+		goto FAIL_EXIT;
+	}
+
+	vfree(pst_task);
+	return ret;
+
+FAIL_EXIT:
+	vb_release_block((vb_blk)blk);
+FAIL_GET_VB:
+	vfree(pst_task);
+FAIL_ALLOC:
+	vb_release_block((vb_blk)vb_in);
+
+	return ret;
+}
+
+static int mesh_dwa_do_ldc_fisheye(struct ldc_vdev *wdev, enum ldc_usage usage, struct vb_s *vb_in
+	, pixel_format_e pix_format, unsigned long long mesh_addr, bool sync_io, void *cb_param
+	, unsigned int cb_param_size, mod_id_e mod_id, rotation_e rotation)
+{
+	struct gdc_handle_data data;
+	struct gdc_task_attr *ptask = NULL;
+	vb_blk blk;
+	struct vb_s *vb_out;
+	unsigned int buf_size;
+	int ret;
+	size_s size_out;
+	rotation_e rotationOut;
+	void *_cb_param;
+	unsigned char i;
+	struct ldc_job *job;
+	struct _gdc_cb_param *p_cb_param;
+
+	ptask = vmalloc(sizeof(struct gdc_task_attr));
+	if (!ptask) {
+		TRACE_LDC(DBG_ERR, "vmalloc failed\n");
+		ret = ERR_GDC_NOMEM;
+		goto FAIL_ALLOC;
+	}
+
+	if (rotation == ROTATION_0 || rotation == ROTATION_180) {
+		size_out.width = ALIGN(vb_in->buf.size.width, DEFAULT_ALIGN / 2);
+		size_out.height = vb_in->buf.size.height;
+	} else {
+		size_out.width = ALIGN(vb_in->buf.size.height, DEFAULT_ALIGN / 2);
+		size_out.height = vb_in->buf.size.width;
+	}
+
+	// get buf for gdc output.
+	buf_size = common_getpicbuffersize(size_out.width, size_out.height
+		, PIXEL_FORMAT_YUV_PLANAR_420, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DWA_ALIGNMENT);
+	blk = vb_get_block_with_id(wdev->vb_pool, buf_size, ID_GDC);
+	if (blk == VB_INVALID_HANDLE) {
+		TRACE_LDC(DBG_ERR, "get vb fail\n");
+		vb_release_block((vb_blk)vb_in);
 		ret = ERR_GDC_NOBUF;
 		goto FAIL_GET_VB;
 	}
@@ -302,70 +481,113 @@ static int mesh_gdc_do_ldc(struct ldc_vdev *wdev, struct vb_s *vb_in
 	atomic_long_fetch_and(~BIT(mod_id), &vb_in->mod_ids);
 	atomic_long_fetch_or(BIT(ID_GDC), &vb_in->mod_ids);
 
-	vb_out[0] = (struct vb_s *)blk;
-	vb_out[1] = (struct vb_s *)vb_in; // Reuse input buffer
-	base_get_frame_info(pix_format, size_out[0], &vb_out[0]->buf, vb_out[0]->phy_addr, DEFAULT_ALIGN);
+	vb_out = (struct vb_s *)blk;
+	base_get_frame_info(pix_format, size_out, &vb_out->buf, vb_out->phy_addr, DWA_ALIGNMENT);
 
-	TRACE_LDC(DBG_DEBUG, "GDC usage(%d) rot(%d) src phy-addr(0x%llx) dst phy-addr(0x%llx, 0x%llx)\n"
-		, GDC_USAGE_LDC, rotation, vb_in->phy_addr, vb_out[0]->phy_addr, vb_out[1]->phy_addr);
+	TRACE_LDC(DBG_DEBUG, "DWA usage(%d) rot(%d) src phy-addr(0x%llx) dst phy-addr(0x%llx)\n"
+	, usage, rotation, vb_in->phy_addr, vb_out->phy_addr);
+
+	ret = ldc_begin_job(wdev, &data);
+	if (ret) {
+		TRACE_LDC(DBG_ERR, "ldc_begin_job fail, ret=%d, DWA usage(%d)\n", ret, usage);
+		goto FAIL_EXIT;
+	}
+
+	memset(ptask, 0, sizeof(*ptask));
+	ptask->handle = data.handle;
+	ptask->rotation = rotationOut;
+
+	// prepare the in/out image info of the gdc task.
+	ptask->img_in.video_frame.pixel_format = pix_format;
+	ptask->img_in.video_frame.width = vb_in->buf.size.width;
+	ptask->img_in.video_frame.height = vb_in->buf.size.height;
+	ptask->img_in.video_frame.pts = vb_in->buf.pts;
+	for (i = 0; i < 3; ++i) {
+		ptask->img_in.video_frame.phyaddr[i] = vb_in->buf.phy_addr[i];
+		ptask->img_in.video_frame.length[i] = vb_in->buf.length[i];
+		ptask->img_in.video_frame.stride[i] = vb_in->buf.stride[i];
+	}
+
+	ptask->img_out.video_frame.pixel_format = pix_format;
+	ptask->img_out.video_frame.width = vb_out->buf.size.width;
+	ptask->img_out.video_frame.height = vb_out->buf.size.height;
+	for (i = 0; i < 3; ++i) {
+		ptask->img_out.video_frame.phyaddr[i] = vb_out->buf.phy_addr[i];
+		ptask->img_out.video_frame.length[i] = vb_out->buf.length[i];
+		ptask->img_out.video_frame.stride[i] = vb_out->buf.stride[i];
+	}
+
+	ptask->img_out.video_frame.pts = ptask->img_in.video_frame.pts;
+	ptask->img_out.video_frame.private_data = vb_out;
 
 	switch (rotation) {
 	default:
 	case ROTATION_0:
-		rotationOut[0] = ROTATION_90;
-		rotationOut[1] = ROTATION_270;
+		ptask->img_out.video_frame.offset_top = vb_in->buf.offset_top;
+		ptask->img_out.video_frame.offset_left = vb_in->buf.offset_left;
+		ptask->img_out.video_frame.offset_bottom = vb_in->buf.offset_bottom;
+		ptask->img_out.video_frame.offset_right = vb_in->buf.offset_right;
 		break;
 	case ROTATION_90:
-		rotationOut[0] = ROTATION_90;
-		rotationOut[1] = ROTATION_0;
+		ptask->img_out.video_frame.offset_top = vb_in->buf.offset_left;
+		ptask->img_out.video_frame.offset_left = vb_in->buf.offset_bottom;
+		ptask->img_out.video_frame.offset_bottom = vb_in->buf.offset_right;
+		ptask->img_out.video_frame.offset_right = vb_in->buf.offset_top;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.frame_crop.start_y;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.size.width - vb_in->buf.frame_crop.end_x;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.size.width - vb_in->buf.frame_crop.start_x;
 		break;
 	case ROTATION_180:
-		rotationOut[0] = ROTATION_90;
-		rotationOut[1] = ROTATION_90;
+		ptask->img_out.video_frame.offset_top = vb_in->buf.offset_bottom;
+		ptask->img_out.video_frame.offset_left = vb_in->buf.offset_right;
+		ptask->img_out.video_frame.offset_bottom = vb_in->buf.offset_top;
+		ptask->img_out.video_frame.offset_right = vb_in->buf.offset_left;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.size.width - vb_in->buf.frame_crop.end_x;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.size.width - vb_in->buf.frame_crop.start_x;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.size.height - vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.size.height - vb_in->buf.frame_crop.start_y;
 		break;
 	case ROTATION_270:
-		rotationOut[0] = ROTATION_270;
-		rotationOut[1] = ROTATION_0;
+		ptask->img_out.video_frame.offset_top = vb_in->buf.offset_right;
+		ptask->img_out.video_frame.offset_left = vb_in->buf.offset_top;
+		ptask->img_out.video_frame.offset_bottom = vb_in->buf.offset_left;
+		ptask->img_out.video_frame.offset_right = vb_in->buf.offset_bottom;
+		vb_out->buf.frame_crop.start_x = vb_in->buf.size.height - vb_in->buf.frame_crop.end_y;
+		vb_out->buf.frame_crop.end_x = vb_in->buf.size.height - vb_in->buf.frame_crop.start_y;
+		vb_out->buf.frame_crop.start_y = vb_in->buf.frame_crop.start_x;
+		vb_out->buf.frame_crop.end_y = vb_in->buf.frame_crop.end_x;
 		break;
 	}
 
-	ret = init_ldc_param(vb_in, vb_out[0], ptask[0], pix_format, mesh_addr
-		, false, cb_param, cb_param_size, rotationOut[0]);
-	if (ret) {
-		TRACE_LDC(DBG_ERR, "init ldc param 1st failed\n");
+	vb_out->buf.offset_top = ptask->img_out.video_frame.offset_top;
+	vb_out->buf.offset_bottom = ptask->img_out.video_frame.offset_bottom;
+	vb_out->buf.offset_left = ptask->img_out.video_frame.offset_left;
+	vb_out->buf.offset_right = ptask->img_out.video_frame.offset_right;
+	vb_out->buf.pts = ptask->img_out.video_frame.pts;
+	vb_out->buf.frm_num = vb_in->buf.frm_num;
+	vb_out->buf.motion_lv = vb_in->buf.motion_lv;
+	memcpy(vb_out->buf.motion_table, vb_in->buf.motion_table, MO_TBL_SIZE);
+
+	_cb_param = vmalloc(cb_param_size);
+	if (!_cb_param) {
+		TRACE_LDC(DBG_ERR, "vmalloc failed, cb_param_size=%d\n", cb_param_size);
+		ret = ERR_GDC_NOMEM;
 		goto FAIL_EXIT;
 	}
 
-	ret = ldc_begin_job(wdev, &data);
-	if (ret) {
-		TRACE_LDC(DBG_ERR, "ldc_begin_job fail, ret=%d, GDC usage(%d)\n", ret, GDC_USAGE_LDC);
-		goto FAIL_EXIT;
-	}
-	ptask[0]->handle = data.handle;
-	ptask[0]->rotation = rotationOut[0];
-	ret = ldc_add_ldc_task(wdev, ptask[0]);
-	if (ret) {
-		TRACE_LDC(DBG_ERR, "ldc_add_ldc_task 1st fail, ret=%d, GDC usage(%d)\n", ret, GDC_USAGE_LDC);
-		goto FAIL_EXIT;
-	}
+	memcpy(_cb_param, cb_param, cb_param_size);
+	ptask->private_data[0] = mesh_addr;
+	ptask->private_data[1] = (__u64)true;
+	ptask->private_data[2] = (uintptr_t)_cb_param;
+	ptask->reserved = GDC_MAGIC;
 
-	// Reuse vb_in after 1st job assigned
-	base_get_frame_info(pix_format, size_out[1], &vb_out[1]->buf, vb_out[1]->phy_addr, DEFAULT_ALIGN);
-
-	mesh_gen_get_1st_size(size_out[0], &mesh_1st_size);
-	ret = init_ldc_param(vb_out[0], vb_out[1], ptask[1], pix_format, mesh_addr + mesh_1st_size
-		, true, cb_param, cb_param_size, rotationOut[1]);
+	if (usage == LDC_USAGE_LDC)
+		ret = ldc_add_ldc_task(wdev, ptask);
+	else
+		ret = ldc_add_cor_task(wdev, ptask);
 	if (ret) {
-		TRACE_LDC(DBG_ERR, "init ldc param 2nd failed\n");
-		vfree((void *)(uintptr_t)ptask[0]->private_data[2]);
-		goto FAIL_EXIT;
-	}
-
-	ptask[1]->handle = data.handle;
-	ptask[1]->rotation = rotationOut[1];
-	ret = ldc_add_ldc_task(wdev, ptask[1]);
-	if (ret) {
-		TRACE_LDC(DBG_ERR, "ldc_add_ldc_task 2nd fail, ret=%d, GDC usage(%d)\n", ret, GDC_USAGE_LDC);
+		TRACE_LDC(DBG_ERR, "ldc_add_xxx_tsk fail, ret=%d, DWA usage(%d)\n", ret, usage);
 		goto FAIL_EXIT;
 	}
 
@@ -373,25 +595,24 @@ static int mesh_gdc_do_ldc(struct ldc_vdev *wdev, struct vb_s *vb_in
 	job->identity.sync_io = sync_io;
 	job->identity.mod_id = mod_id;
 	job->identity.id = vb_in->buf.frm_num;
-	p_cb_param = (struct _gdc_cb_param *)cb_param;
+	p_cb_param = (struct _gdc_cb_param *)_cb_param;
 	snprintf(job->identity.name, sizeof(job->identity.name)
 		, "dev_%d_chn_%d", p_cb_param->chn.dev_id, p_cb_param->chn.chn_id);
 
 	ret = ldc_end_job(wdev, data.handle);
+	if (ret) {
+		TRACE_LDC(DBG_ERR, "ldc_end_job fail, ret=%d, DWA usage(%d)\n", ret, usage);
+		goto FAIL_EXIT;
+	}
 
-	vfree(ptask[0]);
-	vfree(ptask[1]);
+	vfree(ptask);
 	return ret;
 
 FAIL_EXIT:
 	vb_release_block((vb_blk)blk);
-
 FAIL_GET_VB:
+	vfree(ptask);
 FAIL_ALLOC:
-	if (ptask[0])
-		vfree(ptask[0]);
-	if (ptask[0])
-		vfree(ptask[1]);
 	vb_release_block((vb_blk)vb_in);
 
 	return ret;
@@ -403,15 +624,18 @@ int mesh_gdc_do_op(struct ldc_vdev *wdev, enum gdc_usage usage
 	, mod_id_e mod_id, rotation_e rotation)
 {
 	int ret = ERR_GDC_ILLEGAL_PARAM;
+	ldc_attr_s ldc_attr;
+	fisheye_attr_s fisheye_attr;
 
 	TRACE_LDC(DBG_DEBUG, "GDC usage(%d) rotation(%d), mesh-addr(0x%llx), cb_param_size(%d)\n",
 			usage, rotation, (unsigned long long)mesh_addr, cb_param_size);
 
-	if (usage == GDC_USAGE_FISHEYE) {
-		TRACE_LDC(DBG_ERR, "GDC usage(%d) mesh-addr(0x%llx) not support\n",
-			      usage, (unsigned long long)mesh_addr);
-		return -1;
+	if (usage != GDC_USAGE_ROTATION) {
+		ret = ldc_check_null_ptr(usage_param);
+		if (ret)
+			return ret;
 	}
+
 	if (mesh_addr < DEFAULT_MESH_PADDR) {
 		TRACE_LDC(DBG_ERR, "GDC mod(0x%x) usage(%d) mesh-addr(0x%llx) invalid\n",
 			      mod_id, usage, (unsigned long long)mesh_addr);
@@ -420,8 +644,24 @@ int mesh_gdc_do_op(struct ldc_vdev *wdev, enum gdc_usage usage
 
 	switch (usage) {
 	case GDC_USAGE_LDC:
-		ret = mesh_gdc_do_ldc(wdev, vb_in, pix_format, mesh_addr
-			, sync_io, cb_param, cb_param_size, mod_id, rotation);
+		ldc_attr = *(ldc_attr_s *)usage_param;
+		if (ldc_attr.grid_info_attr.enable)
+			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, usage, &ldc_attr.grid_info_attr
+				, vb_in, pix_format, mesh_addr
+				, sync_io, cb_param, cb_param_size, mod_id);
+		else
+			ret = mesh_dwa_do_ldc_fisheye(wdev, usage, vb_in, pix_format, mesh_addr
+				, sync_io, cb_param, cb_param_size, mod_id, rotation);
+		break;
+	case GDC_USAGE_FISHEYE:
+		fisheye_attr = *(fisheye_attr_s *)usage_param;
+		if (fisheye_attr.grid_info_attr.enable)
+			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, usage, &fisheye_attr.grid_info_attr
+				, vb_in, pix_format, mesh_addr
+				, sync_io, cb_param, cb_param_size, mod_id);
+		else
+			ret = mesh_dwa_do_ldc_fisheye(wdev, usage, vb_in, pix_format, mesh_addr
+				, sync_io, cb_param, cb_param_size, mod_id, rotation);
 		break;
 	case GDC_USAGE_ROTATION:
 		ret = mesh_gdc_do_rot(wdev, vb_in, pix_format, mesh_addr

@@ -90,13 +90,17 @@
 
 #if defined(CONFIG_DFS_MASTER) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
 #ifndef CONFIG_RTW_CFG80211_CAC_EVENT
-#define CONFIG_RTW_CFG80211_CAC_EVENT 0
+#define CONFIG_RTW_CFG80211_CAC_EVENT 1
 #endif
 #else
 #ifdef CONFIG_RTW_CFG80211_CAC_EVENT
 #undef CONFIG_RTW_CFG80211_CAC_EVENT
 #endif
 #define CONFIG_RTW_CFG80211_CAC_EVENT 0
+#endif
+
+#if CONFIG_RTW_CFG80211_CAC_EVENT && RTW_PER_ADAPTER_WIPHY
+#error "CONFIG_RTW_CFG80211_CAC_EVENT is not supported when enable RTW_PER_ADAPTER_WIPHY"
 #endif
 
 #if !defined(CONFIG_P2P) && RTW_P2P_GROUP_INTERFACE
@@ -301,7 +305,7 @@ struct rtw_wiphy_data {
 #define rtw_wiphy_priv(wiphy) ((struct rtw_wiphy_data *)wiphy_priv(wiphy))
 #define wiphy_to_dvobj(wiphy) (((struct rtw_wiphy_data *)wiphy_priv(wiphy))->dvobj)
 #define wiphy_to_adapter(wiphy) (dvobj_get_primary_adapter(wiphy_to_dvobj(wiphy)))
-#define wiphy_to_dev(wiphy) (dvobj_to_dev(wiphy_to_dvobj(wiphy)))
+
 
 #if defined(RTW_DEDICATED_P2P_DEVICE)
 #define wiphy_to_pd_wdev(wiphy) (rtw_wiphy_priv(wiphy)->pd_wdev)
@@ -467,7 +471,10 @@ void rtw_cfg80211_deinit_rfkill(struct wiphy *wiphy);
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0))
-u8 rtw_cfg80211_ch_switch_notify(_adapter *adapter, struct rtw_chan_def *rtw_chdef, u8 ht, bool started);
+u8 rtw_cfg80211_ch_switch_notify(_adapter *adapter,
+					struct _ADAPTER_LINK *alink,
+					struct rtw_chan_def *rtw_chdef,
+					u8 ht, bool started);
 #endif
 
 #if CONFIG_IEEE80211_BAND_6GHZ

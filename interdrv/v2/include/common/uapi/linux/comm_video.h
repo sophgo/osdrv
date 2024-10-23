@@ -512,9 +512,6 @@ typedef struct _grid_info_attr_s {
 	unsigned char is_blending;
 	unsigned char eis_enable; /* enable eis */
 	unsigned char homorgn_num;
-#if 0
-	homograph_region_s homo_regions[gdc_max_region_num];
-#endif
 } grid_info_attr_s;
 
 typedef struct _ldc_attr_s {
@@ -526,7 +523,6 @@ typedef struct _ldc_attr_s {
 	int center_y_offset;
 	int distortion_ratio;
 	grid_info_attr_s grid_info_attr;
-	unsigned char enable_hw_ldc;
 	rotation_e rotation;
 } ldc_attr_s;
 // -------- If you want to change these interfaces, please contact the isp team. --------
@@ -583,6 +579,7 @@ typedef enum {
 	SEQ_CHANGE,
 	SEQ_DECODE_START,
 	SEQ_DECODE_FINISH,
+	SEQ_DECODE_WRONG_RESOLUTION,
 }seq_status;
 
 #ifdef __cplusplus

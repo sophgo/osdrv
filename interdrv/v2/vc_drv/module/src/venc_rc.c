@@ -74,10 +74,6 @@ int venc_rc_set_param(stRcInfo *pRcInfo, EncOpenParam *pOpenParam, eRcParam ePar
 {
     int ret = 0;
 
-    if (!pRcInfo->rcEnable) {
-        return ret;
-    }
-
     switch (eParam) {
     case E_BITRATE:
         _venc_rc_set_bitrate_param(pRcInfo, pOpenParam);
@@ -99,12 +95,13 @@ void venc_rc_open(stRcInfo *pRcInfo, EncOpenParam *pOpenParam)
     EncWave5Param *param = &pOpenParam->EncStdParam.waveParam;
 
     pRcInfo->rcEnable = pOpenParam->rcEnable;
-    pRcInfo->RcEn = pOpenParam->RcEn;
+
+    pRcInfo->RcEn = 1;// pOpenParam->RcEn;
 
     pRcInfo->codec = pOpenParam->bitstreamFormat;
 
     // params setting
-    pRcInfo->rcMode = pOpenParam->rcMode;
+    pRcInfo->rcMode = pOpenParam->hostRcmode;
     pRcInfo->numOfPixel = pOpenParam->picWidth * pOpenParam->picHeight;
     // frame skipping
     pRcInfo->contiSkipNum = (!pOpenParam->frmLostOpen) ? 0 :(pOpenParam->encFrmGaps == 0) ? 65535 : pOpenParam->encFrmGaps;
@@ -161,10 +158,10 @@ void venc_rc_open(stRcInfo *pRcInfo, EncOpenParam *pOpenParam)
     if (pRcInfo->rcMode == RC_MODE_AVBR) {
         VLOG(INFO, "bitrateChangePeriod = %d\n",
                 pRcInfo->bitrateChangePeriod);
-        VLOG(INFO, "motionSensitivy = %d\n", pOpenParam->motionSensitivy);
+        VLOG(INFO, "motionSensitivity = %d\n", pOpenParam->motionSensitivity);
         VLOG(INFO, "minStillPercent = %d\n", pOpenParam->minStillPercent);
         VLOG(INFO, "maxStillQp = %d\n", pOpenParam->maxStillQp);
-        VLOG(INFO, "pureStillThr = %d\n", pOpenParam->pureStillThr);
+        VLOG(INFO, "avbrPureStillThr = %d\n", pOpenParam->avbrPureStillThr);
         VLOG(INFO, "avbrContiSkipNum = %d\n",
                 pRcInfo->avbrContiSkipNum);
     }
@@ -265,7 +262,7 @@ BOOL venc_rc_avbr_pic_ctrl(stRcInfo *pRcInfo, EncOpenParam *pOpenParam, int fram
         return FALSE;
     }
     winSize = pRcInfo->bitrateChangePeriod;
-    coring_offset = pOpenParam->pureStillThr;
+    coring_offset = pOpenParam->avbrPureStillThr;
     coring_in = pOpenParam->picMotionLevel;
     coring_out = CLIP3(0, 255, (coring_in - coring_offset));
     // DRV_VC_INFO("pic mot in = %d, mot lv = %d\n", coring_in, coring_out);
@@ -273,7 +270,7 @@ BOOL venc_rc_avbr_pic_ctrl(stRcInfo *pRcInfo, EncOpenParam *pOpenParam, int fram
     pOpenParam->picMotionLevel = coring_out;
     pRcInfo->picMotionLvWindow[frameIdx % winSize] = pOpenParam->picMotionLevel;
     pRcInfo->avbrChangeBrEn = FALSE;
-    coring_gain = pOpenParam->motionSensitivy;
+    coring_gain = pOpenParam->motionSensitivity;
     pRcInfo->periodMotionLvRaw = calc_avg_motionLv(pRcInfo);
     pRcInfo->periodMotionLv = CLIP3(0, 255, (pRcInfo->periodMotionLvRaw * coring_gain) / 10);
     // DRV_VC_INFO("periodMotionLvRaw = %d periodMotionLv = %d\n",
@@ -313,10 +310,6 @@ BOOL venc_rc_avbr_pic_ctrl(stRcInfo *pRcInfo, EncOpenParam *pOpenParam, int fram
 int venc_rc_get_param(stRcInfo *pRcInfo, eRcParam eParam)
 {
     int ret = 0;
-
-    if (!pRcInfo->rcEnable) {
-        return ret;
-    }
 
     switch (eParam) {
     case E_BITRATE:

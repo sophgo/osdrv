@@ -11,5 +11,7 @@
 
 int vpss_proc_init(struct vpss_device *dev);
 int vpss_proc_remove(struct vpss_device *dev);
+int vpp_proc_init(struct vpss_device *dev);
+int vpp_proc_remove(struct vpss_device *dev);
 
 #endif // _VIP_VPSS_PROC_H_

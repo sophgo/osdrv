@@ -456,6 +456,81 @@ size_t jdi_read_memory(unsigned long addr, unsigned char *data, size_t len, int 
     return len;
 }
 
+int jdi_insert_external_memory(jpu_buffer_t *vb)
+{
+    jdi_info_t *jdi;
+    int i;
+    jpudrv_buffer_t jdb;
+
+    jdi = &s_jdi_info;
+
+    if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
+        return -1;
+
+    memset(&jdb, 0x00, sizeof(jpudrv_buffer_t));
+
+    jdb.size = vb->size;
+    jdb.phys_addr = vb->phys_addr;
+    jdb.base = vb->base;
+    jdb.virt_addr = vb->virt_addr;
+    jdb.is_cached = vb->is_cached;  // external memory must be invalidate/flush
+
+    jdi_lock();
+    for (i=0; i<MAX_JPU_BUFFER_POOL; i++)
+    {
+        if (jdi->jpu_buffer_pool[i].inuse == 0)
+        {
+            jdi->jpu_buffer_pool[i].jdb = jdb;
+            jdi->jpu_buffer_pool_count++;
+            jdi->jpu_buffer_pool[i].inuse = 1;
+            break;
+        }
+    }
+    jdi_unlock();
+    JLOG(INFO, "[JDI] jdi_insert_extern_memory, physaddr=0x%lx, virtaddr=0x%lx~0x%lx, size=0x%lx\n",
+         vb->phys_addr, vb->virt_addr, vb->virt_addr + vb->size, vb->size);
+
+    return 0;
+}
+
+void jdi_remove_external_memory(jpu_buffer_t *vb)
+{
+    jdi_info_t *jdi;
+    int i;
+    jpudrv_buffer_t jdb;
+
+
+    jdi = &s_jdi_info;
+
+    if(!vb || !jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
+        return;
+
+    if (vb->size == 0)
+        return ;
+
+    memset(&jdb, 0x00, sizeof(jpudrv_buffer_t));
+
+    jdi_lock();
+    for (i=0; i<MAX_JPU_BUFFER_POOL; i++) {
+        if (jdi->jpu_buffer_pool[i].jdb.phys_addr == vb->phys_addr) {
+            jdi->jpu_buffer_pool[i].inuse = 0;
+            jdi->jpu_buffer_pool_count--;
+            jdb = jdi->jpu_buffer_pool[i].jdb;
+            break;
+        }
+    }
+    jdi_unlock();
+
+    if (!jdb.size)
+    {
+        JLOG(ERR, "[JDI] invalid buffer to free address = 0x%lx, vb addr:%lx, size:%ld\n"
+            , jdb.virt_addr, vb->phys_addr, vb->size);
+        return ;
+    }
+
+    memset(vb, 0, sizeof(jpu_buffer_t));
+}
+
 int jdi_allocate_dma_memory(jpu_buffer_t *vb)
 {
     jdi_info_t *jdi;

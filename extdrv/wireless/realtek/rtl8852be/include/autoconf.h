@@ -40,12 +40,12 @@
  * Work around Config
  */
 #define RTW_WKARD_DIS_PROBE_REQ_RPT_TO_HOSTAPD
+#define CONFIG_WKARD_ULMU
 
 #ifdef CONFIG_BTC
 #define RTK_WKARD_CORE_BTC_STBC_CAP
 #endif
 
-#define RTW_WKARD_LIMIT_MAX_TXAGG
 
 #define RTW_WKARD_PCI_DEVRM_DIS_INT
 
@@ -250,6 +250,13 @@
 	#if defined(CONFIG_RTW_IPS) || defined(CONFIG_RTW_LPS)
 		#define CONFIG_PS_FW_DBG
 	#endif
+	#ifdef CONFIG_WOWLAN
+		#define CONFIG_RTW_IPS_WOW
+		#ifdef CONFIG_RTW_IPS_WOW
+			#define CONFIG_FWIPS_WOW
+		#endif /* CONFIG_RTW_IPS_WOW */
+		#define CONFIG_RTW_LPS_WOW
+	#endif /* CONFIG_WOWLAN */
 	#ifdef CONFIG_RTW_LPS
 	#define CONFIG_RTW_LPS_DEFAULT_OFF
 	#endif
@@ -263,6 +270,11 @@
 
 	/*#define CONFIG_ANTENNA_DIVERSITY*/
 
+#ifdef CONFIG_GPIO_WAKEUP
+	#ifndef WAKEUP_GPIO_IDX
+		#define WAKEUP_GPIO_IDX	12	/* WIFI Chip Side */
+	#endif /*!WAKEUP_GPIO_IDX*/
+#endif /* CONFIG_GPIO_WAKEUP */
 
 /*#define CONFIG_PCI_ASPM*/
 #ifdef CONFIG_PCI_ASPM
@@ -306,7 +318,12 @@
 	#define CONFIG_TDLS_AUTOSETUP
 #endif
 	#define CONFIG_TDLS_AUTOCHECKALIVE
-	/* #define CONFIG_TDLS_CH_SW */ /* Not support yet */
+	/*
+	 * Enable "CONFIG_TDLS_CH_SW" by default,
+	 * however limit it to only work in wifi logo test mode
+	 * but not in normal mode currently
+	 */
+	#define CONFIG_TDLS_CH_SW
 #endif
 
 #define CONFIG_SKB_COPY	/* for amsdu */
@@ -336,17 +353,16 @@
  */
 #define CONFIG_SCAN_BACKOP_STA
 
-
-/*
- * Hareware/Firmware Related Config
- */
-#define CONFIG_TCP_CSUM_OFFLOAD_RX
+/* #define CONFIG_RTW_CSI_CHANNEL_INFO */
+#ifdef CONFIG_RTW_CSI_CHANNEL_INFO
+#define CONFIG_RTW_CSI_NETLINK
+#define CONFIG_CSI_TIMER_POLLING
+#endif
 
 /*
  * Interface  Related Config
  */
 /* #define CONFIG_RTW_FORCE_PCI_MSI_DISABLE */
-
 #define CONFIG_64BIT_DMA
 
 /*

@@ -26,6 +26,7 @@ static struct mlv_i_s g_mlv_i[VI_MAX_DEV_NUM];
 static struct crop_size_s dis_i_data[VI_MAX_DEV_NUM] = { 0 };
 static u32 dis_i_frm_num[VI_MAX_DEV_NUM] = { 0 };
 static u32 dis_flag[VI_MAX_DEV_NUM] = { 0 };
+static u32 dev_bind_pipe_attr[VI_MAX_DEV_NUM] = {0};
 static wait_queue_head_t dis_wait_q[VI_MAX_DEV_NUM];
 struct vb_jobs_t vi_jobs[VI_MAX_CHN_NUM];
 
@@ -169,7 +170,7 @@ static int vi_set_dev_bind_info(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 #endif
 
 	if (ctx->isp_bind_info[raw_num].is_bind) {
-		vi_pr(VI_ERR, "mac(%d) is binded before\n", mac_num);
+		vi_pr(VI_ERR, "mac(%d) is binded before, set dev unbind first\n", mac_num);
 		return ret;
 	}
 
@@ -254,7 +255,7 @@ int vi_sdk_qbuf(mmf_chn_s chn, void *data)
 void vi_fill_mlv_info(struct vb_s *blk, u8 dev, struct mlv_i_s *m_lv_i, u8 is_vpss_offline)
 {
 	if (is_vpss_offline) {
-		u8 snr_num = blk->buf.dev_num;
+		u8 snr_num = dev;
 
 		blk->buf.motion_lv = g_mlv_i[snr_num].mlv_i_level;
 		memcpy(blk->buf.motion_table, g_mlv_i[snr_num].mlv_i_table, MO_TBL_SIZE);
@@ -277,9 +278,9 @@ int vi_set_motion_lv(struct mlv_info_s mlv_i)
 	return 0;
 }
 
-void vi_fill_dis_info(struct vb_s *blk)
+void vi_fill_dis_info(struct vb_s *blk, u8 dev)
 {
-	u8 snr_num = blk->buf.dev_num;
+	u8 snr_num = dev;
 	u32 frm_num = blk->buf.frm_num;
 	u8 is_set_dis_info = false;
 	static struct crop_size_s dis_i[VI_MAX_DEV_NUM] = { 0 };
@@ -418,6 +419,10 @@ int vi_set_dev_bind_attr(int vi_dev, const vi_dev_bind_pipe_s *dev_bind_attr)
 
 	memcpy(&g_vi_ctx->bind_pipe_attr[vi_dev], dev_bind_attr, sizeof(vi_dev_bind_pipe_s));
 
+#ifndef FPGA_PORTING
+	dev_bind_pipe_attr[vi_dev] = g_vi_ctx->bind_pipe_attr[vi_dev].pipe_id[0];
+#endif
+
 	return ret;
 }
 
@@ -432,6 +437,41 @@ int vi_get_dev_bind_attr(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 	*dev_bind_attr = g_vi_ctx->bind_pipe_attr[vi_dev];
 
 	return ret;
+}
+
+int vi_set_dev_unbind_attr(int vi_dev)
+{
+	struct isp_ctx *ctx = &gvdev->ctx;
+	int raw_num = 0;
+	int mac_num = 0;
+	int ret = 0;
+
+    ret = check_vi_dev_valid(vi_dev);
+	if (ret != 0)
+		return ret;
+
+	if (g_vi_ctx->is_dev_enable[vi_dev]) {
+		vi_pr(VI_DBG, "vi dev(%d) is already enabled, cannot set unbind.", vi_dev);
+		return 0;
+	}
+
+	mac_num = dev_bind_pipe_attr[vi_dev];
+	raw_num = mac_num;
+
+#if defined(__CV186X__)
+	if (mac_num == ISP_PRERAW1)
+		raw_num = ISP_PRERAW3;
+	else if (mac_num == ISP_PRERAW3)
+		raw_num = ISP_PRERAW1;
+#endif
+
+	ctx->isp_bind_info[raw_num].is_bind = false;
+
+#ifndef FPGA_PORTING
+	dev_bind_pipe_attr[vi_dev] = 0;
+#endif
+
+    return ret;
 }
 
 int vi_enable_dev(int vi_dev)
@@ -458,6 +498,7 @@ int vi_enable_dev(int vi_dev)
 
 	raw_num = vi_get_raw_num_by_dev(ctx, (u8)vi_dev);
 
+	// Now from VI_CB_SET_VIVPSSMODE callback
 	ctx->isp_pipe_cfg[raw_num].is_offline_scaler = ctx->isp_pipe_offline_sc[(u8)vi_dev];
 
 	if (g_vi_ctx->dev_attr[vi_dev].input_data_type == VI_DATA_TYPE_YUV ||
@@ -483,6 +524,9 @@ int vi_enable_dev(int vi_dev)
 
 #ifndef FPGA_PORTING
 	vi_mac_clk_ctrl(gvdev, g_vi_ctx->bind_pipe_attr[vi_dev].pipe_id[0], true);
+	if (g_vi_ctx->dev_attr[vi_dev].size.width > 4608) {
+		vi_mac_clk_ctrl(gvdev, ISP_PRERAW3, true);
+	}
 #endif
 	vi_pr(VI_DBG, "dev_%d, raw_num(%d) enable=%d, total_dev_num=%d\n",
 		vi_dev, raw_num, g_vi_ctx->is_dev_enable[vi_dev], g_vi_ctx->total_dev_num);
@@ -504,6 +548,18 @@ int vi_disable_dev(int vi_dev)
 		return 0;
 	}
 
+#ifndef FPGA_PORTING
+	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
+		if (g_vi_ctx->bind_pipe_attr[i].num) {
+			vi_mac_clk_ctrl(gvdev, g_vi_ctx->bind_pipe_attr[i].pipe_id[0], false);
+			memset(&g_vi_ctx->bind_pipe_attr[i], 0, sizeof(vi_dev_bind_pipe_s));
+			if (g_vi_ctx->dev_attr[vi_dev].size.width > 4608) {
+				vi_mac_clk_ctrl(gvdev, ISP_PRERAW3, false);
+			}
+		}
+	}
+#endif
+
 	g_vi_ctx->is_dev_enable[vi_dev] = false;
 	memset(&g_vi_ctx->dev_attr[vi_dev], 0, sizeof(vi_dev_attr_s));
 
@@ -511,15 +567,6 @@ int vi_disable_dev(int vi_dev)
 		if (g_vi_ctx->is_dev_enable[i])
 			return ret;
 	}
-
-#ifndef FPGA_PORTING
-	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		if (g_vi_ctx->bind_pipe_attr[i].num) {
-			vi_mac_clk_ctrl(gvdev, g_vi_ctx->bind_pipe_attr[i].pipe_id[0], false);
-			memset(&g_vi_ctx->bind_pipe_attr[i], 0, sizeof(vi_dev_bind_pipe_s));
-		}
-	}
-#endif
 
 	memset(g_vi_ctx, 0, sizeof(struct sop_vi_ctx));
 
@@ -667,12 +714,14 @@ int vi_set_dev_timing_attr(int vi_dev, const vi_dev_timing_attr_s *timing_attr)
 
 	g_vi_ctx->timing_attr[vi_dev] = *timing_attr;
 
-	if (timing_attr->frm_rate > 30)
-		gvdev->usr_pic_delay = msecs_to_jiffies(33);
-	else if (timing_attr->frm_rate > 0)
-		gvdev->usr_pic_delay = msecs_to_jiffies(1000 / timing_attr->frm_rate);
-	else
-		gvdev->usr_pic_delay = 0;
+	gvdev->usr_pic_delay = 0;
+
+	if (timing_attr->enable) {
+		if (timing_attr->frm_rate > 30)
+			gvdev->usr_pic_delay = msecs_to_jiffies(33);
+		else if (timing_attr->frm_rate > 0)
+			gvdev->usr_pic_delay = msecs_to_jiffies(1000 / timing_attr->frm_rate);
+	}
 
 	if (!gvdev->usr_pic_delay)
 		usr_pic_time_remove();
@@ -694,8 +743,7 @@ int vi_get_dev_timing_attr(int vi_dev, vi_dev_timing_attr_s *timing_attr)
 	}
 
 	if (g_vi_ctx->timing_attr[vi_dev].enable == 0) {
-		vi_pr(VI_ERR, "SetDevTimingAttr first\n");
-		return ERR_VI_FAILED_NOTCONFIG;
+		vi_pr(VI_DBG, "SetDevTimingAttr auto trig disable\n");
 	}
 
 	*timing_attr = g_vi_ctx->timing_attr[vi_dev];
@@ -825,20 +873,34 @@ int vi_send_pipe_raw(int vi_pipe, const video_frame_info_s *pvideo_frame)
 					? pvideo_frame->video_frame.offset_bottom
 					: pvideo_frame->video_frame.height;
 
+	if (gvdev->usr_pic_delay) {
+		if (pvideo_frame->video_frame.phyaddr[0] == 0) {
+			vi_pr(VI_ERR, "auto replay le buf_addr is 0, The current operation trig failed\n");
+			return ret;
+		}
+	} else if (!gvdev->usr_pic_delay) {
+		if (pvideo_frame->video_frame.phyaddr[0] == 0) {
+			vi_pr(VI_ERR, "manual replay le buf_addr is 0, The current operation trig failed\n");
+			return ret;
+		}
+	}
+
 	phy_addr = pvideo_frame->video_frame.phyaddr[0];
-	ispblk_dma_setaddr(ctx, dmaid_le, phy_addr);
+	ispblk_dma_setaddr(ctx, vi_pipe, dmaid_le, phy_addr);
 	gvdev->usr_pic_phy_addr[ISP_RAW_PATH_LE] = phy_addr;
 	vi_pr(VI_INFO, "raw_replay le(0x%llx)\n", gvdev->usr_pic_phy_addr[ISP_RAW_PATH_LE]);
 
-	if (ctx->is_hdr_on) {
+	if (ctx->is_hdr_on || pvideo_frame->video_frame.pixel_format) {
 		phy_addr = pvideo_frame->video_frame.phyaddr[1];
-		ispblk_dma_setaddr(ctx, dmaid_se, phy_addr);
+		ispblk_dma_setaddr(ctx, vi_pipe, dmaid_se, phy_addr);
 		gvdev->usr_pic_phy_addr[ISP_RAW_PATH_SE] = phy_addr;
 		vi_pr(VI_INFO, "raw_replay se(0x%llx)\n", gvdev->usr_pic_phy_addr[ISP_RAW_PATH_SE]);
 	}
 
 	if (gvdev->usr_pic_delay) {
 		usr_pic_timer_init(gvdev);
+	} else {
+		user_pic_trig(gvdev);
 	}
 
 	return ret;
@@ -1975,6 +2037,11 @@ long vi_sdk_ctrl(struct sop_vi_dev *vdev, struct vi_ext_control *p)
 		}
 
 		rc = 0;
+		break;
+	}
+	case VI_SDK_SET_DEV_UNBIND_ATTR:
+	{
+		rc = vi_set_dev_unbind_attr(p->sdk_cfg.dev);
 		break;
 	}
 	case VI_SDK_ENABLE_DEV:

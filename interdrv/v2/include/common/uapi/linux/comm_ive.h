@@ -461,15 +461,15 @@ typedef struct _ive_sub_ctrl_s {
 	ive_sub_mode_e mode;
 } ive_sub_ctrl_s;
 
-typedef enum _ive_integ_out_ctrl_e {
+typedef enum _ive_integ_outmode_ctrl_e {
 	IVE_INTEG_OUT_CTRL_COMBINE = 0x0,
 	IVE_INTEG_OUT_CTRL_SUM = 0x1,
 	IVE_INTEG_OUT_CTRL_SQSUM = 0x2,
 	IVE_INTEG_OUT_CTRL_BUTT
-} ive_integ_out_ctrl_e;
+} ive_integ_outmode_ctrl_e;
 
 typedef struct _ive_integ_ctrl_s {
-	ive_integ_out_ctrl_e out_ctrl;
+	ive_integ_outmode_ctrl_e out_ctrl;
 } ive_integ_ctrl_s;
 
 typedef enum _ive_thresh_s16_mode_e {

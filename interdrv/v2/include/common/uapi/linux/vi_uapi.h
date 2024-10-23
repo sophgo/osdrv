@@ -87,6 +87,7 @@ enum vi_sdk_ctrl_e {
 	VI_SDK_GET_DEV_ATTR,
 	VI_SDK_SET_DEV_BIND_ATTR,
 	VI_SDK_GET_DEV_BIND_ATTR,
+	VI_SDK_SET_DEV_UNBIND_ATTR,
 	VI_SDK_GET_PIPE_STATUS,
 	VI_SDK_GET_CHN_STATUS,
 	VI_SDK_ENABLE_DEV,
@@ -233,28 +234,28 @@ struct dis_info_s {
 };
 
 struct vi_chn_rot_cfg {
-	s32 vi_pipe;
-	s32 vi_chn;
+	__s32 vi_pipe;
+	__s32 vi_chn;
 	rotation_e rotation;
 };
 
 struct vi_chn_ldc_cfg {
-	s32 vi_pipe;
-	s32 vi_chn;
+	__s32 vi_pipe;
+	__s32 vi_chn;
 	vi_ldc_attr_s ldc_attr;
-	u64 mesh_handle;
+	__u64 mesh_handle;
 };
 
 struct vi_chn_flip_mirror_cfg {
-	s32 vi_pipe;
-	s32 vi_chn;
-	bool flip;
-	bool mirror;
+	__s32 vi_pipe;
+	__s32 vi_chn;
+	__u8  flip;
+	__u8  mirror;
 };
 
 struct vi_vb_pool_cfg {
-	s32 vi_pipe;
-	s32 vi_chn;
+	__s32 vi_pipe;
+	__s32 vi_chn;
 	__u32 vb_pool;
 };
 

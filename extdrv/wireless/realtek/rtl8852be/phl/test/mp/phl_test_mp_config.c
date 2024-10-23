@@ -516,6 +516,106 @@ static enum rtw_phl_status phl_mp_config_set_bt_uart_en(struct mp_context *mp,
 	return RTW_PHL_STATUS_SUCCESS;
 }
 
+static enum rtw_phl_status phl_mp_config_set_mac_loopbk_enter(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_set_mac_loopbk_enter(mp, arg);
+
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+static enum rtw_phl_status phl_mp_config_set_hci_speed(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_mp_set_hci_speed(mp, arg);
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+static enum rtw_phl_status phl_mp_config_get_hci_speed(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_mp_get_hci_speed(mp, arg);
+
+	PHL_INFO("%s: speed (%d)\n", __FUNCTION__, arg->hci_speed);
+
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+static enum rtw_phl_status phl_mp_config_set_mac_general_io_test(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_set_mac_fw_general_io_test(mp, arg);
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+static enum rtw_phl_status phl_mp_config_set_mac_l1ss_enable(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_mp_set_mac_l1ss_enable(mp, arg);
+
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+static enum rtw_phl_status phl_mp_config_set_mac_aspm_test(
+	struct mp_context *mp, struct mp_config_arg *arg)
+{
+	/* Record the result */
+	arg->cmd_ok = true;
+	arg->status = rtw_hal_set_mac_aspm_test(mp);
+
+	/* Transfer to report */
+	mp->rpt = arg;
+	mp->rpt_len = sizeof(struct mp_config_arg);
+	mp->buf = NULL;
+	mp->buf_len = 0;
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
 enum rtw_phl_status mp_config(struct mp_context *mp,struct mp_config_arg *arg)
 {
 	enum rtw_phl_status phl_status = RTW_PHL_STATUS_FAILURE;
@@ -628,6 +728,30 @@ enum rtw_phl_status mp_config(struct mp_context *mp,struct mp_config_arg *arg)
 	case MP_CONFIG_CMD_SWITCH_ANTENNA:
 		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SWITCH_ANTENNA\n", __FUNCTION__);
 		phl_status = phl_mp_config_switch_antenna(mp, arg);
+		break;
+	case MP_CONFIG_CMD_SET_MAC_LOOPBK_ENTER:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_MAC_LOOPBK_ENTER\n", __FUNCTION__);
+		phl_status = phl_mp_config_set_mac_loopbk_enter(mp, arg);
+		break;
+	case MP_CONFIG_CMD_SET_HCI_SPEED:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_HCI_SPEED\n", __FUNCTION__);
+		phl_status = phl_mp_config_set_hci_speed(mp, arg);
+		break;
+	case MP_CONFIG_CMD_GET_HCI_SPEED:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_GET_HCI_SPEED\n", __FUNCTION__);
+		phl_status = phl_mp_config_get_hci_speed(mp, arg);
+		break;
+	case MP_CONFIG_CMD_SET_MAC_GENERNAL_IO_TEST:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_MAC_GENERNAL_IO_TEST\n", __FUNCTION__);
+		phl_status = phl_mp_config_set_mac_general_io_test(mp, arg);
+		break;
+	case MP_CONFIG_CMD_SET_MAC_L1SS_ENABLE:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_MAC_L1SS_ENABLE\n", __FUNCTION__);
+		phl_status = phl_mp_config_set_mac_l1ss_enable(mp, arg);
+		break;
+	case MP_CONFIG_CMD_SET_MAC_ASPM_STATE:
+		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_MAC_ASPM_STATE\n", __FUNCTION__);
+		phl_status = phl_mp_config_set_mac_aspm_test(mp, arg);
 		break;
 	case MP_CONFIG_CMD_SET_GPIO:
 		PHL_INFO("%s: CMD = MP_CONFIG_CMD_SET_GPIO\n", __FUNCTION__);

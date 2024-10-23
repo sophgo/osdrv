@@ -222,14 +222,6 @@ static signed int _mesh_gdc_do_op_cb(enum gdc_usage usage, const void *usage_par
 	exe_cb.cmd_id = LDC_CB_MESH_GDC_OP;
 	exe_cb.data   = &cfg;
 
-	if(usage == GDC_USAGE_FISHEYE)
-		exe_cb.callee = E_MODULE_DWA;
-	else {
-		ldc_attr_s *attr = (ldc_attr_s *)usage_param;
-		if(attr && !attr->enable_hw_ldc)
-			exe_cb.callee = E_MODULE_DWA;
-	}
-
 	return base_exe_module_cb(&exe_cb);
 }
 
@@ -281,9 +273,14 @@ void vpss_gdc_callback(void *param, vb_blk blk)
 	TRACE_VPSS(DBG_DEBUG, "Grp(%d) Chn(%d) usage(%d)\n", gdc_cb_param->chn.dev_id,
 		       gdc_cb_param->chn.chn_id, gdc_cb_param->usage);
 	mutex_unlock(&g_vpss_mesh[gdc_cb_param->chn.dev_id][gdc_cb_param->chn.chn_id].lock);
-	if (blk != VB_INVALID_HANDLE)
-		vb_done_handler(gdc_cb_param->chn, CHN_TYPE_OUT,
-			&g_vpss_vb_jobs[gdc_cb_param->chn.dev_id].outs[gdc_cb_param->chn.chn_id], blk);
+	if (blk != VB_INVALID_HANDLE) {
+		if (!vpss_check_suspend()) {
+			vb_done_handler(gdc_cb_param->chn, CHN_TYPE_OUT,
+				&g_vpss_vb_jobs[gdc_cb_param->chn.dev_id].outs[gdc_cb_param->chn.chn_id], blk);
+		} else {
+			vb_release_block(blk);
+		}
+	}
 	vfree(param);
 }
 
@@ -316,8 +313,7 @@ static void _vpss_fill_buffer(vpss_chn chn_id, struct video_buffer *grp_buf,
 	unsigned char ldc_wa = false;
 
 	//workaround for ldc 64-align for width/height.
-	if (ctx->chn_cfgs[chn_id].rotation != ROTATION_0
-		|| (ctx->chn_cfgs[chn_id].ldc_attr.enable && ctx->chn_cfgs[chn_id].ldc_attr.attr.enable_hw_ldc))
+	if (ctx->chn_cfgs[chn_id].rotation != ROTATION_0)
 		ldc_wa = true;
 
 	if (ldc_wa) {
@@ -1410,6 +1406,10 @@ static unsigned char _vpss_chl_frame_rate_ctrl(struct vpss_ctx *ctx, unsigned ch
 				ctx->grp_work_status.frc_recv_cnt);
 		}
 	}
+
+	if (!(working_mask & 0xf))
+		working_mask = 0;
+
 	return working_mask;
 }
 
@@ -2277,6 +2277,7 @@ signed int vpss_destroy_grp(vpss_grp grp_id)
 		for (chn_id = 0; chn_id < VPSS_MAX_CHN_NUM; ++chn_id) {
 			ctx->chn_cfgs[chn_id].rotation = ROTATION_0;
 			ctx->chn_cfgs[chn_id].ldc_attr.enable = false;
+			ctx->chn_cfgs[chn_id].fisheye_attr.enable = false;
 
 			if (g_vpss_mesh[grp_id][chn_id].paddr) {
 #if 0
@@ -3906,10 +3907,7 @@ signed int vpss_set_chn_ldc_attr(vpss_grp grp_id, vpss_chn chn_id,
 	if (ret != 0)
 		return ret;
 
-	if (ldc_attr->attr.enable_hw_ldc)
-		ret = check_vpss_gdc_fmt(grp_id, chn_id, g_vpss_ctx[grp_id]->chn_cfgs[chn_id].chn_attr.pixel_format);
-	else
-		ret = check_vpss_dwa_fmt(grp_id, chn_id, g_vpss_ctx[grp_id]->chn_cfgs[chn_id].chn_attr.pixel_format);
+	ret = check_vpss_dwa_fmt(grp_id, chn_id, g_vpss_ctx[grp_id]->chn_cfgs[chn_id].chn_attr.pixel_format);
 	if (ret != 0)
 		return ret;
 
@@ -4240,6 +4238,27 @@ EXIT:
 	return ret;
 }
 
+signed int video_frame_dmabuf_fd_to_paddr(video_frame_s *video_frame){
+	int dmabuf_fd = video_frame->phyaddr[0];
+	int height = video_frame->height;
+	pixel_format_e pixel_format = video_frame->pixel_format;
+	int uv_height = (pixel_format == PIXEL_FORMAT_YUV_PLANAR_420 || pixel_format == PIXEL_FORMAT_NV21 ||
+		pixel_format == PIXEL_FORMAT_NV12) ? (height / 2) : height;
+	TRACE_VPSS(DBG_DEBUG, "dmabuf_fd%d\n", dmabuf_fd);
+	video_frame->phyaddr[0] = vpss_dmabuf_fd_to_paddr(dmabuf_fd);
+	video_frame->phyaddr[1] = video_frame->phyaddr[0]
+		+ video_frame->stride[0] * height;
+	video_frame->phyaddr[2] = video_frame->phyaddr[1]
+		+ video_frame->stride[1] * uv_height;
+	TRACE_VPSS(DBG_DEBUG, "phyaddr%lx, %lx, %lx\n", (long unsigned int)video_frame->phyaddr[0],
+		(long unsigned int)video_frame->phyaddr[1], (long unsigned int)video_frame->phyaddr[2]);
+	if(!video_frame->phyaddr[0]){
+		TRACE_VPSS(DBG_ERR, "vpss_dmabuf_fd_to_paddr fail\n");
+		return -1;
+	}
+	return 0;
+}
+
 signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	signed int ret = 0, i = 0, j = 0;
 	struct vpss_job *job = kzalloc(sizeof(struct vpss_job), GFP_ATOMIC);
@@ -4373,6 +4392,13 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	chn_hw_cfg->pixelformat = vpss_cfg->chn_frm_cfg.video_frame.video_frame.pixel_format;
 	chn_hw_cfg->bytesperline[0] = vpss_cfg->chn_frm_cfg.video_frame.video_frame.stride[0];
 	chn_hw_cfg->bytesperline[1] = vpss_cfg->chn_frm_cfg.video_frame.video_frame.stride[1];
+	if(vpss_cfg->chn_frm_cfg.video_frame.video_frame.phyaddr[0] < 0x1000){ // dmabuf_fd
+		ret = video_frame_dmabuf_fd_to_paddr(&vpss_cfg->chn_frm_cfg.video_frame.video_frame);
+		if(ret != 0){
+			kfree(job);
+			return ret;
+		}
+	}
 	for (i = 0; i < NUM_OF_PLANES; ++i)
 		chn_hw_cfg->addr[i] = vpss_cfg->chn_frm_cfg.video_frame.video_frame.phyaddr[i];
 	if (vpss_cfg->chn_frm_cfg.video_frame.video_frame.pixel_format == PIXEL_FORMAT_BGR_888_PLANAR) {

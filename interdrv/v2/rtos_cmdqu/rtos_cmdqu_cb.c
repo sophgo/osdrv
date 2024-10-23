@@ -2,7 +2,7 @@
 #include <base_cb.h>
 #include "cmdqu_cb.h"
 
-int rtos_cmdqu_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
+int rtos_cmdqu_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	struct cvi_rtos_cmdqu_device *ndev = (struct cvi_rtos_cmdqu_device *)dev;
 	int rc = -1;

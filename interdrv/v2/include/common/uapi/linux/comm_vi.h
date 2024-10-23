@@ -371,7 +371,7 @@ typedef struct _vi_dev_attr_s {
 /* Information of pipe binded to device */
 typedef struct _vi_dev_bind_pipe_s {
 	unsigned int num; /* RW;Range [1,VI_MAX_PIPE_NUM] */
-	s32 pipe_id[VI_MAX_PIPE_NUM]; /* RW;Array of pipe ID */
+	__s32 pipe_id[VI_MAX_PIPE_NUM]; /* RW;Array of pipe ID */
 } vi_dev_bind_pipe_s;
 
 /* Source of 3DNR reference frame */
@@ -718,7 +718,7 @@ typedef enum _vi_ext_chn_source_e {
 
 typedef struct _vi_ext_chn_attr_s {
 	vi_ext_chn_source_e source;
-	s32 bind_chn; /* RW;Range [VI_CHN0, VI_MAX_PHY_CHN_NUM);The channel num which extend channel will bind to*/
+	__s32 bind_chn; /* RW;Range [VI_CHN0, VI_MAX_PHY_CHN_NUM);The channel num which extend channel will bind to*/
 	size_s size; /* RW;Channel out put size */
 	pixel_format_e pixel_format; /* RW;Pixel format */
 	unsigned int depth; /* RW;Range [0,8];Depth */
@@ -748,7 +748,7 @@ typedef struct _vi_ldc_attr_s {
 typedef struct _vi_chn_status_s {
 	unsigned char enable; /* RO;Whether this channel is enabled */
 	unsigned int frame_rate; /* RO;current frame rate */
-	u64 prev_time; // latest time (us)
+	__u64 prev_time; // latest time (us)
 	unsigned int frame_num;  //The number of Frame in one second
 	unsigned int lost_frame; /* RO;Lost frame count */
 	unsigned int vb_fail; /* RO;Video buffer malloc failure */
@@ -826,9 +826,9 @@ typedef struct _vi_pm_ops_s {
 } vi_pm_ops_s;
 
 typedef struct _vi_smooth_raw_dump_info_s {
-	s32 vi_pipe;
+	__s32 vi_pipe;
 	unsigned char  blk_cnt;	// ring buffer number
-	u64 *phy_addr_list;	// ring buffer addr
+	__u64 *phy_addr_list;	// ring buffer addr
 	rect_s  crop_rect;
 } vi_smooth_raw_dump_info_s;
 
