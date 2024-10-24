@@ -581,7 +581,7 @@ static long mipi_tx_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		u8 cmd = 0x28;
 		int i = 0;
 
-		for (i = 0; i < DISP_MAX_INST; ++i) {
+		for (i = DISP_MAX_INST - 1; i >= 0; --i) {
 			mipi_tx_disable(i);
 			dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
 			mipi_tx_enable(i);
@@ -822,7 +822,7 @@ static int mipi_tx_remove(struct platform_device *pdev)
 	mutex_unlock(&reboot_lock);
 	_power_off(&mipi_tx_dev_ctx);
 
-	for (i = 0; i < ARRAY_SIZE(clk_mipipll_name); ++i) {
+	for (i = ARRAY_SIZE(clk_mipipll_name) - 1; i >= 0; --i) {
 		if (mipi_tx_dev_ctx.clk_mipipll[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i]))
 			clk_disable_unprepare(mipi_tx_dev_ctx.clk_mipipll[i]);
 	}
@@ -858,7 +858,7 @@ static int mipi_tx_suspend(struct platform_device *pdev, pm_message_t state)
 		mipi_tx_enable(i);
 	}
 
-	for (i = 0; i < ARRAY_SIZE(clk_mipipll_name); ++i) {
+	for (i = ARRAY_SIZE(clk_mipipll_name) - 1; i >= 0; --i) {
 		if (mipi_tx_dev_ctx.clk_mipipll[i] && __clk_is_enabled(mipi_tx_dev_ctx.clk_mipipll[i]))
 			clk_disable_unprepare(mipi_tx_dev_ctx.clk_mipipll[i]);
 	}
