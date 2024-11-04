@@ -684,10 +684,12 @@ int vpss_hal_remove_job(struct vpss_job *job)
 				// BIT(10) always reset; BIT(11) never reset
 				if((work_mask & BIT(10)) || ((!reset_time[i]) && ((work_mask & BIT(11)) == 0))){
 					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
+					TRACE_VPSS(DBG_WARN, "core(%d) reset.\n", i);
 					reset_time[i] = 1000;
 				} else {
 					work_mask &= (~BIT(i));
 					avail_mask &= (~BIT(i));
+					TRACE_VPSS(DBG_WARN, "core(%d) mask.\n", i);
 				}
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
 					__clk_is_enabled(vpss_dev->vpss_cores[i].clk_vpss))

@@ -4446,10 +4446,7 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 		break;
 	}
 
-	if (down_interruptible(&g_vpss_core_sem)){
-		ret = -1;
-		goto fail;
-	}
+	down(&g_vpss_core_sem);
 
 	if (vpss_hal_direct_schedule(job))
 		vpss_hal_push_job(job);
@@ -4470,7 +4467,6 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 			vpss_hal_down_reg(i);
 		}
 	}
-fail:
 	up(&g_vpss_core_sem);
 	kfree(job);
 
