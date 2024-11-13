@@ -411,12 +411,12 @@ static int32_t sys_ion_alloc_user(struct cvi_sys_device *ndev, unsigned long arg
 	return 0;
 }
 
-int32_t sys_ion_get_memory_statics(uint64_t *total_size,
+int32_t sys_ion_get_memory_state(uint64_t *total_size,
 	uint64_t *free_size, uint64_t *max_avail_size)
 {
-	return cvi_ion_get_memory_statics(total_size, free_size, max_avail_size);
+	return cvi_ion_get_memory_state(total_size, free_size, max_avail_size);
 }
-EXPORT_SYMBOL_GPL(sys_ion_get_memory_statics);
+EXPORT_SYMBOL_GPL(sys_ion_get_memory_state);
 
 int32_t sys_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t u32Len)
 {
@@ -483,7 +483,7 @@ static long cvi_sys_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 {
 	struct cvi_sys_device *ndev = filp->private_data;
 	long ret = 0;
-	struct sys_ion_mm_statics ion_statics = {};
+	struct sys_ion_mem_state ion_state = {};
 
 	switch (cmd) {
 	case SYS_ION_ALLOC:
@@ -498,15 +498,15 @@ static long cvi_sys_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 	case SYS_CACHE_FLUSH:
 		ret = sys_cache_op_userv(arg, enum_cache_op_flush);
 		break;
-	case SYS_ION_G_ION_MM_STATICS:
-		sys_ion_get_memory_statics(&ion_statics.total_size, &ion_statics.free_size,
-			&ion_statics.max_avail_size);
-		ret = copy_to_user((struct sys_ion_mm_statics __user *)arg,
-					&ion_statics,
-					sizeof(struct sys_ion_mm_statics));
+	case SYS_ION_G_ION_MEM_STATE:
+		sys_ion_get_memory_state(&ion_state.total_size, &ion_state.free_size,
+			&ion_state.max_avail_size);
+		ret = copy_to_user((struct sys_ion_mem_state __user *)arg,
+					&ion_state,
+					sizeof(struct sys_ion_mem_state));
 		if (ret) {
 			pr_err("copy_to_user fail, total:%llu free:%lld avail:%lld ret:%ld\n",
-				ion_statics.total_size,	ion_statics.free_size, ion_statics.max_avail_size, ret);
+				ion_state.total_size,	ion_state.free_size, ion_state.max_avail_size, ret);
 		}
 		break;
 

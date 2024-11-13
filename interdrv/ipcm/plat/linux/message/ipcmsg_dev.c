@@ -15,22 +15,54 @@
 #include <linux/seq_file.h>
 
 #include "ipcm_common.h"
-#include "linux/ipcm_linux.h"
+#include "ipcmsg_dev.h"
 #include "ipcmsg.h"
 #include "ipcm.h"
 
 
 static struct fasync_struct *async_queue;
-static struct ipcm_signal_cfg stSigData;
+static struct ipcm_signal_ctl stSigCtl;
 static atomic_t s_msg_id = ATOMIC_INIT(0);
 static struct mutex data_lock[IPCM_DATA_SPIN_MAX];
 
 void ipcmsg_signal_send(CVI_S32 s32Id, CVI_IPCMSG_MESSAGE_S *pstMsg)
 {
-	stSigData.s32Id = s32Id;
-	stSigData.pstMsg = pstMsg;
+	CVI_U32 i;
 
-	ipcm_err("kill_fasync\n");
+	for (i = 0; i < MAX_SIG_MSG_NUM; ++i) {
+		if (atomic_read(&stSigCtl.atUsed[i]) == 1)
+			continue;
+
+		atomic_set(&stSigCtl.atUsed[i], 1);
+		stSigCtl.stSigData[i].s32Id = s32Id;
+
+		stSigCtl.stSigData[i].pstMsg = (CVI_IPCMSG_MESSAGE_S *)
+				kzalloc(sizeof(CVI_IPCMSG_MESSAGE_S), GFP_KERNEL);
+		if (!stSigCtl.stSigData[i].pstMsg) {
+			ipcm_err("kmalloc failed, size(%d)\n", pstMsg->u32BodyLen);
+
+			return;
+		}
+		memcpy(stSigCtl.stSigData[i].pstMsg, pstMsg, sizeof(CVI_IPCMSG_MESSAGE_S));
+
+		stSigCtl.stSigData[i].pstMsg->pBody = (CVI_VOID *)kzalloc(pstMsg->u32BodyLen, GFP_KERNEL);
+		if (!stSigCtl.stSigData[i].pstMsg->pBody) {
+			ipcm_err("kmalloc failed, size(%d)\n", pstMsg->u32BodyLen);
+
+			return;
+		}
+		memcpy(stSigCtl.stSigData[i].pstMsg->pBody, pstMsg->pBody, pstMsg->u32BodyLen);
+
+		break;
+	}
+
+	if (i == MAX_SIG_MSG_NUM){
+		ipcm_err("sig data msg full\n");
+
+		return;
+	}
+
+	ipcm_debug("kill_fasync\n");
 	kill_fasync(&async_queue, SIGIO, POLL_IN);
 }
 
@@ -192,21 +224,31 @@ static long dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case IPCM_IOC_SIG_DATA:
 	{
 		struct ipcm_signal_cfg sig_cfg;
+		CVI_U32 i;
 
 		if (copy_from_user(&sig_cfg, (void __user *)arg, sizeof(sig_cfg)))
 			return -EINVAL;
 
-		sig_cfg.s32Id = stSigData.s32Id;
+		for (i = 0; i < MAX_SIG_MSG_NUM; ++i) {
+			if (atomic_read(&stSigCtl.atUsed[i]) == 1)
+				break;
+		}
+
+		sig_cfg.s32Id = stSigCtl.stSigData[i].s32Id;
 		if (copy_to_user((void __user *)arg, &sig_cfg, sizeof(sig_cfg)))
 			return -EINVAL;
 
-		if (copy_to_user((void __user *)sig_cfg.pstMsg, stSigData.pstMsg, sizeof(CVI_IPCMSG_MESSAGE_S)))
+		if (copy_to_user((void __user *)sig_cfg.pstMsg, stSigCtl.stSigData[i].pstMsg, sizeof(CVI_IPCMSG_MESSAGE_S)))
 			return -EINVAL;
 
-		if ((stSigData.pstMsg->u32BodyLen > 0) &&
+		if ((stSigCtl.stSigData[i].pstMsg->u32BodyLen > 0) &&
 			copy_to_user((void __user *)sig_cfg.pBody,
-			stSigData.pstMsg->pBody, stSigData.pstMsg->u32BodyLen))
+			stSigCtl.stSigData[i].pstMsg->pBody, stSigCtl.stSigData[i].pstMsg->u32BodyLen))
 			return -EINVAL;
+
+		kfree(stSigCtl.stSigData[i].pstMsg->pBody);
+		kfree(stSigCtl.stSigData[i].pstMsg);
+		atomic_set(&stSigCtl.atUsed[i], 0);
 		ret = 0;
 		break;
 	}

@@ -338,6 +338,16 @@ enum ENUM_CHIP_ID {
 #define AO_SYSCHN_CHNID         (AO_MAX_CHN_NUM - 1) /* system channel id */
                                         /* max channel num of input/output device */
 
+#define CVI_MAX_AUDIO_FRAME_NUM    300       /* max count of audio frame in Buffer */
+#define CVI_AUD_MAX_VOICE_POINT_NUM    1280      /* max sample per frame for voice encode */
+#define CVI_AUD_MAX_AUDIO_POINT_NUM    2048     /* max sample per frame for all encoder */
+#define CVI_AUD_MAX_CHANNEL_NUM      3         /* Maximum number of audio channels supported */
+#define CVI_MAX_AUDIO_STREAM_LEN   (4 * 4096)  /* Maximum length of an audio stream in bytes */
+
+#define MAX_AUDIO_FILE_PATH_LEN	256           /* Maximum length of the file path for an audio file */
+#define MAX_AUDIO_FILE_NAME_LEN	256           /* Maximum length of the file name for an audio file */
+#define MAX_AUDIO_VQE_CUSTOMIZE_NAME	64      /* Maximum length of the name for a custom VQE setting */
+
 /* For VPSS */
 #define VPSS_IP_NUM              2
 #define VPSS_DEV_0               0
