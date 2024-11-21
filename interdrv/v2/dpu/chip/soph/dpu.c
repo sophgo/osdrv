@@ -3013,9 +3013,25 @@ int32_t dpu_vb_done_handler(mmf_chn_s chn, enum chn_type_e chn_type, vb_blk blk)
 		pr_debug("Mod(%s) chn(%d) dev(%d) dst out release\n"
 			     , sys_get_modname(chn.mod_id), chn.chn_id, chn.dev_id);
 	}
-	ret = vb_release_block(blk);
-	vb = (struct  vb_s*)blk;
-	TRACE_DPU(DBG_INFO, "dpu_vb_done_handler   vb cnt(%d)       -\n",vb->usr_cnt.counter);
+
+	if (blk != VB_INVALID_HANDLE){
+		vb = (struct  vb_s*)blk;
+		TRACE_DPU(DBG_INFO, "dpu_vb_done_handler   vb cnt(%d)       -\n",vb->usr_cnt.counter);
+		TRACE_DPU(DBG_INFO, "vb_release_block start \n");
+		if(vb_release_block(blk) != SUCCESS)
+			TRACE_DPU(DBG_INFO, "vb_release_block fail\n");
+
+		TRACE_DPU(DBG_INFO, "vb_release_block done \n");
+	}else{
+		TRACE_DPU(DBG_INFO, "blk == VB_INVALID_HANDLE\n");
+	}
+	// if((struct  vb_s*)blk != NULL){
+	// 	vb = (struct  vb_s*)blk;
+	// 	TRACE_DPU(DBG_INFO, "dpu_vb_done_handler   vb cnt(%d)       -\n",vb->usr_cnt.counter);
+	// }else{
+	// 	TRACE_DPU(DBG_INFO, "dpu_vb_done_handler   vb NULL\n");
+	// }
+
 	TRACE_DPU(DBG_INFO, "dpu_vb_done_handler          -\n");
 	return ret;
 }
