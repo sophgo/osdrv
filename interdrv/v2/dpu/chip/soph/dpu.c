@@ -1261,8 +1261,11 @@ int dpu_start_grp(dpu_grp dpu_grp_id)
 	dpu_ctx[dpu_grp_id]->grp_state = GRP_STATE_IDLE;
 
 	/* Only change state from stop to run */
+	mutex_lock(&handler_ctx[dpu_dev_id].mutex);
 	if (handler_ctx[dpu_dev_id].hdl_state == HANDLER_STATE_STOP)
 		handler_ctx[dpu_dev_id].hdl_state = HANDLER_STATE_RUN;
+
+	mutex_unlock(&handler_ctx[dpu_dev_id].mutex);
 	mutex_unlock(&dpu_ctx[dpu_grp_id]->lock);
 
 	TRACE_DPU(DBG_INFO, "Grp(%d) isStart(%d)\n", dpu_grp_id,dpu_ctx[dpu_grp_id]->isstarted);
@@ -1297,6 +1300,7 @@ int dpu_stop_grp(dpu_grp dpu_grp_id)
 	dpu_ctx[dpu_grp_id]->grp_state = GRP_STATE_IDLE;
 
 	/* Only change state from run to stop */
+	mutex_lock(&handler_ctx[dpu_dev_id].mutex);
 	enabled = dpu_enable_handler_ctx(&handler_ctx[dpu_dev_id]);
 	state = handler_ctx[dpu_dev_id].hdl_state;
 	TRACE_DPU(DBG_INFO, "dpu_enable_handler_ctx(%d)\n", enabled);
@@ -1309,6 +1313,7 @@ int dpu_stop_grp(dpu_grp dpu_grp_id)
 
 		dpu_dev->bbusy = FALSE;
 	}
+	mutex_unlock(&handler_ctx[dpu_dev_id].mutex);
 	mutex_unlock(&dpu_ctx[dpu_grp_id]->lock);
 	TRACE_DPU(DBG_INFO, "dpu_dev->bbusy(%d)\n", dpu_dev->bbusy);
 	TRACE_DPU(DBG_INFO, "Grp(%d)\n", dpu_grp_id);
