@@ -103,27 +103,48 @@ typedef struct decoder_handle{
     int frameBufFlag;
     int emptyBufSize;
     int wait_decoded_finish;
-    void *thread_handle;
 }DECODER_HANDLE;
 
 typedef struct _handle_pool{
     DECODER_HANDLE *handle[MAX_VDEC_HANDLE];
     int handle_count;
-    void *thread_handle;
     struct mutex handle_mutex;
 }handle_pool;
 
 handle_pool vdec_handle_pool[MAX_NUM_VPU_CORE] = {0};
-struct mutex thread_decode_mutex[MAX_NUM_VPU_CORE];
+void* thread_handle[MAX_NUM_VPU_CORE];
+static int core_idx[MAX_NUM_VPU_CORE] = {0,1,2};
+static int stop_thread[MAX_NUM_VPU_CORE] = {0};
 static int thread_decode(void *param);
 
 int vdec_init_handle_pool(void)
 {
     int i;
+    struct sched_param param = {
+        .sched_priority = 95,
+    };
 
-    for (i=0; i<MAX_NUM_VPU_CORE; i++) {
+    for (i=1; i<MAX_NUM_VPU_CORE; i++) {
         mutex_init(&vdec_handle_pool[i].handle_mutex);
-        mutex_init(&thread_decode_mutex[i]);
+
+        stop_thread[i] = 0;
+        thread_handle[i] = kthread_run(thread_decode, &core_idx[i], "vdec_core%d", core_idx[i]);
+        if (IS_ERR(thread_handle[i])) {
+            thread_handle[i] = NULL;
+        } else
+            sched_setscheduler(thread_handle[i], SCHED_RR, &param);
+    }
+
+    return 0;
+}
+
+int vdec_deinit_handle_pool(void)
+{
+    int i;
+
+    for (i=1; i<MAX_NUM_VPU_CORE; i++) {
+        stop_thread[i] = 1;
+        kthread_stop(thread_handle[i]);
     }
 
     return 0;
@@ -265,7 +286,7 @@ static int alloc_framebuffer(void *pHandle)
         }
 
         if (pst_handle->open_param->wtlEnable)
-            pst_handle->numOfDecwtl = pst_handle->seq_info->frameBufDelay + pst_handle->frame_buffer_count + pst_handle->cmd_queue_depth;
+            pst_handle->numOfDecwtl = pst_handle->numOfDecFbc;
         else
             pst_handle->numOfDecwtl = 0;
     }
@@ -554,6 +575,10 @@ static int sequence_change(void *pHandle)
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
     int ret;
 
+    if (Queue_Get_Cnt(pst_handle->display_frame)) {
+        return RETCODE_FAILURE;
+    }
+
     free_framebuffer(pst_handle);
     VPU_DecGiveCommand(pst_handle->handle, DEC_GET_SEQ_INFO, pst_handle->seq_info);
     ret = alloc_framebuffer(pst_handle);
@@ -595,13 +620,13 @@ static int fill_command_queue(DECODER_HANDLE *pst_handle)
             if (src_info) {
                 ret = VPU_DecSetRdPtr(pst_handle->handle, src_info->stream_addr, TRUE);
                 if (ret != RETCODE_SUCCESS) {
-                    VLOG(INFO, "VPU_DecSetRdPtr failed! ret=%d\n", ret);
+                    VLOG(ERR, "VPU_DecSetRdPtr failed! ret=%d\n", ret);
                     return ret;
                 }
 
                 ret = VPU_DecUpdateBitstreamBuffer(pst_handle->handle, src_info->stream_len);
                 if (ret != RETCODE_SUCCESS) {
-                    VLOG(INFO, "VPU_DecUpdateBitstreamBuffer failed! ret=%d\n", ret);
+                    VLOG(ERR, "VPU_DecUpdateBitstreamBuffer failed! ret=%d\n", ret);
                     return ret;
                 }
                 pst_handle->decode_one_frame = 1;
@@ -617,7 +642,7 @@ static int fill_command_queue(DECODER_HANDLE *pst_handle)
             pst_handle->seq_status = SEQ_INIT_START;
             ret = VPU_DecIssueSeqInit(pst_handle->handle);
             if (RETCODE_SUCCESS != ret) {
-                VLOG(INFO, "VPU_DecIssueSeqInit failed! ret=%08x\n", ret);
+                VLOG(ERR, "VPU_DecIssueSeqInit failed! ret=%08x\n", ret);
                 return ret;
             }
         }
@@ -625,7 +650,7 @@ static int fill_command_queue(DECODER_HANDLE *pst_handle)
         if (pst_handle->seq_status == SEQ_DECODE_START) {
             ret = VPU_DecStartOneFrame(pst_handle->handle, &dec_param);
             if (ret != RETCODE_SUCCESS) {
-                VLOG(INFO, "VPU_DecStartOneFrame failed! ret=%08x\n", ret);
+                VLOG(ERR, "VPU_DecStartOneFrame failed! ret=%08x\n", ret);
                 pst_handle->decode_one_frame = 0;
                 return ret;
             }
@@ -641,7 +666,6 @@ static int fill_command_queue(DECODER_HANDLE *pst_handle)
 static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
 {
     int ret;
-    int report_queue_cnt = 0;
     SecAxiUse  sec_axi_info = {0};
     int cycle_per_tick = 256;
     int height_from_user, width_from_user;
@@ -658,18 +682,14 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
     if (ret & (1<<INT_WAVE5_INIT_SEQ)){
         height_from_user = pst_handle->seq_info->picHeight;
         width_from_user = pst_handle->seq_info->picWidth;
-        report_queue_cnt = 0;
 
-        do {
-            ret = VPU_DecCompleteSeqInit(pst_handle->handle, pst_handle->seq_info);
-            if (ret == RETCODE_REPORT_NOT_READY) {
-                msleep(1);
-                report_queue_cnt++;
-            }
-        } while ((ret == RETCODE_REPORT_NOT_READY) && (report_queue_cnt<3));
+        ret = VPU_DecCompleteSeqInit(pst_handle->handle, pst_handle->seq_info);
+        if (ret == RETCODE_REPORT_NOT_READY)
+            return RETCODE_SUCCESS;
 
         if (ret != RETCODE_SUCCESS) {
             VLOG(ERR, "VPU_DecCompleteSeqInit failed! ret = %08x\n", ret);
+
             pst_handle->decode_one_frame = 0;
             pst_handle->seq_status = SEQ_INIT_NON;
 
@@ -706,15 +726,7 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
 
         pst_handle->seq_status = SEQ_DECODE_START;
     } else if (ret & (1<<INT_WAVE5_DEC_PIC)) {
-        report_queue_cnt = 0;
-        do {
-            ret = VPU_DecGetOutputInfo(pst_handle->handle, pst_handle->output_info);
-            if (ret == RETCODE_REPORT_NOT_READY) {
-                msleep(1);
-                report_queue_cnt++;
-            }
-        } while ((ret == RETCODE_REPORT_NOT_READY) && (report_queue_cnt<3));
-
+        ret = VPU_DecGetOutputInfo(pst_handle->handle, pst_handle->output_info);
         if (ret != RETCODE_SUCCESS)
             return ret;
 
@@ -749,66 +761,81 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
     return 0;
 }
 
-static int thread_decode(void *param)
+static int process_data(DECODER_HANDLE *pst_handle, int timeout)
 {
-    DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)param;
     QueueStatusInfo queue_status = {0};
     int i;
+    int ret;
     int fill_queue_cnt = 0;
 
-    while(1) {
-        VPU_DecGiveCommand(pst_handle->handle, DEC_GET_QUEUE_STATUS, &queue_status);
-        if (pst_handle->stop_wait_interrupt) {
-            FRAME_INFO *frame_info;
-            if (!queue_status.instanceQueueCount && queue_status.reportQueueEmpty)
-                break;
-
-            frame_info = (FRAME_INFO *)Queue_Dequeue(pst_handle->display_frame);
-            if (frame_info != NULL) {
-                VPU_DecClrDispFlag(pst_handle->handle, frame_info->frame_idx);
-            }
-
-            pst_handle->decode_one_frame = 0;
-            VPU_DecFrameBufferFlush(pst_handle->handle, NULL, NULL);
-        } else if (pst_handle->user_pic_enable) {
-            if (pst_handle->user_pic_mode) {
-                wake_up(&tVdecWaitQueue[pst_handle->channel_index]);
-                msleep(10);
-            } else if (pst_handle->seq_status == SEQ_DECODE_FINISH) {
-                wake_up(&tVdecWaitQueue[pst_handle->channel_index]);
-                msleep(10);
-            }
-
+    VPU_DecGiveCommand(pst_handle->handle, DEC_GET_QUEUE_STATUS, &queue_status);
+    if (pst_handle->stop_wait_interrupt) {
+        FRAME_INFO *frame_info;
+        if (!queue_status.instanceQueueCount && queue_status.reportQueueEmpty) {
+            free_framebuffer(pst_handle);
+            up(&pst_handle->sem_release);
+            return RETCODE_SUCCESS;
         }
 
-        update_bind_mode(pst_handle);
-        if (pst_handle->seq_status > SEQ_INIT_START)
-            release_framebuffer(pst_handle);
-
-        if (pst_handle->seq_status == SEQ_CHANGE) {
-            if (Queue_Get_Cnt(pst_handle->display_frame)) {
-                msleep(10);
-                continue;
-            } else {
-                if (RETCODE_SUCCESS != sequence_change(pst_handle))
-                    break;
-            }
+        frame_info = (FRAME_INFO *)Queue_Dequeue(pst_handle->display_frame);
+        if (frame_info != NULL) {
+            VPU_DecClrDispFlag(pst_handle->handle, frame_info->frame_idx);
         }
 
-        VPU_DecGiveCommand(pst_handle->handle, DEC_GET_QUEUE_STATUS, &queue_status);
-        if (pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END)
-            fill_queue_cnt = pst_handle->cmd_queue_depth - queue_status.instanceQueueCount;
-        else
-            fill_queue_cnt = 1;
-
-        for (i=0; i<fill_queue_cnt; i++)
-            fill_command_queue(pst_handle);
-
-        get_outputinfo(pst_handle, 1000);
+        pst_handle->decode_one_frame = 0;
+        VPU_DecFrameBufferFlush(pst_handle->handle, NULL, NULL);
+    } else if (pst_handle->user_pic_enable) {
+        if (pst_handle->user_pic_mode) {
+            wake_up(&tVdecWaitQueue[pst_handle->channel_index]);
+        } else if (pst_handle->seq_status == SEQ_DECODE_FINISH) {
+            wake_up(&tVdecWaitQueue[pst_handle->channel_index]);
+        }
     }
 
-    free_framebuffer(pst_handle);
-    pst_handle->thread_handle  = NULL;
+    update_bind_mode(pst_handle);
+    if (pst_handle->seq_status > SEQ_INIT_START)
+        release_framebuffer(pst_handle);
+
+    if (pst_handle->seq_status == SEQ_CHANGE) {
+        ret = sequence_change(pst_handle);
+        if (ret != RETCODE_SUCCESS)
+            return ret;
+    }
+
+    VPU_DecGiveCommand(pst_handle->handle, DEC_GET_QUEUE_STATUS, &queue_status);
+    if (pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END)
+        fill_queue_cnt = pst_handle->cmd_queue_depth - queue_status.instanceQueueCount;
+    else
+        fill_queue_cnt = queue_status.instanceQueueFull ? 0 : 1;
+
+    for (i=0; i<fill_queue_cnt; i++)
+        fill_command_queue(pst_handle);
+
+    get_outputinfo(pst_handle, timeout);
+
+    return RETCODE_SUCCESS;
+}
+
+static int thread_decode(void *param)
+{
+    int i;
+    int core_idx = *(int *)param;
+    DECODER_HANDLE *pst_handle;
+
+    while(!stop_thread[core_idx]) {
+        if (vdec_get_handle_count(core_idx) == 0) {
+            msleep(1);
+            continue;
+        }
+
+        for (i=0; i<MAX_VDEC_HANDLE; i++) {
+            pst_handle = vdec_get_handle(core_idx, i);
+            if (pst_handle == NULL)
+                continue;
+
+            process_data(pst_handle, 30);
+        }
+    }
 
     return 0;
 }
@@ -837,7 +864,6 @@ reinit:
     ret = VPU_InitWithBitcode(core_idx, pus_bitCode, fw_size);
     if ((ret == RETCODE_VPU_RESPONSE_TIMEOUT) && (reinit_count < 3)) {
         reinit_count++;
-        VPU_HWReset(core_idx);
         goto reinit;
     } else if ((ret != RETCODE_SUCCESS) && (ret != RETCODE_CALLED_BEFORE)) {
         VLOG(ERR, "VPU_InitWithBitcode failed! ret = %08x\n", ret);
@@ -1008,18 +1034,8 @@ reinit:
     base_mod_jobs_init(&pst_handle->jobs, 1, 1, 0);
     sema_init(&pst_handle->sem_release, 0);
     *pHandle = pst_handle;
-
-    if (pst_handle->thread_handle == NULL) {
-        struct sched_param param = {
-            .sched_priority = 95,
-        };
-
-        pst_handle->thread_handle = kthread_run(thread_decode, pst_handle, "vdec_core%d_%d", pst_handle->core_idx, pst_handle->channel_index);
-        if (IS_ERR(pst_handle->thread_handle)) {
-            pst_handle->thread_handle = NULL;
-        } else
-            sched_setscheduler(pst_handle->thread_handle, SCHED_RR, &param);
-    }
+    vdec_insert_handle(pst_handle);
+    pst_handle->wait_decoded_finish  = 1;
 
     return RETCODE_SUCCESS;
 
@@ -1080,11 +1096,13 @@ int vdec_close(void *pHandle)
     if (pst_handle == NULL)
         return 0;
 
-    if (pst_handle->thread_handle != NULL) {
+    if (pst_handle->wait_decoded_finish) {
+        pst_handle->wait_decoded_finish = 0;
         pst_handle->stop_wait_interrupt = 1;
-        osal_thread_join(pst_handle->thread_handle, NULL);
-        pst_handle->thread_handle  = NULL;
+        down(&pst_handle->sem_release);
     }
+
+    vdec_remove_handle(pst_handle);
 
     for (i=0; i<pst_handle->cmd_queue_depth; i++) {
         vb.size = pst_handle->bitstream_size;
@@ -1184,6 +1202,9 @@ int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms)
             pst_handle->loop_flag = 0;
             pst_handle->seq_status = SEQ_INIT_START;
         } else if (pdopc->bsLen == 0) {
+            if(pst_handle->seq_status == SEQ_INIT_NON)
+                return RETCODE_SUCCESS;
+
             if (queue_status.instanceQueueCount || Queue_Get_Cnt(pst_handle->display_frame)) {
                 if (pst_handle->is_bind_mode)
                     fill_vbbuffer(pst_handle);
@@ -1522,11 +1543,12 @@ int disable_user_pic(void *pHandle)
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
     int ret;
 
-    if (pst_handle->thread_handle != NULL) {
+    if (pst_handle->wait_decoded_finish) {
         pst_handle->stop_wait_interrupt = 1;
-        osal_thread_join(pst_handle->thread_handle, NULL);
-        pst_handle->thread_handle  = NULL;
+        down(&pst_handle->sem_release);
+        pst_handle->wait_decoded_finish  = 0;
     }
+    vdec_remove_handle(pst_handle);
 
     do {
         VPU_DecFrameBufferFlush(pst_handle->handle, NULL, NULL);
@@ -1542,6 +1564,8 @@ int disable_user_pic(void *pHandle)
     pst_handle->stop_wait_interrupt = 0;
     pst_handle->user_pic_enable = 0;
     pst_handle->seq_status = SEQ_INIT_NON;
+    vdec_insert_handle(pst_handle);
+    pst_handle->wait_decoded_finish  = 1;
 
     return 0;
 }

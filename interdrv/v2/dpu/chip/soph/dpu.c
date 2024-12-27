@@ -2001,7 +2001,7 @@ int dpu_check_param(dpu_grp grp)
 
 	width =width_left;
 	height =height_left;
-	if(width <64 || width > 1920 || height < 64 || height >1080){
+	if(width <64 || width > 1920 ){
 		TRACE_DPU(DBG_INFO,"[%s]the size of image out of the range!\n ",__func__);
 		TRACE_DPU(DBG_INFO,"width(%d),height(%d)",width,height);
 		return FAILURE;
@@ -3368,6 +3368,8 @@ void dpu_start_handler(struct dpu_dev_s *dpu_dev)
 	dpu_dev->run_time_info.total_int_cnt = 0;
 	dpu_dev->run_time_info.total_int_cnt_last_sec = 0;
 	dpu_dev->run_time_info.total_int_cost_tm = 0;
+	dpu_dev->duty_ratio = 0;
+	dpu_dev->total_hwduration = 0;
 
 	dpu_dev->time_for_sec = 0;
 	dpu_dev->int_num_per_sec = 0;

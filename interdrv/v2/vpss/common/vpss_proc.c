@@ -343,15 +343,15 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 
 	// VPSS CHN OUTPUT RESOLUTION
 	seq_puts(m, "\n-------------------------------VPSS CHN OUTPUT RESOLUTION-----------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%10s%20s%10s%10s%10s\n",
-		"GrpID", "ChnID", "Enable", "Width", "Height", "Pixfmt", "Videofmt", "SendOK", "FrameRate");
+	seq_printf(m, "%10s%10s%10s%10s%10s%20s%10s%10s%10s%10s\n",
+		"GrpID", "ChnID", "Enable", "Width", "Height", "Pixfmt", "Videofmt", "VbPool", "SendOK", "FrameRate");
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (vpss_ctx[i] && vpss_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
 				memset(c, 0, sizeof(c));
 				_pix_fmt_to_string(vpss_ctx[i]->chn_cfgs[j].chn_attr.pixel_format, c, sizeof(c));
 
-				seq_printf(m, "%8s%2d%8s%2d%10s%10d%10d%20s%10s%10d%10d\n",
+				seq_printf(m, "%8s%2d%8s%2d%10s%10d%10d%20s%10s%9d%1s%10d%10d\n",
 					"#",
 					i,
 					"#",
@@ -362,6 +362,8 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 					c,
 					(vpss_ctx[i]->chn_cfgs[j].chn_attr.video_format
 						== VIDEO_FORMAT_LINEAR) ? "LINEAR" : "UNKNOWN",
+					vpss_ctx[i]->chn_cfgs[j].chn_work_status.pool_id,
+					(vpss_ctx[i]->chn_cfgs[j].vb_pool == VB_INVALID_POOLID) ? " ": "*",
 					vpss_ctx[i]->chn_cfgs[j].chn_work_status.send_ok,
 					vpss_ctx[i]->chn_cfgs[j].chn_work_status.real_frame_rate);
 			}

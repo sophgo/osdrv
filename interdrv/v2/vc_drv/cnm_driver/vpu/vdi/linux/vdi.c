@@ -28,10 +28,6 @@
 #include "main_helper.h"
 #include "misc/debug.h"
 
-#ifdef SUPPORT_SW_UART_ON_NONOS
-extern void SwUartHandler(void *context);
-#endif
-
 #define VPU_BIT_REG_SIZE                    (0x4000*MAX_NUM_VPU_CORE)
 
 #if 0//def SUPPORT_MULTI_CORE_IN_ONE_DRIVER
@@ -186,9 +182,8 @@ int vdi_init(unsigned long core_idx)
     vdi->core_idx = core_idx;
     vdi->task_num++;
     vdi_set_clock_gate(core_idx, 0);
-    atomic_set(&vdi->instance_count, 0);
+    atomic_set(&vdi->instance_count, 1);
     vdi_unlock(core_idx);
-
     VLOG(INFO, "[VDI] success to init driver \n");
     return 0;
 
@@ -1431,9 +1426,6 @@ int vdi_wait_bus_busy(unsigned long core_idx, int timeout, unsigned int gdi_busy
     }
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (PRODUCT_CODE_W_SERIES(vdi->product_code)) {
             if (vdi_fio_read_register(core_idx, gdi_busy_flag) == gdi_status_check_value) break;
         }
@@ -1474,9 +1466,6 @@ int vdi_wait_vpu_busy(unsigned long core_idx, int timeout, unsigned int addr_bit
         return -1;
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (vdi_read_register(core_idx, addr_bit_busy_flag) == 0)
             break;
 
@@ -1509,9 +1498,6 @@ int vdi_wait_vcpu_bus_busy(unsigned long core_idx, int timeout, unsigned int gdi
         return -1;
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (vdi_fio_read_register(core_idx, gdi_busy_flag) == 0x00)
             break;
         if (timeout > 0) {
@@ -1618,9 +1604,6 @@ int vdi_wait_interrupt(unsigned long core_idx, unsigned int instIdx, int timeout
         if (vpu_irq_handler((void *)irqPollContext, vdi->support_cq) < 0){
         }
     }
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    SwUartHandler(NULL);
-#endif
 
     ptr_intr_reason = (unsigned int *)Queue_Dequeue(irqPollContext->intrQ[instIdx]);
     if (ptr_intr_reason) {

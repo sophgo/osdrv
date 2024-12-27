@@ -44,6 +44,7 @@ static struct sclr_fbd_cfg g_fbd_cfg[SCL_MAX_INST];
 static uintptr_t reg_base_vi, reg_base_vd0, reg_base_vd1, reg_base_vo;
 static uintptr_t top_rst_reg_base, vi_sys_reg_base, vo_sys_reg_base;
 static u32 reset_mask[SCL_MAX_INST] = {BIT(16), BIT(17), BIT(18), BIT(19), BIT(10), BIT(11), BIT(14), BIT(15), BIT(4), BIT(5)};
+static u32 reset_apb_mask[4] = {BIT(11), BIT(12), BIT(13), BIT(14)}; //only vi apb reset bit pos differ in sw reset
 static uintptr_t reg_base = 0;
 /****************************************************************************
  * Initial info
@@ -438,8 +439,8 @@ void sclr_set_base_addr(void *vi_base, void *vd0_base, void *vd1_base, void *vo_
 void sclr_init_sys_top_addr(void)
 {
 	top_rst_reg_base = (uintptr_t)ioremap(REG_TOP_RESET_BASE, 0x4);
-	vi_sys_reg_base = (uintptr_t)ioremap(REG_VI_STS_BASE, 0x4);
-	vo_sys_reg_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x4);
+	vi_sys_reg_base = (uintptr_t)ioremap(REG_VI_STS_BASE, 0x8);
+	vo_sys_reg_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x8);
 }
 
 void sclr_deinit_sys_top_addr(void)
@@ -1021,26 +1022,27 @@ bool sclr_img_reg_shadow_mask(u8 inst, bool mask)
 
 void vpss_v_sw_top_reset(u8 inst)
 {
-	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], reset_mask[inst]);
-	udelay(20);
+	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
+	_reg_write_mask(vi_sys_reg_base + 0x4, reset_apb_mask[inst], reset_apb_mask[inst]);// apb reset
 	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], 0);
+	_reg_write_mask(vi_sys_reg_base + 0x4, reset_apb_mask[inst], 0);
 
 	return;
 }
 
 void vpss_d_sw_top_reset(u8 inst)
 {
-	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], reset_mask[inst]);
-	udelay(20);
+	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
+	_reg_write_mask(vo_sys_reg_base + 0x4, reset_mask[inst], reset_mask[inst]);// apb reset
 	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], 0);
+	_reg_write_mask(vo_sys_reg_base + 0x4, reset_mask[inst], 0);
 
 	return;
 }
 
 void vpss_t_sw_top_reset(u8 inst)
 {
-	_reg_write_mask(top_rst_reg_base, reset_mask[inst], 0);
-	udelay(20);
+	_reg_write_mask(top_rst_reg_base, reset_mask[inst], 0);// sw + apb reset
 	_reg_write_mask(top_rst_reg_base, reset_mask[inst], reset_mask[inst]);
 
 	return;
@@ -1056,6 +1058,8 @@ void sclr_vpss_sw_top_reset(u8 inst)
 		vpss_d_sw_top_reset(inst);
 
 	sclr_ctrl_init(inst, false);
+
+	TRACE_VPSS(DBG_DEBUG, "reset(%d)\n", inst);
 }
 
 void sclr_img_reset(u8 inst)
@@ -2808,8 +2812,8 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		v_pos = 1 << 22;
 	TRACE_VPSS(DBG_DEBUG, "%s: on sc(%d)\n", __func__, inst);
-	TRACE_VPSS(DBG_DEBUG, "width: src(%d), crop(%d), dst(%d)\n",
-		g_sc_cfg[inst].sc.src.w, crop_size.w, out_size.w);
+	TRACE_VPSS(DBG_DEBUG, "height: src(%d), crop(%d), dst(%d)\n",
+		g_sc_cfg[inst].sc.src.h, crop_size.h, out_size.h);
 
 	if (cfg->crop.y >= src_l_last_pixel_max) {
 		// do nothing on left tile if crop out-of-range.
@@ -2861,12 +2865,12 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 	cfg->v_tile.out = out_size;
 	cfg->v_tile.border_enable = g_bd_cfg[inst].cfg.b.enable;
 	if (g_bd_cfg[inst].cfg.b.enable) {
-		// if border, then only on left tile enabled to fill bgcolor.
+		// if border, then only on top tile enabled to fill bgcolor.
 		cfg->v_tile.dma_l_x = g_bd_cfg[inst].start.x;
 		cfg->v_tile.dma_l_y = g_bd_cfg[inst].start.y & ~0x01;
 		cfg->v_tile.dma_r_x = g_bd_cfg[inst].start.x;
 		cfg->v_tile.dma_r_y = cfg->v_tile.dma_l_y + out_l_width;
-		cfg->v_tile.dma_l_width = g_odma_cfg[inst].mem.width;
+		cfg->v_tile.dma_l_width = g_odma_cfg[inst].mem.height;
 		if ((g_odma_cfg[inst].flip == SCL_FLIP_HFLIP) || (g_odma_cfg[inst].flip == SCL_FLIP_HVFLIP))
 			cfg->v_tile.dma_r_x = g_odma_cfg[inst].frame_size.w - out_size.w - (g_bd_cfg[inst].start.x);
 		if ((g_odma_cfg[inst].flip == SCL_FLIP_VFLIP) || (g_odma_cfg[inst].flip == SCL_FLIP_HVFLIP))
@@ -3033,6 +3037,8 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 		g_bd_cfg[inst].start.x = sc->tile.dma_l_x;
 		g_bd_cfg[inst].start.y = sc->tile.dma_l_y;
 		sclr_border_set_cfg(inst, &g_bd_cfg[inst]);
+		TRACE_VPSS(DBG_DEBUG, "sc%d border start: x=%d y=%d\n", inst, g_bd_cfg[inst].start.x,
+			g_bd_cfg[inst].start.y);
 	} else {
 		odma_cfg->mem.start_x = sc->tile.dma_l_x;
 		odma_cfg->mem.start_y = sc->tile.dma_l_y;
@@ -3078,7 +3084,7 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 	return true;
 }
 
-bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
+bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_right)
 {
 	struct sclr_scale_cfg *sc;
 	struct sclr_odma_cfg *odma_cfg;
@@ -3119,7 +3125,7 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 	sclr_set_crop(inst, crop, false);
 	sclr_set_output_size(inst, dst);
 
-	if (sc->v_tile.border_enable && (!is_left)) {
+	if (sc->v_tile.border_enable && (!is_right)) {
 		odma_cfg->mem.start_y = 0;
 		odma_cfg->mem.height = sc->v_tile.dma_l_width;
 		sclr_odma_set_mem(inst, &odma_cfg->mem);
@@ -3127,9 +3133,11 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left)
 		g_bd_cfg[inst].cfg.b.enable = true;
 		g_bd_cfg[inst].start.y = sc->v_tile.dma_l_y;
 		sclr_border_set_cfg(inst, &g_bd_cfg[inst]);
+		TRACE_VPSS(DBG_DEBUG, "sc%d border start: x=%d y=%d\n", inst, g_bd_cfg[inst].start.x,
+			g_bd_cfg[inst].start.y);
 	} else {
 		odma_cfg->mem.start_y = sc->v_tile.dma_l_y;
-		odma_cfg->mem.height = sc->v_tile.dma_l_width;
+		odma_cfg->mem.height = dst.h;
 		sclr_odma_set_mem(inst, &odma_cfg->mem);
 	}
 	TRACE_VPSS(DBG_DEBUG, "sc%d input size: w=%d h=%d\n", inst, src.w, src.h);
@@ -3372,11 +3380,12 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 	else
 		sclr_set_scale_phase(inst, sc->fac.h_pos, sc->v_tile.r_ini_phase);
 
-	odma_cfg->mem.start_y = sc->v_tile.out_l_width;
+	odma_cfg->mem.start_y = sc->v_tile.dma_r_y;
+	odma_cfg->mem.width = dst.w;
 	odma_cfg->mem.height = dst.h;
 	sclr_odma_set_mem(inst, &odma_cfg->mem);
 
-	// right tile don't do border.
+	// down tile don't do border.
 	g_bd_cfg[inst].cfg.b.enable = false;
 	sclr_border_set_cfg(inst, &g_bd_cfg[inst]);
 

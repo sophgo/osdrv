@@ -507,7 +507,7 @@ int vi_enable_dev(int vi_dev)
 		ctx->isp_pipe_cfg[raw_num].inf_mode		= g_vi_ctx->dev_attr[vi_dev].intf_mode;
 		ctx->isp_pipe_cfg[raw_num].mux_mode		= g_vi_ctx->dev_attr[vi_dev].work_mode;
 		ctx->isp_pipe_cfg[raw_num].data_seq		= g_vi_ctx->dev_attr[vi_dev].data_seq;
-		ctx->isp_pipe_cfg[raw_num].yuv_scene_mode	= g_vi_ctx->dev_attr[vi_dev].yuv_scene_mode;
+		ctx->isp_pipe_cfg[raw_num].yuv_scene_mode	= (enum isp_yuv_scene_e)g_vi_ctx->dev_attr[vi_dev].yuv_scene_mode;
 	}
 
 	if (g_vi_ctx->dev_attr[vi_dev].intf_mode == VI_MODE_LVDS) {

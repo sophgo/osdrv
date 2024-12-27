@@ -339,10 +339,7 @@ static int jpege_enc_one_pic(void *ctx,
     if (status == ENC_TIMEOUT) {
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
-        //retry, workaround for https://jira.sophgo.com/browse/SE9SW-1454
-        status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-        if (status == ENC_TIMEOUT)
-            return DRV_ERR_VENC_BUSY;
+        return DRV_ERR_VENC_BUSY;
     }
 
     if (status != 0) {

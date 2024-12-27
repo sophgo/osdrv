@@ -469,7 +469,7 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------DPU GRP WORK STATUS-----------------------\n");
 	seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s\n",
 						"grp_id", "FrameNumPerSec", "start_cnt", "FailCnt", "DoneCnt",
-						"cur_task_cost_tm(us)","max_task_cost_tm(us)");
+						"cur_task_cost_tm(us)","max_task_cost_tm(us),d");
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
 		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
 			// seq_printf(m, "%20s%20s%20s%20s%20s%20s%20s\n",

@@ -7,6 +7,7 @@
 
 #include "ldc_proc.h"
 #include "ldc_debug.h"
+#include "base_common.h"
 
 #define GENERATE_STRING(STRING)	(#STRING),
 #define LDC_PROC_NAME "soph/ldc"
@@ -14,9 +15,43 @@
 static struct ldc_proc_ctx *g_proc_ctx_ldc = NULL;
 static const char *const MOD_STRING[] = FOREACH_MOD(GENERATE_STRING);
 
+//update dutyratio
+static void _update_ldc_dutyratio(struct timer_list *timer);
+DEFINE_TIMER(timer_proc, _update_ldc_dutyratio);
+static atomic_t g_timer_added = ATOMIC_INIT(0);
+
 static struct ldc_proc_ctx * ldc_get_proc_ctx(void)
 {
 	return g_proc_ctx_ldc;
+}
+
+static void _update_ldc_dutyratio(struct timer_list *timer)
+{
+	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
+
+	u8 i;
+	u32 duration;
+	static u32 duration_long = 0;
+	struct timespec64 cur_time;
+	static struct timespec64 pre_time = {0};
+
+	(void)(timer);
+
+	ktime_get_ts64(&cur_time);
+	duration = get_diff_in_us(pre_time, cur_time);
+	duration_long += duration;
+	pre_time = cur_time;
+
+	if (duration > 2000000)
+		goto FIRSTTIME;
+
+	for (i = DEV_LDC_0; i < DEV_LDC_MAX; ++i) {
+		proc_ctx->gdc_core_status[i].duty_ratio = (proc_ctx->gdc_core_status[i].core_all_hw_time * 100) / duration;
+		proc_ctx->gdc_core_status[i].core_all_hw_time = 0;
+	}
+
+FIRSTTIME:
+	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 }
 
 static int ldc_proc_show_tsk(struct seq_file *m, struct ldc_proc_ctx *pldcCtx, int idx)
@@ -78,6 +113,7 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 	int i, j, idx, total_handletime, total_hwTime, total_busyTime;
 	char c[32];
 	int idxs[LDC_PROC_JOB_INFO_NUM] = {0};
+	char * dev_name[] = {"ldc0", "ldc1", "dwa0", "dwa1"};
 
 	if (unlikely(!pldcCtx)) {
 		seq_puts(m, "ldc proc ctx is NULL\n");
@@ -234,6 +270,19 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 				pldcCtx->fisheye_status.end_job_fail,
 				pldcCtx->fisheye_status.cb_cnt);
 
+
+	// LDC core duty_ratio status
+	seq_puts(m, "\n-------------------------------LDC HW DUTY RATIO STATUS-----------------\n");
+	seq_printf(m, "%15s%15s%15s\n", "ID", "DEV", "DutyRatio");
+
+	for (i = DEV_LDC_0; i < DEV_LDC_MAX; ++i) {
+		seq_printf(m, "%14s%d%15s%15d\n",
+			"#",
+			i,
+			dev_name[i],
+			pldcCtx->gdc_core_status[i].duty_ratio);
+	}
+
 	return 0;
 }
 
@@ -279,6 +328,7 @@ static int ldc_handle_to_procIdx(struct ldc_job *job)
 int ldc_proc_init(void *shm)
 {
 	int rc = 0, idx;
+	unsigned long flags;
 
 	if (proc_create_data(LDC_PROC_NAME, 0644, NULL, &ldc_proc_fops, NULL) == NULL) {
 		pr_err("ldc proc creation failed\n");
@@ -288,6 +338,13 @@ int ldc_proc_init(void *shm)
 	g_proc_ctx_ldc = (struct ldc_proc_ctx *)shm;
 	spin_lock_init(&g_proc_ctx_ldc->lock);
 
+	spin_lock_irqsave(&g_proc_ctx_ldc->lock, flags);
+	if (atomic_cmpxchg(&g_timer_added, 0, 1) == 0)
+		add_timer(&timer_proc);
+
+	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
+	spin_unlock_irqrestore(&g_proc_ctx_ldc->lock, flags);
+
 	for (idx = 0; idx < LDC_PROC_JOB_INFO_NUM; ++idx)
 		g_proc_ctx_ldc->job_info[idx].handle = 0;
 
@@ -296,6 +353,14 @@ int ldc_proc_init(void *shm)
 
 int ldc_proc_remove(void)
 {
+	unsigned long flags;
+
+	spin_lock_irqsave(&g_proc_ctx_ldc->lock, flags);
+	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
+		del_timer_sync(&timer_proc);
+
+	spin_unlock_irqrestore(&g_proc_ctx_ldc->lock, flags);
+
 	remove_proc_entry(LDC_PROC_NAME, NULL);
 	g_proc_ctx_ldc = NULL;
 
@@ -309,6 +374,7 @@ void ldc_proc_record_hw_tsk_start(struct ldc_job *job, struct ldc_task *tsk, uns
 	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
 
 	idx = ldc_handle_to_procIdx(job);
+
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < LDC_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
@@ -317,7 +383,6 @@ void ldc_proc_record_hw_tsk_start(struct ldc_job *job, struct ldc_task *tsk, uns
 			(u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = LDC_TASK_STATE_RUNNING;
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].top_id = top_id;
-
 		proc_ctx->tsk_status.procing_num++;
 		proc_ctx->tsk_status.wait_num =
 			proc_ctx->tsk_status.begin_num - proc_ctx->tsk_status.procing_num;
@@ -335,10 +400,12 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 	enum ldc_task_state state;
 
 	idx = ldc_handle_to_procIdx(job);
+
 	if (job && tsk && proc_ctx && idx >= 0
 		&& (tsk->tsk_id >= 0 && tsk->tsk_id < LDC_JOB_MAX_TSK_NUM)) {
 		ktime_get_ts64(&curTime);
 		end_time = (u64)(curTime.tv_sec * USEC_PER_SEC + curTime.tv_nsec / NSEC_PER_USEC);
+
 		state = atomic_read(&tsk->state);
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time =
@@ -352,9 +419,11 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 			proc_ctx->tsk_status.fail++;
 		else
 			TRACE_LDC(DBG_ERR, "invalid tsk id(%d) state (%d).\n", tsk->tsk_id, state);
+
 	} else {
 		TRACE_LDC(DBG_NOTICE, "job or tsk or proc_ctx or job_idx(%d) invalid.\n", idx);
 	}
+
 }
 
 void ldc_proc_record_job_start(struct ldc_job *job)
@@ -474,3 +543,19 @@ void ldc_proc_commit_job(struct ldc_job *job)
 	}
 }
 
+void ldc_proc_update_timer_proc(bool suspend)
+{
+	struct ldc_proc_ctx *proc_ctx = ldc_get_proc_ctx();
+	unsigned long flags;
+
+	spin_lock_irqsave(&proc_ctx->lock, flags);
+	if (suspend) {
+		if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
+			del_timer(&timer_proc);
+	} else {
+		if (atomic_cmpxchg(&g_timer_added, 0, 1) == 0)
+			add_timer(&timer_proc);
+		mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
+	}
+	spin_unlock_irqrestore(&g_proc_ctx_ldc->lock, flags);
+}

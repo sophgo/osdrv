@@ -128,8 +128,8 @@ int sink_capability(hdmi_sink_capability* hdmi_sink_cap)
 	hdmi_sink_cap->support_ycbcr = (sink_cap->edid_mycc444_support || sink_cap->edid_mycc422_support
 								  || sink_cap->edid_mycc420_support);
 	hdmi_sink_cap->hdcp14_en = ctx->hdmi_tx.snps_hdmi_ctrl.hdcp_on;
-	hdmi_sink_cap->hdmi_video_input = ctx->mode.pvideo.mencodingin;
-	hdmi_sink_cap->hdmi_video_output = ctx->mode.pvideo.mencodingout;
+	hdmi_sink_cap->hdmi_video_input = (hdmi_video_mode)ctx->mode.pvideo.mencodingin;
+	hdmi_sink_cap->hdmi_video_output = (hdmi_video_mode)ctx->mode.pvideo.mencodingout;
 	hdmi_sink_cap->version = ctx->mode.edid.version;
 	hdmi_sink_cap->revision = ctx->mode.edid.revision;
 	hdmi_sink_cap->support_dvi_dual = sink_cap->edid_mhdmivsdb.m_dvi_dual;
@@ -790,8 +790,8 @@ int hdmitx_set_attr(hdmi_attr* attr)
 	ctx->mode.pvideo.mdtd.m_code = attr->video_format;
 	ctx->mode.pvideo.mcolor_resolution = attr->deep_color_mode;
 	ctx->hdmi_tx.snps_hdmi_ctrl.pixel_clock = attr->pix_clk;
-	ctx->mode.pvideo.mencodingin = attr->hdmi_video_input;
-	ctx->mode.pvideo.mencodingout = attr->hdmi_video_output;
+	ctx->mode.pvideo.mencodingin = (encoding_t)attr->hdmi_video_input;
+	ctx->mode.pvideo.mencodingout = (encoding_t)attr->hdmi_video_output;
 	ctx->hdmi_tx.snps_hdmi_ctrl.csc_on =
 				(ctx->mode.pvideo.mencodingin == ctx->mode.pvideo.mencodingout) ? 0: 1;
 	ctx->hdmi_tx.snps_hdmi_ctrl.hdcp_on = attr->hdcp14_en;
@@ -819,8 +819,8 @@ int hdmitx_get_attr(hdmi_attr* attr)
 	attr->video_format = ctx->mode.pvideo.mdtd.m_code;
 	attr->deep_color_mode = HDMI_DEEP_COLOR_24BIT;
 	attr->pix_clk = ctx->hdmi_tx.snps_hdmi_ctrl.pixel_clock;
-	attr->hdmi_video_input = ctx->mode.pvideo.mencodingin;
-	attr->hdmi_video_output = ctx->mode.pvideo.mencodingout;
+	attr->hdmi_video_input = (hdmi_video_mode)ctx->mode.pvideo.mencodingin;
+	attr->hdmi_video_output = (hdmi_video_mode)ctx->mode.pvideo.mencodingout;
 	attr->hdmi_force_output = ctx->hdmi_tx.snps_hdmi_ctrl.hdmi_force_output;
 	/*audio*/
 	attr->audio_en = dev_read_mask(AHB_DMA_START, 0x1);
@@ -1363,13 +1363,13 @@ int hdmitx_set_infoframe(hdmi_infoframe* info_frame)
 	/*video*/
 	ctx->hdmi_tx.snps_hdmi_ctrl.pixel_repetition = ctx->mode.pvideo.mpixel_repetition_factor
 												 = info_frame->infoframe_unit.avi_infoframe.pixel_repetition;
-	ctx->mode.pvideo.mencodingout =  info_frame->infoframe_unit.avi_infoframe.color_space;
+	ctx->mode.pvideo.mencodingout =  (encoding_t)info_frame->infoframe_unit.avi_infoframe.color_space;
 	ctx->mode.pvideo.mdtd.m_code = info_frame->infoframe_unit.avi_infoframe.timing_mode;
 	ctx->mode.pvideo.mcolorimetry = info_frame->infoframe_unit.avi_infoframe.colorimetry;
 	ctx->mode.pvideo.mrgb_quantization_range = info_frame->infoframe_unit.avi_infoframe.rgb_quant;
 	/*audio*/
 	ctx->mode.paudio.mchannel_allocation =  info_frame->infoframe_unit.audio_infoframe.chn_alloc;
-	ctx->mode.paudio.mcoding_type = info_frame->infoframe_unit.audio_infoframe.coding_type;
+	ctx->mode.paudio.mcoding_type = (coding_type_t)info_frame->infoframe_unit.audio_infoframe.coding_type;
 	ctx->mode.paudio.msample_size = info_frame->infoframe_unit.audio_infoframe.sample_size;
 	ctx->mode.paudio.msampling_frequency = info_frame->infoframe_unit.audio_infoframe.sampling_freq;
 	return 0;
@@ -1384,13 +1384,13 @@ int hdmitx_get_infoframe(hdmi_infoframe* info_frame)
 
 	/*video*/
 	info_frame->infoframe_unit.avi_infoframe.pixel_repetition = ctx->hdmi_tx.snps_hdmi_ctrl.pixel_repetition;
-	info_frame->infoframe_unit.avi_infoframe.color_space = ctx->mode.pvideo.mencodingout;
+	info_frame->infoframe_unit.avi_infoframe.color_space = (hdmi_color_space)ctx->mode.pvideo.mencodingout;
 	info_frame->infoframe_unit.avi_infoframe.timing_mode = ctx->mode.pvideo.mdtd.m_code;
 	info_frame->infoframe_unit.avi_infoframe.colorimetry = ctx->mode.pvideo.mcolorimetry;
 	info_frame->infoframe_unit.avi_infoframe.rgb_quant = ctx->mode.pvideo.mrgb_quantization_range;
 	/*audio*/
 	info_frame->infoframe_unit.audio_infoframe.chn_alloc = ctx->mode.paudio.mchannel_allocation;
-	info_frame->infoframe_unit.audio_infoframe.coding_type = ctx->mode.paudio.mcoding_type;
+	info_frame->infoframe_unit.audio_infoframe.coding_type = (hdmi_coding_type)ctx->mode.paudio.mcoding_type;
 	info_frame->infoframe_unit.audio_infoframe.sample_size = ctx->mode.paudio.msample_size;
 	info_frame->infoframe_unit.audio_infoframe.sampling_freq = ctx->mode.paudio.msampling_frequency;
 	return 0;
@@ -1464,11 +1464,11 @@ int hdmi_proc_outclrspace_parse(u8 outclrspace)
 	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
 
 	if(outclrspace == 0){
-		ctx->mode.pvideo.mencodingout = HDMI_VIDEO_MODE_RGB888;
+		ctx->mode.pvideo.mencodingout = (encoding_t)HDMI_VIDEO_MODE_RGB888;
 	} else if (outclrspace == 1){
-		ctx->mode.pvideo.mencodingout = HDMI_VIDEO_MODE_YCBCR444;
+		ctx->mode.pvideo.mencodingout = (encoding_t)HDMI_VIDEO_MODE_YCBCR444;
 	} else if (outclrspace == 2){
-		ctx->mode.pvideo.mencodingout = HDMI_VIDEO_MODE_YCBCR422;
+		ctx->mode.pvideo.mencodingout = (encoding_t)HDMI_VIDEO_MODE_YCBCR422;
 	} else {
 		pr_err("%s: Invalid Param outclrspace(%d) \n", __func__, outclrspace);
 		return -1;

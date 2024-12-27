@@ -1880,7 +1880,7 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 
 		writel(ive_top_c->reg_1.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_1));
 		ive_dump_reg_state(false);
-		start_vld_time(optype);
+		start_vld_time(optype, &ndev->core[dev_id]);
 		if (instant) {
 			TRACE_IVE(IVE_DBG_INFO, "instant is true\n");
 			while (((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90) &
@@ -1888,10 +1888,10 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 				usleep_range(10, 20);
 				cnt++;
 			}
-			stop_vld_time(optype, ndev->core[dev_id].tile_num);
+			stop_vld_time(optype, ndev->core[dev_id].tile_num, &ndev->core[dev_id]);
 			complete(&ndev->core[dev_id].frame_done);
 			if (cnt >= 10000) {
-				TRACE_IVE(IVE_DBG_ERR, "frame done timeout!\n");
+				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile = %d\n", ndev->core[dev_id].tile_num);
 				ret = FAILURE;
 			}
 		} else {
@@ -1901,7 +1901,7 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 
 			reinit_completion(&ndev->core[dev_id].frame_done);
 			if (leavetime <= 0) {
-				TRACE_IVE(IVE_DBG_ERR, "frame done timeout!\n");
+				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile = %d\n", ndev->core[dev_id].tile_num);
 				ret = FAILURE;
 			}
 		}
@@ -2023,22 +2023,34 @@ s32 emit_bgm_tile(
 				if (remain_width > 480) {
 					tileLen[n] = 480;
 					remain_width -= 480;
+					TRACE_IVE(IVE_DBG_INFO, "\ttileLen[%d]=0x%04x -> %d\n", n, tileLen[n], tileLen[n]);
 				} else {
 					//in case last tile too short
 					if (remain_width < 64) {
-						tileLen[n] = 128;
-						tileLen[0] -= (128 - remain_width);
+						tileLen[n] = remain_width + 64;
+						tileLen[0] -= 64;
 					} else {
 						tileLen[n] = remain_width;
 					}
+					TRACE_IVE(IVE_DBG_INFO, "\ttileLen[%d]=0x%04x -> %d\n", n,
+							 tileLen[n], tileLen[n]);
 					remain_width = 0;
 				}
+			}
+
+			//Inference other array based on tileLen
+			for (n = 0; n < tileNum; n++) {
 				cropstart[n] = 0;
 				cropend[n] = tileLen[n] - 1;
 				segLen[n] = tileLen[n];
 				outOffset[n] = (n == 0) ? 0 : segLen[n - 1];
 				inOffset[n] = outOffset[n];
+				TRACE_IVE(IVE_DBG_INFO, "\ttileLen[%d]=0x%04x -> %d\n", n, tileLen[n], tileLen[n]);
+				TRACE_IVE(IVE_DBG_INFO, "cropstart[%d]=%d;\ncropend[%d]=%d;\nsegLen[%d]=%d;\noutOffset[%d]=%d;\ninOffset[%d]=%d;\n",
+								n,cropstart[n],n,cropend[n],n,segLen[n],n,outOffset[n],n,inOffset[n]);
+
 			}
+
 
 			bgmodel_0_rdma_ctl_c->sys_control.reg_stride_sel = 1;
 			bgmodel_0_rdma_ctl_c->dma_stride.reg_stride = 16 * width_align(width, 16);
@@ -2386,12 +2398,14 @@ s32 emit_bgm_tile(
 							inOffset[round] * 2;
 						gmm_factor_rdma_ctl_c->sys_control
 							.reg_stride_sel = 1;
-						//gmm_factor_rdma_ctl_c->dma_stride.reg_stride =
-						//	width * 2;
+						//
+						// gmm_factor_rdma_ctl_c->dma_stride.reg_stride =
+						// 	width * 2;
 						gmm_match_wdma_ctl_c->base_addr.reg_basel +=
 							outOffset[round];
-						//gmm_match_wdma_ctl_c->dma_stride.reg_stride =
-						//	width;
+						//
+						// gmm_match_wdma_ctl_c->dma_stride.reg_stride =
+						// 	width;
 						gmm_match_wdma_ctl_c->sys_control
 							.reg_stride_sel = 1;
 						writel(gmm_factor_rdma_ctl_c->base_addr.val,
@@ -2657,11 +2671,14 @@ s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 				s32 nFirst_tile = (n == 0) ? 0 : 1;
 				s32 nLast_tile = (n == tileNum - 1) ? 0 : 1;
 
+				TRACE_IVE(IVE_DBG_INFO, "\ttileLen[%d]=0x%04x -> %d\n", n, tileLen[n], tileLen[n]);
 				cropstart[n] = 16 * nFirst_tile;
 				cropend[n] = tileLen[n] - 16 * nLast_tile - 1;
 				segLen[n] = tileLen[n] - 16 * nFirst_tile - 16 * nLast_tile;
 				outOffset[n] = (n == 0) ? 0 : segLen[n - 1];
 				inOffset[n] = (n == 1) ? outOffset[n] - 16 : outOffset[n];
+				TRACE_IVE(IVE_DBG_INFO, "cropstart[%d]=%d;\ncropend[%d]=%d;\nsegLen[%d]=%d;\noutOffset[%d]=%d;\ninOffset[%d]=%d;\n",
+								n,cropstart[n],n,cropend[n],n,segLen[n],n,outOffset[n],n,inOffset[n]);
 			}
 
 			if (optype == MOD_STBOX) {
@@ -9925,6 +9942,6 @@ irqreturn_t platform_ive_irq(struct ive_device *ndev, int dev_id)
 {
 	//pr_err("[IVE] got %s callback\n", __func__);
 	complete(&ndev->core[dev_id].frame_done);
-	stop_vld_time(ndev->cur_optype, ndev->core[dev_id].tile_num);
+	stop_vld_time(ndev->cur_optype, ndev->core[dev_id].tile_num, &ndev->core[dev_id]);
 	return IRQ_HANDLED;
 }

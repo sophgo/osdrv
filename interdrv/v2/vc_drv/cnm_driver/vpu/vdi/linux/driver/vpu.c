@@ -411,6 +411,57 @@ int vpu_hw_reset(int core_idx)
     return 0;
 }
 
+static int vpu_check_usage_info(vpu_statistic_info_t *vpu_usage_info)
+{
+    int ret = 0, i;
+
+    // mutex_lock(&s_vpu_proc_lock);
+    /* update usage */
+    for (i = 0; i <  get_vpu_core_num(chip_id, video_cap); i++){
+        int vpu_woking_time_ms = 0;
+        int vpu_instant_usage = 0;
+        int j;
+
+        if (vpu_usage_info->vpu_stat_enable[i] == 0) {
+            continue;
+        }
+
+        vpu_woking_time_ms = (uint64_t)vpu_usage_info->vpu_stat_cycles[i]*1000/VPU_STAT_CYCLES;
+        vpu_woking_time_ms = (vpu_woking_time_ms > VPU_INFO_STAT_INTERVAL) ? VPU_INFO_STAT_INTERVAL: vpu_woking_time_ms;
+        vpu_usage_info->vpu_stat_cycles[i] = 0;
+
+        vpu_usage_info->vpu_working_time_in_ms[i] += vpu_woking_time_ms;
+        vpu_usage_info->vpu_total_time_in_ms[i] += VPU_INFO_STAT_INTERVAL;
+
+        vpu_usage_info->vpu_working_array[i][vpu_usage_info->vpu_status_index[i]] = vpu_woking_time_ms;
+        vpu_usage_info->vpu_status_index[i]++;
+        vpu_usage_info->vpu_status_index[i] %= MAX_VPU_STAT_WIN_SIZE;
+
+        for (j = 0; j < MAX_VPU_STAT_WIN_SIZE; j++)
+            vpu_instant_usage += vpu_usage_info->vpu_working_array[i][j];
+
+        vpu_usage_info->vpu_instant_usage[i] = (vpu_instant_usage)/MAX_VPU_STAT_WIN_SIZE;
+        vpu_usage_info->vpu_instant_usage[i] = (vpu_usage_info->vpu_instant_usage[i] > 100) ? 100 : vpu_usage_info->vpu_instant_usage[i];
+    }
+    // mutex_unlock(&s_vpu_proc_lock);
+
+    return ret;
+}
+
+int vpu_monitor_thread(void *data)
+{
+    int ret = 0;
+    vpu_statistic_info_t *vpu_usage_info = (vpu_statistic_info_t *)data;
+
+    set_current_state(TASK_INTERRUPTIBLE);
+    while (!kthread_should_stop()) {
+        vpu_check_usage_info(vpu_usage_info);
+        msleep(VPU_INFO_STAT_INTERVAL);
+    }
+
+    return ret;
+}
+
 static vpudrv_instance_pool_t *get_instance_pool_handle(u32 core)
 {
     int instance_pool_size_per_core;
@@ -951,6 +1002,15 @@ long vpu_open_instance(vpudrv_inst_info_t *inst_info)
     s_interrupt_flag[inst_info->core_idx] = 0;
 #endif
     s_vpu_usage_info.vpu_stat_enable[vil->core_idx] = 1;
+
+    /* launch vpu monitor thread */
+    if (s_vpu_monitor_task == NULL){
+        s_vpu_monitor_task = kthread_run(vpu_monitor_thread, &s_vpu_usage_info, "soph_vpu_monitor");
+        if (s_vpu_monitor_task == NULL){
+            pr_err("create vpu monitor thread failed\n");
+        } else
+            pr_info("create vpu monitor thread done\n");
+    }
     mutex_unlock(&s_vpu_lock);
 
     DPRINTK("[VPUDRV] VDI_IOCTL_OPEN_INSTANCE core_idx=%d, inst_idx=%d, vpu_open_ref_count=%d, inst_open_count=%d\n", \
@@ -1071,6 +1131,7 @@ long vpu_free_physical_memory(vpudrv_buffer_t *vdb)
     vpudrv_buffer_pool_t *vbp, *n;
     DPRINTK("[VPUDRV][+]VDI_IOCTL_FREE_PHYSICALMEMORY\n");
 
+    mutex_lock(&s_vpu_lock);
     if (vdb->base) {
         if (vdb->offset > 0) {
             vdb->phys_addr -= vdb->offset;
@@ -1079,7 +1140,6 @@ long vpu_free_physical_memory(vpudrv_buffer_t *vdb)
         vpu_free_dma_buffer(vdb);
     }
 
-    mutex_lock(&s_vpu_lock);
     list_for_each_entry_safe(vbp, n, &s_vbp_head, list)
     {
         if (vbp->vb.base == vdb->base) {
@@ -1432,9 +1492,7 @@ int vpu_op_close(int core_idx)
         vpu_clk_disable(core_idx);
 #endif
     }
-    mutex_unlock(&s_vpu_lock);
 
-    mutex_lock(&s_vpu_lock);
     if(gfilp[core_idx]->private_data != NULL)
         vfree(gfilp[core_idx]->private_data);
 
@@ -1442,7 +1500,15 @@ int vpu_op_close(int core_idx)
         vfree(gfilp[core_idx]);
 
     gfilp[core_idx]= NULL;
-        DPRINTK("[VPUDRV] -%s\n", __FUNCTION__);
+    DPRINTK("[VPUDRV] -%s\n", __FUNCTION__);
+
+    // when all core idle, stop vpuinfo thread
+    if (!gfilp[0] && !gfilp[1] && !gfilp[2] && s_vpu_monitor_task) {
+        kthread_stop(s_vpu_monitor_task);
+        s_vpu_monitor_task = NULL;
+        pr_info("vpu monitor thread released\n");
+    }
+
     mutex_unlock(&s_vpu_lock);
 
     return 0;
@@ -1515,57 +1581,6 @@ int check_vpu_core_busy(vpu_statistic_info_t *vpu_usage_info, int coreIdx)
             else if (atomic_read(&vpu_usage_info->vpu_busy_status[coreIdx]) > 0)
                 ret = 1;
         }
-    }
-
-    return ret;
-}
-
-static int vpu_check_usage_info(vpu_statistic_info_t *vpu_usage_info)
-{
-    int ret = 0, i;
-
-    // mutex_lock(&s_vpu_proc_lock);
-    /* update usage */
-    for (i = 0; i <  get_vpu_core_num(chip_id, video_cap); i++){
-        int vpu_woking_time_ms = 0;
-        int vpu_instant_usage = 0;
-        int j;
-
-        if (vpu_usage_info->vpu_stat_enable[i] == 0) {
-            continue;
-        }
-
-        vpu_woking_time_ms = (uint64_t)vpu_usage_info->vpu_stat_cycles[i]*1000/VPU_STAT_CYCLES;
-        vpu_woking_time_ms = (vpu_woking_time_ms > VPU_INFO_STAT_INTERVAL) ? VPU_INFO_STAT_INTERVAL: vpu_woking_time_ms;
-        vpu_usage_info->vpu_stat_cycles[i] = 0;
-
-        vpu_usage_info->vpu_working_time_in_ms[i] += vpu_woking_time_ms;
-        vpu_usage_info->vpu_total_time_in_ms[i] += VPU_INFO_STAT_INTERVAL;
-
-        vpu_usage_info->vpu_working_array[i][vpu_usage_info->vpu_status_index[i]] = vpu_woking_time_ms;
-        vpu_usage_info->vpu_status_index[i]++;
-        vpu_usage_info->vpu_status_index[i] %= MAX_VPU_STAT_WIN_SIZE;
-
-        for (j = 0; j < MAX_VPU_STAT_WIN_SIZE; j++)
-            vpu_instant_usage += vpu_usage_info->vpu_working_array[i][j];
-
-        vpu_usage_info->vpu_instant_usage[i] = (vpu_instant_usage)/MAX_VPU_STAT_WIN_SIZE;
-        vpu_usage_info->vpu_instant_usage[i] = (vpu_usage_info->vpu_instant_usage[i] > 100) ? 100 : vpu_usage_info->vpu_instant_usage[i];
-    }
-    // mutex_unlock(&s_vpu_proc_lock);
-
-    return ret;
-}
-
-int vpu_monitor_thread(void *data)
-{
-    int ret = 0;
-    vpu_statistic_info_t *vpu_usage_info = (vpu_statistic_info_t *)data;
-
-    set_current_state(TASK_INTERRUPTIBLE);
-    while (!kthread_should_stop()) {
-        vpu_check_usage_info(vpu_usage_info);
-        msleep(VPU_INFO_STAT_INTERVAL);
     }
 
     return ret;
@@ -1869,16 +1884,6 @@ int vpu_drv_platform_init(struct platform_device *pdev)
     DPRINTK("[VPUDRV] success to probe vpu device with non reserved video memory\n");
 
     entry = proc_create("soph/vpuinfo", 0666, NULL, &proc_info_operations);
-
-    /* launch vpu monitor thread */
-    if (s_vpu_monitor_task == NULL){
-        s_vpu_monitor_task = kthread_run(vpu_monitor_thread, &s_vpu_usage_info, "soph_vpu_monitor");
-        if (s_vpu_monitor_task == NULL){
-            pr_info("create vpu monitor thread failed\n");
-            goto ERROR_PROVE_DEVICE;
-        } else
-            pr_info("create vpu monitor thread done\n");
-    }
 
     ret = vpu_register_clk(pdev);
     if (ret != 0) {

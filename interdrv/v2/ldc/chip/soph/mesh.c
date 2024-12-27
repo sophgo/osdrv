@@ -646,21 +646,21 @@ int mesh_gdc_do_op(struct ldc_vdev *wdev, enum gdc_usage usage
 	case GDC_USAGE_LDC:
 		ldc_attr = *(ldc_attr_s *)usage_param;
 		if (ldc_attr.grid_info_attr.enable)
-			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, usage, &ldc_attr.grid_info_attr
+			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, (enum ldc_usage)usage, &ldc_attr.grid_info_attr
 				, vb_in, pix_format, mesh_addr
 				, sync_io, cb_param, cb_param_size, mod_id);
 		else
-			ret = mesh_dwa_do_ldc_fisheye(wdev, usage, vb_in, pix_format, mesh_addr
+			ret = mesh_dwa_do_ldc_fisheye(wdev, (enum ldc_usage)usage, vb_in, pix_format, mesh_addr
 				, sync_io, cb_param, cb_param_size, mod_id, rotation);
 		break;
 	case GDC_USAGE_FISHEYE:
 		fisheye_attr = *(fisheye_attr_s *)usage_param;
 		if (fisheye_attr.grid_info_attr.enable)
-			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, usage, &fisheye_attr.grid_info_attr
+			ret = mesh_dwa_do_ldc_fisheye_gridinfo(wdev, (enum ldc_usage)usage, &fisheye_attr.grid_info_attr
 				, vb_in, pix_format, mesh_addr
 				, sync_io, cb_param, cb_param_size, mod_id);
 		else
-			ret = mesh_dwa_do_ldc_fisheye(wdev, usage, vb_in, pix_format, mesh_addr
+			ret = mesh_dwa_do_ldc_fisheye(wdev, (enum ldc_usage)usage, vb_in, pix_format, mesh_addr
 				, sync_io, cb_param, cb_param_size, mod_id, rotation);
 		break;
 	case GDC_USAGE_ROTATION:

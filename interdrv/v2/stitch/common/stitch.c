@@ -23,6 +23,7 @@
 #include "stitch_reg_cfg.h"
 #include "sys.h"
 #include "vb.h"
+#include "stitch_proc.h"
 
 #define STITCH_SIZE_ZERO 0
 #undef BIT
@@ -1204,7 +1205,6 @@ static int stitch_src_qbuf(mmf_chn_s chn, vb_blk blk)
 static void stitch_handle_frm_done(struct __stitch_ctx *p_stitch_ctx)
 {
 	mmf_chn_s chn = {.mod_id = ID_STITCH, .dev_id = p_stitch_ctx->grp_id};
-	struct timespec64 time;
 	vb_blk blk;
 	int i;
 	stitch_grp grp_id = p_stitch_ctx->grp_id;
@@ -1234,9 +1234,6 @@ static void stitch_handle_frm_done(struct __stitch_ctx *p_stitch_ctx)
 	p_stitch_ctx->work_status.done_cnt++;
 
 	TRACE_STITCH(DBG_DEBUG, "get eof cnt(%d)\n", p_stitch_ctx->work_status.done_cnt);
-
-	ktime_get_ts64(&time);
-	p_stitch_ctx->work_status.duration = get_diff_in_us(p_stitch_ctx->time, time);
 }
 
 static void stitch_work_handle_frm_done(struct __stitch_ctx *p_stitch_ctx)
@@ -1293,6 +1290,7 @@ static void stitch_work_frm_done(struct work_struct *work)
 static void stitch_wkup_frm_done_work(void *data)
 {
 	struct __stitch_ctx *p_stitch_ctx = (struct __stitch_ctx *)data;
+	unsigned long flags;
 
 	if (!p_stitch_ctx) {
 		TRACE_STITCH(DBG_ERR, "dev isn't created yet.\n");
@@ -1309,7 +1307,12 @@ static void stitch_wkup_frm_done_work(void *data)
 	if (p_stitch_ctx->work_status.hw_cost_time > p_stitch_ctx->work_status.hw_max_cost_time) {
 		p_stitch_ctx->work_status.hw_max_cost_time = p_stitch_ctx->work_status.hw_cost_time;
 	}
-	p_stitch_ctx->work_status.hw_duration += p_stitch_ctx->work_status.hw_cost_time;
+	spin_lock_irqsave(&evt_hdl_ctx.lock, flags);
+	evt_hdl_ctx.time.hw_duration += p_stitch_ctx->work_status.hw_cost_time;
+	evt_hdl_ctx.time.grp_fps[p_stitch_ctx->grp_id]++;
+	spin_unlock_irqrestore(&evt_hdl_ctx.lock, flags);
+	evt_hdl_ctx.time.all_hw_duration += p_stitch_ctx->work_status.hw_cost_time;
+
 	TRACE_STITCH(DBG_INFO, "grp[%d] hardware[%d] time cost:[%u] us\n", p_stitch_ctx->grp_id, p_stitch_ctx->core_id, p_stitch_ctx->work_status.hw_cost_time);
 
 	queue_work(evt_hdl_ctx.workqueue, &stitch_ctx[evt_hdl_ctx.working_grp]->work_frm_done);
@@ -1445,7 +1448,7 @@ static int stitch_event_handler_th(void *arg)
 		spin_unlock_irqrestore(&evt_ctx->lock, flags);
 
 		for(j = 0; j < stitch_grp_num; j++) {
-			evt_state = (enum stitch_handler_state)atomic_read(&evt_ctx->evt_state);
+			evt_state = (enum stitch_evt_state)atomic_read(&evt_ctx->evt_state);
 			if (evt_state == STITCH_EVT_STATE_RUNNING ||
 				evt_state == STITCH_EVT_STATE_RUNNING_STAGE2)
 				break;
@@ -1931,7 +1934,6 @@ int stitch_get_chn_frame(stitch_grp grp_id, video_frame_info_s *pstvideo_frame, 
 
 	ktime_get_ts64(&sw_ts[1]);
 	stitch_ctx[grp_id]->work_status.cost_time = get_diff_in_us(sw_ts[0], sw_ts[1]);
-	stitch_ctx[grp_id]->work_status.sw_duration += stitch_ctx[grp_id]->work_status.cost_time;
 	if (stitch_ctx[grp_id]->work_status.cost_time > stitch_ctx[grp_id]->work_status.max_cost_time) {
 		stitch_ctx[grp_id]->work_status.max_cost_time = stitch_ctx[grp_id]->work_status.cost_time;
 	}
@@ -2474,6 +2476,7 @@ int stitch_suspend_handler(void)
 		TRACE_STITCH(DBG_ERR, "stitch thread not initialized yet\n");
 		return ERR_STITCH_NOTREADY;
 	}
+	stitch_proc_set_timer(false);
 
 	for(i = 0; i< stitch_grp_num; i++) {
 		if (!stitch_ctx[i])
@@ -2521,6 +2524,7 @@ int stitch_resume_handler(void)
 
 		TRACE_STITCH(DBG_DEBUG, "resume handler+\n");
 	}
+	stitch_proc_set_timer(true);
 
 	TRACE_STITCH(DBG_WARN, "resume handler+\n");
 	return 0;

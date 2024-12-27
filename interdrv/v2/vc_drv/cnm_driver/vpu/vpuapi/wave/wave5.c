@@ -316,6 +316,7 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     VpuWriteReg(coreIdx, W5_COMMAND,              W5_INIT_VPU);
     VpuWriteReg(coreIdx, W5_VPU_REMAP_CORE_START, 1);
     if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
+        vdi_hw_reset(coreIdx);
         VLOG(INFO, "VPU init(W5_VPU_REMAP_CORE_START) timeout\n");
         return RETCODE_VPU_RESPONSE_TIMEOUT;
     }
@@ -1518,6 +1519,7 @@ RetCode Wave5VpuReInit(Uint32 coreIdx, void* firmware, Uint32 size)
         VpuWriteReg(coreIdx, W5_VPU_REMAP_CORE_START, 1);
 
         if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
+            vdi_hw_reset(coreIdx);
             VLOG(INFO, "VPU reinit(W5_VPU_REMAP_CORE_START) timeout\n");
             return RETCODE_VPU_RESPONSE_TIMEOUT;
         }

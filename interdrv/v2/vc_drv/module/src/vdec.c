@@ -364,6 +364,7 @@ void vdec_drv_deinit(void)
     if(vdec_handle)
         MEM_FREE(vdec_handle);
     vdec_handle = NULL;
+    vdec_deinit_handle_pool();
 
     return;
 }

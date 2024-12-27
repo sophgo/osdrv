@@ -2263,10 +2263,11 @@ u32 mac_port_init(struct mac_ax_adapter *adapter,
 	if (pinfo->stat == PORT_ST_AP && adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
 		bcn_dynamic_mech.bcn_dm_tbtt_shft_en = 1;
 		ret = mac_set_bcn_dynamic_mech(adapter, &bcn_dynamic_mech);
-		if (ret != MACSUCCESS)
+		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR]B%dP%d ap beacon dynamic mech set fail %d\n",
 				      band, port, ret);
 			return ret;
+		}
 	}
 
 	return ret;

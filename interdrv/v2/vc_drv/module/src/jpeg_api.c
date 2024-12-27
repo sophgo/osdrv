@@ -10,6 +10,10 @@
 #include "jpulog.h"
 #include "jpu_helper.h"
 #include "jpuapifunc.h"
+#include "vb.h"
+#include "vbq.h"
+#include "bind.h"
+#include "ion.h"
 #include "datastructure.h"
 
 #ifdef MAX
@@ -74,6 +78,7 @@ typedef struct frame_buffer_pool{
     FrameBuffer buffer[MAX_NUM_FRAME];
     int size[MAX_NUM_FRAME];
     char is_external[MAX_NUM_FRAME];
+    vb_blk blk[MAX_NUM_FRAME];
     struct mutex mutex;
 }frame_buffer_pool_t;
 
@@ -101,6 +106,11 @@ typedef struct {
     int                 timeout;
     Queue               *disp_frame;
     frame_buffer_pool_t frame_buffer_pool;
+    char                is_bind_mode;
+    int                 channel_index;
+    int                 frame_num;
+    mmf_bind_dest_s     bind_dst;
+    struct vb_jobs_t    jobs;
 } JPEG_DEC_HANDLE;
 
 extern int irq_status[MAX_NUM_JPU_CORE];
@@ -262,7 +272,101 @@ static int jpeg_rc_update_pic_info(JPEG_ENC_HANDLE *handle, int last_encoded_bit
     return 0;
 }
 
-static int _insert_frame_buffer(drv_jpg_handle handle, FrameBuffer buffer, int buffer_size, char is_external)
+static int update_bind_mode(JPEG_DEC_HANDLE *pst_handle)
+{
+    int ret;
+    mmf_chn_s src_chn = {0};
+
+    src_chn.mod_id = ID_VDEC;
+    src_chn.dev_id = 0;
+    src_chn.chn_id = pst_handle->channel_index;
+    ret = bind_get_dst(&src_chn, &pst_handle->bind_dst);
+    if (ret == 0)
+        pst_handle->is_bind_mode = 1;
+
+    return JPG_RET_SUCCESS;
+}
+
+static int fill_vbbuffer(JPEG_DEC_HANDLE *pst_handle, FrameBuffer frame_buffer)
+{
+    vb_blk blk;
+    struct vb_s *vb;
+    struct video_buffer *vb_buf;
+    mmf_chn_s src_chn = {0};
+
+    src_chn.mod_id = ID_VDEC;
+    src_chn.dev_id = 0;
+    src_chn.chn_id = pst_handle->channel_index;
+
+    blk = vb_phys_addr2handle(frame_buffer.bufY);
+    vb = (struct vb_s *)blk;
+    vb_buf = &vb->buf;
+    atomic_fetch_add(1, &vb->usr_cnt);
+
+    memset(vb_buf, 0, sizeof(struct video_buffer));
+    if (pst_handle->ver_scale_mode ||
+        pst_handle->hor_scale_mode ||
+        pst_handle->open_param.rotation == 90 ||
+        pst_handle->open_param.rotation == 270) {
+        vb_buf->size.width = pst_handle->output_info.decPicWidth;
+        vb_buf->size.height = pst_handle->output_info.decPicHeight;
+    } else {
+        vb_buf->size.width = pst_handle->initial_info.picWidth;
+        vb_buf->size.height = pst_handle->initial_info.picHeight;
+    }
+
+    if (frame_buffer.format == FORMAT_400) {
+        vb_buf->pixel_format = PIXEL_FORMAT_YUV_400;
+    } else if (frame_buffer.format == FORMAT_422) {
+        if (pst_handle->open_param.packedFormat == PACKED_FORMAT_422_YUYV) {
+            vb_buf->pixel_format = PIXEL_FORMAT_YUYV;
+        } else if(pst_handle->open_param.packedFormat == PACKED_FORMAT_422_UYVY) {
+            vb_buf->pixel_format = PIXEL_FORMAT_UYVY;
+        } else if(pst_handle->open_param.packedFormat == PACKED_FORMAT_422_YVYU) {
+            vb_buf->pixel_format = PIXEL_FORMAT_YVYU;
+        } else if(pst_handle->open_param.packedFormat == PACKED_FORMAT_422_VYUY) {
+            vb_buf->pixel_format = PIXEL_FORMAT_VYUY;
+        } else if (pst_handle->open_param.packedFormat == PACKED_FORMAT_NONE){
+            if(pst_handle->open_param.chromaInterleave == CBCR_INTERLEAVE) {
+                vb_buf->pixel_format = PIXEL_FORMAT_NV16;
+            } else if(pst_handle->open_param.chromaInterleave == CRCB_INTERLEAVE) {
+                vb_buf->pixel_format = PIXEL_FORMAT_NV61;
+            } else
+                vb_buf->pixel_format = PIXEL_FORMAT_YUV_PLANAR_422;
+        }
+    } else if (frame_buffer.format == FORMAT_444) {
+        vb_buf->pixel_format = PIXEL_FORMAT_YUV_PLANAR_444;
+    } else {//frame_buffer.format == FORMAT_420
+        if (pst_handle->open_param.chromaInterleave == CBCR_INTERLEAVE) {
+            vb_buf->pixel_format = PIXEL_FORMAT_NV12;
+        } else if (pst_handle->open_param.chromaInterleave == CRCB_INTERLEAVE) {
+            vb_buf->pixel_format = PIXEL_FORMAT_NV21;
+        } else {
+            vb_buf->pixel_format = PIXEL_FORMAT_YUV_PLANAR_420;
+        }
+    }
+
+    vb_buf->stride[0] = frame_buffer.stride;
+    vb_buf->phy_addr[0] = frame_buffer.bufY;
+    vb_buf->length[0] = frame_buffer.stride * frame_buffer.fbLumaHeight;
+    vb_buf->stride[1] = frame_buffer.strideC;
+    vb_buf->phy_addr[1] = frame_buffer.bufCb;
+    vb_buf->length[1] = frame_buffer.strideC * frame_buffer.fbChromaHeight;
+    if (!pst_handle->open_param.chromaInterleave) {
+        vb_buf->phy_addr[2] = frame_buffer.bufCr;
+        vb_buf->length[2] = frame_buffer.strideC * frame_buffer.fbChromaHeight;
+    }
+
+    vb_buf->compress_mode = COMPRESS_MODE_NONE;
+    vb_buf->sequence = pst_handle->frame_num;
+    vb_buf->frm_num = pst_handle->frame_num;
+
+    vb_done_handler(src_chn, CHN_TYPE_OUT, &pst_handle->jobs, blk);
+
+    return JPG_RET_SUCCESS;
+}
+
+static int _insert_frame_buffer(drv_jpg_handle handle, FrameBuffer buffer, int buffer_size, vb_blk blk, char is_external)
 {
     int idx;
     JPEG_DEC_HANDLE *pst_handle = handle;
@@ -273,6 +377,7 @@ static int _insert_frame_buffer(drv_jpg_handle handle, FrameBuffer buffer, int b
         if (!pst_handle->frame_buffer_pool.size[idx]) {
             memcpy(&pst_handle->frame_buffer_pool.buffer[idx], &buffer, sizeof(FrameBuffer));
             pst_handle->frame_buffer_pool.size[idx] = buffer_size;
+            pst_handle->frame_buffer_pool.blk[idx] = blk;
             pst_handle->frame_buffer_pool.is_external[idx] = is_external;
             break;
         }
@@ -315,7 +420,6 @@ static int _find_frame_buffer(drv_jpg_handle handle, PhysicalAddress addr)
 static int _free_frame_buffer(drv_jpg_handle handle, int frame_idx)
 {
     JPEG_DEC_HANDLE *pst_handle = handle;
-    jpu_buffer_t vb;
 
     if (frame_idx >= MAX_NUM_FRAME) {
         JLOG(ERR, "invalid frame_idx:%d\n", frame_idx);
@@ -324,11 +428,7 @@ static int _free_frame_buffer(drv_jpg_handle handle, int frame_idx)
 
     mutex_lock(&pst_handle->frame_buffer_pool.mutex);
     if (pst_handle->frame_buffer_pool.size[frame_idx]) {
-        if (!pst_handle->frame_buffer_pool.is_external[frame_idx]) {
-            vb.size = pst_handle->frame_buffer_pool.size[frame_idx];
-            vb.phys_addr = pst_handle->frame_buffer_pool.buffer[frame_idx].bufY;
-            jdi_free_dma_memory(&vb);
-        }
+        vb_release_block(pst_handle->frame_buffer_pool.blk[frame_idx]);
         memset(&pst_handle->frame_buffer_pool.buffer[frame_idx], 0, sizeof(FrameBuffer));
         pst_handle->frame_buffer_pool.size[frame_idx] = 0;
     }
@@ -559,7 +659,7 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
     }
 
     pst_handle->header_mode = ENC_HEADER_MODE_NORMAL;
-    pst_handle->config->encQualityPercentage = config.u.enc.quality ? 99 : config.u.enc.quality;
+    pst_handle->config->encQualityPercentage = config.u.enc.quality ? config.u.enc.quality : 99;
 
     JPU_EncGiveCommand(pst_handle->handle, SET_JPG_USE_STUFFING_BYTE_FF, &pst_handle->config->bEnStuffByte);
     if (pst_handle->config->encQualityPercentage > 0)  {
@@ -610,6 +710,7 @@ int jpeg_dec_open(drv_jpg_handle handle, drv_jpg_config config)
 
     pst_handle->stream_buffer.size = ALIGN(pst_handle->stream_buffer.size, BS_SIZE_ALIGNMENT);
     pst_handle->stream_buffer.is_cached = 0;
+    pst_handle->channel_index = config.s32ChnNum;
     pst_handle->out_num           = 1;
     pst_handle->output_info.indexFrameDisplay = -1;
     pst_handle->hor_scale_mode    = config.u.dec.iHorScaleMode;
@@ -670,6 +771,7 @@ int jpeg_dec_open(drv_jpg_handle handle, drv_jpg_config config)
         goto ERR_DEC_JPU_OPEN;
     }
 
+    base_mod_jobs_init(&pst_handle->jobs, 1, 1, 0);
     return ret;
 
 ERR_DEC_JPU_OPEN:
@@ -795,6 +897,7 @@ int jpeg_dec_close(drv_jpg_handle handle)
         Queue_Destroy(pst_handle->disp_frame);
 
     pst_handle->handle = NULL;
+    base_mod_jobs_exit(&pst_handle->jobs);
 
     return ret;
 }
@@ -1005,10 +1108,10 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
             irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
             _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
-            ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
+            JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return -2; // ENC_TIMEOUT
+            return JPG_RET_FAILURE;
         }
         if (int_reason == -2) {
             JLOG(ERR, "Interrupt occurred. but this interrupt is not for my instance enc\n");
@@ -1067,7 +1170,6 @@ static int _jpeg_alloc_frame(JPEG_DEC_HANDLE *pst_handle)
     int temp;
     BOOL scaler_on = FALSE;
     int rotation_index;
-    jpu_buffer_t vb;
     int decode_width;
     int decode_height;
     int luma_stride;
@@ -1078,6 +1180,7 @@ static int _jpeg_alloc_frame(JPEG_DEC_HANDLE *pst_handle)
     int chroma_size;
     int frame_size;
     FrameFormat subsample;
+    vb_blk blk;
 
     rotation_index = pst_handle->open_param.rotation / 90;
     if (pst_handle->initial_info.sourceFormat == FORMAT_420 || pst_handle->initial_info.sourceFormat == FORMAT_422)
@@ -1179,27 +1282,25 @@ static int _jpeg_alloc_frame(JPEG_DEC_HANDLE *pst_handle)
         if (pst_handle->open_param.chromaInterleave == CBCR_SEPARATED)
             pst_handle->frame_buffer.bufCr = pst_handle->frame_buffer.bufCb + chroma_size;
 
-        if (_insert_frame_buffer(pst_handle, pst_handle->frame_buffer, pst_handle->external_fb.size, 1) < 0)
+        blk = vb_create_block(pst_handle->external_fb.phys_addr, NULL, VB_STATIC_POOLID, 1);
+        if (blk == VB_INVALID_HANDLE)
+            return JPG_RET_FAILURE;
+
+        if (_insert_frame_buffer(pst_handle, pst_handle->frame_buffer, pst_handle->external_fb.size, blk, 1) < 0)
             return JPG_RET_FAILURE;
     } else {
-        vb.size = frame_size;
-        if (jdi_allocate_dma_memory(&vb) < 0) {
-            JLOG(ERR, "Fail to allocate frame buffer size=%ld\n", vb.size);
+        blk = vb_get_block_with_id(VB_STATIC_POOLID, frame_size, ID_VDEC);
+        if (blk == VB_INVALID_HANDLE)
             return JPG_RET_FAILURE;
-        }
 
-        if (jdi_invalidate_cache(&vb) < 0) {
-            JLOG(ERR, "Fail to invalidate frame buffer size=%ld\n", vb.size);
-            return JPG_RET_FAILURE;
-        }
-
-        pst_handle->frame_buffer.bufY = vb.phys_addr;
+        pst_handle->frame_buffer.bufY = vb_handle2phys_addr(blk);
         pst_handle->frame_buffer.bufCb = pst_handle->frame_buffer.bufY + luma_size;
         if (pst_handle->open_param.chromaInterleave == CBCR_SEPARATED)
             pst_handle->frame_buffer.bufCr = pst_handle->frame_buffer.bufCb + chroma_size;
 
-        if (_insert_frame_buffer(pst_handle, pst_handle->frame_buffer, frame_size, 0) < 0) {
-            jdi_free_dma_memory(&vb);
+        base_ion_cache_invalidate(pst_handle->frame_buffer.bufY, NULL, frame_size);
+        if (_insert_frame_buffer(pst_handle, pst_handle->frame_buffer, frame_size, blk, 0) < 0) {
+            vb_release_block(blk);
             return JPG_RET_FAILURE;
         }
     }
@@ -1318,6 +1419,8 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
         return JPG_RET_FAILURE;
     }
 
+    update_bind_mode(pst_handle);
+
     pst_handle->handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
     if (pst_handle->core_idx < 0)
         return JPG_RET_FAILURE;
@@ -1416,10 +1519,15 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
     if (pst_handle->output_info.indexFrameDisplay == -1)
         return JPG_RET_FAILURE;
 
-    if (pst_handle->output_info.indexFrameDisplay >= 0)
+    if (pst_handle->output_info.indexFrameDisplay >= 0) {
         pst_handle->valid_cnt++;
+        pst_handle->frame_num++;
+    }
 
-    _enqueue_disp_frame(pst_handle, pst_handle->frame_buffer);
+    if (pst_handle->is_bind_mode)
+        fill_vbbuffer(pst_handle, pst_handle->frame_buffer);
+    else
+        _enqueue_disp_frame(pst_handle, pst_handle->frame_buffer);
     memset(&pst_handle->frame_buffer, 0, sizeof(FrameBuffer));
 
     return ret;

@@ -39,7 +39,7 @@ module_param(VPU_LOG_LEVEL, int, 0644);
 static osal_file_t fpLog  = NULL;
 
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-static pthread_mutex_t s_log_mutex;
+static osal_mutex_t s_log_mutex;
 #endif
 
 struct vdi_osal_file {
@@ -49,9 +49,9 @@ struct vdi_osal_file {
 
 int InitLog()
 {
-    fpLog = osal_fopen("ErrorLog.txt", "w");
+    fpLog = osal_fopen("ErrorLog.txt", "wb");
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-    pthread_mutex_init(&s_log_mutex, NULL);
+    s_log_mutex = osal_mutex_create();
 #endif
     return 1;
 }
@@ -64,7 +64,7 @@ void DeInitLog()
         fpLog = NULL;
     }
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-    pthread_mutex_destroy(&s_log_mutex);
+    osal_mutex_destroy(s_log_mutex);
 #endif
 }
 
@@ -89,7 +89,7 @@ void LogMsg(int level, const char *format, ...)
     if (level > VPU_LOG_LEVEL)
         return;
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-    pthread_mutex_lock(&s_log_mutex);
+    osal_mutex_lock(s_log_mutex);
 #endif
 
     if ((log_decor & LOG_HAS_COLOR)) {
@@ -127,7 +127,7 @@ void LogMsg(int level, const char *format, ...)
     }
 
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-    pthread_mutex_unlock(&s_log_mutex);
+    osal_mutex_unlock(s_log_mutex);
 #endif
 }
 

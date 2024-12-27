@@ -87,6 +87,16 @@ struct ive_dev_core {
 	int cur_optype;
 	int tile_num;
 	int total_tile;
+#if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
+	struct timespec64 ts_start;
+	struct timespec64 ts_end;
+#else
+	struct timespec ts_start;
+	struct timespec ts_end;
+#endif
+	u32 hw_duration;
+	u32 hw_duration_total;
+	u32 duty_ratio;
 //for task func
 	atomic_t dev_state;//device_state
 	struct ive_task *work_tsk;
@@ -136,9 +146,9 @@ struct ive_profiling_info {
 	uint32_t time_vld_diff_us[6];
 	uint32_t time_tile_diff_us;
 };
-
-void start_vld_time(int optype);
-void stop_vld_time(int optype, int tile_num);
+typedef void (*ive_timer_cb)(void *data);
+void start_vld_time(int optype, struct ive_dev_core *core);
+void stop_vld_time(int optype, int tile_num, struct ive_dev_core *core);
 void ive_notify_wkup_evt_kth(void *data, enum ive_wait_evt evt);
 s32 is_ive_suspend(struct ive_device *ndev);
 

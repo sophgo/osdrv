@@ -961,7 +961,7 @@ RetCode SetEncCropInfo(Int32 codecMode, VpuRect* param, int rotMode, int srcWidt
 
 
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-void SwUartHandler(void *context);
+int SwUartHandler(void *context);
 int  create_sw_uart_thread(unsigned long coreIdx, unsigned long productId);
 void destroy_sw_uart_thread(unsigned long coreIdx);
 #endif

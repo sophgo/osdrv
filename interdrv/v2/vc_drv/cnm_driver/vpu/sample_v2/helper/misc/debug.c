@@ -469,53 +469,53 @@ void PrintWave5xxDecSppStatus(
 {
     Uint32  regVal;
     //DECODER SDMA INFO
-    VLOG(INFO,"[+] SDMA REG Dump\n");
+    VLOG(WARN,"[+] SDMA REG Dump\n");
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5000);
-    VLOG(INFO,"C_SDMA_LOAD_CMD      = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_LOAD_CMD      = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5004);
-    VLOG(INFO,"C_SDMA_AUTO_MODE     = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_AUTO_MODE     = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5008);
-    VLOG(INFO,"C_SDMA_START_ADDR    = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_START_ADDR    = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x500C);
-    VLOG(INFO,"C_SDMA_END_ADDR      = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_END_ADDR      = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5010);
-    VLOG(INFO,"C_SDMA_ENDIAN        = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_ENDIAN        = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5014);
-    VLOG(INFO,"C_SDMA_IRQ_CLEAR     = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_IRQ_CLEAR     = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5018);
-    VLOG(INFO,"C_SDMA_BUSY          = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_BUSY          = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x501C);
-    VLOG(INFO,"C_SDMA_LAST_ADDR     = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SDMA_LAST_ADDR     = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5020);
-    VLOG(INFO,"C_SDMA_SC_BASE_ADDR  = 0x08%x\n",regVal);
-    VLOG(INFO,"[-] SMDA REG Dump\n");
+    VLOG(WARN,"C_SDMA_SC_BASE_ADDR  = 0x08%x\n",regVal);
+    VLOG(WARN,"[-] SMDA REG Dump\n");
 
-    VLOG(INFO,"[+] SHU REG Dump\n");
+    VLOG(WARN,"[+] SHU REG Dump\n");
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5400);
-    VLOG(INFO,"C_SHU_INIT           = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SHU_INIT           = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5404);
-    VLOG(INFO,"C_SHU_SEEK_NXT_NAL   = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SHU_SEEK_NXT_NAL   = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x540C);
-    VLOG(INFO,"C_SHU_RD_NAL_ADDR    = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SHU_RD_NAL_ADDR    = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x540C);
-    VLOG(INFO,"C_SHU_STATUS         = 0x%08x\n",regVal);
+    VLOG(WARN,"C_SHU_STATUS         = 0x%08x\n",regVal);
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5478);
-    VLOG(INFO,"C_SHU_REMAIN_BYTE    = 0x%08x\n",regVal);
-    VLOG(INFO,"[-] SHU REG Dump\n");
+    VLOG(WARN,"C_SHU_REMAIN_BYTE    = 0x%08x\n",regVal);
+    VLOG(WARN,"[-] SHU REG Dump\n");
 
-    VLOG(INFO,"[+] GBU REG Dump\n");
+    VLOG(WARN,"[+] GBU REG Dump\n");
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5800);
-    VLOG(INFO,"C_GBU_INIT           = 0x%08x\n",regVal);
+    VLOG(WARN,"C_GBU_INIT           = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5804);
-    VLOG(INFO,"GBU_STATUS           = 0x%08x\n",regVal);
+    VLOG(WARN,"GBU_STATUS           = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5808);
-    VLOG(INFO,"GBU_TCNT             = 0x%08x\n",regVal);
+    VLOG(WARN,"GBU_TCNT             = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x580C);
-    VLOG(INFO,"GBU_NCNT             = 0x%08x\n",regVal);
+    VLOG(WARN,"GBU_NCNT             = 0x%08x\n",regVal);
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x5478);
-    VLOG(INFO,"GBU_REMAIN_BIT       = 0x%08x\n",regVal);
-    VLOG(INFO,"[-] GBU REG Dump\n");
+    VLOG(WARN,"GBU_REMAIN_BIT       = 0x%08x\n",regVal);
+    VLOG(WARN,"[-] GBU REG Dump\n");
 }
 
 
@@ -525,24 +525,24 @@ void PrintWave5xxDecPrescanStatus(
 {
     Uint32  regVal;
     //DECODER SDMA INFO
-    VLOG(INFO,"[+] PRESCAN REG Dump\n");
+    VLOG(WARN,"[+] PRESCAN REG Dump\n");
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x61a0);
-    VLOG(INFO,"V_PRESCAN_CQ_BS_START_ADDR   = 0x%08x\n",regVal);
+    VLOG(WARN,"V_PRESCAN_CQ_BS_START_ADDR   = 0x%08x\n",regVal);
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x61a4);
-    VLOG(INFO,"V_PRESCAN_CQ_BS_END_ADDR     = 0x%08x\n",regVal);
+    VLOG(WARN,"V_PRESCAN_CQ_BS_END_ADDR     = 0x%08x\n",regVal);
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x61ac);
-    VLOG(INFO,"V_PRESCAN_CQ_DEC_CODEC_STD   = 0x%08x\n",regVal);
+    VLOG(WARN,"V_PRESCAN_CQ_DEC_CODEC_STD   = 0x%08x\n",regVal);
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x6200);
-    VLOG(INFO,"V_PRESCAN_AVC_SEQ_PARAM      = 0x%08x\n",regVal);
+    VLOG(WARN,"V_PRESCAN_AVC_SEQ_PARAM      = 0x%08x\n",regVal);
 
     regVal = vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x6204);
-    VLOG(INFO,"V_PRESCAN_AVC_PIC_PARAM     = 0x%08x\n",regVal);
+    VLOG(WARN,"V_PRESCAN_AVC_PIC_PARAM     = 0x%08x\n",regVal);
 
-    VLOG(INFO,"[-] PRESCAN REG Dump\n");
+    VLOG(WARN,"[-] PRESCAN REG Dump\n");
 }
 
 
@@ -865,40 +865,40 @@ void wave5xx_vcore_status(
     Uint32 i;
     Uint32 temp;
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCORE BPU STATUS                        -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCORE BPU STATUS                        -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
 
-    VLOG(INFO,"[+] BPU REG Dump\n");
+    VLOG(WARN,"[+] BPU REG Dump\n");
     for (i=0;i < 20; i++) {
         temp = vdi_fio_read_register(coreIdx, (W5_REG_BASE + 0x8000 + 0x18));
-        VLOG(INFO,"BITPC = 0x%08x\n", temp);
+        VLOG(WARN,"BITPC = 0x%08x\n", temp);
     }
 
 /*
-    VLOG(INFO, "r0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x0) );
-    VLOG(INFO, "r1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x1) );
-    VLOG(INFO, "r2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x2) );
-    VLOG(INFO, "r3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x3) );
+    VLOG(WARN, "r0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x0) );
+    VLOG(WARN, "r1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x1) );
+    VLOG(WARN, "r2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x2) );
+    VLOG(WARN, "r3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x3) );
 
-    VLOG(INFO, "r4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x4) );
-    VLOG(INFO, "r5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x5) );
-    VLOG(INFO, "r6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x6) );
-    VLOG(INFO, "r7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x7) );
+    VLOG(WARN, "r4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x4) );
+    VLOG(WARN, "r5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x5) );
+    VLOG(WARN, "r6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x6) );
+    VLOG(WARN, "r7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x7) );
 
-    VLOG(INFO, "stack0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x10) );
-    VLOG(INFO, "stack1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x11) );
-    VLOG(INFO, "stack2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x12) );
-    VLOG(INFO, "stack3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x13) );
+    VLOG(WARN, "stack0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x10) );
+    VLOG(WARN, "stack1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x11) );
+    VLOG(WARN, "stack2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x12) );
+    VLOG(WARN, "stack3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x13) );
 
-    VLOG(INFO, "stack4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x14) );
-    VLOG(INFO, "stack5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x15) );
-    VLOG(INFO, "stack6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x16) );
-    VLOG(INFO, "stack7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x17) );
+    VLOG(WARN, "stack4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x14) );
+    VLOG(WARN, "stack5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x15) );
+    VLOG(WARN, "stack6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x16) );
+    VLOG(WARN, "stack7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x17) );
 */
 
-    VLOG(INFO,"[+] BPU Debug message REG Dump\n");
-    VLOG(INFO,"[MSG_0:0x%08x], [MSG_1:0x%08x],[MSG_2:0x%08x],[MSG_3:0x%08x],[MSG_4:0x%08x],[MSG_5:0x%08x] \n",
+    VLOG(WARN,"[+] BPU Debug message REG Dump\n");
+    VLOG(WARN,"[MSG_0:0x%08x], [MSG_1:0x%08x],[MSG_2:0x%08x],[MSG_3:0x%08x],[MSG_4:0x%08x],[MSG_5:0x%08x] \n",
         vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x8000 + 0x1A8),
         vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x8000 + 0x1AC),
         vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x8000 + 0x1B0),
@@ -906,71 +906,71 @@ void wave5xx_vcore_status(
         vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x8000 + 0x1B8),
         vdi_fio_read_register(coreIdx, W5_REG_BASE + 0x8000 + 0x1BC));
 
-    VLOG(INFO,"[-] BPU Debug message REG Dump\n");
-    VLOG(INFO,"[+] BPU interface REG Dump\n");
+    VLOG(WARN,"[-] BPU Debug message REG Dump\n");
+    VLOG(WARN,"[+] BPU interface REG Dump\n");
     for(i = 0x8000; i < 0x80FC; i += 16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 12)));
     }
-    VLOG(INFO,"[-] BPU interfrace REG Dump\n");
+    VLOG(WARN,"[-] BPU interfrace REG Dump\n");
 
 
 
-    VLOG(INFO,"[+] MIB REG Dump\n");
+    VLOG(WARN,"[+] MIB REG Dump\n");
     temp  = vdi_irb_read_register(coreIdx, 0, 0x110);
-    VLOG(INFO,"MIB_EXTADDR        : 0x%08x , External base address \n", temp);
+    VLOG(WARN,"MIB_EXTADDR        : 0x%08x , External base address \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x111);
-    VLOG(INFO,"MIB_INT_ADDR       : 0x%08x , Internal base address (MIBMEM) \n", temp);
+    VLOG(WARN,"MIB_INT_ADDR       : 0x%08x , Internal base address (MIBMEM) \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x112);
-    VLOG(INFO,"MIB_DATA_CNT       : 0x%08x , Length (8-byte unit) \n", temp);
+    VLOG(WARN,"MIB_DATA_CNT       : 0x%08x , Length (8-byte unit) \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x113);
-    VLOG(INFO,"MIB_COMMAND        : 0x%08x , COMMAND[load, save] \n", temp);
+    VLOG(WARN,"MIB_COMMAND        : 0x%08x , COMMAND[load, save] \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x114);
-    VLOG(INFO,"MIB_BUSY           : 0x%08x , Busy status \n", temp);
+    VLOG(WARN,"MIB_BUSY           : 0x%08x , Busy status \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x116);
-    VLOG(INFO,"MIB_WREQ           : 0x%08x , Write response done \n", temp);
+    VLOG(WARN,"MIB_WREQ           : 0x%08x , Write response done \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x117);
-    VLOG(INFO,"MIB_BUSID          : 0x%08x , GDI bus ID for core \n", temp);
-    VLOG(INFO,"[-] MIB REG Dump\n");
+    VLOG(WARN,"MIB_BUSID          : 0x%08x , GDI bus ID for core \n", temp);
+    VLOG(WARN,"[-] MIB REG Dump\n");
 
-    VLOG(INFO,"[+] RDMA REG Dump\n");
+    VLOG(WARN,"[+] RDMA REG Dump\n");
     temp  = vdi_irb_read_register(coreIdx, 0, 0x120);
-    VLOG(INFO,"RDMA_WR_SEL          : 0x%08x , [0] : selection flag for writing register, 0 - for GBIN0, 1- for GBIN1 \n", temp);
+    VLOG(WARN,"RDMA_WR_SEL          : 0x%08x , [0] : selection flag for writing register, 0 - for GBIN0, 1- for GBIN1 \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x121);
-    VLOG(INFO,"RDMA_RD_SEL          : 0x%08x , [0] : selection flag for reading register,  \n", temp);
+    VLOG(WARN,"RDMA_RD_SEL          : 0x%08x , [0] : selection flag for reading register,  \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x122);
-    VLOG(INFO,"RDMA_INIT            : 0x%08x , (WO) 1 - init RDMA, (RO) 1 - init_busy during RDMA initialize  \n", temp);
+    VLOG(WARN,"RDMA_INIT            : 0x%08x , (WO) 1 - init RDMA, (RO) 1 - init_busy during RDMA initialize  \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x123);
-    VLOG(INFO,"RDMA_LOAD_CMD        : 0x%08x , [0] auto_mode,[1] manual_mode  \n", temp);
+    VLOG(WARN,"RDMA_LOAD_CMD        : 0x%08x , [0] auto_mode,[1] manual_mode  \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x125);
-    VLOG(INFO,"RDMA_BASE_ADDR       : 0x%08x , Base address after init, should be 16byte align \n", temp);
+    VLOG(WARN,"RDMA_BASE_ADDR       : 0x%08x , Base address after init, should be 16byte align \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x126);
-    VLOG(INFO,"RDMA_END_ADDR        : 0x%08x , RDMA end address, if current >= rdma end addr, empty intterupt is occrured \n", temp);
+    VLOG(WARN,"RDMA_END_ADDR        : 0x%08x , RDMA end address, if current >= rdma end addr, empty intterupt is occrured \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x127);
-    VLOG(INFO,"RDMA_ENDIAN          : 0x%08x , ENDIAN setting for RDMA \n", temp);
+    VLOG(WARN,"RDMA_ENDIAN          : 0x%08x , ENDIAN setting for RDMA \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x128);
-    VLOG(INFO,"RDMA_CUR_ADDR        : 0x%08x , RDMA current addr, after loading, current addr is increased with load Bytes \n", temp);
+    VLOG(WARN,"RDMA_CUR_ADDR        : 0x%08x , RDMA current addr, after loading, current addr is increased with load Bytes \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x129);
-    VLOG(INFO,"RDMA_STATUS          : 0x%08x , [0] if 1, RMDA busy [30:28] load command count [31] if 1, bin_rmda_empty \n", temp);
+    VLOG(WARN,"RDMA_STATUS          : 0x%08x , [0] if 1, RMDA busy [30:28] load command count [31] if 1, bin_rmda_empty \n", temp);
     temp  = vdi_irb_read_register(coreIdx, 0, 0x12A);
-    VLOG(INFO,"RDMA_DBG_INFO        : 0x%08x , RDMA debug info \n", temp);
-    VLOG(INFO,"[+] RDMA REG Dump\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCORE STATUS                              -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"RDMA_DBG_INFO        : 0x%08x , RDMA debug info \n", temp);
+    VLOG(WARN,"[+] RDMA REG Dump\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCORE STATUS                              -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
     // --------- VCE register Dump
-    VLOG(INFO,"[+] VCE REG Dump Core0\n");
+    VLOG(WARN,"[+] VCE REG Dump Core0\n");
     for (i=0x000; i<0x1fc; i+=16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", i,
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", i,
             ReadRegVCE(coreIdx, 0, (i+0x00)),
             ReadRegVCE(coreIdx, 0, (i+0x04)),
             ReadRegVCE(coreIdx, 0, (i+0x08)),
             ReadRegVCE(coreIdx, 0, (i+0x0c)));
     }
-    VLOG(INFO,"[-] VCE REG Dump\n");
+    VLOG(WARN,"[-] VCE REG Dump\n");
 }
 
 
@@ -1128,57 +1128,57 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
     int       vcore_num;
     int i;
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                           Encoder only                                                         -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"BS_OPT: 0x%08x\n", VpuReadReg(coreIdx, W5_BS_OPTION));
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                           Encoder only                                                         -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"BS_OPT: 0x%08x\n", VpuReadReg(coreIdx, W5_BS_OPTION));
 
-    VLOG(INFO,"[+] VCPU DMA Dump\n");
+    VLOG(WARN,"[+] VCPU DMA Dump\n");
     for(i = 0x2000; i < 0x2018; i += 16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 12)));
     }
-    VLOG(INFO,"[-] VCPU DMA Dump\n");
+    VLOG(WARN,"[-] VCPU DMA Dump\n");
 
-    VLOG(INFO,"[+] VCPU HOST REG Dump\n");
+    VLOG(WARN,"[+] VCPU HOST REG Dump\n");
     for(i = 0x3000; i < 0x30fc; i += 16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 12)));
     }
-    VLOG(INFO,"[-] VCPU HOST REG Dump\n");
+    VLOG(WARN,"[-] VCPU HOST REG Dump\n");
 
-    VLOG(INFO,"[+] VCPU ENT ENC REG Dump\n");
+    VLOG(WARN,"[+] VCPU ENT ENC REG Dump\n");
     for(i = 0x6800; i < 0x7000; i += 16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 12)));
     }
-    VLOG(INFO,"[-] VCPU ENT ENC REG Dump\n");
+    VLOG(WARN,"[-] VCPU ENT ENC REG Dump\n");
 
-    VLOG(INFO,"[+] VCPU HOST MEM Dump\n");
+    VLOG(WARN,"[+] VCPU HOST MEM Dump\n");
     for(i = 0x7000; i < 0x70fc; i += 16) {
-        VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+        VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
             vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 12)));
     }
-    VLOG(INFO,"[-] VCPU SPP Dump\n");
+    VLOG(WARN,"[-] VCPU SPP Dump\n");
 
-    VLOG(INFO,"vce run flag = %d\n", VpuReadReg(coreIdx, 0x1E8));
+    VLOG(WARN,"vce run flag = %d\n", VpuReadReg(coreIdx, 0x1E8));
 
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCE DUMP(ENC)                           -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCE DUMP(ENC)                           -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
     vce_enc_debug[0] = 0x0ba0;//MODE SEL //parameter VCE_ENC_DEBUG0            = 9'h1A0;
     vce_enc_debug[1] = 0x0ba4;
     vce_enc_debug[2] = 0x0ba8;
@@ -1194,9 +1194,9 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
 
 #if 0
     for (vcore_idx = 0; vcore_idx < vcore_num ; vcore_idx++) {
-        VLOG(INFO,"==========================================\n");
-        VLOG(INFO,"[+] VCE REG Dump VCORE_IDX : %d\n",vcore_idx);
-        VLOG(INFO,"==========================================\n");
+        VLOG(WARN,"==========================================\n");
+        VLOG(WARN,"[+] VCE REG Dump VCORE_IDX : %d\n",vcore_idx);
+        VLOG(WARN,"==========================================\n");
         DisplayVceEncReadVCE             (coreIdx, vcore_idx);
         DisplayVceEncDebugCommon521      (coreIdx, vcore_idx, set_mode, vce_enc_debug[0], vce_enc_debug[1], vce_enc_debug[2]);
         DisplayVceEncDebugMode          (coreIdx, vcore_idx, set_mode, vce_enc_debug);
@@ -1210,12 +1210,12 @@ void vdi_print_vpu_status_dec(unsigned long coreIdx)
     Uint32 i;
     Int32 product_id = VPU_GetProductId(coreIdx);
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                           Decoder only                             -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                           Decoder only                             -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
 
     /// -- VCPU ENTROPY PERI DECODE Common
-    VLOG(INFO,"[+] VCPU ENT DEC REG Dump\n");
+    VLOG(WARN,"[+] VCPU ENT DEC REG Dump\n");
     if (PRODUCT_ID_W_SERIES(product_id)) {
         if (PRODUCT_ID_517 == product_id) {
             Uint32 reg_val[4] = {0,};
@@ -1230,24 +1230,24 @@ void vdi_print_vpu_status_dec(unsigned long coreIdx)
                     reg_val[3] = 0; //0x61FC
                 }
                 if (i == 0x6020 || i == 0x6030 || i == 0x6040) {
-                    VLOG(INFO,"-HEVC_INFO start-\n");
-                    VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+                    VLOG(WARN,"-HEVC_INFO start-\n");
+                    VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
                         reg_val[0],
                         reg_val[1],
                         reg_val[2],
                         reg_val[3]);
-                    VLOG(INFO,"-HEVC_INFO DONE-\n");
+                    VLOG(WARN,"-HEVC_INFO DONE-\n");
                 } else if (i == 0x6220) {
-                    VLOG(INFO,"-AVC_INFO start-\n");
-                    VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+                    VLOG(WARN,"-AVC_INFO start-\n");
+                    VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
                         reg_val[0],
                         reg_val[1],
                         reg_val[2],
                         reg_val[3]);
-                    VLOG(INFO,"-AVC_INFO DONE-\n");
+                    VLOG(WARN,"-AVC_INFO DONE-\n");
 
                 } else {
-                    VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+                    VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
                         reg_val[0],
                         reg_val[1],
                         reg_val[2],
@@ -1256,7 +1256,7 @@ void vdi_print_vpu_status_dec(unsigned long coreIdx)
             }
         } else {
             for(i = 0x6000; i < 0x6800; i += 16) {
-                VLOG(INFO,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
+                VLOG(WARN,"0x%04xh: 0x%08x 0x%08x 0x%08x 0x%08x\n", (W5_REG_BASE + i),
                     vdi_fio_read_register(coreIdx, (W5_REG_BASE + i)),
                     vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 4 )),
                     vdi_fio_read_register(coreIdx, (W5_REG_BASE + i + 8 )),
@@ -1264,7 +1264,7 @@ void vdi_print_vpu_status_dec(unsigned long coreIdx)
             }
         }
     }
-    VLOG(INFO,"[-] VCPU ENT DEC REG Dump\n");
+    VLOG(WARN,"[-] VCPU ENT DEC REG Dump\n");
 }
 
 
@@ -1825,72 +1825,72 @@ void wave5xx_vcpu_status(unsigned long coreIdx)
     Uint32 stage_3;
     Uint32 instance_done;
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            Scheduler STATUS                        -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            Scheduler STATUS                        -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
     {
         que_status = vdi_read_register(coreIdx,  0x1e0);
-        VLOG(INFO, "COMMAND_QUE_CNT : %d,    REPORT_QUE_CNT : %d \n", que_status >> 16, que_status & 0xffff);
+        VLOG(WARN, "COMMAND_QUE_CNT : %d,    REPORT_QUE_CNT : %d \n", que_status >> 16, que_status & 0xffff);
         stage_1 = vdi_read_register(coreIdx, 0x1f0);
-        VLOG(INFO, "PARSING_INSTANCE     : 0x%08x \n", stage_1);
+        VLOG(WARN, "PARSING_INSTANCE     : 0x%08x \n", stage_1);
         stage_2 = vdi_read_register(coreIdx, 0x1f4);
-        VLOG(INFO, "DECODING_INSTANCE     : 0x%08x \n", stage_2);
+        VLOG(WARN, "DECODING_INSTANCE     : 0x%08x \n", stage_2);
         stage_3 = vdi_read_register(coreIdx, 0x1f8);
-        VLOG(INFO, "ENCODING_INSTANCE     : 0x%08x \n", stage_3);
+        VLOG(WARN, "ENCODING_INSTANCE     : 0x%08x \n", stage_3);
         instance_done = vdi_read_register(coreIdx, 0x1fC);
-        VLOG(INFO, "QUEUED_COMMAND_DONE : 0x%08x \n", instance_done);
+        VLOG(WARN, "QUEUED_COMMAND_DONE : 0x%08x \n", instance_done);
     }
 
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCPU CORE STATUS                        -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCPU CORE STATUS                        -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
    // --------- VCPU register Dump
-    VLOG(INFO,"[+] VCPU REG Dump\n");
+    VLOG(WARN,"[+] VCPU REG Dump\n");
     for (i = 0; i < 25; i++) {
         VpuWriteReg (coreIdx, 0x14, (1<<9) | (i & 0xff));
         vcpu_reg[i] = VpuReadReg (coreIdx, 0x1c);
 
         if (i < 16) {
-            VLOG(INFO,"0x%08x\t",  vcpu_reg[i]);
+            VLOG(WARN,"0x%08x\t",  vcpu_reg[i]);
             if ((i % 4) == 3) VLOG(INFO,"\n");
         }
         else {
             switch (i) {
-            case 16: VLOG(INFO,"CR0: 0x%08x\t", vcpu_reg[i]); break;
-            case 17: VLOG(INFO,"CR1: 0x%08x\n", vcpu_reg[i]); break;
-            case 18: VLOG(INFO,"ML:  0x%08x\t", vcpu_reg[i]); break;
-            case 19: VLOG(INFO,"MH:  0x%08x\n", vcpu_reg[i]); break;
-            case 21: VLOG(INFO,"LR:  0x%08x\n", vcpu_reg[i]); break;
-            case 22: VLOG(INFO,"PC:  0x%08x\n", vcpu_reg[i]); break;
-            case 23: VLOG(INFO,"SR:  0x%08x\n", vcpu_reg[i]); break;
-            case 24: VLOG(INFO,"SSP: 0x%08x\n", vcpu_reg[i]); break;
+            case 16: VLOG(WARN,"CR0: 0x%08x\t", vcpu_reg[i]); break;
+            case 17: VLOG(WARN,"CR1: 0x%08x\n", vcpu_reg[i]); break;
+            case 18: VLOG(WARN,"ML:  0x%08x\t", vcpu_reg[i]); break;
+            case 19: VLOG(WARN,"MH:  0x%08x\n", vcpu_reg[i]); break;
+            case 21: VLOG(WARN,"LR:  0x%08x\n", vcpu_reg[i]); break;
+            case 22: VLOG(WARN,"PC:  0x%08x\n", vcpu_reg[i]); break;
+            case 23: VLOG(WARN,"SR:  0x%08x\n", vcpu_reg[i]); break;
+            case 24: VLOG(WARN,"SSP: 0x%08x\n", vcpu_reg[i]); break;
             default: break;
             }
         }
     }
 
     for ( i = 0 ; i < 20 ; i++) {
-        VLOG(INFO, "LR=0x%x, PC=0x%x\n", vdi_read_register(coreIdx, W5_VCPU_CUR_LR), vdi_read_register(coreIdx, W5_VCPU_CUR_PC));
+        VLOG(WARN, "LR=0x%x, PC=0x%x\n", vdi_read_register(coreIdx, W5_VCPU_CUR_LR), vdi_read_register(coreIdx, W5_VCPU_CUR_PC));
     }
-    VLOG(INFO, "VCPU_BUSY_STATUS    : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x70) );
-    VLOG(INFO, "VCPU_HALT_STATUS    : 0x%08x , [3:0] VPU bus transaction [4] halt status \n", vdi_read_register(coreIdx, 0x74) );
-    VLOG(INFO,"[-] VCPU CORE REG Dump\n");
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC_IF          : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x300) );
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC             : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x304) );
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC_IDX         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x308) );
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC_CLR         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x30C) );
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC_CNT         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x310) );
-    VLOG(INFO, "TEMP VPU_SUB_FRM_SYNC_ENC_FIDX    : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x314) );
+    VLOG(WARN, "VCPU_BUSY_STATUS    : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x70) );
+    VLOG(WARN, "VCPU_HALT_STATUS    : 0x%08x , [3:0] VPU bus transaction [4] halt status \n", vdi_read_register(coreIdx, 0x74) );
+    VLOG(WARN,"[-] VCPU CORE REG Dump\n");
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC_IF          : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x300) );
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC             : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x304) );
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC_IDX         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x308) );
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC_CLR         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x30C) );
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC_CNT         : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x310) );
+    VLOG(WARN, "TEMP VPU_SUB_FRM_SYNC_ENC_FIDX    : 0x%08x , VPU command re-enterance check \n", vdi_read_register(coreIdx, 0x314) );
 
-    VLOG(INFO,"[-] VCPU REG Dump\n");
+    VLOG(WARN,"[-] VCPU REG Dump\n");
     /// -- VCPU PERI DECODE Common
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCPU PERI(SPP)                          -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCPU PERI(SPP)                          -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
     PrintWave5xxDecSppStatus(coreIdx);
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
-    VLOG(INFO,"------                            VCPU PERI(PRESCAN)                      -----\n");
-    VLOG(INFO,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
+    VLOG(WARN,"------                            VCPU PERI(PRESCAN)                      -----\n");
+    VLOG(WARN,"-------------------------------------------------------------------------------\n");
     PrintWave5xxDecPrescanStatus(coreIdx);
 }
 
