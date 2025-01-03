@@ -322,7 +322,7 @@ static void rtc_32k_fine_value_calib(struct cvi_rtc_info *info)
 	uint32_t frac_ext = 10000;
 
 	writel(1, info->rtc_ctrl_base + CVI_RTC_FC_FINE_EN);
-
+	udelay(200);
 	fc_fine_time1 = readl(info->rtc_ctrl_base + CVI_RTC_FC_FINE_CAL);
 	fc_fine_time1 >>= 24;
 	// dev_notice(NULL, "fc_fine_time1 = 0x%x\n", fc_fine_time1);

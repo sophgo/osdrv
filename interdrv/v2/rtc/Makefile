@@ -4,7 +4,7 @@ RTC_PATH = $(CVIARCH_L)
 
 $(CVIARCH_L)_rtc-objs = $(RTC_PATH)/cvi_rtc.o
 
-obj-n += $(CVIARCH_L)_rtc.o
+obj-m += $(CVIARCH_L)_rtc.o
 
 ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
 
