@@ -61,7 +61,7 @@ ifeq ($(CHIP_ARCH), $(filter $(CHIP_ARCH), CV183X CV182X))
 endif
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X))
-	KO_LIST += sys vi snsr_i2c cif vpss dwa rgn vo rtos_cmdqu fast_image cvi_vc_drv ive #motor
+	KO_LIST += sys vi snsr_i2c cif vpss dwa rgn vo rtos_cmdqu fast_image cvi_vc_drv ive #motor trng
 	BASE_DEP = sys
 	FB_DEP = vpss
 else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
@@ -179,6 +179,8 @@ cvi_vc_drv: sys base vcodec jpeg
 rtos_cmdqu:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
+trng:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 # osdrv/extdrv
 tp:
 	@$(call MAKE_EXT_KO, extdrv/${@})

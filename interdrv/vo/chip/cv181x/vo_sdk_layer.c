@@ -265,10 +265,10 @@ CVI_S32 vo_clear_chnbuf(VO_LAYER VoLayer, VO_CHN VoChn, bool bClrAll)
 	if (!bClrAll)
 		return CVI_SUCCESS;
 
-	gVoCtx->clearchnbuf = 1;
-
 	if (FIFO_EMPTY(&jobs->workq))
 		return CVI_SUCCESS;
+
+	gVoCtx->clearchnbuf = 1;
 
 	mutex_lock(&jobs->lock);
 	FIFO_GET_TAIL(&jobs->workq, &vb);
@@ -292,12 +292,9 @@ CVI_S32 vo_clear_chnbuf(VO_LAYER VoLayer, VO_CHN VoChn, bool bClrAll)
 		}
 	} else {
 		CVI_TRACE_VO(CVI_DBG_ERR, "enPixFormat not support yet.\n");
-
-		gVoCtx->clearchnbuf = 0;
-		mutex_unlock(&jobs->lock);
-
-		return ret;
 	}
+
+	gVoCtx->clearchnbuf = 0;
 	mutex_unlock(&jobs->lock);
 	return ret;
 }

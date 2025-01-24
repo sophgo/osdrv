@@ -589,6 +589,10 @@ static CVI_VOID _vpss_offline_set_mlv_info(struct vb_s *vb_in, struct cvi_buffer
 	in_ctu_h = ALIGN(vb_in->buf.size.u32Height, 64) >> 6;
 	out_ctu_w = ALIGN(ctx->stChnCfgs[VpssChn].stChnAttr.u32Width, 64) >> 6;
 	out_ctu_h = ALIGN(ctx->stChnCfgs[VpssChn].stChnAttr.u32Height, 64) >> 6;
+	if (out_ctu_w * out_ctu_h > MO_TBL_SIZE) {
+		memset(buf->motion_table, 0, MO_TBL_SIZE);
+		return;
+	}
 
 	x_scale = (in_ctu_w << fractional_bits) / out_ctu_w;
 	y_scale = (in_ctu_h << fractional_bits) / out_ctu_h;
@@ -1144,6 +1148,10 @@ static CVI_VOID _vpss_online_set_mlv_info(struct vb_s *blk, struct cvi_vpss_ctx 
 	in_ctu_h = ALIGN(ctx->stGrpAttr.u32MaxH, 64) >> 6;
 	out_ctu_w = ALIGN(ctx->stChnCfgs[VpssChn].stChnAttr.u32Width, 64) >> 6;
 	out_ctu_h = ALIGN(ctx->stChnCfgs[VpssChn].stChnAttr.u32Height, 64) >> 6;
+	if (out_ctu_w * out_ctu_h > MO_TBL_SIZE) {
+		memset(blk->buf.motion_table, 0, MO_TBL_SIZE);
+		return;
+	}
 
 	x_scale = (in_ctu_w << fractional_bits) / out_ctu_w;
 	y_scale = (in_ctu_h << fractional_bits) / out_ctu_h;
