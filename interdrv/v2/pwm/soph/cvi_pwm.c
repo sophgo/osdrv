@@ -13,21 +13,25 @@
 #include <linux/version.h>
 
 #define REG_HLPERIOD		0x0
-#define REG_PERIOD			0x4
-#define REG_GROUP			0x8
-#define REG_FREQNUM			0x20
+#define REG_PERIOD		0x4
+#define REG_GROUP		0x8
+#define REG_FREQNUM		0x20
 #define REG_FREQDATA		0x24
 #define REG_POLARITY		0x40
 
-#define REG_PWMSTART			0x44
-#define REG_PWMUPDATE			0x4C
-#define REG_SHIFTCOUNT			0x80
-#define REG_SHIFTSTART			0x90
-#define REG_FREQEN				0x9C
-#define REG_FREQ_DONE_NUM		0xC0
-#define REG_PWM_OE				0xD0
+#define REG_PWMSTART		0x44
+#define REG_PWMUPDATE		0x4C
+#define REG_SHIFTCOUNT		0x80
+#define REG_SHIFTSTART		0x90
+#define REG_FREQEN		0x9C
+#define REG_FREQ_DONE_NUM	0xC0
+#define REG_PWM_OE		0xD0
 
-#define PWM_REG_NUM				0x80
+#define PWM_REG_NUM		0x80
+
+#define VDDC_PWM_ID		0x8
+
+#define REG_GPIO0_PINCTRL	0x28104C64
 
 /**
  * struct cv_pwm_channel - private data of PWM channel
@@ -59,15 +63,34 @@ struct cv_pwm_chip {
 	uint32_t pwm_saved_regs[PWM_REG_NUM];
 };
 
-
 static inline
 struct cv_pwm_chip *to_cv_pwm_chip(struct pwm_chip *chip)
 {
 	return container_of(chip, struct cv_pwm_chip, chip);
 }
 
+static int check_vddc_pwm(void)
+{
+	void __iomem *ptr;
+	u32 value, sel;
+
+	ptr = ioremap(REG_GPIO0_PINCTRL, PAGE_SIZE);
+	value = readl(ptr);
+	sel = value >> 4 & 0xf;
+	iounmap(ptr);
+
+	// if pin GPIO0 is multiplexed to PWM8, return 1.
+	if (sel == 0x7)
+		return 1;
+	else
+		return 0;
+}
+
 static int pwm_cv_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
+	if (pwm_dev->pwm == VDDC_PWM_ID && check_vddc_pwm())
+		return -EBUSY;
+
 	struct cv_pwm_channel *channel;
 
 	channel = kzalloc(sizeof(*channel), GFP_KERNEL);
