@@ -339,7 +339,10 @@ static int jpege_enc_one_pic(void *ctx,
     if (status == ENC_TIMEOUT) {
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
-        return DRV_ERR_VENC_BUSY;
+        //retry, workaround for https://jira.sophgo.com/browse/SE9SW-1454
+        status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
+        if (status == ENC_TIMEOUT)
+            return DRV_ERR_VENC_BUSY;
     }
 
     if (status != 0) {
@@ -1046,7 +1049,7 @@ int venc_create_enc_ctx(venc_enc_ctx *pEncCtx, void *pchnctx)
     venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     int status = 0;
 
-    VENC_MEMSET(pEncCtx, 0, sizeof(venc_enc_ctx));
+    memset(pEncCtx, 0, sizeof(venc_enc_ctx));
 
     switch (pVencAttr->enType) {
     case PT_JPEG:

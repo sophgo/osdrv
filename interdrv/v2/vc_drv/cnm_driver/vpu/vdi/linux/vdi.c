@@ -564,7 +564,7 @@ int vdi_lock(unsigned long core_idx)
             VLOG(ERR, "%s failed to get lock sync_ret=%d, sync_val=%d, sync_ptr=%d \n", __FUNCTION__, sync_ret, sync_val, (int)*sync_lock_ptr);
             return -1;
         }
-        osal_msleep(1);
+        usleep_range(5, 10);
     }
 
     return 0;//lint !e454
@@ -612,7 +612,7 @@ int vdi_disp_lock(unsigned long core_idx)
             VLOG(ERR, "%s failed to get lock sync_ret=%d, sync_val=%d, sync_ptr=%d \n", __FUNCTION__, sync_ret, sync_val, (int)*sync_lock_ptr);
             return -1;
         }
-        osal_msleep(1);
+        usleep_range(5, 10);
     }
 
     return 0;//lint !e454
@@ -661,7 +661,7 @@ static int vmem_lock(unsigned long core_idx)
             VLOG(ERR, "%s failed to get lock sync_ret=%d, sync_val=%d, sync_ptr=%d \n", __FUNCTION__, sync_ret, sync_val, (int)*sync_lock_ptr);
             return -1;
         }
-        osal_msleep(1);
+        usleep_range(5, 10);
     }
 
     return 0;//lint !e454
@@ -1445,6 +1445,7 @@ int vdi_wait_bus_busy(unsigned long core_idx, int timeout, unsigned int gdi_busy
                 return -1;
             }
         }
+        usleep_range(5, 10);    // delay more to give idle time to OS;
     }
     return 0;
 }
@@ -1477,6 +1478,7 @@ int vdi_wait_vpu_busy(unsigned long core_idx, int timeout, unsigned int addr_bit
                 return -1;
             }
         }
+        usleep_range(5, 10);   // delay more to give idle time to OS;
     }
     return 0;
 }
@@ -1508,6 +1510,7 @@ int vdi_wait_vcpu_bus_busy(unsigned long core_idx, int timeout, unsigned int gdi
                 return -1;
             }
         }
+        usleep_range(5, 10);   // delay more to give idle time to OS;
     }
     return 0;
 }

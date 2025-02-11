@@ -1108,10 +1108,10 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
             irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
             _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
-            JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
+            ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return JPG_RET_FAILURE;
+            return -2; // ENC_TIMEOUT
         }
         if (int_reason == -2) {
             JLOG(ERR, "Interrupt occurred. but this interrupt is not for my instance enc\n");

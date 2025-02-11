@@ -650,7 +650,8 @@ static int fill_command_queue(DECODER_HANDLE *pst_handle)
         if (pst_handle->seq_status == SEQ_DECODE_START) {
             ret = VPU_DecStartOneFrame(pst_handle->handle, &dec_param);
             if (ret != RETCODE_SUCCESS) {
-                VLOG(ERR, "VPU_DecStartOneFrame failed! ret=%08x\n", ret);
+                if (ret != RETCODE_QUEUEING_FAILURE)
+                    VLOG(ERR, "VPU_DecStartOneFrame failed! ret=%08x\n", ret);
                 pst_handle->decode_one_frame = 0;
                 return ret;
             }
@@ -835,6 +836,7 @@ static int thread_decode(void *param)
 
             process_data(pst_handle, 30);
         }
+        usleep_range(5, 10);    // delay more to give idle time to OS;
     }
 
     return 0;

@@ -459,6 +459,7 @@ int vpu_monitor_thread(void *data)
         msleep(VPU_INFO_STAT_INTERVAL);
     }
 
+    s_vpu_monitor_task = NULL;
     return ret;
 }
 
@@ -1006,8 +1007,9 @@ long vpu_open_instance(vpudrv_inst_info_t *inst_info)
     /* launch vpu monitor thread */
     if (s_vpu_monitor_task == NULL){
         s_vpu_monitor_task = kthread_run(vpu_monitor_thread, &s_vpu_usage_info, "soph_vpu_monitor");
-        if (s_vpu_monitor_task == NULL){
+        if (IS_ERR(s_vpu_monitor_task)) {
             pr_err("create vpu monitor thread failed\n");
+            s_vpu_monitor_task = NULL;
         } else
             pr_info("create vpu monitor thread done\n");
     }
@@ -1941,7 +1943,7 @@ int vpu_drv_platform_exit(void)
     }
 
     /* stop vpu monitor thread */
-    if (s_vpu_monitor_task != NULL){
+    if (s_vpu_monitor_task){
         kthread_stop(s_vpu_monitor_task);
         s_vpu_monitor_task = NULL;
         pr_info("vpu monitor thread released\n");
@@ -2072,7 +2074,7 @@ static int vpuapi_wait_reset_busy(u32 core)
             ret = VPUAPI_RET_TIMEOUT;
             break;
         }
-        udelay(0);    // delay more to give idle time to OS;
+        usleep_range(5, 10);   // delay more to give idle time to OS;
     }
 
     return ret;
@@ -2114,7 +2116,7 @@ static int vpuapi_wait_vpu_busy(u32 core, u32 reg)
             ret = VPUAPI_RET_TIMEOUT;
             break;
         }
-        udelay(0);    // delay more to give idle time to OS;
+        usleep_range(5, 10);    // delay more to give idle time to OS;
     }
 
     return ret;
@@ -2144,7 +2146,7 @@ static int vpuapi_wait_bus_busy(u32 core, u32 bus_busy_reg_addr)
             ret = VPUAPI_RET_TIMEOUT;
             break;
         }
-        udelay(0);    // delay more to give idle time to OS;
+        usleep_range(5, 10);    // delay more to give idle time to OS;
     }
 
     return ret;

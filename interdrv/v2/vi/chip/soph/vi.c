@@ -140,8 +140,11 @@ static int64_t _mempool_pop(u32 size)
 
 static bool ddr_need_retrain(struct sop_vi_dev *vdev)
 {
-	if (ioread32(vdev->ddr_retrain_reg) & BIT(8)) {
-		return true;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	if(!vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_fe && !vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_be) {
+		if (ioread32(vdev->ddr_retrain_reg) & BIT(8)) {
+			return true;
+		}
 	}
 
 	return false;
