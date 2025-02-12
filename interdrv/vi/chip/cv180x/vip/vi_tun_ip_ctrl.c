@@ -1,5 +1,6 @@
 #include <linux/slab.h>
 #include <vip/vi_drv.h>
+#include <sys.h>
 
 #define BE_RUNTIME_TUN(_name) \
 	{\
@@ -44,7 +45,8 @@ extern uint8_t g_w_bit[ISP_PRERAW_VIRT_MAX], g_h_bit[ISP_PRERAW_VIRT_MAX];
 extern int tuning_dis[4];
 
 struct isp_tuning_cfg tuning_buf_addr;
-static void *vi_tuning_ptr[ISP_PRERAW_VIRT_MAX];
+static void *vi_tuning_vir_ptr[ISP_PRERAW_VIRT_MAX];
+static uint64_t vi_tuning_phy_ptr[ISP_PRERAW_VIRT_MAX];
 
 static struct cvi_vip_isp_fe_tun_cfg *fe_tun_backup[ISP_PRERAW_VIRT_MAX] = {NULL, NULL};
 static struct cvi_vip_isp_be_tun_cfg *be_tun_backup[ISP_PRERAW_VIRT_MAX] = {NULL, NULL};
@@ -252,7 +254,6 @@ int vi_tuning_buf_setup(struct isp_ctx *ctx)
 	static u64 be_paddr[ISP_PRERAW_VIRT_MAX] = {0, 0};
 	static u64 post_paddr[ISP_PRERAW_VIRT_MAX] = {0, 0};
 	u32 size = 0;
-	u64 phyAddr = 0;
 
 	size = (VI_ALIGN(sizeof(struct cvi_vip_isp_post_cfg)) +
 		VI_ALIGN(sizeof(struct cvi_vip_isp_be_cfg)) +
@@ -262,30 +263,28 @@ int vi_tuning_buf_setup(struct isp_ctx *ctx)
 		if (!ctx->isp_pipe_enable[i])
 			continue;
 
-		if (vi_tuning_ptr[i] == NULL) {
-			vi_tuning_ptr[i] = kzalloc(size, GFP_KERNEL | __GFP_RETRY_MAYFAIL);
-			if (vi_tuning_ptr[i] == NULL) {
-				vi_pr(VI_ERR, "tuning_buf ptr[%d] kmalloc size(%u) fail\n", i, size);
+		if (vi_tuning_vir_ptr[i] == NULL) {
+			sys_ion_alloc(&vi_tuning_phy_ptr[i], &vi_tuning_vir_ptr[i], "tuning_buf", size, true);
+			if (vi_tuning_vir_ptr[i] == NULL) {
+				vi_pr(VI_ERR, "tuning_buf ptr[%d] alloc ion size(%u) fail\n", i, size);
 				return -ENOMEM;
 			}
-
-			phyAddr = virt_to_phys(vi_tuning_ptr[i]);
 		}
 
 		if (post_paddr[i] == 0) {
-			post_paddr[i] = phyAddr;
+			post_paddr[i] = vi_tuning_phy_ptr[i];
 			tuning_buf_addr.post_addr[i] = post_paddr[i];
 			tuning_buf_addr.post_vir[i] = phys_to_virt(post_paddr[i]);
 		}
 
 		if (be_paddr[i] == 0) {
-			be_paddr[i] = phyAddr + VI_ALIGN(sizeof(struct cvi_vip_isp_post_cfg));
+			be_paddr[i] = vi_tuning_phy_ptr[i] + VI_ALIGN(sizeof(struct cvi_vip_isp_post_cfg));
 			tuning_buf_addr.be_addr[i] = be_paddr[i];
 			tuning_buf_addr.be_vir[i] = phys_to_virt(be_paddr[i]);
 		}
 
 		if (fe_paddr[i] == 0) {
-			fe_paddr[i] = phyAddr + VI_ALIGN(sizeof(struct cvi_vip_isp_post_cfg))
+			fe_paddr[i] = vi_tuning_phy_ptr[i] + VI_ALIGN(sizeof(struct cvi_vip_isp_post_cfg))
 					+ VI_ALIGN(sizeof(struct cvi_vip_isp_be_cfg));
 			tuning_buf_addr.fe_addr[i] = fe_paddr[i];
 			tuning_buf_addr.fe_vir[i] = phys_to_virt(fe_paddr[i]);
@@ -388,8 +387,9 @@ void vi_tuning_buf_release(struct isp_ctx *ctx)
 		if (!ctx->isp_pipe_enable[i])
 			continue;
 
-		kfree(vi_tuning_ptr[i]);
-		vi_tuning_ptr[i] = NULL;
+		sys_ion_free(vi_tuning_phy_ptr[i]);
+		vi_tuning_phy_ptr[i] = 0;
+		vi_tuning_vir_ptr[i] = NULL;
 	}
 }
 
@@ -1199,7 +1199,7 @@ int ispblk_clut_tun_cfg(
 		ispblk_clut_cmdq_config(ctx, raw_num, cfg->enable, cfg->r_lut, cfg->g_lut, cfg->b_lut);
 #endif
 	}
-	cfg->update = 0;
+
 	return 1;
 }
 

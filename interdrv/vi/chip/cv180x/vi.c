@@ -3244,6 +3244,8 @@ int vi_stop_streaming(struct cvi_vi_dev *vdev)
 	vi_ip_test_cases_uninit(&vdev->ctx);
 #endif
 
+	vi_tuning_buf_release(&vdev->ctx);
+
 	return rc;
 }
 
@@ -8282,8 +8284,6 @@ int vi_destroy_instance(struct platform_device *pdev)
 
 	for (i = 0; i < E_VI_TH_MAX; i++)
 		vi_destory_thread(vdev, i);
-
-	vi_tuning_buf_release(&vdev->ctx);
 
 	for (i = 0; i < ISP_PRERAW_VIRT_MAX; i++) {
 		sync_task_exit(i);
