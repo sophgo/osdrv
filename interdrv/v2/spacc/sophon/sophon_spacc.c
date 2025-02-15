@@ -112,7 +112,7 @@ static int cvi_spacc_aes(spacc_exec_config *config)
 
 	int ret;
 	uint64_t key_len;
-	uint64_t arg6 = ((uint64_t)config->algo << 48) |
+	uint64_t arg7 = ((uint64_t)config->algo << 48) |
 			((uint64_t)config->mode << 32) |
 			((uint64_t)config->key_mode << 16) |
 			((uint64_t)config->otp << 4 | (uint64_t)config->action);
@@ -152,9 +152,9 @@ static int cvi_spacc_aes(spacc_exec_config *config)
 	arch_sync_dma_for_device(iv_phys, 16, DMA_TO_DEVICE);
 	arch_sync_dma_for_device(key_phys, key_len, DMA_TO_DEVICE);
 
-	arm_smccc_smc(OPTEE_SMC_CALL_CV_SPACC_EXEC, (unsigned long)src_phys,
+	arm_smccc_smc(OPTEE_SMC_CALL_CV_SPACC_EXEC, (unsigned long)src_phys, (unsigned long)src_phys,
 		      g_spacc_dev.data_size, (unsigned long)key_phys,
-		      (unsigned long)iv_phys, key_len, arg6, 0, &res);
+		      (unsigned long)iv_phys, key_len, arg7, &res);
 	arch_sync_dma_for_device(src_phys, g_spacc_dev.data_size,
 				 DMA_FROM_DEVICE);
 

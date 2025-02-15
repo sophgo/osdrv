@@ -8047,7 +8047,6 @@ static int _vi_event_handler_thread(void *arg)
 			chn.dev_id = 0;
 			chn.chn_id = b.chn_id;
 			ret2 = vb_dqbuf(chn, &vi_jobs[chn.chn_id], &blk);
-			vi_pr(VI_INFO, "dev = %d, chn = %d\n", chn.dev_id, chn.chn_id);
 			if (ret2 != 0) {
 				if (blk == VB_INVALID_HANDLE)
 					vi_pr(VI_ERR, "chn(%d) can't get vb-blk.\n", chn.chn_id);
