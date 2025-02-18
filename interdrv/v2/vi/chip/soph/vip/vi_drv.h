@@ -557,6 +557,7 @@ struct _isp_cfg {
 	enum _vi_yuv_data_seq_e data_seq;
 	struct isp_cmdq_buf	cmdq_buf;
 	struct timespec64	ts;
+	pixel_format_e		pixel_fmt;
 
 	u32			is_patgen_en		: 1;
 	u32			is_raw_replay_fe	: 1;

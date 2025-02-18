@@ -2515,7 +2515,12 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 				((ctx->isp_pipe_cfg[raw_num].tnr_mode == ISP_TNR_TYPE_OLD_MODE) ? 0x24 : 0x3f));
 			ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, reg_422_444, 0);
 			ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_5, tdnr_enable, ctx->isp_pipe_cfg[raw_num].tnr_mode);
-			ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, swap, 0);
+
+			if (ctx->isp_pipe_cfg[raw_num].pixel_fmt == PIXEL_FORMAT_NV21) {
+				ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, swap, 0);
+			} else {
+				ISP_WR_BITS(tnr, reg_isp_444_422_t, reg_4, swap, 1);
+			}
 		}
 	}
 
