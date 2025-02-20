@@ -9,6 +9,7 @@
 
 #include "stitch_core.h"
 
+void stitch_proc_set_timer(bool set);
 int stitch_proc_init(struct stitch_dev *dev);
 int stitch_proc_remove(struct stitch_dev *dev);
 

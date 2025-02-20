@@ -25,8 +25,8 @@ int main(int argc, char **args)
 	unsigned int result_size;
 	int ret;
 	unsigned int pool_size = POOL_SIZE;
-	char buf[POOL_SIZE] = {0};
-	struct cvi_spacc_base64 b64 = {0, 1};
+	char buf[POOL_SIZE] = { 0 };
+	struct cvi_spacc_base64 b64 = { 0, 1 };
 
 	fd = open("/dev/spacc", O_RDWR);
 	if (fd < 0) {
@@ -102,6 +102,96 @@ int main(int argc, char **args)
 
 	printf("\n");
 	close(fd);
+	return ret;
+}
+int testAES(void)
+{
+	int fd;
+	int ret;
+	spacc_exec_config conf;
+	unsigned int pool_size = POOL_SIZE;
+	char buf[POOL_SIZE] = { 0 };
+	unsigned char key[32] = { 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				  0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				  0x61, 0x61, 0x61, 0x62, 0x63, 0x64, 0x65,
+				  0x66, 0x67, 0x68, 0x61, 0x61, 0x61, 0x61,
+				  0x61, 0x61, 0x61, 0x61 };
+	unsigned char iv[16] = {
+		0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+		0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
+	};
+	unsigned char __16B_bin[] = { 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x0b,
+				      0x0b, 0x0b, 0x0b, 0x0b, 0x0b, 0x0b,
+				      0x0b, 0x0b, 0x0b, 0x0b };
+	unsigned int __16B_bin_len = 16;
+
+	fd = open("/dev/spacc", O_RDWR);
+	if (fd < 0) {
+		printf("open /dev/spacc failed\n");
+		return -1;
+	}
+	printf("encrypt case:============================\n");
+	if (ioctl(fd, IOCTL_SPACC_CREATE_POOL, &pool_size)) {
+		printf("ioctl failed\n");
+		return -1;
+	}
+
+	pool_size = 0;
+	ioctl(fd, IOCTL_SPACC_GET_POOL_SIZE, &pool_size);
+	printf("pool size: %d\n", pool_size);
+
+	write(fd, __16B_bin, __16B_bin_len);
+
+	conf.algo = ALGO_AES; // Setting the algorithm
+	conf.mode = AES_CBC; // Setting the mode
+	conf.key_mode = AES_256BIT; // Set the key length
+	conf.action = ENCRYPTION; // Set the operation type
+	conf.otp = USE_DMA_KEY; //choose to open without using the OTP key
+	conf.key = (uintptr_t)key; // choose to open without using the OTP key
+	// conf.otp =USE_OTP_KEY;
+	conf.iv = (uintptr_t)iv;
+	if (ioctl(fd, IOCTL_SPACC_AES_ACTION, conf) < 0) {
+		printf("ioctl failed\n");
+		return -1;
+	}
+	ret = read(fd, buf, __16B_bin_len);
+	printf("result :");
+	for (int i = 0; i < __16B_bin_len; i++) {
+		printf("%x", buf[i]);
+	}
+	printf("\n");
+
+	conf.algo = ALGO_AES; // Setting the algorithm
+	conf.mode = AES_CBC; // Setting the mode
+	conf.key_mode = AES_256BIT; // Set the key length
+	conf.action = DECRYPT;
+	// conf.otp =USE_OTP_KEY;
+	conf.otp = USE_DMA_KEY; //choose to open without using the OTP key
+	conf.key = (uintptr_t)key; // choose to open without using the OTP key
+	conf.iv = (uintptr_t)iv;
+
+	printf("decrypt case:============================\n");
+	printf("src");
+	for (int i = 0; i < __16B_bin_len; i++) {
+		printf("%x", buf[i]);
+	}
+	printf("\n");
+	write(fd, buf, __16B_bin_len);
+	if (ioctl(fd, IOCTL_SPACC_AES_ACTION, conf) < 0) {
+		printf("ioctl failed\n");
+		return -1;
+	}
+	ret = read(fd, buf, __16B_bin_len);
+	printf("result :");
+	for (int i = 0; i < __16B_bin_len; i++) {
+		printf("%x", buf[i]);
+	}
+	printf("\n");
+
+	close(fd);
 	return 0;
 }
-
+int main(int argc, char **args)
+{
+	testAES();
+}

@@ -301,11 +301,11 @@ static uint32_t axi_mon_offline_get_latency_his_cnts(uint32_t base_register, uin
 {
 	return readl(iomem_aximon_offline_base + base_register + AXIMON_OFFSET_LATENCY_HIS_0 + 4 * his_n);
 }
+#if 0
 static uint32_t axi_mon_bulk_get_latency_his_cnts(uint32_t base_register, uint32_t his_n)
 {
 	return readl(iomem_aximon_bulk_base + base_register + AXIMON_OFFSET_LATENCY_HIS_0 + 4 * his_n);
 }
-#if 0
 static uint32_t axi_mon_ddrsys1_get_latency_his_cnts(uint32_t base_register, uint32_t his_n)
 {
 	return readl(iomem_ddrmon_sys1_base + base_register + AXIMON_OFFSET_LATENCY_HIS_0 + 4 * his_n);
@@ -319,7 +319,7 @@ static void axi_mon_count_port_info(uint32_t duration, uint32_t byte_cnt, struct
 {
 	uint32_t bw = byte_cnt / duration;
 
-	pr_debug("duration=%ld, byte_cnt=%ld, count=%ld\n", duration, byte_cnt, axi_info->count);
+	pr_debug("duration=%u, byte_cnt=%u, count=%llu\n", duration, byte_cnt, axi_info->count);
 	//pr_err("duration=%ld, byte_cnt=%ld, count=%ld\n", duration, byte_cnt, axi_info->count);
 
 	if (axi_info->count != 0) {
@@ -421,10 +421,10 @@ void customed_setting(void)
 	//real fabric setting
 	//r_hit_sel setting
 	u4value = readl(iomem_aximon_base + AXIMON_real_M1_WRITE + 0x4);
-	u4value = (u4value) & (~0x3ff) | r_hit_sel;
+	u4value = ((u4value) & (~0x3ff)) | r_hit_sel;
 	writel(u4value, (iomem_aximon_base + AXIMON_real_M1_WRITE + 0x4));
 	u4value = readl(iomem_aximon_base + AXIMON_real_M1_READ + 0x4);
-	u4value = (u4value) & (~0x3ff) | r_hit_sel;
+	u4value = ((u4value) & (~0x3ff)) | r_hit_sel;
 	writel(u4value, (iomem_aximon_base + AXIMON_real_M1_READ + 0x4));
 
 	//r_hit_id&id mask setting
@@ -447,10 +447,10 @@ void customed_setting(void)
 	//offline_fabric m1 setting
 	//o1 hit sel fix to 2
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M1_WRITE + 0x4);
-	u4value = (u4value) & (~0x3ff) | 0x2;
+	u4value = ((u4value) & (~0x3ff)) | 0x2;
 	writel(u4value, (iomem_aximon_offline_base + AXIMON_offline_M1_WRITE + 0x4));
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M1_READ + 0x4);
-	u4value = (u4value) & (~0x3ff) | 0x2;
+	u4value = ((u4value) & (~0x3ff)) | 0x2;
 	writel(u4value, (iomem_aximon_offline_base + AXIMON_offline_M1_READ + 0x4));
 	//o1_hit_id setting
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M1_WRITE + 0x1c);
@@ -470,10 +470,10 @@ void customed_setting(void)
 	//offline_fabric m2 setting
 	//o2 hit sel fix to 2
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M2_WRITE + 0x4);
-	u4value = (u4value) & (~0x3ff) | 0x2;
+	u4value = ((u4value) & (~0x3ff)) | 0x2;
 	writel(u4value, (iomem_aximon_offline_base + AXIMON_offline_M2_WRITE + 0x4));
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M2_READ + 0x4);
-	u4value = (u4value) & (~0x3ff) | 0x2;
+	u4value = ((u4value) & (~0x3ff)) | 0x2;
 	writel(u4value, (iomem_aximon_offline_base + AXIMON_offline_M2_READ + 0x4));
 	//o2_hit_id setting
 	u4value = readl(iomem_aximon_offline_base + AXIMON_offline_M2_WRITE + 0x1c);
@@ -918,9 +918,9 @@ void axi_mon_get_info_all(uint32_t duration)
 
 void axi_mon_dump_single(struct AXIMON_INFO_PORT *port_info)
 {
-	uint64_t total_write_lat_his = 0;
-	uint64_t total_read_lat_his = 0;
-	uint i = 0;
+	//uint64_t total_write_lat_his = 0;
+	//uint64_t total_read_lat_his = 0;
+	//uint i = 0;
 	uint64_t dividend = port_info->bw_avg_sum;
 	uint64_t divedend_w_lat = port_info->latency_write_avg;
 	uint64_t divedend_r_lat = port_info->latency_read_avg;
@@ -932,7 +932,7 @@ void axi_mon_dump_single(struct AXIMON_INFO_PORT *port_info)
 
 	if ((strcmp(port_info->port_name, "ddrsys1_m1") == 0) | (strcmp(port_info->port_name, "ddrsys2_m1") == 0)) {
 		pr_err("%-8s : %-8s\n",	port_info->port_name, port_info->id_name);
-		pr_err("avg_w_latency=%5dns, avg_w_latency_min=%5dns, avg_w_latency_max=%5dns\navg_r_latency=%5dns, avg_r_latency_min=%5dns, avg_r_latency_max=%5dns\n",
+		pr_err("avg_w_latency=%lluns, avg_w_latency_min=%uns, avg_w_latency_max=%uns\navg_r_latency=%lluns, avg_r_latency_min=%uns, avg_r_latency_max=%uns\n",
 			divedend_w_lat, port_info->latency_write_avg_min, port_info->latency_write_avg_max,
 			divedend_r_lat, port_info->latency_read_avg_min, port_info->latency_read_avg_max);
 
@@ -957,7 +957,7 @@ void axi_mon_dump_single(struct AXIMON_INFO_PORT *port_info)
 								port_info->bw_min, port_info->bw_max);
 
 		if (((strcmp(port_info->port_name, "off_total") != 0) & (strcmp(port_info->port_name, "bulk_total") != 0) & (strcmp(port_info->port_name, "rt_m1") != 0)) | (strcmp(port_info->port_name, "rt_m1") == 0))
-			pr_err("avg_w_latency=%5dns, avg_w_latency_min=%5dns, avg_w_latency_max=%5dns\navg_r_latency=%5dns, avg_r_latency_min=%5dns, avg_r_latency_max=%5dns\n",
+			pr_err("avg_w_latency=%5lluns, avg_w_latency_min=%5uns, avg_w_latency_max=%5uns\navg_r_latency=%5lluns, avg_r_latency_min=%5uns, avg_r_latency_max=%5uns\n",
 			divedend_w_lat, port_info->latency_write_avg_min, port_info->latency_write_avg_max,
 			divedend_r_lat, port_info->latency_read_avg_min, port_info->latency_read_avg_max);
 

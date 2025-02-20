@@ -140,8 +140,11 @@ static int64_t _mempool_pop(u32 size)
 
 static bool ddr_need_retrain(struct sop_vi_dev *vdev)
 {
-	if (ioread32(vdev->ddr_retrain_reg) & BIT(8)) {
-		return true;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	if(!vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_fe && !vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_be) {
+		if (ioread32(vdev->ddr_retrain_reg) & BIT(8)) {
+			return true;
+		}
 	}
 
 	return false;
@@ -2547,7 +2550,7 @@ int user_pic_trig(struct sop_vi_dev *vdev)
 
 		_post_rgbmap_update(ctx, raw_num, vdev->pre_be_frm_num[raw_num][ISP_BE_CH0]);
 
-		_pre_hw_enque(vdev, raw_num, ISP_BE_CH0);
+		_pre_hw_enque(vdev, raw_num, (enum sop_isp_fe_chn_num)ISP_BE_CH0);
 
 		_vi_wake_up_preraw_th(vdev, raw_num);
 
@@ -3311,8 +3314,9 @@ void _vi_scene_ctrl(struct sop_vi_dev *vdev)
 		ctx->raw_chnstr_num[raw_num] = ctx->total_chn_num;
 
 		if (!ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
+			ctx->isp_pipe_cfg[raw_num].pixel_fmt =
+					g_vi_ctx->chn_attr[ctx->raw_chnstr_num[raw_num]].pixel_format;
 			ctx->total_chn_num++;
-
 			vi_pr(VI_INFO, "raw_num=%d, rgb, chnstr_num=%d, chn_num=%d\n",
 					raw_num, ctx->raw_chnstr_num[raw_num], 1);
 		} else {
@@ -6031,7 +6035,7 @@ void vi_suspend(struct sop_vi_dev *vdev)
 	union reg_isp_top_int_event2_en ev2_en;
 	union reg_isp_top_int_event2_en_fe345 ev2_en_fe345;
 	uintptr_t isptopb = vdev->ctx.phys_regs[ISP_BLK_ID_ISPTOP];
-	u8 count = 200;
+	u8 count = 20;
 	atomic_set(&vdev->is_suspend, 1);
 	ev2_en.raw = 0;
 	ev2_en.bits.frame_start_enable_fe0	= 0;
@@ -6139,27 +6143,27 @@ int vi_create_thread(struct sop_vi_dev *vdev, enum E_VI_TH th_id)
 	if (vdev->vi_th[th_id].w_thread == NULL) {
 		switch (th_id) {
 		case E_VI_TH_PRERAW:
-			memcpy(vdev->vi_th[th_id].th_name, "task_isp_pre", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "task_isp_pre", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_preraw_thread;
 			break;
 		case E_VI_TH_VBLANK_HANDLER:
-			memcpy(vdev->vi_th[th_id].th_name, "task_isp_blank", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "task_isp_blank", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_vblank_handler_thread;
 			break;
 		case E_VI_TH_ERR_HANDLER:
-			memcpy(vdev->vi_th[th_id].th_name, "task_isp_err", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "task_isp_err", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_err_handler_thread;
 			break;
 		case E_VI_TH_EVENT_HANDLER:
-			memcpy(vdev->vi_th[th_id].th_name, "vi_event_handler", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "vi_event_handler", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_event_handler_thread;
 			break;
 		case E_VI_TH_RUN_TPU1:
-			memcpy(vdev->vi_th[th_id].th_name, "ai_isp_tpu1", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "ai_isp_tpu1", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_run_tpu_thread1;
 			break;
 		case E_VI_TH_RUN_TPU2:
-			memcpy(vdev->vi_th[th_id].th_name, "ai_isp_tpu2", sizeof(vdev->vi_th[th_id].th_name));
+			strncat(vdev->vi_th[th_id].th_name, "ai_isp_tpu2", sizeof(vdev->vi_th[th_id].th_name));
 			vdev->vi_th[th_id].th_handler = _vi_run_tpu_thread2;
 			break;
 		default:
@@ -8044,7 +8048,6 @@ static int _vi_event_handler_thread(void *arg)
 			chn.dev_id = 0;
 			chn.chn_id = b.chn_id;
 			ret2 = vb_dqbuf(chn, &vi_jobs[chn.chn_id], &blk);
-			vi_pr(VI_INFO, "dev = %d, chn = %d\n", chn.dev_id, chn.chn_id);
 			if (ret2 != 0) {
 				if (blk == VB_INVALID_HANDLE)
 					vi_pr(VI_ERR, "chn(%d) can't get vb-blk.\n", chn.chn_id);
@@ -8327,7 +8330,7 @@ static void _vi_err_retrig_pre_fe(struct sop_vi_dev *vdev)
 
 		//yuv sensor offline2sc
 		if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor && ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
-			fe_max = ctx->isp_pipe_cfg[raw_num].mux_mode;
+			fe_max = (enum sop_isp_fe_chn_num)ctx->isp_pipe_cfg[raw_num].mux_mode;
 			for (fe_chn = ISP_FE_CH0; fe_chn <= fe_max; fe_chn++) {
 				if (atomic_read(&vdev->isp_err_times[raw_num])) {
 					spin_lock_irqsave(&vdev->qbuf_lock, flags);
@@ -9453,7 +9456,7 @@ static inline void _isp_pre_be_done_handler(struct sop_vi_dev *vdev,
 
 		if (!ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe &&
 			!ctx->isp_pipe_cfg[raw_num].is_raw_replay_be)
-			_pre_hw_enque(vdev, raw_num, chn_num);
+			_pre_hw_enque(vdev, raw_num, (enum sop_isp_fe_chn_num)chn_num);
 
 		if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
 			trigger = (vdev->pre_be_frm_num[raw_num][ISP_BE_CH0] ==

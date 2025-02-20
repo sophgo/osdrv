@@ -39,6 +39,7 @@ struct vpss_chn_work_status_s {
 	u64 prev_time; // latest time (us)
 	u32 frame_num;  //The number of Frame in one second
 	u32 real_frame_rate; // chn real time frame rate
+	u32 pool_id;
 };
 
 struct vpss_chn_cfg {

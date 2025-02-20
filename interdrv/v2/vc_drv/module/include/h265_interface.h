@@ -785,6 +785,7 @@ int enable_user_pic(void *pHandle, int instant);
 int disable_user_pic(void *pHandle);
 int set_display_mode(void *pHandle, int display_mode);
 int vdec_init_handle_pool(void);
+int vdec_deinit_handle_pool(void);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

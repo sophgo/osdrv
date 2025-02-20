@@ -60,7 +60,7 @@ int work_mask = 0xff; //default vpss_v + vpss_t
 int avail_mask = 0xff;
 int sche_thread_enable = 1;
 unsigned short reset_time[VPSS_MAX];
-unsigned char core_last_sign[VPSS_MAX];
+unsigned char core_last_sign[VPSS_MAX] = {0};
 
 module_param(work_mask, int, 0644);
 
@@ -339,8 +339,8 @@ static int job_try_schedule(struct vpss_job *job)
 	job->dev_idx_start = dev_idx;
 	dev_idx_max = dev_idx + chn_num;
 
-	if(job->cfg.grp_cfg.pixelformat == PIXEL_FORMAT_NV12 ||
-		job->cfg.grp_cfg.pixelformat == PIXEL_FORMAT_NV21)
+	if(cfg->grp_cfg.pixelformat == PIXEL_FORMAT_NV12 ||
+		cfg->grp_cfg.pixelformat == PIXEL_FORMAT_NV21)
 		core_last_sign[dev_idx] = true;
 	else
 		core_last_sign[dev_idx] = false;
@@ -682,7 +682,10 @@ int vpss_hal_remove_job(struct vpss_job *job)
 					continue;
 				vpss_stauts(i);
 				// BIT(10) always reset; BIT(11) never reset
-				if((work_mask & BIT(10)) || ((!reset_time[i]) && ((work_mask & BIT(11)) == 0))){
+				// VPSS2 and VPSS3 need binding reset, manual set BIT(13) can reset
+				if(((BIT(10) & work_mask) ||
+					(!reset_time[i] && !(BIT(11) & work_mask))) &&
+					(i != VPSS_V2 || (BIT(13) & work_mask))) {
 					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
 					TRACE_VPSS(DBG_WARN, "core(%d) reset.\n", i);
 					reset_time[i] = 1000;
@@ -1066,7 +1069,7 @@ static void vpss_job_finish(struct vpss_job *job)
 				for (i = 0; i < VPSS_MAX; i++){
 					if (!(job->vpss_dev_mask & BIT(i)))
 						continue;
-					if (!img_top_tile_cfg(i, false))
+					if (!img_top_tile_cfg(i, true))
 						atomic_set(&dev->vpss_cores[i].state, VIP_END);
 					else
 						atomic_set(&dev->vpss_cores[i].state, VIP_RUNNING);

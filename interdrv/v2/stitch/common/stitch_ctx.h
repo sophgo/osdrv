@@ -26,6 +26,16 @@ enum stitch_handler_state {
 	STITCH_HANDLER_STATE_MAX,
 };
 
+struct stitch_core_time_info {
+	unsigned int hw_duration;//us per second
+	unsigned int duty_ratio;
+	unsigned long long all_hw_duration;//us
+	unsigned long long all_duration;//us
+	unsigned int all_duty_ratio;
+	unsigned int grp_fps[STITCH_MAX_GRP_NUM];//frame num per second
+	unsigned int fps;
+};
+
 struct stitch_work_status {
 	//xkliu
 	unsigned char grp_id;
@@ -37,9 +47,6 @@ struct stitch_work_status {
 	unsigned int max_cost_time;
 	unsigned int hw_cost_time; // current job Hw cost time in us
 	unsigned int hw_max_cost_time;
-	unsigned int duration;
-	unsigned int sw_duration;
-	unsigned int hw_duration;
 };
 
 typedef void (*stitch_job_cb)(void *data);
@@ -85,7 +92,6 @@ struct __stitch_ctx {
 	struct stitch_work_status work_status;
 	struct stitch_job job;
 	struct work_struct work_frm_done;
-	struct timespec64 time;
 	struct vb_s *vb_out;
 	atomic_t enable_count;
 	//struct mutex io_lock;
@@ -120,6 +126,7 @@ struct stitch_handler_ctx {
 	stitch_grp working_grp;
 	atomic_t evt_state;//specific enum stitch_evt_state
 	struct grp_work_queue grp_workq;
+	struct stitch_core_time_info time;
 };
 
 #ifdef __cplusplus

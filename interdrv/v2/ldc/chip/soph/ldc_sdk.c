@@ -1912,6 +1912,7 @@ int ldc_suspend_handler(void)
 	}
 	atomic_set(&dev->state, LDC_DEV_STATE_STOP);
 
+	ldc_proc_update_timer_proc(true);
 	TRACE_LDC(DBG_WARN, "suspend handler+\n");
 	return 0;
 }
@@ -1931,6 +1932,8 @@ int ldc_resume_handler(void)
 	}
 
 	atomic_set(&dev->state, LDC_DEV_STATE_RUNNING);
+
+	ldc_proc_update_timer_proc(false);
 
 	TRACE_LDC(DBG_WARN, "resume handler+\n");
 	return 0;

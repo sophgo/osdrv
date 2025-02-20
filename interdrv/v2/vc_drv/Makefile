@@ -79,7 +79,7 @@ JPU_SOURCES =	cnm_driver/jpeg/jpuapi/jpuapi.c 	\
 				cnm_driver/jpeg/jdi/linux/driver/jpu_core_res.c	\
 				cnm_driver/jpeg/jdi/linux/driver/jpeg.c	\
 				cnm_driver/jpeg/sample/helper/jpulog.c	\
-				cnm_driver/jpeg/sample/helper/jpuhelper.c 
+				cnm_driver/jpeg/sample/helper/jpuhelper.c
 
 
 MODULE_OBJS=$(patsubst %.c,%.o,$(MODULE_SOURCES))
@@ -94,6 +94,8 @@ KBUILD_EXTRA_SYMBOLS += $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 
 ccflags-y += $(VC_DRV_HEADER) -DUSE_KERNEL_MODE -DKERNEL_MODE -DENABLE_DEC -DMJPEG_INTERFACE_API -DCNM_WAVE_SERIES
+
+ccflags-y += -DRV_TEST -mno-outline-atomics
 
 ccflags-y += -DRV_TEST
 

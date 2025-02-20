@@ -210,6 +210,12 @@ struct ldc_proc_operation_status {
 	unsigned int cb_cnt;
 };
 
+struct ldc_proc_core_status {
+	unsigned long long hw_start_time; // us
+	unsigned int core_all_hw_time;
+	unsigned int duty_ratio;
+};
+
 struct ldc_proc_ctx {
 	struct ldc_proc_job_info job_info[LDC_PROC_JOB_INFO_NUM];
 	unsigned short job_idx; // latest job submitted
@@ -217,6 +223,7 @@ struct ldc_proc_ctx {
 	struct ldc_proc_tsk_status tsk_status;
 	struct ldc_proc_operation_status fisheye_status;
 	spinlock_t lock;
+	struct ldc_proc_core_status gdc_core_status[LDC_DEV_MAX_CNT];
 };
 
 #endif /* _LDC_COMMON_H_ */

@@ -815,7 +815,7 @@ static int vo_set_hdmi_param(vo_dev dev, vo_hdmi_param_s *hdmi_param)
 	if ((hdmi_param->hdmi_csc.csc_matrix >= VO_CSC_MATRIX_601_LIMIT_RGB2YUV &&
 	     hdmi_param->hdmi_csc.csc_matrix <= VO_CSC_MATRIX_709_FULL_RGB2YUV) ||
 	     hdmi_param->hdmi_csc.csc_matrix == VO_CSC_MATRIX_IDENTITY) {
-		disp_set_out_csc(dev, hdmi_param->hdmi_csc.csc_matrix);
+		disp_set_out_csc(dev, (enum disp_csc)hdmi_param->hdmi_csc.csc_matrix);
 	} else {
 		TRACE_VO(DBG_ERR, "dev(%d) HDMI CscMatrix(%d) invalid.\n", dev, hdmi_param->hdmi_csc.csc_matrix);
 		return ERR_VO_ILLEGAL_PARAM;
@@ -842,7 +842,7 @@ static int vo_get_hdmi_param(vo_dev dev, vo_hdmi_param_s *hdmi_param)
 	}
 
 	disp_cfg = disp_get_cfg(dev);
-	hdmi_param->hdmi_csc.csc_matrix = disp_cfg->out_csc;
+	hdmi_param->hdmi_csc.csc_matrix = (vo_csc_matrix_e)disp_cfg->out_csc;
 
 	return 0;
 }
@@ -1488,7 +1488,7 @@ static int vo_set_layer_csc(vo_layer layer, vo_csc_s video_csc)
 
 	if (video_csc.csc_matrix >= VO_CSC_MATRIX_601_LIMIT_YUV2RGB &&
 	    video_csc.csc_matrix <= VO_CSC_MATRIX_709_FULL_YUV2RGB) {
-		disp_set_in_csc(dev, video_csc.csc_matrix);
+		disp_set_in_csc(dev, (enum disp_csc)video_csc.csc_matrix);
 	} else {
 		TRACE_VO(DBG_ERR, "layer(%d) CscMatrix(%d) invalid.\n", layer, video_csc.csc_matrix);
 		return ERR_VO_ILLEGAL_PARAM;
@@ -1515,7 +1515,7 @@ static int vo_get_layer_csc(vo_layer layer, vo_csc_s *video_csc)
 	layer_ctx = &g_vo_ctx->layer_ctx[layer];
 	dev = layer_ctx->bind_dev_id;
 	disp_cfg = disp_get_cfg(dev);
-	video_csc->csc_matrix = disp_cfg->in_csc;
+	video_csc->csc_matrix = (vo_csc_matrix_e)disp_cfg->in_csc;
 
 	return 0;
 }

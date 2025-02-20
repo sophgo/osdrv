@@ -17,6 +17,7 @@
 #include <linux/version.h>
 #include <generated/compile.h>
 #include "ldc_common.h"
+#include "ldc_core.h"
 
 int ldc_proc_init(void *shm);
 int ldc_proc_remove(void);
@@ -25,6 +26,7 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk);
 void ldc_proc_record_job_start(struct ldc_job *job);
 void ldc_proc_record_job_done(struct ldc_job *job);
 void ldc_proc_commit_job(struct ldc_job *job);
+void ldc_proc_update_timer_proc(bool suspend);
 
 #ifdef __cplusplus
 }

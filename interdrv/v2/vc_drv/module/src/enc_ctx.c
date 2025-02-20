@@ -1049,7 +1049,7 @@ int venc_create_enc_ctx(venc_enc_ctx *pEncCtx, void *pchnctx)
     venc_rc_attr_s *prcatt = &pChnAttr->stRcAttr;
     int status = 0;
 
-    VENC_MEMSET(pEncCtx, 0, sizeof(venc_enc_ctx));
+    memset(pEncCtx, 0, sizeof(venc_enc_ctx));
 
     switch (pVencAttr->enType) {
     case PT_JPEG:

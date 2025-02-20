@@ -121,14 +121,6 @@
 
 //#define SUPPORT_SW_UART
 //#define SUPPORT_SW_UART_V2	// WAVE511 or WAVE521C or WAVE6
-// #define SUPPORT_SW_UART_ON_NONOS
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    #if (!defined(SUPPORT_SW_UART) && !defined(SUPPORT_SW_UART_V2))
-        #error "SUPPORT_SW_UART_ON_NONOS define needs (#if defined(SUPPORT_SW_UART_V2) || defined(SUPPORT_SW_UART))"
-    #endif
-#endif
-
-
 // #define SUPPORT_SAMPLE_ENC_DOLBY_SEI
 
 #define ENABLE_HOST_RC

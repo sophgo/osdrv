@@ -6,6 +6,7 @@
 #include <linux/platform_device.h>
 #include <linux/proc_fs.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/compat.h>
@@ -385,7 +386,7 @@ static void vpss_dev_deinit(struct vpss_device *dev)
 
 		if (core->clk_src)
 			clk_disable_unprepare(core->clk_src);
-		if (core->clk_apb)
+		if (core->clk_apb && __clk_is_enabled(core->clk_apb))
 			clk_disable_unprepare(core->clk_apb);
 		if (core->clk_vpss)
 			clk_unprepare(core->clk_vpss);

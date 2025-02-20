@@ -909,7 +909,7 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end);
 bool sclr_left_tile(u8 inst, u16 src_l_w);
 bool sclr_right_tile(u8 inst, u16 src_offset);
 bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right);
-bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_left);
+bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_right);
 
 void sclr_dump_top_register(u8 inst);
 void sclr_dump_img_in_register(int img_inst);

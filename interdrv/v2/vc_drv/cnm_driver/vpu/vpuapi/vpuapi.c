@@ -14,7 +14,7 @@
 #include "product.h"
 #include "wave/wave5_regdefine.h"
 #include <linux/mutex.h>
-
+#include <linux/delay.h>
 
 
 #define INVALID_CORE_INDEX_RETURN_ERROR(_coreIdx)  \
@@ -204,7 +204,7 @@ static RetCode InitializeVPU(Uint32 coreIdx, const Uint16* code, Uint32 size)
 
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
     create_sw_uart_thread(coreIdx, ProductVpuGetId(coreIdx));
-    usleep(500*1000);
+    msleep(500);
 #endif
     if (ProductVpuIsInit(coreIdx) != 0) {
         ProductVpuReInit(coreIdx, (void *)code, size);

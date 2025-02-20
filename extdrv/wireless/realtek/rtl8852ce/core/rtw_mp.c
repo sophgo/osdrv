@@ -368,7 +368,7 @@ MPT_InitializeAdapter(
 	pMptCtx->backup0xc30 = (u8)phy_query_bb_reg(adapter, rOFDM0_RxDetector1, bMaskByte0);
 	pMptCtx->backup0x52_RF_A = (u8)phy_query_rf_reg(adapter, RF_PATH_A, RF_0x52, 0x000F0);
 	pMptCtx->backup0x52_RF_B = (u8)phy_query_rf_reg(adapter, RF_PATH_B, RF_0x52, 0x000F0);
-#endif	
+#endif
 	return	rtStatus;
 }
 
@@ -532,7 +532,7 @@ void rtw_mp_trigger_dack(_adapter *padapter)
 
 static void init_mp_data(_adapter *padapter)
 {
-#if 0	
+#if 0
 	struct dm_struct *phydm = adapter_to_phydm(padapter);
 
 	/*disable BCN*/
@@ -541,7 +541,7 @@ static void init_mp_data(_adapter *padapter)
 	rtw_write8(padapter, REG_BCN_CTRL, v8);
 
 	phydm->rf_calibrate_info.txpowertrack_control = _FALSE;
-#endif	
+#endif
 }
 
 u32 mp_join(_adapter *padapter, u8 mode)
@@ -1348,7 +1348,7 @@ u8 rtw_phl_mp_tx_cmd(_adapter *padapter, enum rtw_mp_tx_cmd cmdid,
 			tx_arg.ppdu_type = pmppriv->rtw_mp_pmact_ppdu_type;
 			tx_arg.cbw = pmppriv->bandwidth;
 			tx_arg.txsc = pmppriv->rtw_mp_trxsc;
-			tx_arg.n_user = pmppriv->rtw_mp_plcp_tx_user; 
+			tx_arg.n_user = pmppriv->rtw_mp_plcp_tx_user;
 
 			RTW_INFO("%s,SET TX_CONFIG_PLCP_COMMON_INFO\n", __func__);
 			RTW_INFO("%s=============================\n", __func__);
@@ -1715,9 +1715,9 @@ void rtw_set_phl_packet_tx(_adapter *padapter, u8 bStart)
 	struct _ADAPTER_LINK *padapter_link = GET_PRIMARY_LINK(padapter);
 	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
 	u8 rfpath_i = 0;
+	u32 val32 = 0;
 	u8 tx_nss = get_phy_tx_nss(padapter, padapter_link);
 	pmp_priv = &padapter->mppriv;
-	u32 val32 = 0;
 
 	RTW_INFO("%s: PACKET TX tx method %d!!\n", __func__, pmp_priv->rtw_mp_tx_method);
 
@@ -1776,7 +1776,7 @@ void rtw_set_phl_packet_tx(_adapter *padapter, u8 bStart)
 
 		pmp_priv->bspecif_tssi_de = false;
 		pmp_priv->specif_tsside_val = 0;
-	} 		
+	}
          if (!bStart) {
 			val32 = rtw_phl_read32(dvobj->phl, 0xC340);
 			val32 |= 0x000007FF;
@@ -1784,7 +1784,7 @@ void rtw_set_phl_packet_tx(_adapter *padapter, u8 bStart)
 			val32 = rtw_phl_read32(dvobj->phl, 0x12344);/*B mode CCA on*/
 			val32 &= 0xEFFFFFFF;
 			rtw_phl_write32(dvobj->phl, 0x12344, val32);
-			
+
 			val32 = rtw_phl_read32(dvobj->phl, 0x10c3c);/*OFDM CCA on*/
 			val32 &= 0xFFFFFDFF;
 			rtw_phl_write32(dvobj->phl, 0x10c3c, val32);
@@ -2167,7 +2167,7 @@ static int rtw_mp_psd_close(_adapter *padapter, struct psd_init_regs *regs)
 
 	/* 11ac cck restore */
 	rtw_write32(padapter, 0x808, regs->reg_808);
-#endif	
+#endif
 	RTW_INFO("%s: restore %d rf type done\n", __func__, rf_type);
 	return 0;
 }
@@ -3085,7 +3085,7 @@ u32 rtw_mpt_raw2dec_dbm(u32 val)
 {
 	u32 actdbm = 0;
 	u32 dec = val % TX_POWER_BASE;
-	
+
 	actdbm = ((dec * 100) / TX_POWER_BASE);
 
 	return actdbm;
@@ -3558,7 +3558,7 @@ static thread_return mp_rx_phl_cal_thread(thread_context context)
 	struct rtw_mp_cal_arg	*cal_arg = NULL;
 	u8 i = 0;
 	u8 rxcmd = RTW_MP_CAL_CMD_TRIGGER_WATCHDOG_CAL;
-	
+
 	pmp_priv = (struct mp_priv *)context;
 	padapter = pmp_priv->papdater;
 	cal_arg = _rtw_malloc(sizeof(struct rtw_mp_cal_arg));

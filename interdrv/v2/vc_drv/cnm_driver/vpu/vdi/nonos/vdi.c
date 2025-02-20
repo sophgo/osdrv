@@ -21,9 +21,7 @@
 #include "vpuapi/vpuapi.h"
 #include "main_helper.h"
 #include "misc/debug.h"
-#ifdef SUPPORT_SW_UART_ON_NONOS
-extern void SwUartHandler(void *context);
-#endif
+
 #if defined(_WIN32) || defined(__WIN32__) || defined(_WIN64) || defined(WIN32) || defined(__MINGW32__)
 #elif defined(linux) || defined(__linux) || defined(ANDROID)
 #else
@@ -1041,9 +1039,6 @@ int vdi_wait_bus_busy(unsigned long coreIdx, int timeout, unsigned int gdi_busy_
 
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (PRODUCT_CODE_W_SERIES(vdi->product_code)) {
             if (vdi_fio_read_register(coreIdx, gdi_busy_flag) == gdi_status_check_value) break;
         }
@@ -1070,9 +1065,6 @@ int vdi_wait_vpu_busy(unsigned long coreIdx, int timeout, unsigned int addr_bit_
 
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (vdi_read_register(coreIdx, addr_bit_busy_flag) == 0)
             break;
 
@@ -1095,9 +1087,6 @@ int vdi_wait_vcpu_bus_busy(unsigned long coreIdx, int timeout, unsigned int gdi_
     //the setting small value as timeout gives a chance to wait the other vpu core.
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
         if (vdi_fio_read_register(coreIdx, gdi_busy_flag) == 0x00)
             break;
         //osal_msleep(1);    // 1ms sec
@@ -1148,10 +1137,6 @@ int vdi_wait_interrupt(unsigned long core_idx, unsigned int instIdx, int timeout
 
     while(1)
     {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        SwUartHandler(NULL);
-#endif
-
         ptr_intr_reason = (unsigned int *)Queue_Dequeue(irqContext->intrQ[instIdx]);
         if (ptr_intr_reason)
         {

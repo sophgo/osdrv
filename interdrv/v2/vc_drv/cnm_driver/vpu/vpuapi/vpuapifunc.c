@@ -16,7 +16,7 @@
 #include "coda9/coda9_vpuconfig.h"
 #include "wave/wave5_regdefine.h"
 #include "wave/wave6_regdefine.h"
-
+#include <linux/delay.h>
 
 #define MAX_LAVEL_IDX 16
 
@@ -4308,106 +4308,61 @@ Int32 CalcChromaSize(
 
 
 #if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
-#include <string.h>
-#include <pthread.h>
-#include <inttypes.h>
+#include <linux/string.h>
 typedef struct  {
     int core_idx;
     PhysicalAddress status_reg;
     PhysicalAddress tx_data_reg;
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    char uartTx[1024];
-#else
-    pthread_t thread_id;
-#endif
+    osal_thread_t thread_id;
     int sw_uart_thread_run;
 } SwUartContext;
 static SwUartContext s_SwUartContext;
-void SwUartHandler(void *context)
+int SwUartHandler(void *context)
 {
     unsigned int regSwUartStatus;
     unsigned int regSwUartTxData;
     unsigned char *strRegSwUartTxData;
     int i = 0;
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    char *uartTx = &s_SwUartContext.uartTx[0];
-#else
     char uartTx[1024];
-#endif
 
-#ifdef SUPPORT_SW_UART_ON_NONOS
-#else
     VLOG(1, "enter %s \n", __FUNCTION__);
-#endif
-#ifdef SUPPORT_SW_UART_ON_NONOS
-#else
     osal_memset(uartTx, 0, sizeof(char)*1024);
-#endif
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    // if (s_SwUartContext.sw_uart_thread_run != 1)
-    //     return;
-#else
-    while(s_SwUartContext.sw_uart_thread_run == 1)
-#endif
-    {
+    while(s_SwUartContext.sw_uart_thread_run == 1) {
         regSwUartStatus = VpuReadReg(s_SwUartContext.core_idx, s_SwUartContext.status_reg);
         if (regSwUartStatus == (unsigned int)-1)
-        {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-            return;
-#else
             continue;
-#endif
-        }
 
-        if (regSwUartStatus == 0)
-        {
+        if (regSwUartStatus == 0) {
             VpuWriteReg(s_SwUartContext.core_idx, s_SwUartContext.status_reg,  (1<<0));
             regSwUartStatus = VpuReadReg(s_SwUartContext.core_idx, s_SwUartContext.status_reg);
         }
-        if ((regSwUartStatus & (1<<1)))
-        {
+
+        if ((regSwUartStatus & (1<<1))) {
             regSwUartTxData = VpuReadReg(s_SwUartContext.core_idx, s_SwUartContext.tx_data_reg);
             if (regSwUartTxData == (unsigned int)-1)
-            {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-                return;
-#else
                 continue;
-#endif
-            }
+
             regSwUartStatus &= ~(1<<1);
             VpuWriteReg(s_SwUartContext.core_idx, s_SwUartContext.status_reg, regSwUartStatus);
             strRegSwUartTxData = (unsigned char *)&regSwUartTxData;
-            for (i=0; i < 4; i++)
-            {
-                if (strRegSwUartTxData[i] == '\n')
-                {
-                    VLOG(WARN, "[%" PRIu64 "] %s \n", osal_gettime(), uartTx+1);
+            for (i=0; i < 4; i++) {
+                if (strRegSwUartTxData[i] == '\n') {
+                    VLOG(WARN, "%lld, %s \n", osal_gettime(), uartTx+1);
                     osal_memset(uartTx, 0, sizeof(unsigned char)*1024);
-                }
-                else
-                {
+                } else {
                     strncat((char *)uartTx, (const char *)(strRegSwUartTxData + i), 1);
                 }
             }
         }
-        usleep(0); // for sched_yield
+        msleep(0); // for sched_yield
     }
-#ifdef SUPPORT_SW_UART_ON_NONOS
-#else
-    VLOG(1, "exit %s \n", __FUNCTION__);
-#endif
 
+    VLOG(1, "exit %s \n", __FUNCTION__);
+    return 0;
 }
 
 int create_sw_uart_thread(unsigned long coreIdx, unsigned long productId)
 {
-#ifdef SUPPORT_SW_UART_ON_NONOS
-#else
-    int ret;
-#endif
-
     if (s_SwUartContext.sw_uart_thread_run == 1)
         return 1;
 
@@ -4418,18 +4373,12 @@ int create_sw_uart_thread(unsigned long coreIdx, unsigned long productId)
 
     VpuWriteReg(coreIdx, s_SwUartContext.status_reg,  (1<<0)); // enable SW UART. this will be checked by firmware to know SW UART enabled
 
-#ifdef SUPPORT_SW_UART_ON_NONOS
-    osal_memset(s_SwUartContext.uartTx, 0, sizeof(char)*1024);
-    VLOG(1, "enter %s \n", __FUNCTION__);
-#else
-    ret = pthread_create(&s_SwUartContext.thread_id, NULL, (void*)SwUartHandler, &s_SwUartContext);
-
-    if (ret != 0)
-    {
+    s_SwUartContext.thread_id = osal_thread_create((void*)SwUartHandler, &s_SwUartContext);
+    if (IS_ERR(s_SwUartContext.thread_id)) {
         destroy_sw_uart_thread(coreIdx);
         return 0;
     }
-#endif
+
     return 1;
 }
 
@@ -4441,37 +4390,26 @@ void destroy_sw_uart_thread(unsigned long coreIdx)
 
     inst_num = 0;
     for (i=0; i < MAX_NUM_VPU_CORE; i++)
-    {
         inst_num = inst_num + vdi_get_instance_num(i);
-    }
 
     if (inst_num > 0)
         return;
 
     task_num = 0;
     for (i=0; i < MAX_NUM_VPU_CORE; i++)
-    {
         task_num = task_num + vdi_get_task_num(i);
-    }
 
     if (task_num > 1)
         return;
 
-    if (s_SwUartContext.sw_uart_thread_run == 1)
-    {
+    if (s_SwUartContext.sw_uart_thread_run == 1) {
         s_SwUartContext.sw_uart_thread_run = 0;
 
         VpuWriteReg(coreIdx, s_SwUartContext.status_reg, 0); // disable SW UART. this will be checked by firmware to know SW UART enabled
-
-#ifdef SUPPORT_SW_UART_ON_NONOS
-        VLOG(1, "exit %s \n", __FUNCTION__);
-#else
-        if (s_SwUartContext.thread_id)
-        {
-            pthread_join(s_SwUartContext.thread_id, NULL);
+        if (s_SwUartContext.thread_id) {
+            osal_thread_join(s_SwUartContext.thread_id, NULL);
             s_SwUartContext.thread_id = 0;
         }
-#endif
     }
 
     return ;

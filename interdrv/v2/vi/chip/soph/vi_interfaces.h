@@ -12,7 +12,7 @@ const char * const clk_sys_name[] = {
 	"clk_sys_3", "clk_sys_4", "clk_sys_5"
 };
 const char * const clk_isp_name[] = {
-	"clk_csi_be", "clk_raw", "clk_isp_top",
+	"clk_csi_be", "clk_raw", "clk_isp_top"
 };
 const char * const clk_mac_name[] = {
 	"clk_csi_mac0", "clk_csi_mac1", "clk_csi_mac2",

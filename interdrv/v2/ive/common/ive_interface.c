@@ -78,6 +78,14 @@ struct class *class_id;
 static dev_t cdev_id;
 static uint32_t g_enable_usage_profiling;
 static struct ive_profiling_info *g_time_infos;
+//update proc info
+static void ive_update_timer(struct timer_list *timer);
+DEFINE_TIMER(timer_proc, ive_update_timer);
+static atomic_t g_timer_added = ATOMIC_INIT(0);
+
+//timer callback
+static ive_timer_cb g_core_cb;
+static void *g_core_data;
 
 const char * const ive_irq_name[IVE_DEV_MAX] = {"ive_irq0", "ive_irq1"};
 
@@ -121,6 +129,12 @@ static const struct file_operations ive_fops = {
 #endif
 };
 
+void register_timer_fun(ive_timer_cb cb, void *data)
+{
+	g_core_cb = cb;
+	g_core_data = data;
+}
+
 static void start_ioctl_time(struct ive_profiling_info *pinfo, char *name)
 {
 	int i = 0;
@@ -153,7 +167,7 @@ static void stop_ioctl_time(struct ive_profiling_info *pinfo)
 	}
 }
 
-void start_vld_time(int optype)
+void start_vld_time(int optype, struct ive_dev_core* core)
 {
 	if (g_enable_usage_profiling && optype < MOD_ALL &&
 		optype >= MOD_BYP &&
@@ -163,10 +177,11 @@ void start_vld_time(int optype)
 #else
 		getnstimeofday(&g_time_infos[optype].time_vld_start);
 #endif
+		core->ts_start = g_time_infos[optype].time_vld_start;
 	}
 }
 
-void stop_vld_time(int optype, int tile_num)
+void stop_vld_time(int optype, int tile_num, struct ive_dev_core* core)
 {
 	if (tile_num > 6)
 		return;
@@ -184,8 +199,45 @@ void stop_vld_time(int optype, int tile_num)
 	}
 	g_time_infos[optype].time_tile_diff_us +=
 		g_time_infos[optype].time_vld_diff_us[tile_num];
+	core->ts_end = g_time_infos[optype].time_vld_end;
+	core->hw_duration = get_duration_us(&core->ts_start, &core->ts_end);
+	core->hw_duration_total += core->hw_duration;
 }
 
+void ive_timer_core_update(void *data)
+{
+
+	int i;
+	int duration;
+	struct ive_device *dev = (struct ive_device *)data;
+#if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
+		struct timespec64 cur_time;
+		static struct timespec64 pre_time = {0};
+		ktime_get_real_ts64(&cur_time);
+#else
+		struct timespec cur_time;
+		static struct timespec pre_time = {0};
+		getnstimeofday(&cur_time);
+#endif
+
+	duration = get_duration_us(&pre_time, &cur_time);
+	pre_time = cur_time;
+
+	if (duration > 2000000)
+		return;
+
+	for (i = DEV_IVE_0; i < DEV_IVE_MAX; ++i) {
+		dev->core[i].duty_ratio = (dev->core[i].hw_duration_total * 100) / duration;
+		dev->core[i].hw_duration_total = 0;
+	}
+}
+
+static void ive_update_timer(struct timer_list *timer)
+{
+	(void)(timer);
+	g_core_cb(g_core_data);
+	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
+}
 
 #if IVE_IRQ_THREAD_FUNC
 static void ive_frame_finish(struct ive_device *dev, int dev_id)
@@ -259,7 +311,7 @@ static irqreturn_t ive_irq_handler(int irq, void *data)
 static int ive_proc_show(struct seq_file *m, void *v)
 {
 	int i = 0, tile = 0;
-
+	struct ive_device *ndev= (struct ive_device *)m->private;
 	if (g_enable_usage_profiling) {
 		char const *row_name[] = {"op name", "start(s)", "ioctl(us)",
 							"tile0(us)", "tile1(us)", "tile2(us)", "tile3(us)",
@@ -316,6 +368,8 @@ static int ive_proc_show(struct seq_file *m, void *v)
 					g_time_infos[id].time_tile_diff_us + second_tile_time);
 			}
 		}
+		seq_printf(m, "[IVE CORE 0] duty_ratio = %d%%\n", ndev->core[DEV_IVE_0].duty_ratio);
+		seq_printf(m, "[IVE CORE 1] duty_ratio = %d%%\n", ndev->core[DEV_IVE_1].duty_ratio);
 	} else {
 		seq_puts(m, "[IVE] ive time profiling is disabled\n");
 	}
@@ -646,6 +700,9 @@ static int ive_suspend(struct platform_device *pdev, pm_message_t state)
 	atomic_set(&ndev->core[1].dev_state, IVE_DEV_STATE_END);
 	atomic_set(&ndev->clk_flg, IVE_READY_SUSPEND);
 
+	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
+		del_timer(&timer_proc);
+
 	ive_clk_deinit(ndev);
 	pr_info("ive suspended\n");
 
@@ -672,6 +729,9 @@ static int ive_resume(struct platform_device *pdev)
 	atomic_set(&ndev->clk_flg, IVE_READY_RESUME);
 
 	ive_clk_init(ndev);
+	if (atomic_cmpxchg(&g_timer_added, 0, 1) == 0)
+		add_timer(&timer_proc);
+	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 	pr_info("ive resumed\n");
 
 	return ret;
@@ -1393,6 +1453,11 @@ static int ive_sw_init(struct ive_device *ndev)
 	if (ret)
 		TRACE_IVE(IVE_DBG_WARN, "ive thread priority update failed: %d\n", ret);
 
+	if (atomic_cmpxchg(&g_timer_added,0, 1) == 0)
+		add_timer(&timer_proc);
+	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
+
+	register_timer_fun(ive_timer_core_update, (void *)ndev);
 
 	return ret;
 }
@@ -1409,6 +1474,11 @@ static void ive_sw_deinit(struct ive_device *ndev)
 	}
 
 	list_del_init(&ndev->tsk_list);
+
+	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
+		del_timer_sync(&timer_proc);
+
+
 }
 static int instance_init(struct platform_device *pdev)
 {

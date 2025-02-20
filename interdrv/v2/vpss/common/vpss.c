@@ -455,10 +455,12 @@ static signed int fill_buffers(struct vpss_ctx *ctx, struct vpss_job *job)
 						ctx->chn_cfgs[chn_id].blk_size, ID_VPSS);
 		if (blk[chn_id] == VB_INVALID_HANDLE) {
 			if (online_from_isp) {
-				if (ctx->chn_cfgs[chn_id].vb_pool == VB_INVALID_POOLID)
+				if (ctx->chn_cfgs[chn_id].vb_pool == VB_INVALID_POOLID) {
 					pool_id = find_vb_pool(ctx->chn_cfgs[chn_id].blk_size);
-				else
+					ctx->chn_cfgs[chn_id].chn_work_status.pool_id = pool_id;
+				} else {
 					pool_id = ctx->chn_cfgs[chn_id].vb_pool;
+				}
 				vb_acquire_block(vpss_online_qbuf, chn, pool_id, job);
 				TRACE_VPSS(DBG_INFO, "Grp(%d) Chn(%d) acquire VB BLK later\n"
 					, grp_id, chn_id);
@@ -2746,6 +2748,10 @@ signed int vpss_set_chn_attr(vpss_grp grp_id, vpss_chn chn_id, const vpss_chn_at
 		sizeof(ctx->chn_cfgs[chn_id].chn_attr));
 	ctx->chn_cfgs[chn_id].blk_size = vb_cal_config.vb_size;
 	ctx->chn_cfgs[chn_id].align = DEFAULT_ALIGN;
+	if (ctx->chn_cfgs[chn_id].vb_pool == VB_INVALID_POOLID) {
+		ctx->chn_cfgs[chn_id].chn_work_status.pool_id =
+		find_vb_pool(ctx->chn_cfgs[chn_id].blk_size);
+	}
 	ctx->chn_cfgs[chn_id].is_cfg_changed = true;
 	mutex_unlock(&ctx->lock);
 
@@ -4023,6 +4029,7 @@ signed int vpss_attach_vb_pool(vpss_grp grp_id, vpss_chn chn_id, vb_pool vb_pool
 	ctx = g_vpss_ctx[grp_id];
 	mutex_lock(&ctx->lock);
 	ctx->chn_cfgs[chn_id].vb_pool = vb_pool;
+	ctx->chn_cfgs[chn_id].chn_work_status.pool_id = vb_pool;
 	mutex_unlock(&ctx->lock);
 
 	TRACE_VPSS(DBG_DEBUG, "Grp(%d) Chn(%d) attach vb pool(%d)\n",
@@ -4050,6 +4057,8 @@ signed int vpss_detach_vb_pool(vpss_grp grp_id, vpss_chn chn_id)
 	ctx = g_vpss_ctx[grp_id];
 	mutex_lock(&ctx->lock);
 	ctx->chn_cfgs[chn_id].vb_pool = VB_INVALID_POOLID;
+	ctx->chn_cfgs[chn_id].chn_work_status.pool_id =
+		find_vb_pool(ctx->chn_cfgs[chn_id].blk_size);
 	mutex_unlock(&ctx->lock);
 
 	TRACE_VPSS(DBG_DEBUG, "Grp(%d) Chn(%d)\n", grp_id, chn_id);
