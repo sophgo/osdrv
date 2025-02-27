@@ -382,12 +382,12 @@ static int __init cvi_rtc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	info->rtc_base = devm_ioremap_resource(&pdev->dev, res);
+	info->rtc_base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (IS_ERR(info->rtc_base))
 		return PTR_ERR(info->rtc_base);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	info->rtc_ctrl_base = devm_ioremap_resource(&pdev->dev, res);
+	info->rtc_ctrl_base = devm_ioremap(&pdev->dev, res->start, resource_size(res));
 	if (IS_ERR(info->rtc_ctrl_base))
 		return PTR_ERR(info->rtc_ctrl_base);
 
