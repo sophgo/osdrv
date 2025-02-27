@@ -20,6 +20,7 @@
 
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <uapi/linux/sched/types.h>
 
 #include "ipcm_anonymous.h"
 #include "ipcm_port_anon.h"
@@ -46,7 +47,7 @@ static s32 _anon_recv_handle(u8 port_id, void *data)
 		if (_anon_ctx.queue)
 			queue_put(_anon_ctx.queue, data);
 		wake_up_interruptible(&_anon_ctx.anon_wait);
-	} else if (port_id < IPCM_ANON_KER_PORT_ST) {
+	} else if (port_id < IPCM_ANON_PORT_MAX) {
 		if (_anon_ctx.queue_kernel)
 			queue_put(_anon_ctx.queue_kernel, data);
 		up(&_anon_ctx.sem);
@@ -123,6 +124,9 @@ rls_pool:
 
 s32 ipcm_drv_anon_init(void)
 {
+	int ret	= 0;
+	struct sched_param tsk;
+
 	ipcm_debug("%s\n", __func__);
 
 	init_waitqueue_head(&_anon_ctx.anon_wait);
@@ -151,8 +155,12 @@ s32 ipcm_drv_anon_init(void)
 
 	sema_init(&_anon_ctx.sem, 0);
 
+	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
 	_anon_ctx.kernel_thread_run = 1;
-	_anon_ctx.process_thread = kthread_run(_anon_kernel_process, NULL, "kernel anon process");
+	_anon_ctx.process_thread = kthread_run(_anon_kernel_process, NULL, "cvitask_anon_process");
+	ret = sched_setscheduler(_anon_ctx.process_thread, SCHED_RR, &tsk);
+	if (ret)
+		ipcm_warning("vpss thread priority update failed: %d\n", ret);
 
 	return 0;
 }

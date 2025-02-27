@@ -37,6 +37,10 @@ s32 ipcm_register_pre_send_handle(ipcm_pre_handle pre_send);
 
 s32 ipcm_send_msg(MsgData *data);
 
+u32 ipcm_get_recv_msg_cnt(void);
+
+u32 ipcm_get_send_msg_cnt(void);
+
 // return 0:lock success  1:lock fail
 s32 ipcm_data_spin_lock(u8 lock_id);
 

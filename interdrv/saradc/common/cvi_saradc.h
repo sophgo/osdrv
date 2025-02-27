@@ -24,11 +24,13 @@
 #define	SARADC_INTR_CLR	  0x024	// interrupt clear register
 #define	SARADC_INTR_STA	  0x028	// interrupt status	register
 #define	SARADC_INTR_RAW	  0x02c	// interrupt raw status	register
-#define SARADC_TRIM	  0x34	// trim register
+#define SARADC_TEST			0x030	// Enable self-test mode, active high
+#define SARADC_TRIM			0x034	// trim register
+#define SARADC_PERIOD_CYCLE	0x038	// bit[0]-bit[23] auto measure in a period
+#define SARADC_TEST_FORCE	0x040
+
 #define	SARADC_EN_SHIFT	 0x0
 #define	SARADC_SEL_SHIFT 0x4
-#define	SARADC_REGS_SIZE (0x2c + 4)
-#define	SARADC_REGS_NUM	 (SARADC_REGS_SIZE / 4)
 
 int64_t cvi_efuse_read_from_shadow(uint32_t addr);
 

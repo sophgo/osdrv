@@ -51,6 +51,8 @@ static int start_x = -1;
 static int start_y = -1;
 static int panel_res_x, panel_res_y;
 
+struct sclr_gop_cfg *g_cfg;
+
 static const struct fb_fix_screeninfo cvifb_fix = {
 	.id =		"cvifb",
 	.type =		FB_TYPE_PACKED_PIXELS,
@@ -865,6 +867,31 @@ static int cvifb_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if defined(CONFIG_PM)
+int cvifb_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	int layer = 1;
+	g_cfg = sclr_gop_get_cfg(SCL_GOP_DISP, layer);
+
+	printk("cvifb_suspend !\n");
+
+	return 0;
+
+}
+
+int cvifb_resume(struct platform_device *pdev)
+{
+	int layer = 1;
+	struct sclr_gop_cfg *cfg = g_cfg;
+
+	sclr_gop_set_cfg(SCL_GOP_DISP, layer, cfg, true);
+	sclr_gop_ow_set_cfg(SCL_GOP_DISP, layer, 0, &cfg->ow_cfg[0], true);
+	printk("cvifb_resume !\n");
+
+	return 0;
+}
+#endif
+
 static const struct of_device_id cvi_fb_dt_match[] = {
 	{.compatible = "cvitek,fb"},
 	{}
@@ -877,7 +904,11 @@ static struct platform_driver cvifb_driver = {
 		.name		= "cvifb",
 		.owner		= THIS_MODULE,
 		.of_match_table = cvi_fb_dt_match,
-	}
+	},
+#if defined(CONFIG_PM)
+		.suspend = cvifb_suspend,
+		.resume = cvifb_resume,
+#endif
 };
 
 module_param_named(vxres, def_vxres, long, 0664);

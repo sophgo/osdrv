@@ -89,7 +89,7 @@ s32 ipcm_msg_send_param(u8 port_id, u8 msg_id, u32 param);
 #if defined(__ALIOS__) || defined(__LINUX_DRV__)
 s32 ipcm_msg_poll(u8 port_id, int32_t timeout);
 #endif
-
+s32 ipcm_msg_up_blank_sem(u8 port_id);
 /**
  * @brief get current msg info, maybe help for ipcm_msg_read_data
  * 

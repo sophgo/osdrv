@@ -203,6 +203,13 @@ s32 ipcm_msg_poll(u8 port_id, u32 timeout)
     return ret;
 }
 
+// for exit thread immediately
+s32 ipcm_msg_up_blank_sem(u8 port_id)
+{
+	up(&_msg_ctx[port_id].sem);
+	return 0;
+}
+
 s32 ipcm_msg_get_cur_msginfo(u8 port_id, u8 *func_type, u8 *msg_id, u32 *remain_len)
 {
 	if (port_id >= IPCM_MSG_PORT_NUM) {

@@ -25,8 +25,14 @@ struct cvi_saradc_device {
 	bool enable[SARADC_CHAN_NUM];
 	void *private_data;
 	int	channel_index;
-	u32 saradc_saved_top_regs[SARADC_REGS_NUM];
-	u32 saradc_saved_rtc_regs[SARADC_REGS_NUM];
+	u32 saradc_ctrl;
+	u32 saradc_cyc_set;
+	u32 saradc_intr_en;
+	u32 saradc_intr_clr;
+	u32 saradc_test;
+	u32 saradc_trim;
+	u32 saradc_period_cycle;
+	u32 saradc_test_force;
 };
 
 #endif /* __PLAT_CV181X_H__ */

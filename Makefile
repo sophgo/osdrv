@@ -62,18 +62,18 @@ else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
 	BASE_DEP = sys
 endif
 
+OTHERS :=
 ifeq (, ${CONFIG_NO_FB})
 	KO_LIST += fb
 endif
 ifeq (, ${CONFIG_NO_TP})
 	KO_LIST += tp
+	OTHERS += cp_ext_tp
 endif
 
 $(info ** [ KO_LIST ] ** = $(KO_LIST))
 
 $(info ** [ CVIARCH ] ** = $(CVIARCH))
-
-OTHERS :=
 
 ifeq (y, ${CONFIG_CP_EXT_WIRELESS})
 KO_LIST += wireless
@@ -165,6 +165,9 @@ gyro_i2c:
 
 cp_ext_wireless:
 	find extdrv/wireless -name '*.ko' -print -exec cp {} $(INSTALL_DIR)/3rd/ \;;
+
+cp_ext_tp:
+	find extdrv/tp -name '*.ko' -print -exec cp {} $(INSTALL_DIR)/3rd/ \;;
 
 clean:
 	@for subdir in $(SUBDIRS); do cd $$subdir && $(MAKE) clean && cd $(CUR_DIR); done

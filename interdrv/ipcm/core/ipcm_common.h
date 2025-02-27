@@ -55,7 +55,7 @@ typedef enum _RTOS_BOOT_STATUS_E {
     RTOS_VI_DONE, // TODO
     RTOS_VPSS_DONE, // TODO
     RTOS_VENC_DONE, // TODO
-
+	RTOS_BOOTLOGO_DONE,
     RTOS_BOOT_STATUS_BUTT,
 } RTOS_BOOT_STATUS_E;
 
@@ -129,7 +129,7 @@ extern IPCM_LOG_LEVEL_E g_ipcm_log_level;
  * 8 ~ 11: for sharefs msg
  * 12 ~ 147: for anonymous msg
  * others: reserved
- * 
+ *
  */
 #define IPCM_SYS_PORT_MAX 4
 #define IPCM_VIRTTTY_PORT_MAX 4

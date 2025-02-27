@@ -29,6 +29,10 @@
 
 #define PWM_REG_NUM				0x80
 
+enum _pwm_polarity {
+	POLARITY_RESTORE,
+	POLARITY_MODIFY,
+};
 /**
  * struct cv_pwm_channel - private data of PWM channel
  * @period_ns:	current period in nanoseconds programmed to the hardware
@@ -55,6 +59,7 @@ struct cv_pwm_chip {
 	void __iomem *base;
 	struct clk *base_clk;
 	u8 polarity_mask;
+	u8 special_polarity_flag;
 	bool no_polarity;
 	uint32_t pwm_saved_regs[PWM_REG_NUM];
 };
@@ -85,12 +90,34 @@ static void pwm_cv_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 	kfree(channel);
 }
 
+static int _pwm_cv_reset_polarity(struct pwm_chip *chip, struct pwm_device *pwm_dev,
+									enum _pwm_polarity polarity)
+{
+	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	u8 polarity_mask = our_chip->polarity_mask;
+
+	if (polarity) {
+		our_chip->special_polarity_flag |= (1 << pwm_dev->hwpwm);
+		polarity_mask ^= (1 << pwm_dev->hwpwm);
+		pr_debug("%s: special polarity!\n", __func__);
+	} else {
+		our_chip->special_polarity_flag &= ~(1 << pwm_dev->hwpwm);
+		pr_debug("%s: original polarity!\n", __func__);
+	}
+	writel(polarity_mask, our_chip->base + REG_POLARITY);
+
+	return 0;
+}
+
 static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 			     int duty_ns, int period_ns)
 {
 	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
 	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
 	u64 cycles;
+	unsigned long value;
+	/*make sure polarity is original*/
+	_pwm_cv_reset_polarity(chip, pwm_dev, POLARITY_RESTORE);
 
 	cycles = clk_get_rate(our_chip->base_clk);
 	pr_debug("clk_get_rate=%llu\n", cycles);
@@ -102,15 +129,33 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 	cycles = cycles * duty_ns;
 	do_div(cycles, period_ns);
 
-	if (cycles == 0)
-		cycles = 1;
-	if (cycles == channel->period)
-		cycles = channel->period - 1;
-
 	channel->hlperiod = channel->period - cycles;
+	if (cycles == 0)
+		/* when hlperiod >hlperiod, duty_cycle=0%, recommended value is 32'h10*/
+		channel->hlperiod = channel->period + 16;
 
-	pr_debug("period_ns=%d, duty_ns=%d, period=%d, hlperiod=%d\n",
-			period_ns, duty_ns, channel->period, channel->hlperiod);
+	if (cycles == channel->period) {
+		/* if want duty_cycle = 100% ,set duty_cycle = 0% and polarity inversed*/
+		channel->hlperiod = channel->period + 16;
+		_pwm_cv_reset_polarity(chip, pwm_dev, POLARITY_MODIFY);
+	}
+	pr_debug("%s: period_ns=%d, duty_ns=%d\n", __func__, period_ns, duty_ns);
+
+	writel(channel->period, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD);
+	if (channel->hlperiod != 0)
+		writel(channel->hlperiod, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD);
+	pr_debug("%s: REG_PERIOD = 0x%x, REG_HLPERIOD = 0x%x\n", __func__,
+			 readl(our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD),
+			 readl(our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD));
+
+	value = readl(our_chip->base + REG_PWMSTART);
+	set_bit(pwm_dev->hwpwm, &value);
+	writel(value, our_chip->base + REG_PWMUPDATE);
+	pr_debug("%s: REG_PWMUPDATE = 0x%lx\n", __func__, value);
+
+	clear_bit(pwm_dev->hwpwm, &value);
+	writel(value, our_chip->base + REG_PWMUPDATE);
+	pr_debug("%s: REG_PWMUPDATE = 0x%lx\n", __func__, value);
 
 	return 0;
 }
@@ -118,13 +163,8 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
 	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
-	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
 	uint32_t pwm_start_value;
 	uint32_t value;
-
-	writel(channel->period, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD);
-	if (channel->hlperiod != 0)
-		writel(channel->hlperiod, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD);
 
 	pwm_start_value = readl(our_chip->base + REG_PWMSTART);
 
@@ -159,6 +199,8 @@ static int pwm_cv_set_polarity(struct pwm_chip *chip,
 				    enum pwm_polarity polarity)
 {
 	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
+	u64  period_ns, chip_clk;
 
 	if (our_chip->no_polarity) {
 		dev_err(chip->dev, "no polarity\n");
@@ -172,6 +214,17 @@ static int pwm_cv_set_polarity(struct pwm_chip *chip,
 
 	writel(our_chip->polarity_mask, our_chip->base + REG_POLARITY);
 
+	/*
+	 *when duty_cycle = 100%,the polarity is special,
+	 *need to reset pwm_cv_config if the polarity changed
+	 */
+	if ((our_chip->special_polarity_flag & (1 << pwm_dev->hwpwm)) != 0) {
+		pr_debug("%s: special_polarity!, reset pwm_cv_config\n", __func__);
+		chip_clk = clk_get_rate(our_chip->base_clk);
+		period_ns = channel->period * NSEC_PER_SEC;
+		do_div(period_ns, chip_clk);
+		pwm_cv_config(chip, pwm_dev, period_ns, period_ns);
+	}
 	return 0;
 }
 
@@ -255,7 +308,7 @@ static const struct pwm_ops pwm_cv_ops = {
 	.disable	= pwm_cv_disable,
 	.config		= pwm_cv_config,
 	.set_polarity	= pwm_cv_set_polarity,
-	.apply		= pwm_cv_apply,
+	/*.apply		= pwm_cv_apply,*/
 	.capture	= pwm_cv_capture,
 	.owner		= THIS_MODULE,
 };
@@ -283,6 +336,7 @@ static int pwm_cv_probe(struct platform_device *pdev)
 	chip->chip.ops = &pwm_cv_ops;
 	chip->chip.base = -1;
 	chip->polarity_mask = 0;
+	chip->special_polarity_flag = 0;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	chip->base = devm_ioremap_resource(&pdev->dev, res);

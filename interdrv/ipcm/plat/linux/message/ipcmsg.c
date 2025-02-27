@@ -437,6 +437,7 @@ CVI_S32 ipcmsg_disconnect(CVI_S32 s32Id)
 
 	pstService->isConnected = CVI_FALSE;
 
+	ipcm_msg_up_blank_sem(0);
 	if (pstService->thread && kthread_stop(pstService->thread))
 		CVI_TRACE_IPCMSG(CVI_DBG_ERR, "fail to stop ipcmsg thread.\n");
 
@@ -600,6 +601,12 @@ CVI_S32 service_run(CVI_VOID *arg)
 		s32Ret = ipcm_msg_poll(0, 1000);
 		if (s32Ret)
 			continue;
+
+		/* disconnect will set isConnected = CVI_FALSE and up blank sem */
+		if (pstService->isConnected == CVI_FALSE) {
+			CVI_TRACE_IPCMSG(CVI_DBG_INFO, "ipcmsg service disconnect, id(%d)\n", pstService->s32Id);
+			break;
+		}
 
 		atomic_set(&s_status.ThreadStep, 1);
 		pstMsg = _read_msg();

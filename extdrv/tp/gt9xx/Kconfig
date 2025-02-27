@@ -1,0 +1,8 @@
+#
+# Touchscreen driver configuration
+#
+
+config TOUCHSCREEN_GT9XX
+	tristate "betterlife tp"
+	---help-- -
+	betterlife fingerprint.

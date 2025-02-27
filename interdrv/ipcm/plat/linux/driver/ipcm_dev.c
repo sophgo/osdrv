@@ -176,7 +176,11 @@ static ssize_t cvi_ipcm_info_proc_write(struct file *file, const char __user *us
 static int cvi_ipcm_info_proc_show(struct seq_file *m, void *v)
 {
 	s32 cnt = mailbox_get_invalid_cnt();
+	u32 rcv_msg_cnt = ipcm_get_recv_msg_cnt();
+	u32 snd_msg_cnt = ipcm_get_send_msg_cnt();
 	seq_printf(m, "mailbox not valid cnt:%d\n", cnt);
+	seq_printf(m, "rcv msg cnt:%d\n", rcv_msg_cnt);
+	seq_printf(m, "snd msg cnt:%d\n", snd_msg_cnt);
 #ifdef IPCM_INFO_REC
 	{
 		int record_stat = ipcm_get_record_info_status();

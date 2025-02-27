@@ -80,6 +80,9 @@ static aos_mutex_t mailbox_mutex;
 static ipcm_pre_handle _m_pre_process = NULL;
 static ipcm_pre_handle _m_pre_send = NULL;
 
+static u32 _m_msg_recv_cnt = 0;
+static u32 _m_msg_send_cnt = 0;
+
 #ifdef IPCM_INFO_REC
 #define RING_NUM 128
 #define INT_COST_RECORD_TIME_LIMIT 200
@@ -279,6 +282,7 @@ static s32 _ipcm_mb_recv_handle(u8 grp_id, void *msg, void *data)
 	}
 #endif
 
+	_m_msg_recv_cnt++;
 	if (_m_pre_process)
 		_m_pre_process(grp_id, msg);
 	if (ipcm_head[port_type].recv)
@@ -449,8 +453,19 @@ s32 ipcm_send_msg(MsgData *data)
 	ipcm_mutex_lock(&mailbox_mutex);
 	// mailbox send
 	ret = mailbox_send(data);
+	_m_msg_send_cnt++;
 	ipcm_mutex_unlock(&mailbox_mutex);
 	return ret;
+}
+
+u32 ipcm_get_recv_msg_cnt(void)
+{
+	return _m_msg_recv_cnt;
+}
+
+u32 ipcm_get_send_msg_cnt(void)
+{
+	return _m_msg_send_cnt;
 }
 
 // return 0:lock success  1:lock fail

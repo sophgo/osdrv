@@ -40,8 +40,14 @@ extern u64 (*arch_timer_read_counter)(void);
 unsigned long long timer_read_counter(void)
 {
 	unsigned long long cval = 0;
-	// aarch64 not support now
-	// asm volatile("mrrc p15, 1, %Q0, %R0, c14" : "=r" (cval));
+#ifdef __arm__
+	// arm32
+	asm volatile("mrrc p15, 1, %Q0, %R0, c14" : "=r" (cval));
+#endif
+#ifdef __aarch64__
+	// aarch64
+	asm volatile("mrs %0, cntvct_el0" : "=r" (cval) :: "memory");
+#endif
 	return cval;
 }
 #endif
