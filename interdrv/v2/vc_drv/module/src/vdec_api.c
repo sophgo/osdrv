@@ -807,7 +807,7 @@ static int process_data(DECODER_HANDLE *pst_handle, int timeout)
     if (pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END)
         fill_queue_cnt = pst_handle->cmd_queue_depth - queue_status.instanceQueueCount;
     else
-        fill_queue_cnt = queue_status.instanceQueueFull ? 0 : 1;
+        fill_queue_cnt = queue_status.instanceQueueFull ? 0 : (pst_handle->cmd_queue_depth - queue_status.instanceQueueCount);
 
     for (i=0; i<fill_queue_cnt; i++)
         fill_command_queue(pst_handle);

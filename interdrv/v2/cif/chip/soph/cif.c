@@ -536,7 +536,7 @@ static int LANE_IS_FRIST(uint16_t phy_mode, short lane_num, unsigned int devno)
 			if (lane_num == CIF_PHY_LANE_0)
 				return 1;
 		} else if (devno == 3) {
-			if (lane_num == CIF_PHY_LANE_6)
+			if (lane_num == CIF_PHY_LANE_9)
 				return 1;
 		}
 	} else if (phy_mode == 5) {
@@ -616,9 +616,8 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
-			} else if (max_port == 1 && min_port == 1) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
 			if (max_port == 5 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
@@ -661,10 +660,9 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P32P4);
 			} else if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
-			} else if (max_port == 2 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 3) {
 			if (max_port == 3 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
@@ -707,11 +705,10 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 			} else if (max_port == 5 && min_port == 3) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P4);
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
-			} else if (max_port == 3 && min_port == 3) {
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 4) {
 			if (max_port == 4 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P42P3);
@@ -747,12 +744,11 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
 			} else if (max_port == 5 && min_port == 4) {
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
-			} else if (min_port == 4 && max_port == 4) {
-				cif_set_clk_dir(ctx, CIF_CLK_P42P3);
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P42P3);
+			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 5) {
 			if (max_port == 5 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
@@ -774,14 +770,12 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
 			} else if (max_port == 5 && min_port == 4) {
 				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
-			} else if (max_port == 5 && min_port == 5) {
-				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
-				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
-				cif_set_clk_dir(ctx, CIF_CLK_P42P3);
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P52P4);
+			cif_set_clk_dir(ctx, CIF_CLK_P42P3);
+			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		}
 	} else if (ctx->phy_mode == 1) {
 		if (clk_port == 0) {
@@ -799,23 +793,23 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
-			} else if (max_port == 1 && min_port == 1) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
 			if (max_port == 2 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-			} else if (max_port == 2 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 		} else if (clk_port == 3) {
 			if (max_port == 4 && min_port == 3) {
 				cif_set_clk_dir(ctx, CIF_CLK_P32P4);
 			}
+		} else if (clk_port == 4) {
+			cif_set_clk_dir(ctx, CIF_CLK_P42P3);
 		}
 	} else if (ctx->phy_mode == 2) {
 		if (clk_port == 0) {
@@ -833,19 +827,17 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P12P2);
-			} else if (max_port == 1 && min_port == 1) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
 			if (max_port == 2 && min_port == 0) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 			} else if (max_port == 2 && min_port == 1) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
-			} else if (max_port == 2 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-				cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
+			cif_set_clk_dir(ctx, CIF_CLK_P22P1);
 		}
 	} else if (ctx->phy_mode == 3) {
 		if (clk_port == 0) {
@@ -853,31 +845,19 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P02P1);
 			}
 		} else if (clk_port == 1) {
-			if (max_port == 1 && min_port == 0) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			} else if (max_port == 1 && min_port == 1) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
 			if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
 			}
 		} else if (clk_port == 3) {
-			if (max_port == 3 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-			} else if (max_port == 3 && min_port == 3) {
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 		} else if (clk_port == 4) {
 			if (max_port == 5 && min_port == 4) {
 				cif_set_clk_dir(ctx, CIF_CLK_P42P5);
 			}
 		} else if (clk_port == 5) {
-			if (max_port == 5 && min_port == 4) {
-				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
-			} else if (max_port == 5 && min_port == 5) {
-				cif_set_clk_dir(ctx, CIF_CLK_P52P4);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P52P4);
 		}
 	} else if (ctx->phy_mode == 4) {
 		if (clk_port == 0) {
@@ -885,21 +865,13 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P02P1);
 			}
 		} else if (clk_port == 1) {
-			if (max_port == 1 && min_port == 0) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			} else if (max_port == 1 && min_port == 0) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
 			if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
 			}
 		} else if (clk_port == 3) {
-			if (max_port == 3 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-			} else if (max_port == 3 && min_port == 3) {
-				cif_set_clk_dir(ctx, CIF_CLK_P32P2);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 		}
 	} else if (ctx->phy_mode == 5) {
 		if (clk_port == 0) {
@@ -907,11 +879,7 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 				cif_set_clk_dir(ctx, CIF_CLK_P02P1);
 			}
 		} else if (clk_port == 1) {
-			if (max_port == 1 && min_port == 0) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			} else if (max_port == 1 && min_port == 1) {
-				cif_set_clk_dir(ctx, CIF_CLK_P12P0);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		}
 	}
 
@@ -3086,6 +3054,8 @@ static int cif_reset_snsr_gpio(struct cif_dev *dev,
 		reset_pin = reset_pin + 352;
 	} else if (reset_port == 5) {
 		reset_pin = reset_pin + 320;
+	} else if (reset_port == 6) {
+		reset_pin = reset_pin + 288;
 	}
 
 	link = &dev->link[sns_rst_config->devno];

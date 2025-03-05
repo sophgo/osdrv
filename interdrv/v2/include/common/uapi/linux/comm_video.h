@@ -513,6 +513,8 @@ typedef struct _grid_info_attr_s {
 	unsigned char is_blending;
 	unsigned char eis_enable; /* enable eis */
 	unsigned char homorgn_num;
+	void * buf;
+	unsigned int len;
 } grid_info_attr_s;
 
 typedef struct _ldc_attr_s {
