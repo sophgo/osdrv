@@ -339,6 +339,8 @@ typedef struct _RGN_RECT_ATTR_S {
 typedef struct _RGN_BITMAP_ATTR_S {
 	RECT_S stRect;
 	CVI_U32 u32BitmapPAddr;
+	CVI_BOOL bOnebitMode;
+	CVI_U32 u32FgColor;
 } RGN_BITMAP_ATTR_S;
 
 /* compression object attribute

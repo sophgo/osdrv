@@ -66,7 +66,8 @@ typedef enum _CVI_JPEG_OP_ {
 	CVI_JPEG_OP_START = (7 << CVI_JPEG_OP_SHIFT),
 	CVI_JPEG_OP_SET_SBM_ENABLE = (8 << CVI_JPEG_OP_SHIFT),
 	CVI_JPEG_OP_WAIT_FRAME_DONE = (9 << CVI_JPEG_OP_SHIFT),
-	CVI_JPEG_OP_MAX = (10 << CVI_JPEG_OP_SHIFT),
+	CVI_JPEG_OP_SET_SUPER_FRAME = (10 << CVI_JPEG_OP_SHIFT),
+	CVI_JPEG_OP_MAX = (0xFF << CVI_JPEG_OP_SHIFT),
 } CVI_JPEG_OP;
 
 /* struct define */
@@ -192,6 +193,11 @@ int CVIJpgGetFrameData(CVIJpgHandle jpgHandle, void *data, int length,
 int CVIJpgGetInputDataBuf(CVIJpgHandle jpgHandle, void *data, int length);
 /* release stream buffer */
 int CVIJpgReleaseFrameData(CVIJpgHandle jpgHandle);
+/* check out bit stream is oversize */
+int CVIJpegCheckSuperFrame(CVIJpgHandle jpgHandle, int outsize);
+/* re encode super frame */
+int CVIJpegProcessSuperFrame(CVIJpgHandle jpgHandle, void *data);
+
 int cviJpegIoctl(void *handle, int op, void *arg);
 
 #ifdef __cplusplus

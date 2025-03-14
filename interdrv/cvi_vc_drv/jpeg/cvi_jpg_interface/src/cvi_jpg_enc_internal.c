@@ -373,6 +373,32 @@ static int cvi_jpeg_quality_scaling(int quality)
 	return quality;
 }
 
+int cvi_jpeg_scale_quality(int scale_factor)
+/* Convert a user-specified scaling factor rating to a percentage quality
+* for an underlying quantization table, using our recommended scaling curve.
+* The input 'quality' factor should be 0 (terrible) to 100 (very good).
+*/
+{
+	/* Safety limit on quality factor.  Convert 0 to 1 to avoid zero divide. */
+	if (scale_factor <= 100)
+		scale_factor = 100;
+	if (scale_factor > 5000)
+		scale_factor = 5000;
+
+		/* The basic table is used as-is (scaling 100) for a quality of 50.
+		* Qualities 50..100 are converted to scaling percentage 200 - 2*Q;
+		* note that at Q=100 the scaling is 0, which will cause cvi_jpeg_add_quant_table
+		* to make all the table entries 1 (hence, minimum quantization loss).
+		* Qualities 1..50 are converted to scaling percentage 5000/Q.
+		*/
+	if (scale_factor > 200)
+		scale_factor = 5000 / scale_factor;
+	else
+		scale_factor = (200 - scale_factor) / 2;
+
+	return scale_factor;
+}
+
 void cvi_jpgGetQMatrix(int scale_factor, unsigned char *qMatTab0,
 		       unsigned char *qMatTab1)
 {
@@ -982,8 +1008,14 @@ int cviJpgEncClose(CVIJpgHandle handle)
 
 static int cviJpgEncBufFullSaveStream(JpgEncInfo *pEncInfo)
 {
-	BYTE *p = MEM_MALLOC(pEncInfo->preStreamLen + pEncInfo->streamBufSize);
+	BYTE *p = NULL;
 
+	if (pEncInfo->superFrm > 0) {
+		pEncInfo->preStreamLen += pEncInfo->streamBufSize;
+		return JPG_RET_SUCCESS;
+	}
+
+	p = MEM_MALLOC(pEncInfo->preStreamLen + pEncInfo->streamBufSize);
 	if (p == NULL) {
 		JLOG(ERR, "null pointer\n");
 		return JPG_RET_FAILURE;
@@ -1286,6 +1318,12 @@ static int cviJpegEncWaitInterrupt(CVIJpgHandle jpgHandle, JpgRet *pRet)
 static int cviJpegEncGetFinalStream(JpgEncInfo *pEncInfo, BYTE **virt_addr,
 				    unsigned int *size)
 {
+	if (pEncInfo && pEncInfo->superFrm > 0) {
+		*size += pEncInfo->preStreamLen;
+		pEncInfo->preStreamLen = 0;
+		return JPG_RET_SUCCESS;
+	}
+
 	pEncInfo->pFinalStream = MEM_KMALLOC(pEncInfo->preStreamLen + *size);
 
 	if (pEncInfo->pFinalStream == NULL) {

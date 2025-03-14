@@ -1541,6 +1541,7 @@ static int _vi_preraw_thread(void *arg);
 static int _vi_vblank_handler_thread(void *arg);
 static int _vi_err_handler_thread(void *arg);
 static int _vi_event_handler_thread(void *arg);
+static void _vi_record_debug_info(struct isp_ctx *ctx);
 
 #ifdef __cplusplus
 }

@@ -282,6 +282,8 @@ typedef struct {
 	jpu_buffer_t tEncBitstreamData;
 
 	bool bSbmEn;
+	Uint32 superFrm;
+	int reEncode;
 } JpgEncInfo;
 
 typedef struct JpgInst {
@@ -301,6 +303,8 @@ typedef struct JpgInst {
 	Uint64 u64StartTime;
 	Uint64 u64EndTime;
 	int s32ChnNum;
+	void *datainfo;
+	int length;
 } JpgInst;
 
 extern unsigned char sJpuCompInfoTable[5][24];

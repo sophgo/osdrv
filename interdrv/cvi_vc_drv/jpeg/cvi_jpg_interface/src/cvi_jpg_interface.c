@@ -21,6 +21,8 @@
 #endif
 
 #define RET_JPG_TIMEOUT (-2)
+#define REENCODE_DEFAULT_QUALITY 55
+#define MAX_REENCODE_COUNT	5
 
 void cviJpgGetVersion(void)
 {
@@ -94,6 +96,11 @@ CVIJpgHandle CVIJpgOpen(CVIJpgConfig config)
 	pJpgInst = (JpgInst *)handle;
 	pJpgInst->s32ChnNum = config.s32ChnNum;
 
+	pJpgInst->datainfo = MEM_CALLOC(1, sizeof(CVIFRAMEBUF));
+	if (IS_ERR(pJpgInst->datainfo)) {
+		CVI_JPG_DBG_ERR("alloc datainfo failed\n");
+	}
+
 	CVI_JPG_DBG_IF("handle = %p\n", handle);
 	JpgLeaveLock();
 	return handle;
@@ -112,6 +119,11 @@ int CVIJpgClose(CVIJpgHandle jpgHandle)
 		JpgLeaveLock();
 		CVI_JPG_DBG_ERR("jpgHandle = NULL\n");
 		return -1;
+	}
+
+	if (pJpgInst->datainfo) {
+		MEM_FREE(pJpgInst->datainfo);
+		pJpgInst->datainfo = NULL;
 	}
 
 	if (CVIJPGCOD_DEC == pJpgInst->type) {
@@ -204,6 +216,8 @@ int CVIJpgSendFrameData(CVIJpgHandle jpgHandle, void *data, int length,
 		ret = cviJpgDecFlush(jpgHandle);
 	} else if (CVIJPGCOD_ENC == pJpgInst->type) {
 		ret = cviJpgEncFlush(jpgHandle);
+		memcpy(pJpgInst->datainfo, data, sizeof(CVIFRAMEBUF));
+		pJpgInst->length = length;
 	}
 
 	do {
@@ -278,6 +292,111 @@ int CVIJpgReleaseFrameData(CVIJpgHandle jpgHandle)
 	// if sharing es buffer, to unlock when releasing frame
 	if (jdi_use_single_es_buffer())
 		JpgLeaveLock();
+	return ret;
+}
+
+int CVIJpegCheckSuperFrame(CVIJpgHandle jpgHandle, int outsize)
+{
+	JpgInst *pJpgInst = jpgHandle;
+	int issuperframe = 0;
+	JpgEncInfo *pEncInfo;
+
+	CVI_JPG_DBG_IF("handle = %p\n", jpgHandle);
+
+	pEncInfo = &pJpgInst->JpgInfo.encInfo;
+
+	if (pEncInfo->superFrm == 0) {
+		return 0;
+	}
+
+	if (outsize > pEncInfo->streamBufSize) {
+		CVI_JPG_DBG_WARN("encode size(%d) > streamBufSize(%d)\n",
+			outsize, pEncInfo->streamBufSize);
+		issuperframe = 1;
+	}
+
+	return issuperframe;
+}
+
+int CVIJpegProcessSuperFrame(CVIJpgHandle jpgHandle, void *data)
+{
+	JpgInst *pJpgInst = jpgHandle;
+	int ret = JPG_RET_SUCCESS;
+	JpgEncInfo *pEncInfo;
+	int quality = 0;
+	int bitrate = 0;
+	int retry_cnt = 0;
+	CVIBUF *cviBuf = (CVIBUF *)data;
+
+	if (jpgHandle == NULL) {
+		CVI_JPG_DBG_ERR("jpgHandle = NULL\n");
+		return -1;
+	}
+
+	pEncInfo = &pJpgInst->JpgInfo.encInfo;
+	quality = pEncInfo->openParam.quality;
+	bitrate = pEncInfo->openParam.bitrate;
+RETRY:
+	if (pEncInfo->openParam.bitrate != 0 || pEncInfo->openParam.quality != 0) {
+		if (pEncInfo->openParam.quality == 0) {
+			//cbr/vbr mode
+			int scalar = 0;
+			int qualityInfo = 0;
+
+			scalar = cviJpeRc_EstimatePicQs(&pEncInfo->openParam.RcInfo);
+			qualityInfo = cvi_jpeg_scale_quality(scalar);
+			pEncInfo->openParam.quality = (qualityInfo * 7) / 10;
+			pEncInfo->openParam.bitrate = 0;
+		} else {
+			//fixqp mode
+			pEncInfo->openParam.quality = (pEncInfo->openParam.quality * 7) / 10;
+		}
+	} else {
+		pEncInfo->openParam.quality = REENCODE_DEFAULT_QUALITY;
+	}
+
+	if (retry_cnt == (MAX_REENCODE_COUNT - 1)) {
+		pEncInfo->openParam.quality = 1;
+	}
+
+	if (!jdi_use_single_es_buffer())
+		JpgEnterLock();
+
+	ret = cviJpgEncFlush(jpgHandle);
+	if (ret != JPG_RET_SUCCESS) {
+		CVI_JPG_DBG_ERR("cviJpgEncFlush fail, ret %d\n", ret);
+		if (!jdi_use_single_es_buffer())
+			JpgLeaveLock();
+		goto OUT;
+	}
+
+	pEncInfo->reEncode++;
+	ret = cviJpgEncSendFrameData(jpgHandle, pJpgInst->datainfo, pJpgInst->length);
+	if (ret != JPG_RET_SUCCESS) {
+		CVI_JPG_DBG_ERR("cviJpgEncSendFrameData fail, ret %d\n", ret);
+		if (!jdi_use_single_es_buffer())
+			JpgLeaveLock();
+		goto OUT;
+	}
+
+	ret = cviJpgEncGetFrameData(jpgHandle, data);
+	if (ret != JPG_RET_SUCCESS) {
+		CVI_JPG_DBG_ERR("cviJpgEncSendFrameData fail, ret %d\n", ret);
+		goto OUT;
+	}
+
+	if (CVIJpegCheckSuperFrame(jpgHandle, cviBuf->size)) {
+		retry_cnt++;
+		if (retry_cnt >= MAX_REENCODE_COUNT) {
+			CVI_JPG_DBG_ERR("reencode 5 time fail, ret %d\n", ret);
+			goto OUT;
+		}
+		goto RETRY;
+	}
+OUT:
+
+	pEncInfo->openParam.bitrate = bitrate;
+	pEncInfo->openParam.quality = quality;
 	return ret;
 }
 
@@ -675,6 +794,32 @@ int cviJpegShowChnInfo(CVIJpgHandle jpgHandle, void *data)
 
 #endif
 
+static int cviJpegSetSuperFrame(CVIJpgHandle jpgHandle, void *arg)
+{
+	int ret = JPG_RET_SUCCESS;
+	JpgInst *pJpgInst;
+	unsigned int u32SuperFrm = *(unsigned int *)arg;
+
+	CVI_JPG_DBG_IF("handle = %p\n", jpgHandle);
+
+	ret = CheckJpgInstValidity(jpgHandle);
+	if (ret != JPG_RET_SUCCESS) {
+		CVI_JPG_DBG_ERR("CheckJpgInstValidity, %d\n", ret);
+		return ret;
+	}
+
+	pJpgInst = jpgHandle;
+
+	// jpeg encode
+	if(pJpgInst->type == 2) {
+		JpgEncInfo *pEncInfo = &pJpgInst->JpgInfo.encInfo;
+		pEncInfo->superFrm = u32SuperFrm;
+		CVI_JPG_DBG_RC("superframe reencode = %d\n", pEncInfo->superFrm);
+	}
+
+	return ret;
+}
+
 typedef struct _CVI_JPEG_IOCTL_OP_ {
 	int opNum;
 	int (*ioctlFunc)(CVIJpgHandle jpgHandle, void *arg);
@@ -691,6 +836,7 @@ CVI_JPEG_IOCTL_OP cviJpegIoctlOp[] = {
 	{ CVI_JPEG_OP_START, cviJpegStart },
 	{ CVI_JPEG_OP_SET_SBM_ENABLE, cviJpegSetSbmEnable },
 	{ CVI_JPEG_OP_WAIT_FRAME_DONE, cviJpegWaitEncodeDone },
+	{CVI_JPEG_OP_SET_SUPER_FRAME, cviJpegSetSuperFrame},
 };
 
 int cviJpegIoctl(void *handle, int op, void *arg)

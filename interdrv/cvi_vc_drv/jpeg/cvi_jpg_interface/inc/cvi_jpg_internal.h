@@ -1,5 +1,6 @@
 #ifndef CVI_JPG_INTERNAL_H
 #define CVI_JPG_INTERNAL_H
+#include <linux/vmalloc.h>
 
 /* default jpu device struct */
 #define WIDTH_BUFFER_SIZE 4096
@@ -28,6 +29,8 @@ int cviJpgEncGetInputDataBuf(CVIJpgHandle jpgHandle, void *data);
 int cviJpgEncResetQualityTable(CVIJpgHandle jpgHandle);
 int cviJpgEncEncodeUserData(CVIJpgHandle jpgHandle, void *data);
 int cviJpgEncStart(CVIJpgHandle jpgHandle, void *data);
+int cviJpeRc_EstimatePicQs(stRcInfo *pRcInfo);
+int cvi_jpeg_scale_quality(int scale_factor);
 
 extern void jpu_set_channel_num(int chnIdx);
 

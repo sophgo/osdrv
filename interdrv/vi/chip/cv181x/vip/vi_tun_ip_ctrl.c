@@ -1501,8 +1501,8 @@ void ispblk_tnr_tun_cfg(
 
 	mm_08.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_08);
 	mm_08.bits.MMAP_0_MAP_GAIN = cfg->map_gain;
-	mm_08.bits.MMAP_0_MAP_THD_L = cfg->map_thd_l;
-	mm_08.bits.MMAP_0_MAP_THD_H = cfg->map_thd_h;
+	mm_08.bits.MMAP_0_MAP_THD_L = (ctx->isp_pipe_cfg[raw_num].first_frm_cnt < 2) ? 255 : cfg->map_thd_l;
+	mm_08.bits.MMAP_0_MAP_THD_H = (ctx->isp_pipe_cfg[raw_num].first_frm_cnt < 2) ? 255 : cfg->map_thd_h;
 	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_08, mm_08.raw);
 
 	ISP_WR_BITS(manr, REG_ISP_MMAP_T, REG_1C, MMAP_0_LUMA_ADAPT_LUT_SLOPE_2,

@@ -107,6 +107,23 @@ static void _vi_mempool_reset(void)
 	}
 }
 
+static void isp_fbc_info_debug(struct isp_ctx *ctx)
+{
+	uintptr_t wdma_com_1 = ctx->phys_regs[ISP_BLK_ID_WDMA_CORE1];
+	uintptr_t rdma_com = ctx->phys_regs[ISP_BLK_ID_RDMA_CORE];
+	u32 y_wdma, c_wdma;
+	u32 y_rdma, c_rdma;
+
+	y_wdma = ISP_RD_REG(wdma_com_1, REG_WDMA_CORE_T, NEXT_DMA_ADDR_STS10);
+	c_wdma = ISP_RD_REG(wdma_com_1, REG_WDMA_CORE_T, NEXT_DMA_ADDR_STS11);
+
+	y_rdma = ISP_RD_REG(rdma_com, REG_RDMA_CORE_T, NEXT_DMA_ADDR_STS9);
+	c_rdma = ISP_RD_REG(rdma_com, REG_RDMA_CORE_T, NEXT_DMA_ADDR_STS10);
+
+	vi_pr(VI_INFO, "next y wdma=0x%x, c_wdma=0x%x, y_rdma=0x%x, c_rdma=0x%x\n", y_wdma, c_wdma, y_rdma, c_rdma);
+
+}
+
 /**
  * _mempool_get_addr - get mempool's latest address.
  *
@@ -4200,6 +4217,8 @@ YUV_POSTRAW_TILE:
 
 		ctx->cam_id = raw_num;
 
+		isp_fbc_info_debug(ctx);
+
 		isp_post_trig(ctx, raw_num);
 
 		vi_record_post_trigger(vdev, raw_num);
@@ -6030,6 +6049,9 @@ int vi_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 
 		if (_is_be_post_online(ctx))
 			atomic_set(&vdev->pre_be_state[ISP_BE_CH0], ISP_PRE_BE_IDLE);
+
+		_vi_record_debug_info(ctx);
+		isp_fbc_info_debug(ctx);
 
 		atomic_set(&vdev->postraw_state, ISP_POSTRAW_IDLE);
 		vi_err_wake_up_th(vdev, raw_num);

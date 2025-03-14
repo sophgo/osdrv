@@ -5219,6 +5219,7 @@ CVI_VENC_SetSuperFrameStrategy(VENC_CHN VeChn,
 	venc_chn_vars *pChnVars = NULL;
 	venc_enc_ctx *pEncCtx;
 	cviSuperFrame super, *pSuper = &super;
+	CVI_U32 u32EnableSuperFrame = 0;
 
 	s32Ret = check_chn_handle(VeChn);
 	if (s32Ret != CVI_SUCCESS) {
@@ -5245,8 +5246,14 @@ CVI_VENC_SetSuperFrameStrategy(VENC_CHN VeChn,
 		CVI_VENC_ERR("can not lock chnMutex\n");
 		return CVI_FAILURE;
 	}
-	s32Ret = pEncCtx->base.ioctl(pEncCtx, CVI_H26X_OP_SET_SUPER_FRAME,
-				     (CVI_VOID *)pSuper);
+
+	if (pChnHandle->pChnAttr->stVencAttr.enType == PT_H265 ||
+		pChnHandle->pChnAttr->stVencAttr.enType == PT_H264)  {
+		s32Ret = pEncCtx->base.ioctl(pEncCtx, CVI_H26X_OP_SET_SUPER_FRAME, (CVI_VOID *) pSuper);
+	} else {
+		u32EnableSuperFrame = (pstSuperFrmParam->enSuperFrmMode != SUPERFRM_NONE) ? 1 : 0;
+		s32Ret = pEncCtx->base.ioctl(pEncCtx, CVI_JPEG_OP_SET_SUPER_FRAME, (CVI_VOID *)&(u32EnableSuperFrame));
+	}
 	MUTEX_UNLOCK(&pChnHandle->chnMutex);
 
 	if (s32Ret == CVI_SUCCESS) {

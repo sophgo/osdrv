@@ -428,6 +428,16 @@ static CVI_S32 jpege_get_stream(CVI_VOID *ctx, VENC_STREAM_S *pstStream,
 		return CVI_ERR_VENC_BUSY;
 	}
 #endif
+
+	//process super frame
+	if (CVIJpegCheckSuperFrame(pHandle, cviBuf.size)) {
+		status = CVIJpegProcessSuperFrame(pHandle, (CVI_U8 *)&cviBuf);
+		if (status != CVI_SUCCESS) {
+			CVI_VENC_ERR("Failed to CVIJpegProcessSuperFrame, ret = %x\n", status);
+			return CVI_FAILURE;
+		}
+	}
+
 	pstStream->u32PackCount = 1;
 	ppack = &pstStream->pstPack[0];
 
