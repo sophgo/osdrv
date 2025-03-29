@@ -27,6 +27,7 @@ extern "C" {
 #define VPSS_CHN3             3
 #define VPSS_INVALID_CHN     -1
 #define VPSS_INVALID_GRP     -1
+#define CVI_STITCH_CHN_MAX_NUM 4
 
 /*
  * VPSS_CROP_RATIO_COOR: Ratio coordinate, not supported currently.
@@ -158,6 +159,42 @@ typedef struct _VPSS_CHN_BUF_WRAP_S {
 	CVI_U32 u32BufLine;	// 64, 128
 	CVI_U32 u32WrapBufferSize;	// depth for now
 } VPSS_CHN_BUF_WRAP_S;
+
+/*vpss stitch src info*/
+typedef struct _CVI_STITCH_SRC_S {
+	VPSS_GRP VpssGrp;
+	VPSS_CHN VpssChn;
+} CVI_STITCH_SRC_S;
+
+/**
+ * stStitchSrc: vpss stitch src info
+ * stDstRect: vpss stitch dest position
+ * u8Priority: Priority
+ */
+typedef struct _CVI_STITCH_CHN_S {
+	CVI_STITCH_SRC_S stStitchSrc;
+	RECT_S stDstRect;
+	CVI_U8 u8Priority;
+} CVI_STITCH_CHN_S;
+
+/**
+ * u8ChnNum: the number of vpss stitch chn
+ * VoChn: Vo chn id
+ * s32OutFps: Output FPS
+ * enOutPixelFormat: image pixel format
+ * stOutSize: Output size
+ * hVbPool: Attached vb pool
+ * astStitchChn: vpss stitch chn attr
+ */
+typedef struct _CVI_STITCH_ATTR_S {
+	CVI_U8 u8ChnNum;
+	CVI_U8 VoChn;
+	CVI_S32 s32OutFps;
+	PIXEL_FORMAT_E enOutPixelFormat;
+	SIZE_S stOutSize;
+	CVI_U32 hVbPool;
+	CVI_STITCH_CHN_S astStitchChn[CVI_STITCH_CHN_MAX_NUM];
+} CVI_STITCH_ATTR_S;
 
 #ifdef __cplusplus
 #if __cplusplus

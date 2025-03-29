@@ -1447,6 +1447,12 @@ struct cvi_vip_isp_post_cfg {
 	struct cvi_vip_isp_post_tun_cfg tun_cfg[TUNING_NODE_NUM];
 };
 
+struct cvi_vi_tuning_buffer_pool{
+	uint8_t *memory;
+	size_t total_size;
+	uint8_t is_allocated;
+};
+
 struct isp_tuning_cfg {
 	uint64_t  fe_addr[ISP_PRERAW_VIRT_MAX];
 	void	  *fe_vir[ISP_PRERAW_VIRT_MAX];
