@@ -1911,7 +1911,7 @@ RetCode VPU_DecGiveCommand(DecHandle handle, CodecCommand cmd, void* param)
             pDecInfo->vbUserData.phys_addr = pDecInfo->userDataBufAddr;
             pDecInfo->vbUserData.size = pDecInfo->userDataBufSize;
             pDecInfo->vbUserData.virt_addr = (unsigned long)userDataVirtAddr;
-            if (vdi_attach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbUserData) != 0) {
+            if (vdi_attach_dma_memory(pCodecInst->coreIdx, &pDecInfo->vbUserData, 0) != 0) {
                 return RETCODE_INSUFFICIENT_RESOURCE;
             }
             break;

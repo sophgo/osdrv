@@ -352,9 +352,6 @@ static int job_try_schedule(struct vpss_job *job)
 		chn_id = chn_idx[i - dev_idx];
 		dev_list[chn_id] = i;
 		atomic_set(&vpss_dev->vpss_cores[i].state, VIP_RUNNING);
-		vpss_dev->vpss_cores[i].job = (void *)job;
-		vpss_dev->vpss_cores[i].map_chn = chn_id;
-		vpss_dev->vpss_cores[i].start_cnt++;
 		//job->dev_idx[i] = dev_idx;
 		job->vpss_dev_mask |= BIT(i);
 
@@ -386,6 +383,10 @@ static int job_try_schedule(struct vpss_job *job)
 			top_update(i, false, is_fbd); //last chn,not share
 		else
 			top_update(i, true, is_fbd);
+
+		vpss_dev->vpss_cores[i].map_chn = chn_id;
+		vpss_dev->vpss_cores[i].start_cnt++;
+		vpss_dev->vpss_cores[i].job = (void *)job;
 	}
 
 	if (job->is_tile) {
@@ -692,6 +693,7 @@ int vpss_hal_remove_job(struct vpss_job *job)
 				} else {
 					work_mask &= (~BIT(i));
 					avail_mask &= (~BIT(i));
+					vpss_dev->vpss_cores[i].job = NULL;
 					TRACE_VPSS(DBG_WARN, "core(%d) mask.\n", i);
 				}
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
@@ -935,6 +937,7 @@ static int vpss_job_restart(struct vpss_job *job){
 		cfg->chn_cfg[chn_id].dst_rect = convert_to_bak[i].chn_rect;
 
 		atomic_set(&vpss_dev->vpss_cores[i].state, VIP_RUNNING);
+		vpss_dev->vpss_cores[i].start_cnt++;
 
 		if (i == dev_idx)
 			img_update(i, true, &cfg->grp_cfg);
@@ -994,6 +997,9 @@ static int vpss_job_restart(struct vpss_job *job){
 	convert_to_bak[dev_idx].enable = false;
 	atomic_set(&job->job_state, JOB_WORKING);
 
+	for (i = dev_idx; i < dev_idx_max; i++)
+		ktime_get_ts64(&vpss_dev->vpss_cores[i].ts_start);
+
 	img_start(dev_idx, cfg->chn_num);
 
 	return 0;
@@ -1038,6 +1044,8 @@ static void vpss_job_finish(struct vpss_job *job)
 				atomic_set(&dev->vpss_cores[i].state, VIP_RUNNING);
 			else
 				atomic_set(&dev->vpss_cores[i].state, VIP_END);
+			ktime_get_ts64(&dev->vpss_cores[i].ts_start);
+			vpss_dev->vpss_cores[i].start_cnt++;
 		}
 		job->tile_mode &= ~SCL_RIGHT_DOWN_TILE_FLAG;
 		atomic_set(&job->job_state, JOB_WORKING);
@@ -1061,8 +1069,10 @@ static void vpss_job_finish(struct vpss_job *job)
 				atomic_set(&dev->vpss_cores[i].state, VIP_RUNNING);
 			else
 				atomic_set(&dev->vpss_cores[i].state, VIP_END);
+			ktime_get_ts64(&dev->vpss_cores[i].ts_start);
+			dev->vpss_cores[i].start_cnt++;
 		}
-		if(job->is_v_tile){
+		if (job->is_v_tile) {
 			job->tile_mode = job->tile_mode >> SCL_V_TILE_OFFSET;
 			if ((job->tile_mode) & SCL_TILE_TOP) {
 				job->tile_mode &= ~(SCL_TILE_TOP);
@@ -1114,6 +1124,8 @@ static void vpss_job_finish(struct vpss_job *job)
 		for (i = 0; i < VPSS_MAX; ++i) {
 			if (!(job->vpss_dev_mask & BIT(i)))
 				continue;
+
+			dev->vpss_cores[i].job = NULL;
 
 			if(reset_time[i] != 0 && reset_time[i] <= 1000)
 				reset_time[i]--;
@@ -1177,10 +1189,6 @@ void vpss_irq_handler(struct vpss_core *core)
 			core->tile_mode &= ~(SCL_TILE_RIGHT);
 		else
 			core->tile_mode &= ~(SCL_TILE_LEFT);
-
-		if (!core->tile_mode) { //work finish
-			core->job = NULL;
-		}
 	}
 
 	vpss_job_finish(job);

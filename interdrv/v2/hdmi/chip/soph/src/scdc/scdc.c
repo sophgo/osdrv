@@ -62,7 +62,11 @@ int scdc_scrambling_enable_flag(hdmi_tx_dev_t *dev, u8 enable)
 	if(res != 0)
 		pr_debug("%s: SCDC addr 0x%x read failed ",__func__, SCDC_TMDS_CONFIG);
 
-	read_value = set(read_value, 0x1, enable ? 0x1 : 0x0);
+	if (enable)
+		read_value |= 0x1;
+	else
+		read_value &= ~0x1;
+
 	res = scdc_write(dev, SCDC_TMDS_CONFIG, 1, &read_value);
 	if(res != 0)
 		pr_debug("%s: SCDC addr 0x%x write failed ",__func__, SCDC_TMDS_CONFIG);

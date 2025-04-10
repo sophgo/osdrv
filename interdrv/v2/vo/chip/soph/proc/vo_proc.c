@@ -108,6 +108,9 @@ static void intf_sync_to_string(vo_intf_sync_e intf_sync, char *str, int len)
 	case VO_OUTPUT_640x480_60:
 		strncpy(str, "640x480@60", len);
 		break;
+	case VO_OUTPUT_480x640_60:
+		strncpy(str, "480x640@60", len);
+		break;
 	case VO_OUTPUT_720x1280_60:
 		strncpy(str, "720x1280@60", len);
 		break;

@@ -7,8 +7,6 @@
 #include "h265_interface.h"
 #include "jpuconfig.h"
 
-unsigned int VENC_LOG_LV = 1;
-
 static const struct of_device_id cvi_vc_drv_match_table[] = {
     { .compatible = "cvitek,cvi_vc_drv" },
     {},
@@ -18,17 +16,12 @@ MODULE_DEVICE_TABLE(of, cvi_vc_drv_match_table);
 wait_queue_head_t tVencWaitQueue[VENC_MAX_CHN_NUM];
 static DEFINE_SPINLOCK(vc_spinlock);
 
-
-module_param(VENC_LOG_LV, int, 0644);
-
 uint32_t MaxVencChnNum = VENC_MAX_CHN_NUM;
 module_param(MaxVencChnNum, uint, 0644);
 #ifdef ENABLE_DEC
 uint32_t MaxVdecChnNum = VDEC_MAX_CHN_NUM;
 module_param(MaxVdecChnNum, uint, 0644);
 #endif
-bool RcEn = 1;
-module_param(RcEn, bool, 0644);
 
 struct drv_vc_chn_info
 {
@@ -1368,7 +1361,7 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
         vdb.core_idx = 0;
         vdb.size = phys_buf.size;
 
-        s32Ret = vpu_allocate_extern_memory(&vdb);
+        s32Ret = vpu_allocate_extern_memory(&vdb, "ENC_EXTERNBUF");
         if (s32Ret != 0) {
             pr_err("drv_venc_alloc_phys_buf with %d\n", s32Ret);
         }
@@ -2186,6 +2179,7 @@ static int vc_drv_plat_probe(struct platform_device *pdev)
     vdec_proc_init(&pdev->dev);
     codecinst_proc_init(&pdev->dev);
 
+    pr_info("%s ok\n", __FUNCTION__);
     return ret;
 }
 
@@ -2202,11 +2196,10 @@ static int vc_drv_plat_remove(struct platform_device *pdev)
     h264e_proc_deinit();
     jpege_proc_deinit();
     rc_proc_deinit();
-    #ifdef ENABLE_DEC
     vdec_proc_deinit();
-    #endif
     codecinst_proc_deinit();
 
+    pr_info("%s ok\n", __FUNCTION__);
     return ret;
 }
 

@@ -87,6 +87,7 @@ struct _membuf {
 	u64 manr_rtile[2]; //tile
 	u64 rgbmap_le[MAX_RGBMAP_BUF_NUM];
 	u64 rgbmap_se[MAX_RGBMAP_BUF_NUM];
+	u64 rgbmap_zero;
 	u64 lmap_le;
 	u64 lmap_se;
 	u64 lsc;
@@ -138,6 +139,7 @@ struct _isp_snr_cfg_queue {
 
 struct _ai_isp_cfg_info {
 	__u64 ai_bnr_addr_pool[2];
+	__u64 ai_rgbmap;
 } ai_isp_cfg_info[ISP_PRERAW_MAX];
 
 struct _isp_raw_num_n {

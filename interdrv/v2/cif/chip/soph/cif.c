@@ -514,10 +514,22 @@ static int LANE_IS_FRIST(uint16_t phy_mode, short lane_num, unsigned int devno)
 		} else if (devno == 3) {
 			if (lane_num == CIF_PHY_LANE_9)
 				return 1;
+		} else if (devno == 5) {
+			if (lane_num == CIF_PHY_LANE_15)
+				return 1;
 		}
 	} else if (phy_mode == 2) {
 		if (devno == 0) {
 			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_9)
+				return 1;
+		} else if (devno == 4) {
+			if (lane_num == CIF_PHY_LANE_12)
+				return 1;
+		} else if (devno == 5) {
+			if (lane_num == CIF_PHY_LANE_15)
 				return 1;
 		}
 	} else if (phy_mode == 3) {
@@ -538,10 +550,48 @@ static int LANE_IS_FRIST(uint16_t phy_mode, short lane_num, unsigned int devno)
 		} else if (devno == 3) {
 			if (lane_num == CIF_PHY_LANE_9)
 				return 1;
+		} else if (devno == 4) {
+			if (lane_num == CIF_PHY_LANE_12)
+				return 1;
+		} else if (devno == 5) {
+			if (lane_num == CIF_PHY_LANE_15)
+				return 1;
 		}
 	} else if (phy_mode == 5) {
 		if (devno == 0) {
 			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 2) {
+			if (lane_num == CIF_PHY_LANE_6)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_9)
+				return 1;
+		} else if (devno == 4) {
+			if (lane_num == CIF_PHY_LANE_12)
+				return 1;
+		} else if (devno == 5) {
+			if (lane_num == CIF_PHY_LANE_15)
+				return 1;
+		}
+	} else if (phy_mode == 6) {
+		if (devno == 0) {
+			if (lane_num == CIF_PHY_LANE_0)
+				return 1;
+		} else if (devno == 1) {
+			if (lane_num == CIF_PHY_LANE_3)
+				return 1;
+		} else if (devno == 2) {
+			if (lane_num == CIF_PHY_LANE_6)
+				return 1;
+		} else if (devno == 3) {
+			if (lane_num == CIF_PHY_LANE_9)
+				return 1;
+		} else if (devno == 4) {
+			if (lane_num == CIF_PHY_LANE_12)
+				return 1;
+		} else if (devno == 5) {
+			if (lane_num == CIF_PHY_LANE_15)
 				return 1;
 		}
 	}
@@ -951,6 +1001,8 @@ static int _cif_set_attr_mipi(struct cif_dev *dev,
 				min_port = LANE_IS_PORT1(attr->lane_id[i]);
 			}
 		}
+		min_port = clk_port < min_port ? clk_port : min_port;
+		max_port = clk_port > max_port ? clk_port : max_port;
 		cif_set_rx_bus_config(ctx, i, attr->lane_id[i]);
 		cif_set_lane_id(ctx, i, attr->lane_id[i], attr->pn_swap[i]);
 		/* clear pad ctrl pu/pd */
@@ -1212,6 +1264,8 @@ static int _cif_set_attr_sublvds(struct cif_dev *dev,
 				min_port = LANE_IS_PORT1(attr->lane_id[i]);
 			}
 		}
+		min_port = clk_port < min_port ? clk_port : min_port;
+		max_port = clk_port > max_port ? clk_port : max_port;
 		cif_set_rx_bus_config(ctx, i, attr->lane_id[i]);
 		cif_set_lane_id(ctx, i, attr->lane_id[i], attr->pn_swap[i]);
 		/* clear pad ctrl pu/pd */
@@ -1464,6 +1518,8 @@ static int _cif_set_attr_hispi(struct cif_dev *dev,
 				min_port = LANE_IS_PORT1(attr->lane_id[i]);
 			}
 		}
+		min_port = clk_port < min_port ? clk_port : min_port;
+		max_port = clk_port > max_port ? clk_port : max_port;
 		cif_set_rx_bus_config(ctx, i, attr->lane_id[i]);
 		cif_set_lane_id(ctx, i, attr->lane_id[i], attr->pn_swap[i]);
 		/* clear pad ctrl pu/pd */

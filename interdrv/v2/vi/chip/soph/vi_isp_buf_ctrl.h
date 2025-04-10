@@ -40,6 +40,7 @@ struct isp_buffer {
 	u32			byr_size;
 	u32			frm_num;
 	u32			ir_idx;
+	u64			rgbmap_addr;
 	struct timespec64	timestamp;
 };
 

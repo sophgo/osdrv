@@ -67,24 +67,24 @@ void vpss_timer_core_update(void *data)
 {
 	u8 i;
 	u32 duration;
-	static u32 duration_long = 0;
-	static u32 hw_duration_total_long[VPSS_MAX] = {0};
 	struct vpss_device *dev = (struct vpss_device *)data;
 	struct timespec64 cur_time;
 	static struct timespec64 pre_time = {0};
 
 	ktime_get_ts64(&cur_time);
 	duration = get_diff_in_us(pre_time, cur_time);
-	duration_long += duration;
 	pre_time = cur_time;
 
-	if (duration > 2000000)
+	if (duration < 1000000 || duration > 2000000) {
+		for (i = VPSS_V0; i < VPSS_MAX; ++i)
+			dev->vpss_cores[i].hw_duration_total = 0;
 		return;
+	}
 
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		dev->vpss_cores[i].duty_ratio = (dev->vpss_cores[i].hw_duration_total * 100) / duration;
-		hw_duration_total_long[i] += dev->vpss_cores[i].hw_duration_total;
-		dev->vpss_cores[i].duty_ratio_long = (hw_duration_total_long[i] * 100) / duration_long;
+		 // In units of 10 milliseconds
+		dev->vpss_cores[i].duty_ratio_long += (dev->vpss_cores[i].hw_duration_total / 10000);
 		dev->vpss_cores[i].hw_duration_total = 0;
 	}
 }
@@ -546,6 +546,8 @@ static int vpss_release(struct inode *inode, struct file *filep)
 
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
+		core->duty_ratio = 0;
+		core->hw_duration_total = 0;
 
 		if (core->clk_apb)
 			clk_disable(core->clk_apb);

@@ -285,6 +285,7 @@ typedef struct ai_isp_api {
 typedef struct ai_isp_bnr_cfg {
 	__u64 swap_buf_index; // __32 *
 	__u32 swap_buf_count;
+	bool ai_rgbmap;
 } ai_isp_bnr_cfg_t;
 
 typedef struct ai_isp_cfg {

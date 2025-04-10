@@ -58,6 +58,7 @@ typedef enum {
 	VO_OUTPUT_1680x1050_60, /* VESA 1680 x 1050 at 60 Hz (non-interlaced) */
 	VO_OUTPUT_1920x1200_60, /* VESA 1920 x 1600 at 60 Hz (non-interlaced) CVT (Reduced Blanking)*/
 	VO_OUTPUT_640x480_60, /* VESA 640 x 480 at 60 Hz (non-interlaced) CVT */
+	VO_OUTPUT_480x640_60, /* VESA 480 x 640 at 60 Hz (non-interlaced) CVT */
 	VO_OUTPUT_720x1280_60, /* For MIPI DSI Tx 720 x1280 at 60 Hz */
 	VO_OUTPUT_1080x1920_60, /* For MIPI DSI Tx 1080x1920 at 60 Hz */
 	VO_OUTPUT_480x800_60, /* For MIPI DSI Tx 480x800 at 60 Hz */

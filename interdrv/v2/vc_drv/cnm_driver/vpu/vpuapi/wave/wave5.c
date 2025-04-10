@@ -222,7 +222,6 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     }
 
     if (coreIdx == 0) {
-        //*(volatile unsigned int *)(VE_TOP_EXT_ADDR) = codeBase>>32;
         unsigned int *reg_addr = ioremap(VE_TOP_EXT_ADDR, 4);
         originValue = readl(reg_addr);
         writel((codeBase>>32) | originValue, reg_addr);
@@ -377,7 +376,7 @@ RetCode Wave5VpuBuildUpDecParam(CodecInst* instance, DecOpenParam* param)
     }
 
     APIDPRINT("ALLOC MEM - WORK\n");
-    if (vdi_allocate_dma_memory(instance->coreIdx, &pDecInfo->vbWork, DEC_WORK, instance->instIndex) < 0) {
+    if (vdi_allocate_dma_memory(instance->coreIdx, &pDecInfo->vbWork, "DEC_WORK", instance->instIndex) < 0) {
         pDecInfo->vbWork.base = 0;
         pDecInfo->vbWork.phys_addr = 0;
         pDecInfo->vbWork.size = 0;
@@ -722,7 +721,7 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
             APIDPRINT("ALLOC MEM - MV\n");
             for (k=0  ; k<mvCount ; k++) {
                 if ( pDecInfo->vbMV[k].size == 0) {
-                    if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, DEC_MV, inst->instIndex) < 0)
+                    if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, "DEC_MV", inst->instIndex) < 0)
                         return RETCODE_INSUFFICIENT_RESOURCE;
                     pDecInfo->vbMV[k] = vbBuffer;
                 }
@@ -762,7 +761,7 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
         APIDPRINT("ALLOC MEM - FBC Y TBL\n");
         for (k=0  ; k<count ; k++) {
             if (pDecInfo->vbFbcYTbl[k].size == 0) {
-                if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, DEC_FBCY_TBL, inst->instIndex) < 0)
+                if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, "DEC_FBCY_TBL", inst->instIndex) < 0)
                     return RETCODE_INSUFFICIENT_RESOURCE;
                 pDecInfo->vbFbcYTbl[k] = vbBuffer;
             }
@@ -801,7 +800,7 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
         APIDPRINT("ALLOC MEM - FBC C TBL\n");
         for (k=0  ; k<count ; k++) {
             if (pDecInfo->vbFbcCTbl[k].size == 0) {
-                if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, DEC_FBCC_TBL, inst->instIndex) < 0)
+                if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, "DEC_FBCC_TBL", inst->instIndex) < 0)
                     return RETCODE_INSUFFICIENT_RESOURCE;
                 pDecInfo->vbFbcCTbl[k] = vbBuffer;
             }
@@ -814,7 +813,7 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
         else
             vbBuffer.size       = (Uint32)((pDecInfo->vlcBufSize * VLC_BUF_NUM) + (pDecInfo->paramBufSize * pDecInfo->openParam.cmdQueueDepth));
         vbBuffer.phys_addr  = 0;
-        if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, DEC_TASK, inst->instIndex) < 0)
+        if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, "DEC_TASK", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
         pDecInfo->vbTask = vbBuffer;
@@ -970,7 +969,7 @@ RetCode Wave5VpuDecUpdateFramebuffer(CodecInst* inst, FrameBuffer* fbcFb, FrameB
         pvbMv = &pDecInfo->vbMV[mvIndex];
         vdi_free_dma_memory(inst->coreIdx, pvbMv, DEC_MV, inst->instIndex);
         pvbMv->size = ((mvColSize+4095)&~4095) + 4096;
-        if (vdi_allocate_dma_memory(inst->coreIdx, pvbMv, DEC_MV, inst->instIndex) < 0) {
+        if (vdi_allocate_dma_memory(inst->coreIdx, pvbMv, "DEC_MV", inst->instIndex) < 0) {
             return RETCODE_INSUFFICIENT_RESOURCE;
         }
     }
@@ -984,7 +983,7 @@ RetCode Wave5VpuDecUpdateFramebuffer(CodecInst* inst, FrameBuffer* fbcFb, FrameB
         vdi_free_dma_memory(inst->coreIdx, pvbFbcYOffset, DEC_FBCY_TBL, inst->instIndex);
         pvbFbcYOffset->phys_addr = 0;
         pvbFbcYOffset->size      = ((fbcYTblSize+4095)&~4095)+4096;
-        if (vdi_allocate_dma_memory(inst->coreIdx, pvbFbcYOffset, DEC_FBCY_TBL, inst->instIndex) < 0) {
+        if (vdi_allocate_dma_memory(inst->coreIdx, pvbFbcYOffset, "DEC_FBCY_TBL", inst->instIndex) < 0) {
             return RETCODE_INSUFFICIENT_RESOURCE;
         }
         fbcYoffsetAddr = pvbFbcYOffset->phys_addr;
@@ -997,7 +996,7 @@ RetCode Wave5VpuDecUpdateFramebuffer(CodecInst* inst, FrameBuffer* fbcFb, FrameB
         vdi_free_dma_memory(inst->coreIdx, pvbFbcCOffset, DEC_FBCC_TBL, inst->instIndex);
         pvbFbcCOffset->phys_addr = 0;
         pvbFbcCOffset->size      = ((fbcCTblSize+4095)&~4095)+4096;
-        if (vdi_allocate_dma_memory(inst->coreIdx, pvbFbcCOffset, DEC_FBCC_TBL, inst->instIndex) < 0) {
+        if (vdi_allocate_dma_memory(inst->coreIdx, pvbFbcCOffset, "DEC_FBCC_TBL", inst->instIndex) < 0) {
             return RETCODE_INSUFFICIENT_RESOURCE;
         }
         fbcCoffsetAddr = pvbFbcCOffset->phys_addr;
@@ -2152,7 +2151,7 @@ RetCode Wave5VpuBuildUpEncParam(CodecInst* instance, EncOpenParam* param)
     if (instance->productId == PRODUCT_ID_521)
         pEncInfo->vbWork.size       = WAVE521ENC_WORKBUF_SIZE;
 
-    if (vdi_allocate_dma_memory(instance->coreIdx, &pEncInfo->vbWork, ENC_WORK, instance->instIndex) < 0) {
+    if (vdi_allocate_dma_memory(instance->coreIdx, &pEncInfo->vbWork, "ENC_WORK", instance->instIndex) < 0) {
         pEncInfo->vbWork.base       = 0;
         pEncInfo->vbWork.phys_addr  = 0;
         pEncInfo->vbWork.size       = 0;
@@ -2612,7 +2611,11 @@ RetCode Wave5VpuEncInitSeq(CodecInst* instance)
         regVal = VpuReadReg(instance->coreIdx, W5_RET_FAIL_REASON);
         if (regVal != WAVE5_SYSERR_QUEUEING_FAIL)
             VLOG(ERR, "FAIL_REASON = 0x%x\n", regVal);
-
+            // ERR_DATA_ADDR_ALIGNMENT, Unrecoverable failure. Restart VPU
+            if (regVal == 0x10) {
+                VLOG(ERR, "start reset core:0x%x\n", coreIdx);
+                vdi_hw_reset(coreIdx);
+            }
         if (regVal == WAVE5_SYSERR_QUEUEING_FAIL) {
             regVal = VpuReadReg(instance->coreIdx, W5_RET_QUEUE_FAIL_REASON);
             VLOG(ERR, "QUEUE_FAIL_REASON = 0x%x\n", regVal);
@@ -2746,7 +2749,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
     vbMV.phys_addr = 0;
     vbMV.size      = ((mvColSize+4095)&~4095)+4096;   /* 4096 is a margin */
     for (idx = 0; idx < count; idx++) {
-        if (vdi_allocate_dma_memory(inst->coreIdx, &vbMV, ENC_MV, inst->instIndex) < 0)
+        if (vdi_allocate_dma_memory(inst->coreIdx, &vbMV, "ENC_MV", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
         pEncInfo->vbMV[idx] = vbMV;
@@ -2784,7 +2787,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
     vbFbcYTbl.phys_addr = 0;
     vbFbcYTbl.size      = ((fbcYTblSize+4095)&~4095)+4096;   /* 4096 is a margin */
     for (idx = 0; idx < count; idx++) {
-        if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcYTbl, ENC_FBCY_TBL, inst->instIndex) < 0)
+        if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcYTbl, "ENC_FBCY_TBL", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
         pEncInfo->vbFbcYTbl[idx] = vbFbcYTbl;
@@ -2822,7 +2825,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
     vbFbcCTbl.phys_addr = 0;
     vbFbcCTbl.size      = ((fbcCTblSize+4095)&~4095)+4096;   /* 4096 is a margin */
     for (idx = 0; idx < count; idx++) {
-        if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcCTbl, ENC_FBCC_TBL, inst->instIndex) < 0)
+        if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcCTbl, "ENC_FBCC_TBL", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
         pEncInfo->vbFbcCTbl[idx] = vbFbcCTbl;
@@ -2836,7 +2839,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
     }
     vbSubSamBuf.size      = ((subSampledSize*count+4095)&~4095)+4096;
     vbSubSamBuf.phys_addr = 0;
-    if (vdi_allocate_dma_memory(coreIdx, &vbSubSamBuf, ENC_SUBSAMBUF, inst->instIndex) < 0)
+    if (vdi_allocate_dma_memory(coreIdx, &vbSubSamBuf, "ENC_SUBSAMBUF", inst->instIndex) < 0)
         return RETCODE_INSUFFICIENT_RESOURCE;
 
     pEncInfo->vbSubSamBuf[0]   = vbSubSamBuf;
@@ -2847,7 +2850,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
         vbTask.size      = (Uint32)((pEncInfo->vlcBufSize * VLC_BUF_NUM) + (pEncInfo->paramBufSize * pOpenParam->cmdQueueDepth));
     vbTask.phys_addr = 0;
     if (pEncInfo->vbTask.size == 0) {
-        if (vdi_allocate_dma_memory(coreIdx, &vbTask, ENC_TASK, inst->instIndex) < 0)
+        if (vdi_allocate_dma_memory(coreIdx, &vbTask, "ENC_TASK", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
         pEncInfo->vbTask = vbTask;

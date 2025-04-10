@@ -26,7 +26,6 @@
 #define VPU_PRODUCT_NAME_REGISTER                 (0x1040)
 #define VPU_PRODUCT_CODE_REGISTER                 (0x1044)
 
-// #define SUPPORT_MULTI_CORE_IN_ONE_DRIVER
 #define MAX_VPU_CORE_NUM MAX_NUM_VPU_CORE
 
 #define MAX_VPU_BUFFER_POOL (MAX_NUM_INSTANCE*100)
@@ -123,8 +122,8 @@ extern int vdi_release(unsigned long core_idx);
 extern vpu_instance_pool_t * vdi_get_instance_pool(unsigned long core_idx);
 extern int vdi_allocate_common_memory(unsigned long core_idx);
 extern int vdi_get_common_memory(unsigned long core_idx, vpu_buffer_t *vb);
-extern int vdi_allocate_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex);
-extern int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb);
+extern int vdi_allocate_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, char* buf_name, int instIndex);
+extern int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, unsigned char is_cached);
 extern void vdi_free_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex);
 extern int vdi_get_sram_memory(unsigned long core_idx, vpu_buffer_t *vb);
 extern int vdi_dettach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb);
@@ -181,6 +180,8 @@ extern int vdi_release_instance(unsigned long core_idx);
 extern int vdi_invalidate_ion_cache(uint64_t u64PhyAddr, void *pVirAddr,
                  uint32_t u32Len);
 extern int vdi_flush_ion_cache(uint64_t u64PhyAddr, void *pVirAddr, uint32_t u32Len);
+
+extern int vdi_get_suspend_state(void);
 #if defined (__cplusplus)
 }
 #endif

@@ -1461,6 +1461,9 @@ static int ive_sw_init(struct ive_device *ndev)
 	// Same as sched_set_fifo in linux 5.x
 	task.sched_priority = MAX_USER_RT_PRIO - 10;
 	ret = sched_setscheduler(ndev->work_thread, SCHED_FIFO, &task);
+
+	register_timer_fun(ive_timer_core_update, (void *)ndev);
+
 	if (ret)
 		TRACE_IVE(IVE_DBG_WARN, "ive thread priority update failed: %d\n", ret);
 	mutex_lock(&g_ive_lock);
@@ -1468,8 +1471,6 @@ static int ive_sw_init(struct ive_device *ndev)
 		add_timer(&timer_proc);
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 	mutex_unlock(&g_ive_lock);
-
-	register_timer_fun(ive_timer_core_update, (void *)ndev);
 
 	return ret;
 }

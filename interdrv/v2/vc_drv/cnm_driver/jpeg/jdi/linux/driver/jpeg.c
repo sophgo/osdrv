@@ -32,7 +32,6 @@
 #include <linux/of_device.h>
 #include <linux/reset.h>
 #include <linux/of_reserved_mem.h>
-#include <linux/streamline_annotate.h>
 #include <linux/version.h>
 #include <linux/device.h>
 #include <linux/io.h>
@@ -50,6 +49,7 @@
 #include "../../../jpuapi/jpuconfig.h"
 #include "jpu.h"
 #include "jpulog.h"
+#include "ion.h"
 
 //#define ENABLE_DEBUG_MSG
 #ifdef ENABLE_DEBUG_MSG
@@ -120,7 +120,7 @@ typedef struct jpudrv_instance_list_t {
 
 
 typedef struct jpudrv_instance_pool_t {
-    unsigned char codecInstPool[MAX_JPEG_NUM_INSTANCE][MAX_INST_HANDLE_SIZE];
+    unsigned char codecInstPool[MAX_JPEG_NUM_INSTANCE][MAX_JPEG_INST_HANDLE_SIZE];
 } jpudrv_instance_pool_t;
 
 
@@ -212,10 +212,6 @@ static struct list_head s_inst_list_head = LIST_HEAD_INIT(s_inst_list_head);
 
 extern int jpu_core_init_resources(unsigned int core_num);
 extern void jpu_core_cleanup_resources(void);
-extern int32_t base_ion_free(uint64_t u64PhyAddr);
-extern int32_t base_ion_alloc(uint64_t *p_paddr, void **pp_vaddr, uint8_t *buf_name, uint32_t buf_len, bool is_cached);
-extern int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t u32Len);
-extern int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t u32Len);
 
 uint32_t jpu_get_extension_address(int core_idx)
 {

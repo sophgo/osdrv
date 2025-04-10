@@ -17,19 +17,11 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/fb.h>
-#include <linux/dma-buf.h>
 #include <linux/version.h>
-#include <asm/cacheflush.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
-#include <linux/dma-map-ops.h>
-#endif
 
-#include <linux/comm_vo.h>
-
+#include "linux/comm_vo.h"
 #include "disp.h"
-#include "ion/ion.h"
-#include "ion/cvitek/cvitek_ion_alloc.h"
-// #include "base.h"
+#include "ion.h"
 
 #define GOP_ALIGNMENT 0x10
 #define MAX_PALETTES 16
@@ -38,14 +30,11 @@
 #define FB_LINE_SIZE(vxres, bpp)                                               \
 	ALIGN(ALIGN((vxres) * (bpp), 8) / 8, GOP_ALIGNMENT)
 
-static unsigned long def_vxres;
-static unsigned long def_vyres;
 static char *mode_option0, *mode_option1;
-static bool double_buffer0, double_buffer1;
 static int scale;
-static bool fb0_on_sc, fb1_on_sc;
-static int rdma_window;
 static int option;
+static int fb0_mem_size = 1920 * 1080 * 4;     //default 1080p - argb8888 - one buf
+static int fb1_mem_size = 1920 * 1080 * 4 * 2; //default 1080p - argb8888 - double buf
 
 struct fb_bind {
 	int pid[64];
@@ -71,9 +60,6 @@ static const struct fb_fix_screeninfo cvifb_fix = {
  * mem_base: phy-addr of frame buffer mem
  */
 struct cvifb_par {
-	int ion_fd;
-	pid_t ion_fd_pid;
-	struct dma_buf *dmabuf;
 	u64 reg_base, mem_base;
 	unsigned int reg_len, mem_len, mem_offset;
 	int irq_num;
@@ -136,7 +122,7 @@ static void _fb_activate_var(struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
 	unsigned char vo_inst = par->vo_inst;
-	bool fb_on_sc = (vo_inst == 0) ? fb0_on_sc : fb1_on_sc;
+	bool fb_on_sc = (vo_inst == 0) ? (option & BIT(2)) : (option & BIT(3));
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
@@ -150,17 +136,22 @@ static int cvifb_open(struct fb_info *info, int user)
 {
 	struct cvifb_par *par = info->par;
 	unsigned char vo_inst = par->vo_inst;
-	bool *pfb_on_sc;
+	bool fb_on_sc = (vo_inst == 0) ? (option & BIT(2)) : (option & BIT(3));
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
-	pfb_on_sc = (vo_inst == 0) ? &fb0_on_sc : &fb1_on_sc;
-	*pfb_on_sc =
-		(option & BIT(2 + vo_inst)) ? true : (disp_mux_get(vo_inst) == DISP_VO_SEL_I80);
-	fb_dbg(info, "fb%d %s blended on sc.\n", vo_inst, *pfb_on_sc ? "is" : "isn't");
+	if (disp_mux_get(vo_inst) == DISP_VO_SEL_I80) {
+		fb_on_sc = true;
+		option |= BIT(2 + vo_inst);
+	}
 
-	if (atomic_add_return(1, &par->ref_count) == 1)
+	fb_dbg(info, "fb%d %s blended on sc.\n", vo_inst, fb_on_sc ? "is" : "isn't");
+
+	if (atomic_add_return(1, &par->ref_count) == 1) {
+		memset(info->screen_base, 0, par->mem_len);
+		base_ion_cache_flush(par->mem_base, info->screen_base, par->mem_len);
 		_fb_activate_var(info);
+	}
 
 	return 0;
 }
@@ -261,9 +252,9 @@ static int _cvifb_decode_var(const struct fb_var_screeninfo *var,
 
 	pitch = FB_LINE_SIZE(vxres, bpp);
 	mem_size = pitch * vyres;
-	if (mem_size > info->fix.smem_len) {
+	if (mem_size > par->mem_len) {
 		fb_err(info, "not enough video memory (%d KB requested, %d KB available)\n",
-				mem_size >> 10, info->fix.smem_len >> 10);
+				mem_size >> 10, par->mem_len >> 10);
 		return -ENOMEM;
 	}
 
@@ -306,7 +297,7 @@ static int cvifb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	unsigned int mem_size, pitch;
 	unsigned int max_vyres;
 	unsigned char inst = par->vo_inst;
-	bool double_buffer = (inst == 0) ? double_buffer0 : double_buffer1;
+	bool double_buffer = (inst == 0) ? (option & BIT(0)) : (option & BIT(1));
 
 	fb_dbg(info, "fb%d %s+\n", par->vo_inst, __func__);
 
@@ -353,7 +344,8 @@ static int cvifb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	pitch = FB_LINE_SIZE(var->xres_virtual, var->bits_per_pixel);
 	if ((info->var.xres != var->xres) || (info->var.yres != var->yres)
 			|| (info->var.xres_virtual != var->xres_virtual)
-			|| (info->var.yres_virtual != var->yres_virtual))
+			|| (info->var.yres_virtual != var->yres_virtual)
+			|| (info->var.bits_per_pixel != var->bits_per_pixel))
 		info->fix.smem_len = pitch * var->yres * (1 + double_buffer);
 
 	/* maximize virtual vertical size for fast scrolling */
@@ -391,69 +383,13 @@ static int cvifb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	return 0;
 }
 
-static char name[MAX_ION_BUFFER_NAME];
-static int _cvifb_alloc_ion(struct fb_info *info, size_t len)
-{
-	struct cvifb_par *par = info->par;
-	struct ion_buffer *ionbuf;
-	int ret = 0;
-
-	par->ion_fd = cvi_ion_alloc(ION_HEAP_TYPE_CARVEOUT, len, 1);
-	if (par->ion_fd < 0)
-		return -ENOMEM;
-
-	par->ion_fd_pid = current->pid;
-
-	par->dmabuf = dma_buf_get(par->ion_fd);
-	if (!par->dmabuf) {
-		fb_err(info, "dma_buf_get fail.\n");
-		return -ENOMEM;
-	}
-
-	ionbuf = (struct ion_buffer *)par->dmabuf->priv;
-
-	ret = dma_buf_begin_cpu_access(par->dmabuf, DMA_TO_DEVICE);
-	if (ret < 0) {
-		fb_err(info, "dma_buf_begin_cpu_access fail.\n");
-		return ret;
-	}
-
-	snprintf(name, sizeof(name), "sophfb%d", par->vo_inst);
-	ionbuf->name = name;
-	par->mem_base = ionbuf->paddr;
-	par->mem_len = len;
-
-	info->fix.smem_start = par->mem_base;
-	info->fix.smem_len = par->mem_len;
-	info->screen_base = (char *)ionbuf->vaddr;
-	info->screen_size = info->fix.smem_len;
-
-	fb_info(info, "fb%d ion mem: paddr: 0x%lx, size: 0x%x.\n",
-			par->vo_inst, info->fix.smem_start, info->fix.smem_len);
-
-	return 0;
-}
-
-static void _cvifb_release_ion(struct fb_info *info)
-{
-	struct cvifb_par *par = info->par;
-
-	fb_dbg(info, "fb%d %s+\n", par->vo_inst, __func__);
-
-	if (par->dmabuf) {
-		dma_buf_end_cpu_access(par->dmabuf, DMA_TO_DEVICE);
-		cvi_ion_free(par->ion_fd);
-		par->dmabuf = NULL;
-	}
-}
-
 static int cvifb_set_par(struct fb_info *info)
 {
 	struct cvifb_par *par = info->par;
 	unsigned int len, pitch;
 	int rc;
 	unsigned char vo_inst = par->vo_inst;
-	bool double_buffer = (vo_inst == 0) ? double_buffer0 : double_buffer1;
+	bool double_buffer = (vo_inst == 0) ? (option & BIT(0)) : (option & BIT(1));
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
@@ -464,39 +400,25 @@ static int cvifb_set_par(struct fb_info *info)
 	pitch = FB_LINE_SIZE(info->var.xres_virtual, info->var.bits_per_pixel);
 	len = pitch * info->var.yres * (1 + double_buffer);
 
-	// Framebuffer length changed,
-	// 1. release previous dmabuf of ion
-	// 2. allocate a new one for new fb_info
-	if (len != par->mem_len && par->dmabuf) {
-		_cvifb_release_ion(info);
-		rc = _cvifb_alloc_ion(info, len);
-		if (rc < 0) {
-			fb_err(info, "fb alloc ion mem fail.\n");
-			return rc;
-		}
+	if (len > par->mem_len) {
+		fb_err(info, "fb%d_mem_size(%d) is too small, requested:%d\n",
+			par->vo_inst, par->mem_len, len);
+		return -EINVAL;
 	}
 
-	// Clear the new dmabuf
-	memset(info->screen_base, 0, info->screen_size);
-	// Flush cache data into DRAM
-#if 0
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
-	arch_sync_dma_for_device(virt_to_phys(info->screen_base), info->screen_size, DMA_TO_DEVICE);
-#else
-	__dma_map_area(info->screen_base, info->screen_size, DMA_TO_DEVICE);
-#endif
-#endif
-	//for gcc 9.3.0
-	arch_sync_dma_for_device(virt_to_phys(info->screen_base), info->screen_size, DMA_TO_DEVICE);
-
-	info->fix.line_length =
-		FB_LINE_SIZE(info->var.xres_virtual, info->var.bits_per_pixel);
+	info->screen_size = len;
+	info->fix.smem_len = len;
+	info->fix.line_length = pitch;
 	if (info->var.bits_per_pixel == 1)
 		info->fix.visual = FB_VISUAL_MONO01;
 	else if (info->var.bits_per_pixel == 8)
 		info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
 	else
 		info->fix.visual = FB_VISUAL_TRUECOLOR;
+
+	// Clear the ion buffer
+	memset(info->screen_base, 0, par->mem_len);
+	base_ion_cache_flush(par->mem_base, info->screen_base, par->mem_len);
 
 	_fb_activate_var(info);
 	return 0;
@@ -591,30 +513,25 @@ static int cvifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info
 	unsigned char layer = 1;
 	struct disp_gop_cfg *cfg = disp_gop_get_cfg(vo_inst, layer);
 	unsigned char ow_number;
+	u64 screen_phy_addr;
+	void *screen_vir_addr;
+	int screen_len;
 
 	fb_dbg(info, "fb%d %s+\n", vo_inst, __func__);
 
 	par->mem_offset = var->yoffset * info->fix.line_length +
 		ALIGN(var->xoffset * var->bits_per_pixel, 8) / 8;
 
-	dev_dbg(info->device,
-			"pan_display: xoffset: %i yoffset: %i offset: %i\n",
+	dev_dbg(info->device, "pan_display: xoffset: %i yoffset: %i offset: %i\n",
 			var->xoffset, var->yoffset, par->mem_offset);
 
-	cfg->ow_cfg[0].addr = par->mem_base + par->mem_offset;
-
-	// Flush cache data into DRAM
-#if 0
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
-	arch_sync_dma_for_device(par->mem_base, par->mem_len, DMA_TO_DEVICE);
-#else
-	__dma_map_area(phys_to_virt(par->mem_base), par->mem_len, DMA_TO_DEVICE);
-#endif
-#endif
-	//for gcc9.3.0
-	arch_sync_dma_for_device(par->mem_base, par->mem_len, DMA_TO_DEVICE);
+	screen_phy_addr = par->mem_base + par->mem_offset;
+	screen_vir_addr = info->screen_base + par->mem_offset;
+	screen_len = info->fix.line_length * var->yres;
+	base_ion_cache_flush(screen_phy_addr, screen_vir_addr, screen_len);
 
 	ow_number = 0;
+	cfg->ow_cfg[0].addr = par->mem_base + par->mem_offset;
 	disp_gop_ow_set_cfg(vo_inst, layer, ow_number, &cfg->ow_cfg[0], true);
 
 	return 0;
@@ -663,6 +580,14 @@ static struct fb_ops cvifb_ops = {
 static int _init_resources(struct platform_device *pdev)
 {
 	int rc = 0;
+	struct fb_info **info = platform_get_drvdata(pdev);
+	struct cvifb_par *par;
+	unsigned char vo_inst;
+
+	for (vo_inst = 0; vo_inst < DISP_MAX_INST; vo_inst++) {
+		par = info[vo_inst]->par;
+		memset(par, 0, sizeof(*par));
+	}
 
 	//no io or irq resources are needed.
 	return rc;
@@ -672,11 +597,15 @@ int cvifb_probe(struct platform_device *pdev)
 {
 	int ret;
 	static struct fb_info *info[DISP_MAX_INST];
-	struct cvifb_par *par[DISP_MAX_INST];
+	struct cvifb_par *par;
 	unsigned int len, pitch;
-	unsigned char vo_inst;
-	bool double_buffer;
+	int vo_inst;
+	int flag[DISP_MAX_INST] = {0, 0};
+	bool double_buffer, double_buffer0, double_buffer1;
 	char *mode_option;
+	u64 phy_addr;
+	void *vaddr;
+	char name[64];
 
 	double_buffer0 = option & BIT(0);
 	double_buffer1 = option & BIT(1);
@@ -686,8 +615,8 @@ int cvifb_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	info[1] = framebuffer_alloc(sizeof(struct cvifb_par), &pdev->dev);
 	if (!info[1]) {
-		framebuffer_release(info[0]);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err0;
 	}
 
 	platform_set_drvdata(pdev, info);
@@ -695,22 +624,22 @@ int cvifb_probe(struct platform_device *pdev)
 	ret = _init_resources(pdev);
 	if (ret) {
 		dev_err(info[0]->device, "dts parsing ng.\n");
-		goto err_dts;
+		goto err1;
 	}
 
 	for (vo_inst = 0; vo_inst < DISP_MAX_INST; vo_inst++) {
-		par[vo_inst] = info[vo_inst]->par;
-		par[vo_inst]->vo_inst = vo_inst;
+		par = info[vo_inst]->par;
+		par->vo_inst = vo_inst;
 
 		info[vo_inst]->fix = cvifb_fix;
-		info[vo_inst]->fix.mmio_start = par[vo_inst]->reg_base;
-		info[vo_inst]->fix.mmio_len = par[vo_inst]->reg_len;
+		info[vo_inst]->fix.mmio_start = par->reg_base;
+		info[vo_inst]->fix.mmio_len = par->reg_len;
 		info[vo_inst]->flags = FBINFO_DEFAULT | FBINFO_HWACCEL_YPAN;
 
 		info[vo_inst]->var.activate = FB_ACTIVATE_NOW;
 		info[vo_inst]->var.bits_per_pixel = 8;
 		info[vo_inst]->fbops = &cvifb_ops;
-		info[vo_inst]->pseudo_palette = par[vo_inst]->pseudo_palette;
+		info[vo_inst]->pseudo_palette = par->pseudo_palette;
 
 		mode_option = (vo_inst == 0) ? mode_option0 : mode_option1;
 		double_buffer = (vo_inst == 0) ? double_buffer0 : double_buffer1;
@@ -721,7 +650,7 @@ int cvifb_probe(struct platform_device *pdev)
 					info[vo_inst]->var.bits_per_pixel);
 			if (!ret || ret == 4) {
 				dev_err(info[vo_inst]->device, "mode %s not found\n", mode_option);
-				ret = -EINVAL;
+				goto err2;
 			}
 		} else {
 			struct disp_timing timing;
@@ -751,9 +680,6 @@ int cvifb_probe(struct platform_device *pdev)
 		fb_destroy_modedb(info[vo_inst]->monspecs.modedb);
 		info[vo_inst]->monspecs.modedb = NULL;
 
-		if (ret == -EINVAL)
-			goto err_find_mode;
-
 		if (scale & BIT(0 + 2 * vo_inst)) {
 			info[vo_inst]->var.xres >>= 1;
 			info[vo_inst]->var.xres_virtual >>= 1;
@@ -765,36 +691,37 @@ int cvifb_probe(struct platform_device *pdev)
 
 		pitch = FB_LINE_SIZE(info[vo_inst]->var.xres_virtual, info[vo_inst]->var.bits_per_pixel);
 		info[vo_inst]->fix.line_length = pitch;
-		len = pitch * info[vo_inst]->var.yres * (1 + double_buffer);
 
-		ret = _cvifb_alloc_ion(info[vo_inst], len);
+		snprintf(name, sizeof(name), "fb%d_mem", vo_inst);
+		len = (vo_inst == 0) ? fb0_mem_size : fb1_mem_size;
+		ret = base_ion_alloc(&phy_addr, &vaddr, name, len, true);
 		if (ret < 0) {
-			fb_err(info[vo_inst], "fb alloc ion mem fail.\n");
-			fb_err(info[vo_inst], "xres_virtual(%d), var.yres_virtual(%d).\n",
-					info[vo_inst]->var.xres_virtual, info[vo_inst]->var.yres_virtual);
-			goto err_alloc_ion;
+			fb_err(info[vo_inst], "base_ion_alloc fail, size:%d.\n", len);
+			goto err2;
 		}
+		flag[vo_inst] |= BIT(0);
 
 		// Clear the new dmabuf
-		memset(info[vo_inst]->screen_base, 0, info[vo_inst]->screen_size);
+		memset(vaddr, 0, len);
 		// Flush cache data into DRAM
-#if 0
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && defined(__riscv)
-		arch_sync_dma_for_device(virt_to_phys(info[vo_inst]->screen_base),
-				info[vo_inst]->screen_size, DMA_TO_DEVICE);
-#else
-		__dma_map_area(info[vo_inst]->screen_base, info[vo_inst]->screen_size, DMA_TO_DEVICE);
-#endif
-#endif
-	//for gcc 9.3.0
-	arch_sync_dma_for_device(virt_to_phys(info[vo_inst]->screen_base),
-			info[vo_inst]->screen_size, DMA_TO_DEVICE);
+		base_ion_cache_flush(phy_addr, vaddr, len);
+
+		par->mem_base = phy_addr;
+		par->mem_len = len;
+		info[vo_inst]->fix.smem_start = par->mem_base;
+		info[vo_inst]->fix.smem_len = pitch * info[vo_inst]->var.yres * (1 + double_buffer);
+		info[vo_inst]->screen_base = (char *)vaddr;
+		info[vo_inst]->screen_size = info[vo_inst]->fix.smem_len;
+		fb_info(info[vo_inst], "fb%d ion mem: paddr: 0x%lx, size: %d, screen_size: %ld.\n",
+				vo_inst, info[vo_inst]->fix.smem_start, len,
+				info[vo_inst]->screen_size);
 
 		ret = fb_alloc_cmap(&info[vo_inst]->cmap, 256, 0);
 		if (ret) {
 			dev_err(info[vo_inst]->device, "cannot allocate colormap\n");
-			goto err_alloc_cmap;
+			goto err2;
 		}
+		flag[vo_inst] |= BIT(1);
 
 		if (!mode_option)
 			if (info[vo_inst]->fbops->fb_check_var)
@@ -805,45 +732,51 @@ int cvifb_probe(struct platform_device *pdev)
 		ret = register_framebuffer(info[vo_inst]);
 		if (ret) {
 			dev_err(info[vo_inst]->device, "error registering framebuffer\n");
-			goto err_reg_framebuffer;
+			goto err2;
 		}
+		flag[vo_inst] |= BIT(2);
 
-		atomic_set(&par[vo_inst]->ref_count, 0);
+		atomic_set(&par->ref_count, 0);
 		fb_info(info[vo_inst], "%s frame buffer device\n", info[vo_inst]->fix.id);
 		fb_info(info[vo_inst], "scale(%#x) double_buffer(%d)\n", scale, double_buffer);
 	}
 
 	return 0;
 
-err_reg_framebuffer:
-	if (vo_inst == 1) {
-		fb_dealloc_cmap(&info[0]->cmap);
-		_cvifb_release_ion(info[1]);
+err2:
+	for (; vo_inst >= 0; vo_inst--) {
+		if (flag[vo_inst] & BIT(0)) {
+			par = info[vo_inst]->par;
+			base_ion_free(par->mem_base);
+		}
+		if (flag[vo_inst] & BIT(1))
+			fb_dealloc_cmap(&info[vo_inst]->cmap);
+		if (flag[vo_inst] & BIT(2))
+			unregister_framebuffer(info[vo_inst]);
 	}
-err_find_mode:
-err_alloc_ion:
-	if (vo_inst == 1)
-		_cvifb_release_ion(info[0]);
-err_alloc_cmap:
-err_dts:
-	framebuffer_release(info[0]);
+
+err1:
 	framebuffer_release(info[1]);
+err0:
+	framebuffer_release(info[0]);
 	return ret;
 }
 
 static int cvifb_remove(struct platform_device *pdev)
 {
 	struct fb_info **info = platform_get_drvdata(pdev);
+	struct cvifb_par *par;
 	unsigned char vo_inst;
 
 	fb_dbg(*info, "%s+\n", __func__);
 
 	for (vo_inst = 0; vo_inst < DISP_MAX_INST; vo_inst++) {
-		if (*(info + vo_inst)) {
-			_cvifb_release_ion(*(info + vo_inst));
-			unregister_framebuffer(*(info + vo_inst));
-			fb_dealloc_cmap(&(*(info + vo_inst))->cmap);
-			framebuffer_release(*(info + vo_inst));
+		if (info[vo_inst]) {
+			par = info[vo_inst]->par;
+			base_ion_free(par->mem_base);
+			unregister_framebuffer(info[vo_inst]);
+			fb_dealloc_cmap(&info[vo_inst]->cmap);
+			framebuffer_release(info[vo_inst]);
 		}
 	}
 
@@ -865,8 +798,9 @@ static struct platform_driver cvifb_driver = {
 	}
 };
 
-module_param_named(vxres, def_vxres, long, 0664);
-module_param_named(vyres, def_vyres, long, 0664);
+module_param(fb0_mem_size, int, 0444);
+module_param(fb1_mem_size, int, 0444);
+
 module_param(mode_option0, charp, 0444);
 module_param(mode_option1, charp, 0444);
 
@@ -877,7 +811,6 @@ module_param(mode_option1, charp, 0444);
  * - bit[3]: if true, fb1 v-scale x 2
  */
 module_param(scale, int, 0444);
-module_param(rdma_window, int, 0444);
 
 /* option: to control fb options
  * - bit[0]: if true, fb0 double buffer
@@ -886,6 +819,7 @@ module_param(rdma_window, int, 0444);
  * - bit[3]: if true, fb1 on vpss not vo
  */
 module_param(option, int, 0444);
+
 MODULE_PARM_DESC(mode_option0, "Default video mode (320x240-32@60', etc)");
 MODULE_PARM_DESC(mode_option1, "Default video mode (320x240-32@60', etc)");
 MODULE_PARM_DESC(scale, "scale up of the fb canvas");

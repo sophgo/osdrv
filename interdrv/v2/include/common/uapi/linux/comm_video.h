@@ -579,10 +579,11 @@ typedef struct _vcodec_perf_fps_s {
 typedef enum {
 	SEQ_INIT_NON,
 	SEQ_INIT_START,
+	SEQ_DECODE_WRONG_RESOLUTION,
+	SEQ_DECODE_FRAMEBUFFER_NOTENOUGH,
 	SEQ_CHANGE,
 	SEQ_DECODE_START,
 	SEQ_DECODE_FINISH,
-	SEQ_DECODE_WRONG_RESOLUTION,
 }seq_status;
 
 #ifdef __cplusplus

@@ -466,8 +466,10 @@ int ispblk_rgbmap_config(struct isp_ctx *ctx, int map_id, bool en)
 	int id = rgbmap_find_hwid(map_id);
 	uintptr_t map;
 
-	if (id < 0)
+	if (id < 0) {
+		vi_pr(VI_ERR, "rgbmap[%d] not found\n", map_id);
 		return -EINVAL;
+	}
 
 	map = ctx->phys_regs[id];
 	ISP_WR_BITS(map, reg_isp_rgbmap_t, rgbmap_0, rgbmap_enable, en);
