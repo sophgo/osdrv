@@ -23,10 +23,14 @@ CUR_DIR = $(PWD)
 $(info ** [ KERNEL_DIR ] ** = $(KERNEL_DIR))
 $(info ** [ INSTALL_DIR ] ** = $(INSTALL_DIR))
 
+OSDRV_BUILD_STRING := $(shell git rev-parse --short HEAD 2> /dev/null)
+GIT_OSDRV_COMMIT := ${OSDRV_BUILD_STRING}$(shell if git diff-index --name-only HEAD | grep -q "."; then echo -dirty; fi)
+
 export INTRERDRV_FLAGS :=
 ifeq ($(CONFIG_BUILD_FOR_DEBUG), y)
 INTRERDRV_FLAGS += -DDRV_DEBUG -DDRV_TEST
 endif
+INTRERDRV_FLAGS += -DGIT_OSDRV_COMMIT_HASH=\"$(GIT_OSDRV_COMMIT)\"
 
 define MAKE_KO
 	( cd $(1) && $(MAKE) KERNEL_DIR=$(KERNEL_DIR) all -j$(shell nproc))
