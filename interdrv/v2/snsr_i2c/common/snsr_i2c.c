@@ -42,13 +42,22 @@ static int snsr_i2c_write(struct i2c_dev *dev, struct isp_i2c_data *i2c)
 
 	/* check i2c device number. */
 	if (i2c_dev >= I2C_MAX_NUM) {
-		dev_err(&client->dev, "iic busid [%d] over i2c6, check!!\n", i2c_dev);
+		pr_err("iic busid [%d] over i2c9, check!!\n", i2c_dev);
 		return -EINVAL;
 	}
 
 	/* Get i2c client */
 	client = dev->ctx[i2c_dev].client;
+	if (!client) {
+		pr_err("i2c client is NULL\n");
+		return -EINVAL;
+	}
+
 	adap = client->adapter;
+	if (!adap) {
+		pr_err("i2c adapter is NULL\n");
+		return -EINVAL;
+	}
 
 	/* Config reg addr */
 	if (i2c->addr_bytes == 1) {
