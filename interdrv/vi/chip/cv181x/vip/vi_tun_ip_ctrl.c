@@ -1338,6 +1338,8 @@ void ispblk_tnr_tun_cfg(
 	union REG_ISP_MMAP_44 mm_44;
 	union REG_ISP_444_422_8 reg_8;
 	union REG_ISP_444_422_9 reg_9;
+	union REG_ISP_MMAP_DC mm_dc;
+	union REG_ISP_MMAP_E0 mm_e0;
 
 	if (!ctx->is_3dnr_on || !cfg->update)
 		return;
@@ -1455,6 +1457,15 @@ void ispblk_tnr_tun_cfg(
 			ispblk_tnr_post_chg(ctx, raw_num);
 		}
 	}
+
+	mm_dc.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_DC);
+	mm_dc.bits.COEF_R = cfg->coef_r;
+	mm_dc.bits.COEF_G = cfg->coef_g;
+	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_DC, mm_dc.raw);
+
+	mm_e0.raw = ISP_RD_REG(manr, REG_ISP_MMAP_T, REG_E0);
+	mm_e0.bits.COEF_B = cfg->coef_b;
+	ISP_WR_REG(manr, REG_ISP_MMAP_T, REG_E0, mm_e0.raw);
 }
 
 void ispblk_ee_tun_cfg(
