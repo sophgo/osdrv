@@ -575,6 +575,8 @@ static int fill_vbbuffer(void *pHandle)
 static int sequence_change(void *pHandle)
 {
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
+    CodecInst *pCodecInst = pst_handle->handle;
+    DecInfo *pDecInfo = &pCodecInst->CodecInfo->decInfo;
     int ret;
 
     if (Queue_Get_Cnt(pst_handle->display_frame)) {
@@ -583,6 +585,9 @@ static int sequence_change(void *pHandle)
 
     free_framebuffer(pst_handle);
     VPU_DecGiveCommand(pst_handle->handle, DEC_GET_SEQ_INFO, pst_handle->seq_info);
+
+    pst_handle->frameBufFlag = 0;
+    pDecInfo->frameBufFlag = 0;
     ret = alloc_framebuffer(pst_handle);
     if (ret ==  RETCODE_SUCCESS)
         pst_handle->seq_status = SEQ_DECODE_START;
@@ -1087,11 +1092,15 @@ reinit:
         for(i=0; i<(pst_handle->numOfDecFbc); i++) {
             pDecInfo->vbFbcYTbl[i].phys_addr = buf_info[i].phys_addr;
             pDecInfo->vbFbcYTbl[i].size = buf_info[i].size;
+            pDecInfo->vbFbcYTbl[i].virt_addr =  (unsigned long)phys_to_virt(buf_info[i].phys_addr);
+            vdi_attach_dma_memory(core_idx, &pDecInfo->vbFbcYTbl[i], 1);
         }
         buf_info = (buffer_info_s *)pInitDecCfg->Ctable_buffer;
         for(i=0; i<(pst_handle->numOfDecFbc); i++) {
             pDecInfo->vbFbcCTbl[i].phys_addr = buf_info[i].phys_addr;
             pDecInfo->vbFbcCTbl[i].size = buf_info[i].size;
+            pDecInfo->vbFbcCTbl[i].virt_addr =  (unsigned long)phys_to_virt(buf_info[i].phys_addr);
+            vdi_attach_dma_memory(core_idx, &pDecInfo->vbFbcCTbl[i], 1);
         }
     }
 

@@ -192,7 +192,9 @@ static vpu_power_ctrl vpu_pw_ctl = {0};
 static int s_vpu_reg_phy_base[MAX_NUM_VPU_CORE] = {0x50440000, 0x50450000, 0x50460000};
 
 static int video_cap = 0;
-
+static osal_mutex_t core_mutex[MAX_NUM_VPU_CORE];
+static osal_mutex_t disp_mutex[MAX_NUM_VPU_CORE];
+static osal_mutex_t mem_mutex[MAX_NUM_VPU_CORE];
 static int vpuapi_close(u32 core, u32 inst);
 static int vpuapi_dec_set_stream_end(u32 core, u32 inst);
 static int vpuapi_dec_clr_all_disp_flag(u32 core, u32 inst);
@@ -1878,6 +1880,11 @@ int vpu_drv_platform_init(struct platform_device *pdev)
     }
 #endif
 
+    for(i=0; i< get_vpu_core_num(chip_id,video_cap); i++) {
+        core_mutex[i] = osal_mutex_create();
+        disp_mutex[i] = osal_mutex_create();
+        mem_mutex[i] = osal_mutex_create();
+    }
     VLOG(INFO, "[VPUDRV][-] vpu_drv_platform_init success\n");
     return 0;
 
@@ -1941,6 +1948,11 @@ int vpu_drv_platform_exit(void)
         entry = NULL;
     }
 
+    for(i=0; i< get_vpu_core_num(chip_id,video_cap); i++) {
+        osal_mutex_destroy(core_mutex[i]);
+        osal_mutex_destroy(disp_mutex[i]);
+        osal_mutex_destroy(mem_mutex[i]);
+    }
     VLOG(INFO, "[VPUDRV][-]\n");
     return 0;
 }
@@ -2980,3 +2992,53 @@ int vpu_do_sw_reset(u32 core, u32 inst, u32 error_reason)
     return ret;
 }
 
+int vpu_core_lock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    osal_mutex_lock(core_mutex[core_idx]);
+    return 0;
+}
+
+void vpu_core_unlock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return;
+
+    osal_mutex_unlock(core_mutex[core_idx]);
+}
+
+int vpu_disp_lock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    osal_mutex_lock(disp_mutex[core_idx]);
+    return 0;
+}
+
+void vpu_disp_unlock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return;
+
+    osal_mutex_unlock(disp_mutex[core_idx]);
+}
+
+int vpu_mem_lock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return -1;
+
+    osal_mutex_lock(mem_mutex[core_idx]);
+    return 0;
+}
+
+void vpu_mem_unlock(unsigned long core_idx)
+{
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return;
+
+    osal_mutex_unlock(mem_mutex[core_idx]);
+}

@@ -2568,44 +2568,42 @@ static unsigned char dpu_handler_is_idle(void)
 	return TRUE;
 }
 
-static int32_t dpu_base_get_frame_info(vb_cal_config_s vb_config,pixel_format_e fmt, size_s size, struct video_buffer *buf, unsigned long long mem_base,unsigned int blk_size)
-{
-	unsigned char i = 0;
-	memset(buf, 0, sizeof(*buf));
-	memcpy(&buf->size,&size,sizeof(buf->size));
-	buf->pixel_format = fmt;
-	for (i = 0; i < vb_config.plane_num; ++i) {
-		buf->phy_addr[i] = mem_base;
-		buf->length[i] = blk_size;
-		buf->stride[i] = (i == 0) ? vb_config.main_stride : vb_config.c_stride;
-		mem_base += buf->length[i];
-
-		pr_debug("(%llx-%zu-%d)\n", buf->phy_addr[i], buf->length[i], buf->stride[i]);
-	}
-
-	return SUCCESS;
-}
-
 static void _dpu_fill_buffer(mmf_chn_s chn, struct vb_s *grp_vb_in,
 		unsigned long long phy_addr, struct video_buffer *buf, struct dpu_ctx_s *ctx)
 {
+	unsigned char i = 0;
+	unsigned long long mem_base = phy_addr;
+	vb_cal_config_s *vb_config = &ctx->chn_cfgs[chn.chn_id].vb_config;
 
-	size_s size;
-	unsigned int blk_size;
 	TRACE_DPU(DBG_INFO, "dpu_fill_buffer          +\n");
-	size.width = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.width;
-	size.height = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.height;
-	blk_size = ctx->chn_cfgs[chn.chn_id].blk_size;
-	dpu_base_get_frame_info( ctx->chn_cfgs[chn.chn_id].vb_config
-			   , ctx->chn_cfgs[chn.chn_id].pixel_format
-			   , size
-			   , buf
-			   , phy_addr
-			   , blk_size);
+
+	memset(buf, 0, sizeof(*buf));
+	buf->size.width = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.width;
+	buf->size.height = ctx->chn_cfgs[chn.chn_id].chn_attr.img_size.height;
+	buf->pixel_format = ctx->chn_cfgs[chn.chn_id].pixel_format;
 	buf->offset_top = 0;
 	buf->offset_bottom =0;
 	buf->offset_left = 0;
 	buf->offset_right =0;
+
+	if (buf->pixel_format == PIXEL_FORMAT_YUV_PLANAR_420) {
+		for (i = 0; i < vb_config->plane_num; ++i) {
+			buf->phy_addr[i] = mem_base;
+			buf->length[i] = ALIGN((i == 0) ? vb_config->main_y_size : vb_config->main_c_size,
+					vb_config->addr_align);
+			buf->stride[i] = (i == 0) ? vb_config->main_stride : vb_config->c_stride;
+			mem_base += buf->length[i];
+
+			pr_debug("(%llx-%zu-%d)\n", buf->phy_addr[i], buf->length[i], buf->stride[i]);
+		}
+	} else {
+		// Y only
+		buf->phy_addr[0] = mem_base;
+		buf->length[0] = ctx->chn_cfgs[chn.chn_id].blk_size;
+		buf->stride[0] = ctx->chn_cfgs[chn.chn_id].stride;
+
+		pr_debug("(%llx-%zu-%d)\n", buf->phy_addr[0], buf->length[0], buf->stride[0]);
+	}
 
 	if (grp_vb_in) {
 		buf->pts = grp_vb_in->buf.pts;

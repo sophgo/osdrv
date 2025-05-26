@@ -380,7 +380,8 @@ void sop_isp_rdy_buf_queue(struct sop_vi_dev *vdev, struct sop_isp_buf *b)
 	spin_unlock_irqrestore(&vdev->qbuf_lock, flags);
 
 	if (!atomic_read(&vdev->isp_streamoff) && vdev->qbuf_num[raw_num][chn_num] == 1) {
-		if (vdev->ctx.isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
+		if (vdev->ctx.isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS
+			&& vdev->ctx.isp_pipe_cfg[raw_num].is_yuv_sensor)
 			_isp_yuv_bypass_trigger(vdev, raw_num, ISP_FE_CH0);
 		else
 			_pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
@@ -3887,8 +3888,14 @@ int vi_stop_streaming(struct sop_vi_dev *vdev)
 		isp_snr_i2c_queue[i].num_rdy = 0;
 		spin_unlock_irqrestore(&snr_node_lock[i], flags);
 
-		while ((isp_b = isp_buf_remove(&pre_be_in_se_q[i])) != NULL)
-			vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&pre_be_in_se_q[i])) != NULL) {
+			if (unlikely(isp_b->is_ext == EXTERNAL_BUFFER)) {
+				_vi_release_ext_buf(isp_b->addr);
+				kfree(isp_b);
+			} else {
+				vfree(isp_b);
+			}
+		}
 	}
 
 	while ((isp_b = isp_buf_remove(&pre_be_in_q)) != NULL) {
@@ -8177,8 +8184,10 @@ QBUF:
 				else
 					poolid = g_vi_ctx->chn_attr[chn.chn_id].bind_vb_pool;
 
-				if (poolid != VB_INVALID_POOLID)
-					vb_acquire_block(vi_sdk_qbuf, chn, poolid, NULL);
+				if (poolid != VB_INVALID_POOLID) {
+					vi_pr(VI_INFO, "Have no valied vb, acquire from pool_%d to ispchn_%d\n", poolid, isp_chn.chn_id);
+					vb_acquire_block(vi_sdk_qbuf, isp_chn, poolid, NULL);
+				}
 			}
 		}
 #ifdef VI_PROFILE
@@ -9357,7 +9366,6 @@ static inline void _isp_pre_fe_done_handler(
 		struct isp_grid_s_info m_info;
 		struct isp_queue *fe_out_q, *be_in_q, *raw_d_q;
 		bool fe_ai_isp = ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap == RAW_AI_ISP_FE ? 1 : 0;
-		vb_blk blk = 0;
 		u8 rgbmap_idx = (vdev->pre_fe_frm_num[raw_num][chn_num] - 1) % RGBMAP_BUF_IDX;
 		struct vb_s *vb = NULL;
 
@@ -9415,10 +9423,9 @@ static inline void _isp_pre_fe_done_handler(
 				*b_dup = *b;
 
 				b_dup->is_ext = EXTERNAL_BUFFER;
-				blk = vb_phys_addr2handle(b_dup->addr);
-				vb = (struct vb_s *)blk;
+				vb = (struct vb_s *)(uintptr_t)b->vb_blk;
 				atomic_fetch_add(1, &vb->usr_cnt);
-				atomic_long_set(&((struct vb_s *)blk)->mod_ids, BIT(ID_ISP));
+				atomic_long_set(&vb->mod_ids, BIT(ID_ISP));
 
 				isp_buf_queue(be_in_q, b_dup);
 			} else {
