@@ -1101,7 +1101,7 @@ unsigned long vdi_get_dma_memory_free_size(unsigned long core_idx)
     return size;
 }
 
-int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb)
+int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, unsigned char is_cached)
 {
     vdi_info_t *vdi;
     int i;
@@ -1125,6 +1125,7 @@ int vdi_attach_dma_memory(unsigned long core_idx, vpu_buffer_t *vb)
     vdb.base = vb->base;
 
     vdb.virt_addr = vb->virt_addr;
+    vdb.is_cached = is_cached;
 
     vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)

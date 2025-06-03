@@ -573,6 +573,8 @@ static int fill_vbbuffer(void *pHandle)
 static int sequence_change(void *pHandle)
 {
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
+    CodecInst *pCodecInst = pst_handle->handle;
+    DecInfo *pDecInfo = &pCodecInst->CodecInfo->decInfo;
     int ret;
 
     if (Queue_Get_Cnt(pst_handle->display_frame)) {
@@ -581,6 +583,9 @@ static int sequence_change(void *pHandle)
 
     free_framebuffer(pst_handle);
     VPU_DecGiveCommand(pst_handle->handle, DEC_GET_SEQ_INFO, pst_handle->seq_info);
+
+    pst_handle->frameBufFlag = 0;
+    pDecInfo->frameBufFlag = 0;
     ret = alloc_framebuffer(pst_handle);
     if (ret ==  RETCODE_SUCCESS)
         pst_handle->seq_status = SEQ_DECODE_START;
@@ -669,7 +674,8 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
     int ret;
     SecAxiUse  sec_axi_info = {0};
     int cycle_per_tick = 256;
-    int height_from_user, width_from_user;
+    unsigned int height_from_user, width_from_user;
+    int numOfDecFbc, numOfDecwtl;
 
     ret = VPU_WaitInterruptEx(pst_handle->handle, timeout);
     if (ret < 0) {
@@ -711,11 +717,30 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
         }
         VPU_DecGiveCommand(pst_handle->handle, SET_SEC_AXI, &sec_axi_info);
 
-        if(height_from_user != 0 && width_from_user != 0 && (height_from_user != pst_handle->seq_info->picHeight || width_from_user != pst_handle->seq_info->picWidth)){
-            VLOG(ERR, "The size information does not match. input width:%d pic width:%d input height:%d pic height:%d",
-                width_from_user, pst_handle->seq_info->picWidth, height_from_user, pst_handle->seq_info->picHeight);
-            pst_handle->seq_status = SEQ_DECODE_WRONG_RESOLUTION;
-            return RETCODE_FAILURE;
+
+        if(pst_handle->frameBufFlag == 1)
+        {
+            if(height_from_user != 0 && width_from_user != 0 && (height_from_user != pst_handle->seq_info->picHeight || width_from_user != pst_handle->seq_info->picWidth)){
+                VLOG(ERR, "The size information does not match. input width:%d pic width:%d input height:%d pic height:%d",
+                    width_from_user, pst_handle->seq_info->picWidth, height_from_user, pst_handle->seq_info->picHeight);
+                pst_handle->seq_status = SEQ_DECODE_WRONG_RESOLUTION;
+                return RETCODE_FAILURE;
+            }
+
+            if (pst_handle->open_param->wtlEnable){
+                numOfDecFbc = pst_handle->seq_info->minFrameBufferCount + pst_handle->cmd_queue_depth;
+                numOfDecwtl = pst_handle->seq_info->frameBufDelay + pst_handle->frame_buffer_count + pst_handle->cmd_queue_depth;
+            }
+            else{
+                numOfDecFbc = pst_handle->seq_info->minFrameBufferCount + pst_handle->cmd_queue_depth + pst_handle->frame_buffer_count;
+                numOfDecwtl = 0;
+            }
+            if(pst_handle->numOfDecFbc < numOfDecFbc || pst_handle->numOfDecwtl < numOfDecwtl) {
+                VLOG(ERR, "framebuffers cnt is less than the VPU minimum require. minFrameBufferCount:%d  frameBufDelayCount:%d\n",
+                pst_handle->seq_info->minFrameBufferCount, pst_handle->seq_info->frameBufDelay);
+                pst_handle->seq_status = SEQ_DECODE_FRAMEBUFFER_NOTENOUGH;
+                return RETCODE_FAILURE;
+            }
         }
 
         ret = alloc_framebuffer(pst_handle);
@@ -773,7 +798,9 @@ static int process_data(DECODER_HANDLE *pst_handle, int timeout)
     if (pst_handle->stop_wait_interrupt) {
         FRAME_INFO *frame_info;
         if (!queue_status.instanceQueueCount && queue_status.reportQueueEmpty) {
-            free_framebuffer(pst_handle);
+            if(pst_handle->seq_status >= SEQ_CHANGE) {
+                free_framebuffer(pst_handle);
+            }
             up(&pst_handle->sem_release);
             return RETCODE_SUCCESS;
         }
@@ -969,7 +996,7 @@ reinit:
                 vb_buffer.size = buf_info[i].size;
                 vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
                 vb_buffer.base = vb_buffer.virt_addr;
-                vdi_attach_dma_memory(core_idx, &vb_buffer);
+                vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
             }
             pst_handle->bitstream_buffer[i] = vb_buffer.phys_addr;
             Queue_Enqueue(pst_handle->free_src_buffer, &vb_buffer.phys_addr);
@@ -988,7 +1015,7 @@ reinit:
             vb_buffer.size = buf_info[0].size;
             vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
             vb_buffer.base = vb_buffer.virt_addr;
-            vdi_attach_dma_memory(core_idx, &vb_buffer);
+            vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
         }
         pst_handle->bitstream_buffer[0] = vb_buffer.phys_addr;
         pst_handle->bitstream_size = vb_buffer.size;
@@ -1011,7 +1038,7 @@ reinit:
         pst_handle->numOfDecFbc = pInitDecCfg->numOfDecFbc;
         pst_handle->numOfDecwtl = pInitDecCfg->numOfDecwtl;
         buf_info = (buffer_info_s *)pInitDecCfg->frame_buffer;
-        VLOG(ERR, "%s:%d frame buffer num:%d\n", __func__, __LINE__, pst_handle->numOfDecFbc+pst_handle->numOfDecwtl);
+        VLOG(INFO, "Frame buffer alloc by user. numOfDecFbc:%d numOfDecwtl:%d\n", pst_handle->numOfDecFbc, pst_handle->numOfDecwtl);
         for(i=0; i<(pst_handle->numOfDecFbc+pst_handle->numOfDecwtl); i++) {
             pst_handle->pst_frame_buffer[i].bufY = buf_info[i].phys_addr;
             pst_handle->pst_frame_buffer[i].size = buf_info[i].size;
@@ -1021,11 +1048,15 @@ reinit:
         for(i=0; i<(pst_handle->numOfDecFbc); i++) {
             pDecInfo->vbFbcYTbl[i].phys_addr = buf_info[i].phys_addr;
             pDecInfo->vbFbcYTbl[i].size = buf_info[i].size;
+            pDecInfo->vbFbcYTbl[i].virt_addr =  (unsigned long)phys_to_virt(buf_info[i].phys_addr);
+            vdi_attach_dma_memory(core_idx, &pDecInfo->vbFbcYTbl[i], 1);
         }
         buf_info = (buffer_info_s *)pInitDecCfg->Ctable_buffer;
         for(i=0; i<(pst_handle->numOfDecFbc); i++) {
             pDecInfo->vbFbcCTbl[i].phys_addr = buf_info[i].phys_addr;
             pDecInfo->vbFbcCTbl[i].size = buf_info[i].size;
+            pDecInfo->vbFbcCTbl[i].virt_addr =  (unsigned long)phys_to_virt(buf_info[i].phys_addr);
+            vdi_attach_dma_memory(core_idx, &pDecInfo->vbFbcCTbl[i], 1);
         }
     }
 
@@ -1188,7 +1219,8 @@ int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms)
     if (pst_handle->user_pic_enable && pdopc->bsLen)
         return RETCODE_QUEUEING_FAILURE;
 
-    if(pst_handle->seq_status == SEQ_DECODE_WRONG_RESOLUTION) {
+    if(pst_handle->seq_status == SEQ_DECODE_WRONG_RESOLUTION ||
+        pst_handle->seq_status == SEQ_DECODE_FRAMEBUFFER_NOTENOUGH) {
         return RETCODE_INVALID_PARAM;
     }
 

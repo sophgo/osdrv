@@ -3314,9 +3314,8 @@ void _vi_scene_ctrl(struct sop_vi_dev *vdev)
 		ctx->raw_chnstr_num[raw_num] = ctx->total_chn_num;
 
 		if (!ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
-			ctx->isp_pipe_cfg[raw_num].pixel_fmt =
-					g_vi_ctx->chn_attr[ctx->raw_chnstr_num[raw_num]].pixel_format;
 			ctx->total_chn_num++;
+
 			vi_pr(VI_INFO, "raw_num=%d, rgb, chnstr_num=%d, chn_num=%d\n",
 					raw_num, ctx->raw_chnstr_num[raw_num], 1);
 		} else {

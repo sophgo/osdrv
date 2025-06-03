@@ -790,7 +790,7 @@ int vdi_allocate_dma_memory(unsigned long coreIdx, vpu_buffer_t *vb, int memType
     return 0;
 }
 
-int vdi_attach_dma_memory(unsigned long coreIdx, vpu_buffer_t *vb)
+int vdi_attach_dma_memory(unsigned long coreIdx, vpu_buffer_t *vb, unsigned char is_cached)
 {
     vdi_info_t *vdi;
     int i;
