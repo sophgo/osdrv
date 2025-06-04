@@ -1,0 +1,27 @@
+#ccflags-y += -save-temps=obj
+
+CONFIG_LOG = 1
+
+ifeq ($(CONFIG_LOG), 1)
+ccflags-y += -DCONFIG_LOG
+endif
+
+ifeq ($(SUBTYPE), fpga)
+ccflags-y += -DFPGA_PORTING
+endif
+
+ifeq ($(CONFIG_DUAL_OS), y)
+ccflags-y += -DCONFIG_DUAL_OS
+endif
+
+ifeq ($(ARCH), arm)
+ccflags-y +=-Wframe-larger-than=2048
+endif
+
+ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-error=enum-conversion
+
+ccflags-y += -I$(PWD)/../include/common/uapi/ \
+             -I$(PWD)/../include/common/kapi/ \
+             -I$(PWD)/../include/chip/$(CHIP_ARCH_L)/uapi/ \
+			 -I$(PWD)/../include/chip/$(CHIP_ARCH_L)/kapi/ \
+			 -I$(PWD)/../osal/include
