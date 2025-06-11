@@ -664,9 +664,8 @@ RetCode Wave5VpuDecGetSeqInfo(CodecInst* instance, DecInitialInfo* info)
 #else
         info->warnInfo = VpuReadReg(instance->coreIdx, W5_RET_DEC_WARN_INFO);
 #endif
+        GetDecSequenceResult(instance, info);
     }
-
-    GetDecSequenceResult(instance, info);
 
     return ret;
 }
