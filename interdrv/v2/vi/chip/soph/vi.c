@@ -380,7 +380,8 @@ void sop_isp_rdy_buf_queue(struct sop_vi_dev *vdev, struct sop_isp_buf *b)
 	spin_unlock_irqrestore(&vdev->qbuf_lock, flags);
 
 	if (!atomic_read(&vdev->isp_streamoff) && vdev->qbuf_num[raw_num][chn_num] == 1) {
-		if (vdev->ctx.isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
+		if (vdev->ctx.isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS
+			&& vdev->ctx.isp_pipe_cfg[raw_num].is_yuv_sensor)
 			_isp_yuv_bypass_trigger(vdev, raw_num, ISP_FE_CH0);
 		else
 			_pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
@@ -518,6 +519,8 @@ static void _isp_preraw_fe_dma_dump(struct isp_ctx *ictx, enum sop_isp_raw raw_n
 		for (i = 0; i < RGBMAP_BUF_IDX; i++)
 			vi_pr(VI_INFO, "rgbmap_se(0x%llx)\n", isp_bufpool[raw_num].rgbmap_se[i]);
 	}
+
+	vi_pr(VI_INFO, "rgbmap_zero(0x%llx)", isp_bufpool[raw_num].rgbmap_zero);
 
 	if (ictx->isp_pipe_cfg[raw_num].is_yuv_sensor &&
 		ictx->isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
@@ -980,6 +983,9 @@ void _isp_pre_fe_dma_setup(struct isp_ctx *ictx, enum sop_isp_raw raw_num)
 					isp_bufpool[raw_num].rgbmap_se[i] = _mempool_pop(bufsize);
 			}
 		}
+
+		isp_bufpool[raw_num].rgbmap_zero = _mempool_pop(bufsize);
+		memset(phys_to_virt(isp_bufpool[raw_num].rgbmap_zero), 0, bufsize);
 	}
 
 EXIT:
@@ -1623,6 +1629,9 @@ void _vi_pre_fe_get_dma_size(struct isp_ctx *ictx, enum sop_isp_raw raw_num)
 				_mempool_pop(bufsize);
 		}
 	}
+
+	_mempool_pop(bufsize);
+
 EXIT:
 	return;
 }
@@ -3879,8 +3888,14 @@ int vi_stop_streaming(struct sop_vi_dev *vdev)
 		isp_snr_i2c_queue[i].num_rdy = 0;
 		spin_unlock_irqrestore(&snr_node_lock[i], flags);
 
-		while ((isp_b = isp_buf_remove(&pre_be_in_se_q[i])) != NULL)
-			vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&pre_be_in_se_q[i])) != NULL) {
+			if (unlikely(isp_b->is_ext == EXTERNAL_BUFFER)) {
+				_vi_release_ext_buf(isp_b->addr);
+				kfree(isp_b);
+			} else {
+				vfree(isp_b);
+			}
+		}
 	}
 
 	while ((isp_b = isp_buf_remove(&pre_be_in_q)) != NULL) {
@@ -3975,7 +3990,6 @@ static u64 bnr_ai_isp_launch_tpu(struct sop_vi_dev *vdev,
 	struct isp_buffer *b = NULL;
 	u64 output_addr = input_addr;
 	u8 dev_num = vi_get_dev_num_by_raw(&vdev->ctx, raw_num);
-	bool is_lauch_sucess = false;
 	int timeout = 200;
 	int ret = 0;
 
@@ -3986,18 +4000,14 @@ static u64 bnr_ai_isp_launch_tpu(struct sop_vi_dev *vdev,
 
 	if (!b) {
 		vi_pr(VI_ERR, "ai isp outbuf %d_%d is NULL!\n", raw_num, chn_num);
-		goto exit;
+		return input_addr;
 	}
-
-	output_addr = b->addr;
-
-	if (!ctx->isp_pipe_cfg[raw_num].is_raw_replay_fe)
-		b->addr = input_addr;
 
 	++ctx->isp_pipe_cfg[raw_num].raw_ai_isp_frm_cnt;
 
+	//will modify by mw，0 src for ai isp, 1 dst for ai isp
 	ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0] = input_addr;
-	ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1] = output_addr;
+	ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1] = b->addr;
 
 	atomic_set(&vdev->ai_isp_int_flag[raw_num], 1);
 
@@ -4011,15 +4021,10 @@ static u64 bnr_ai_isp_launch_tpu(struct sop_vi_dev *vdev,
 	if (!ret) {
 		vi_pr(VI_WARN, "dev_%d wait process timeout(%d ms) at frame(%d)\n",
 			dev_num, timeout, ctx->isp_pipe_cfg[raw_num].raw_ai_isp_frm_cnt);
-		goto exit;
-	}
-
-	is_lauch_sucess = true;
-
-exit:
-	if (!is_lauch_sucess) {
-		b->addr = output_addr;
 		output_addr = input_addr;
+	} else {
+		output_addr = ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1];
+		b->addr = ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0];
 	}
 
 	return output_addr;
@@ -4037,6 +4042,7 @@ static void ai_isp_handle_process(
 	enum sop_isp_fe_chn_num chn_num = ISP_FE_CH0;
 	enum sop_isp_fe_chn_num chn_max = chn_num;
 	u64 output_buf = 0;
+	u8 rgbmap_idx = 0;
 
 	ai_isp_type = atomic_read(&vdev->ai_isp_type);
 	switch (ai_isp_type) {
@@ -4072,6 +4078,7 @@ static void ai_isp_handle_process(
 				} else {//splt ai isp
 					tpu_w_q = &splt_out_q[raw_num][chn_num];
 					tpu_r_q = &pre_fe_in_q[raw_num][chn_num];
+					rgbmap_idx = vdev->pre_fe_frm_num[raw_num][chn_num] % RGBMAP_BUF_IDX;
 					b = isp_buf_remove(tpu_w_q);
 					if (!b) {
 						vi_pr(VI_ERR, "tpu_w_q_%d_%d is NULL!\n",
@@ -4080,9 +4087,12 @@ static void ai_isp_handle_process(
 					}
 					_splt_hw_enque(vdev, raw_num);
 
-					if (atomic_read(&vdev->bnr_run_tpu[raw_num]))
+					if (atomic_read(&vdev->bnr_run_tpu[raw_num])) {
+						ai_isp_cfg_info[raw_num].ai_rgbmap =
+							isp_bufpool[raw_num].rgbmap_le[rgbmap_idx];
 						b->addr = bnr_ai_isp_launch_tpu(vdev, raw_num,
 										chn_num, b->addr);
+					}
 
 					if (check_pre_fe_state(vdev, raw_num, chn_num)) {
 						isp_buf_queue(tpu_r_q, b);
@@ -4108,6 +4118,7 @@ static void ai_isp_handle_process(
 				mutex_unlock(&vdev->ai_isp_lock);
 
 				if (atomic_read(&vdev->bnr_run_tpu[raw_num])) {
+					ai_isp_cfg_info[raw_num].ai_rgbmap = b->rgbmap_addr;
 					output_buf = bnr_ai_isp_launch_tpu(vdev, raw_num,
 									chn_num, b->addr);
 					//for dump_raw
@@ -4167,6 +4178,8 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, ai_isp_cfg_t cfg)
 		}
 		case AI_ISP_CFG_INIT:
 		{
+			ai_isp_bnr_cfg_t bnr_cfg;
+
 			if (!ctx->is_offline_be || ctx->is_offline_postraw) {
 				vi_pr(VI_WARN, "bnr ai isp need (be offline)&(post online)\n");
 				return -EPERM;
@@ -4174,6 +4187,14 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, ai_isp_cfg_t cfg)
 			if (!ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap) {
 				vi_pr(VI_WARN, "need to enable raw_ai_isp_ap before streaming!\n");
 				return -EPERM;
+			}
+
+			if (cfg.param_size == sizeof(ai_isp_bnr_cfg_t)) {
+				memcpy(&bnr_cfg, (void *)cfg.param_addr, cfg.param_size);
+				ctx->isp_pipe_cfg[raw_num].is_rgbmap_ai_isp = bnr_cfg.ai_rgbmap;
+				vi_pr(VI_INFO, "user ai isp rgbmap\n");
+			} else {
+				vi_pr(VI_INFO, "wrong size !!!\n");
 			}
 
 			break;
@@ -4187,6 +4208,7 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, ai_isp_cfg_t cfg)
 						raw_num, timeout);
 			}
 
+			ctx->isp_pipe_cfg[raw_num].is_rgbmap_ai_isp = false;
 			break;
 		}
 		case AI_ISP_CFG_ENABLE:
@@ -4208,7 +4230,7 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, ai_isp_cfg_t cfg)
 				vi_pr(VI_WARN, "wait raw_%d tpu_done timeout(%d)!\n",
 						raw_num, timeout);
 			}
-
+			ctx->isp_pipe_cfg[raw_num].raw_ai_isp_frm_cnt = 0;
 			break;
 		}
 		default:
@@ -4752,6 +4774,7 @@ s8 _pre_hw_enque(
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum isp_blk_id_t splt_rdma_id;
+	u32 rgbmap_id;
 
 	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_pre_trig_done) == 1)) {
 		vi_pr(VI_DBG, "already pre_hw_enque\n");
@@ -4872,15 +4895,23 @@ s8 _pre_hw_enque(
 					splt_rdma_id = (chn_num == ISP_FE_CH0) ?
 							ISP_BLK_ID_SPLT_FE1_RDMA_LE :
 							ISP_BLK_ID_SPLT_FE1_RDMA_SE;
+					rgbmap_id = (chn_num == ISP_FE_CH0) ?
+							ISP_RGBMAP_ID_FE1_LE :
+							ISP_RGBMAP_ID_FE1_SE;
 				} else {
 					splt_rdma_id = (chn_num == ISP_FE_CH0) ?
 							ISP_BLK_ID_SPLT_FE0_RDMA_LE :
 							ISP_BLK_ID_SPLT_FE0_RDMA_SE;
+					rgbmap_id = (chn_num == ISP_FE_CH0) ?
+							ISP_RGBMAP_ID_FE0_LE :
+							ISP_RGBMAP_ID_FE0_SE;
 				}
 
 				if (_pre_fe_inbuf_enque(vdev, raw_num, chn_num) &&
 				    _pre_fe_outbuf_enque(vdev, raw_num, chn_num)) {
 					ispblk_splt_rdma_ctrl_config(ctx, splt_rdma_id, true);
+					ispblk_rgbmap_config(ctx, rgbmap_id,
+							     !ctx->isp_pipe_cfg[raw_num].is_rgbmap_ai_isp);
 					isp_pre_trig(ctx, raw_num, chn_num);
 				} else {
 					// ispblk_splt_rdma_ctrl_config(ctx, splt_rdma_id, false);
@@ -5019,6 +5050,9 @@ static inline void _post_rgbmap_update(struct isp_ctx *ctx, const enum sop_isp_r
 	else
 		pre_le_r = isp_bufpool[raw_num].rgbmap_le[pre_idx];
 
+	if (ctx->isp_pipe_cfg[raw_num].is_rgbmap_ai_isp && ctx->isp_pipe_cfg[raw_num].raw_ai_isp_frm_cnt)
+		pre_le_r = isp_bufpool[raw_num].rgbmap_zero;
+
 	if (ctx->isp_pipe_cfg[raw_num].is_tile && ctx->is_work_on_r_tile) {
 		cur_le_r += UPPER(ctx->tile_cfg.r_in.start - ctx->isp_pipe_cfg[raw_num].crop.x, w_bit) * 6;
 		pre_le_r += UPPER(ctx->tile_cfg.r_in.start - ctx->isp_pipe_cfg[raw_num].crop.x, w_bit) * 6;
@@ -5038,6 +5072,9 @@ static inline void _post_rgbmap_update(struct isp_ctx *ctx, const enum sop_isp_r
 			pre_se_r = isp_bufpool[raw_num].rgbmap_se[0];
 		else
 			pre_se_r = isp_bufpool[raw_num].rgbmap_se[pre_idx];
+
+		if (ctx->isp_pipe_cfg[raw_num].is_rgbmap_ai_isp && ctx->isp_pipe_cfg[raw_num].raw_ai_isp_frm_cnt)
+			pre_se_r = isp_bufpool[raw_num].rgbmap_zero;
 
 		if (ctx->isp_pipe_cfg[raw_num].is_tile && ctx->is_work_on_r_tile) {
 			cur_se_r += UPPER(ctx->tile_cfg.r_in.start - ctx->isp_pipe_cfg[raw_num].crop.x, w_bit) * 6;
@@ -7177,11 +7214,28 @@ static long _vi_s_ctrl(struct sop_vi_dev *vdev, struct vi_ext_control *p)
 	{
 		u8 raw_num;
 		u8 dev_num = p->sdk_cfg.pipe;
+		struct _ai_isp_cfg_info cfg_info;
+		u64 tmp = 0;
 
 		if (dev_num >= ISP_PRERAW_MAX)
 			break;
 
 		raw_num = vi_get_raw_num_by_dev(ctx, dev_num);
+
+		if (copy_from_user(&cfg_info, p->ptr, sizeof(struct _ai_isp_cfg_info)) != 0) {
+			vi_pr(VI_ERR, "fail to copy from user ai_isp_cfg_info\n");
+			break;
+		}
+
+		if (ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0] == cfg_info.ai_bnr_addr_pool[0] &&
+			ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1] == cfg_info.ai_bnr_addr_pool[1]) {
+			vi_pr(VI_DBG, "AI BNR\n");
+		} else {
+			tmp = ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0];
+			ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0] = ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1];
+			ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1] = tmp;
+			vi_pr(VI_DBG, "AI RGBMAP set input buffer as outbuffer\n");
+		}
 
 		atomic_set(&vdev->ai_isp_int_flag[raw_num], 2);
 		wake_up(&vdev->ai_isp_wait_q[raw_num]);
@@ -7682,8 +7736,13 @@ static long _vi_g_ctrl(struct sop_vi_dev *vdev, struct vi_ext_control *p)
 			break;
 		}
 
-		if (copy_to_user(p->ptr, ai_isp_cfg_info[raw_num].ai_bnr_addr_pool,
-				sizeof(ai_isp_cfg_info[raw_num].ai_bnr_addr_pool)) != 0) {
+		vi_pr(VI_DBG, "raw_%d (%llx, %llx) rgbmap 0x%llx\n", raw_num,
+					ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[0],
+					ai_isp_cfg_info[raw_num].ai_bnr_addr_pool[1],
+					ai_isp_cfg_info[raw_num].ai_rgbmap);
+
+		if (copy_to_user(p->ptr, &ai_isp_cfg_info[raw_num],
+				sizeof(struct _ai_isp_cfg_info)) != 0) {
 			break;
 		}
 
@@ -8012,7 +8071,9 @@ static int _vi_event_handler_thread(void *arg)
 		time[0] = ktime_to_timespec64(ktime_get());
 #endif
 		ret = wait_event_timeout(vdev->vi_th[th_id].wq,
-					vdev->vi_th[th_id].flag != 0 || kthread_should_stop(),
+					vdev->vi_th[th_id].flag != 0 ||
+					kthread_should_stop() ||
+					!list_empty(&dqbuf_q.list),
 					msecs_to_jiffies(timeout) - 1);
 
 		if (vdev->vi_th[th_id].flag != 0) {
@@ -8123,8 +8184,10 @@ QBUF:
 				else
 					poolid = g_vi_ctx->chn_attr[chn.chn_id].bind_vb_pool;
 
-				if (poolid != VB_INVALID_POOLID)
-					vb_acquire_block(vi_sdk_qbuf, chn, poolid, NULL);
+				if (poolid != VB_INVALID_POOLID) {
+					vi_pr(VI_INFO, "Have no valied vb, acquire from pool_%d to ispchn_%d\n", poolid, isp_chn.chn_id);
+					vb_acquire_block(vi_sdk_qbuf, isp_chn, poolid, NULL);
+				}
 			}
 		}
 #ifdef VI_PROFILE
@@ -9303,7 +9366,7 @@ static inline void _isp_pre_fe_done_handler(
 		struct isp_grid_s_info m_info;
 		struct isp_queue *fe_out_q, *be_in_q, *raw_d_q;
 		bool fe_ai_isp = ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap == RAW_AI_ISP_FE ? 1 : 0;
-		vb_blk blk = 0;
+		u8 rgbmap_idx = (vdev->pre_fe_frm_num[raw_num][chn_num] - 1) % RGBMAP_BUF_IDX;
 		struct vb_s *vb = NULL;
 
 		fe_out_q = &pre_fe_out_q[raw_num][chn_num];
@@ -9332,6 +9395,7 @@ static inline void _isp_pre_fe_done_handler(
 		b->lmap_i.w_bit = m_info.w_bit;
 		b->lmap_i.h_bit = m_info.h_bit;
 
+		b->rgbmap_addr = isp_bufpool[raw_num].rgbmap_le[rgbmap_idx];
 		b->chn_num = chn_num;
 		b->timestamp = ktime_to_timespec64(ktime_get());
 
@@ -9359,10 +9423,9 @@ static inline void _isp_pre_fe_done_handler(
 				*b_dup = *b;
 
 				b_dup->is_ext = EXTERNAL_BUFFER;
-				blk = vb_phys_addr2handle(b_dup->addr);
-				vb = (struct vb_s *)blk;
+				vb = (struct vb_s *)(uintptr_t)b->vb_blk;
 				atomic_fetch_add(1, &vb->usr_cnt);
-				atomic_long_set(&((struct vb_s *)blk)->mod_ids, BIT(ID_ISP));
+				atomic_long_set(&vb->mod_ids, BIT(ID_ISP));
 
 				isp_buf_queue(be_in_q, b_dup);
 			} else {

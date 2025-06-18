@@ -2158,6 +2158,11 @@ static int hdmi_tx_resume(struct platform_device *pdev)
 
 	enable_irq(dev->irq[0]);
 	is_resume = true;
+
+	//set clock
+	dphy_init(DISP1, VO_DISP_INTF_HDMI);
+	cvitek_hdmi_clk_set(10368);
+
 	hdmitx_start();
 	pr_info("hdmi resumed\n");
 

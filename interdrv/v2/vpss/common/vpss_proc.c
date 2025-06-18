@@ -9,6 +9,7 @@
 #include "vpss_common.h"
 #include "scaler.h"
 #include "vpss_core.h"
+#include "vpss_hal.h"
 #include "vpss.h"
 
 #define VPSS_PROC_NAME          "soph/vpss"
@@ -450,11 +451,119 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 int vpp_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i;
+	char c[32];
 	struct vpss_device *dev = (struct vpss_device *)m->private;
+	struct timespec64 ts;
+	struct vpss_job *job;
 
+	ktime_get_ts64(&ts);
+
+	seq_puts(m, "\n-------------------------------VPSS HW STATUS-----------------------\n");
+	seq_printf(m, "%10s%10s%10s%10s%10s%10s\n",
+		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime");
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
-		seq_printf(m, "{\"id\":%d, \"usage(instant|long)\":%10d%%|%10d%% \n", i, dev->vpss_cores[i].duty_ratio,\
-                dev->vpss_cores[i].duty_ratio_long);
+		int state = atomic_read(&dev->vpss_cores[i].state);
+
+		memset(c, 0, sizeof(c));
+		if (state == VIP_IDLE)
+			strncpy(c, "Idle", sizeof(c));
+		else if (state == VIP_RUNNING)
+			strncpy(c, "Running", sizeof(c));
+		else if (state == VIP_END)
+			strncpy(c, "End", sizeof(c));
+		else if (state == VIP_ONLINE)
+			strncpy(c, "Online", sizeof(c));
+
+		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d\n",
+			"#",
+			i,
+			vpss_name[i],
+			c,
+			dev->vpss_cores[i].start_cnt,
+			dev->vpss_cores[i].int_cnt,
+			dev->vpss_cores[i].hw_duration);
+	}
+
+	seq_puts(m, "\n-------------------------------VPSS INPUT INFO-------------------------\n");
+	seq_printf(m, "%10s%5s%5s%4s%10s%10s%10s%10s%10s%6s\n",
+		"ID", "w", "h", "fmt", "paddr0", "paddr1", "paddr2", "paddr3", "stride", "fancy");
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		if(dev->vpss_cores[i].job){
+			job = dev->vpss_cores[i].job;
+			seq_printf(m, "%8s %d %4d %4d %3d %9lx %9lx %9lx %9lx %4d %4d %5s\n",
+				"#",
+				i,
+				job->cfg.grp_cfg.src_size.width,
+				job->cfg.grp_cfg.src_size.height,
+				job->cfg.grp_cfg.pixelformat,
+				(unsigned long)job->cfg.grp_cfg.addr[0],
+				(unsigned long)job->cfg.grp_cfg.addr[1],
+				(unsigned long)job->cfg.grp_cfg.addr[2],
+				(unsigned long)job->cfg.grp_cfg.addr[3],
+				job->cfg.grp_cfg.bytesperline[0],
+				job->cfg.grp_cfg.bytesperline[1],
+				job->cfg.grp_cfg.upsample ? "Y" : "N");
+		}
+	}
+
+	seq_puts(m, "\n-------------------------------VPSS OUTPUT INFO-------------------------\n");
+	seq_printf(m, "%10s%5s%5s%4s%10s%10s%10s%10s%5s%5s%5s%6s%4s%4s\n",
+		"ID", "w", "h", "fmt", "paddr0", "paddr1", "paddr2", "stride", "flip", "conv",
+		"draw", "cover", "cir", "rgn");
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		if(dev->vpss_cores[i].job){
+			job = dev->vpss_cores[i].job;
+			seq_printf(m, "%8s %d %4d %4d %3d %9lx %9lx %9lx %4d %4d %4d %4s %4s %5s %3s %3s\n",
+				"#",
+				i,
+				job->cfg.chn_cfg[0].dst_size.width,
+				job->cfg.chn_cfg[0].dst_size.height,
+				job->cfg.chn_cfg[0].pixelformat,
+				(unsigned long)job->cfg.chn_cfg[0].addr[0],
+				(unsigned long)job->cfg.chn_cfg[0].addr[1],
+				(unsigned long)job->cfg.chn_cfg[0].addr[2],
+				job->cfg.chn_cfg[0].bytesperline[0],
+				job->cfg.chn_cfg[0].bytesperline[1],
+				job->cfg.chn_cfg[0].flip,
+				job->cfg.chn_cfg[0].convert_to_cfg.enable ? "Y" : "N",
+				job->cfg.chn_cfg[0].border_vpp_cfg[0].enable ? "Y" : "N",
+				job->cfg.chn_cfg[0].rgn_coverex_cfg.rgn_coverex_param[0].enable ? "Y" : "N",
+				job->cfg.chn_cfg[0].circle_cfg.cfg0.b.enable ? "Y" : "N",
+				job->cfg.chn_cfg[0].rgn_cfg[0].num_of_rgn > 0 ? "Y" : "N");
+		}
+	}
+
+	seq_puts(m, "\n-------------------------------VPSS CROP&PAD INFO-------------------------\n");
+	seq_printf(m, "%10s%20s%20s%20s%12s\n",
+		"ID", "grpcrop", "chncrop", "dstrect", "padcolor");
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		if(dev->vpss_cores[i].job){
+			job = dev->vpss_cores[i].job;
+			seq_printf(m, "%8s %d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %3d %3d %3d\n",
+				"#",
+				i,
+				job->cfg.grp_cfg.crop.left,
+				job->cfg.grp_cfg.crop.top,
+				job->cfg.grp_cfg.crop.width,
+				job->cfg.grp_cfg.crop.height,
+				job->cfg.chn_cfg[0].crop.left,
+				job->cfg.chn_cfg[0].crop.top,
+				job->cfg.chn_cfg[0].crop.width,
+				job->cfg.chn_cfg[0].crop.height,
+				job->cfg.chn_cfg[0].dst_rect.left,
+				job->cfg.chn_cfg[0].dst_rect.top,
+				job->cfg.chn_cfg[0].dst_rect.width,
+				job->cfg.chn_cfg[0].dst_rect.height,
+				job->cfg.chn_cfg[0].border_cfg.enable ? job->cfg.chn_cfg[0].border_cfg.bg_color[0] : -1,
+				job->cfg.chn_cfg[0].border_cfg.enable ? job->cfg.chn_cfg[0].border_cfg.bg_color[1] : -1,
+				job->cfg.chn_cfg[0].border_cfg.enable ? job->cfg.chn_cfg[0].border_cfg.bg_color[2] : -1);
+		}
+	}
+
+	seq_puts(m, "\n-------------------------------VPSS USAGE INFO-------------------------\n");
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		seq_printf(m, "{\"id\":%d, \"usage(instant|long)\":%5d%%|%5d%% \n", i, dev->vpss_cores[i].duty_ratio,\
+                (int)(dev->vpss_cores[i].duty_ratio_long / ts.tv_sec));
 	}
 
 	return 0;

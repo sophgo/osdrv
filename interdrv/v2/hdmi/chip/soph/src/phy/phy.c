@@ -531,12 +531,13 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pclk, color_depth_t color, pixel_re
 		return HDMI_ERR_PHY_NOT_CONFIG;
 	}
 
+	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x1);
+
 	/*
 	 * Some monitors may experience SCDC read/write failures, yet display normally.
 	 * Therefore, in this case, we only provide an error message but not return.
 	 */
 	if(pclk > 340000) {
-		dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x1);
 		res = scrambling(dev, TRUE);
 		if (res != 0)
 			pr_err("scrambling config failed\n");
@@ -548,7 +549,6 @@ int phy316_configure(hdmi_tx_dev_t *dev, u32 pclk, color_depth_t color, pixel_re
 		dev->snps_hdmi_ctrl.src_scramble = dev->snps_hdmi_ctrl.sink_scramble
 		 = dev->snps_hdmi_ctrl.high_tmds_ratio = TRUE;
 	} else {
-		dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0x0);
 		res = scrambling(dev, FALSE);
 		if (res != 0)
 			pr_err("scrambling config failed\n");

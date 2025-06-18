@@ -93,6 +93,7 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 	b->addr = dump[0].raw_dump.phy_addr;
 	b->raw_num = raw_num;
 	b->crop_le = ctx->isp_pipe_cfg[raw_num].rawdump_crop;
+	b->vb_blk = vb_phys_addr2handle(b->addr);
 	vi_pr(VI_DBG, "raw_num=%d enque raw_dump le\n", raw_num);
 	vi_pr(VI_DBG, "b->crop_le x(%d), y(%d), w(%d), h(%d)\n",
 		b->crop_le.x, b->crop_le.y, b->crop_le.w, b->crop_le.h);
@@ -104,6 +105,7 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 		b->addr = dump[1].raw_dump.phy_addr;
 		b->crop_se = ctx->isp_pipe_cfg[raw_num].rawdump_crop_se;
 		b->raw_num = raw_num;
+		b->vb_blk = vb_phys_addr2handle(b->addr);
 		vi_pr(VI_DBG, "enque raw_dump se\n");
 		vi_pr(VI_DBG, "b->crop_se x(%d), y(%d), w(%d), h(%d)\n",
 			b->crop_se.x, b->crop_se.y, b->crop_se.w, b->crop_se.h);
@@ -213,6 +215,7 @@ int isp_start_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth
 		b->addr = (pstSmoothRawParam->raw_blk + j)->raw_dump.phy_addr;
 		b->raw_num = raw_num;
 		b->crop_le = ctx->isp_pipe_cfg[raw_num].rawdump_crop;
+		b->vb_blk = vb_phys_addr2handle(b->addr);
 		vi_pr(VI_DBG, "raw_num=%d enque raw_dump le 0x%llx, crop x(%d), y(%d), w(%d), h(%d)\n",
 			raw_num, b->addr,
 			b->crop_le.x, b->crop_le.y, b->crop_le.w, b->crop_le.h);
@@ -229,6 +232,7 @@ int isp_start_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth
 			b_se->addr = (pstSmoothRawParam->raw_blk + j)->raw_dump.phy_addr;
 			b_se->raw_num = raw_num;
 			b_se->crop_se = ctx->isp_pipe_cfg[raw_num].rawdump_crop_se;
+			b_se->vb_blk = vb_phys_addr2handle(b_se->addr);
 			vi_pr(VI_DBG, "raw_num=%d enque raw_dump se 0x%llx, crop x(%d), y(%d), w(%d), h(%d)\n",
 				raw_num, b_se->addr,
 				b_se->crop_se.x, b_se->crop_se.y, b_se->crop_se.w, b_se->crop_se.h);
@@ -359,6 +363,7 @@ int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk 
 	b->addr = dump[0].raw_dump.phy_addr;
 	b->raw_num = raw_num;
 	b->crop_le = ctx->isp_pipe_cfg[raw_num].rawdump_crop;
+	b->vb_blk = vb_phys_addr2handle(b->addr);
 	vi_pr(VI_DBG, "raw_num=%d enque raw_dump le 0x%llx, crop x(%d), y(%d), w(%d), h(%d)\n",
 		raw_num, b->addr,
 		b->crop_le.x, b->crop_le.y, b->crop_le.w, b->crop_le.h);
@@ -374,6 +379,7 @@ int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk 
 		b_se->addr = dump[1].raw_dump.phy_addr;
 		b_se->raw_num = raw_num;
 		b_se->crop_se = ctx->isp_pipe_cfg[raw_num].rawdump_crop_se;
+		b_se->vb_blk = vb_phys_addr2handle(b_se->addr);
 		vi_pr(VI_DBG, "raw_num=%d enque raw_dump se 0x%llx, crop x(%d), y(%d), w(%d), h(%d)\n",
 			raw_num, b_se->addr,
 			b_se->crop_se.x, b_se->crop_se.y, b_se->crop_se.w, b_se->crop_se.h);

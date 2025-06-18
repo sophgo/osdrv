@@ -36,10 +36,12 @@ struct isp_buffer {
 	struct isp_grid_s_info	rgbmap_i;
 	struct isp_grid_s_info	lmap_i;
 	struct list_head	list;
+	u64			vb_blk;
 	u64			addr;
 	u32			byr_size;
 	u32			frm_num;
 	u32			ir_idx;
+	u64			rgbmap_addr;
 	struct timespec64	timestamp;
 };
 

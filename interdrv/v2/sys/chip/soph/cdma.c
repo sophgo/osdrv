@@ -237,11 +237,14 @@ void _cdma_try_schedule(void)
 	unsigned long flags;
 	int ret = 0;
 
-	if (atomic_read(&g_cdma_task_ctx.status) == CDMA_STATUS_RUN)
+	spin_lock_irqsave(&g_cdma_task_ctx.job_lock, flags);
+
+	if (atomic_read(&g_cdma_task_ctx.status) == CDMA_STATUS_RUN) {
+		spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 		return;
+	}
 
 	if (atomic_read(&g_cdma_task_ctx.num) > 0) {
-		spin_lock_irqsave(&g_cdma_task_ctx.job_lock, flags);
 		if (!list_empty(&g_cdma_task_ctx.job_queue)) {
 			job = list_first_entry(&g_cdma_task_ctx.job_queue,
 				struct cdma_job, list);
@@ -264,8 +267,9 @@ void _cdma_try_schedule(void)
 			atomic_dec(&g_cdma_task_ctx.num);
 			atomic_set(&g_cdma_task_ctx.status, CDMA_STATUS_RUN);
 		}
-		spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 	}
+
+	spin_unlock_irqrestore(&g_cdma_task_ctx.job_lock, flags);
 }
 
 static void cdma_job_finish(void)

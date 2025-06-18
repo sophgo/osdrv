@@ -5,7 +5,7 @@
 #include "vi_snsr.h"
 #include <linux/i2c.h>
 
-#define I2C_MAX_NUM		7
+#define I2C_MAX_NUM		10
 #define I2C_MAX_MSG_NUM		32
 #define I2C_BUF_SIZE		(I2C_MAX_MSG_NUM << 2)
 

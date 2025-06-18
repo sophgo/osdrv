@@ -576,6 +576,7 @@ struct _isp_cfg {
 	u32			is_fake_splt_wdma	: 1;
 	u32			is_tnr_ai_isp		: 1;
 	u32			is_tnr_ai_isp_rdy	: 1;
+	u32			is_rgbmap_ai_isp	: 1;
 	u32			is_tile			: 1;
 	u32			is_work_on_r_tile	: 1;
 	u32			is_postout_crop		: 1;

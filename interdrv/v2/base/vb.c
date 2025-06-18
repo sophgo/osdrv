@@ -1,5 +1,4 @@
 #include <linux/module.h>
-#include <linux/spinlock.h>
 #include <linux/hashtable.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
@@ -23,7 +22,7 @@ static atomic_t ref_count = ATOMIC_INIT(0);
 static DEFINE_MUTEX(g_lock);
 static DEFINE_MUTEX(g_get_vb_lock);
 static DEFINE_MUTEX(g_pool_lock);
-static DEFINE_SPINLOCK(g_hash_lock);
+static DEFINE_MUTEX(g_hash_lock);
 
 DEFINE_HASHTABLE(vb_hash, 8);
 
@@ -83,7 +82,7 @@ static bool _vb_hash_del(uint64_t phy_addr)
 	struct vb_s *obj;
 	struct hlist_node *tmp;
 
-	spin_lock(&g_hash_lock);
+	mutex_lock(&g_hash_lock);
 	hash_for_each_possible_safe(vb_hash, obj, tmp, node, phy_addr) {
 		if (obj->phy_addr == phy_addr) {
 			hash_del(&obj->node);
@@ -91,7 +90,7 @@ static bool _vb_hash_del(uint64_t phy_addr)
 			break;
 		}
 	}
-	spin_unlock(&g_hash_lock);
+	mutex_unlock(&g_hash_lock);
 
 	return is_found;
 }
@@ -101,14 +100,14 @@ static bool _vb_hash_find(uint64_t phy_addr, struct vb_s **vb)
 	bool is_found = false;
 	struct vb_s *obj;
 
-	spin_lock(&g_hash_lock);
+	mutex_lock(&g_hash_lock);
 	hash_for_each_possible(vb_hash, obj, node, phy_addr) {
 		if (obj->phy_addr == phy_addr) {
 			is_found = true;
 			break;
 		}
 	}
-	spin_unlock(&g_hash_lock);
+	mutex_unlock(&g_hash_lock);
 
 	if (is_found)
 		*vb = obj;
@@ -138,7 +137,7 @@ int32_t vb_print_pool(vb_pool poolid)
 
 	CHECK_VB_POOL_VALID_STRONG(poolid);
 
-	spin_lock(&g_hash_lock);
+	mutex_lock(&g_hash_lock);
 	hash_for_each(vb_hash, bkt, vb, node) {
 		if (vb->poolid == poolid) {
 			sprintf(str, "Pool[%d] vb paddr(%#llx) usr_cnt(%d) /",
@@ -153,7 +152,7 @@ int32_t vb_print_pool(vb_pool poolid)
 			TRACE_BASE(DBG_INFO, "%s\n", str);
 		}
 	}
-	spin_unlock(&g_hash_lock);
+	mutex_unlock(&g_hash_lock);
 
 	return 0;
 }
@@ -217,15 +216,16 @@ static void _vb_cleanup(void)
 	}
 
 	// free comm vb blk
-	spin_lock(&g_hash_lock);
+	mutex_lock(&g_hash_lock);
 	hash_for_each_safe(vb_hash, bkt, tmp, vb, node) {
 		if ((vb->poolid >= VB_MAX_COMM_POOLS) && (vb->poolid < vb_max_pools))
 			continue;
 		if (vb->poolid == VB_STATIC_POOLID)
 			base_ion_free(vb->phy_addr);
 		hash_del(&vb->node);
+		vfree(vb);
 	}
-	spin_unlock(&g_hash_lock);
+	mutex_unlock(&g_hash_lock);
 
 }
 
@@ -283,9 +283,9 @@ static int32_t _vb_create_pool(struct vb_pool_cfg *config, bool is_comm)
 		atomic_long_set(&p->mod_ids, 0);
 		p->external = false;
 		FIFO_PUSH(&pool_ctx->freelist, p);
-		spin_lock(&g_hash_lock);
+		mutex_lock(&g_hash_lock);
 		hash_add(vb_hash, &p->node, p->phy_addr);
-		spin_unlock(&g_hash_lock);
+		mutex_unlock(&g_hash_lock);
 	}
 	mutex_unlock(&pool_ctx->lock);
 
@@ -611,9 +611,9 @@ vb_blk vb_create_block(uint64_t phy_addr, void *vir_addr, vb_pool pool_id, bool 
 	p->magic = VB_MAGIC;
 	atomic_long_set(&p->mod_ids, 0);
 	p->external = is_external;
-	spin_lock(&g_hash_lock);
+	mutex_lock(&g_hash_lock);
 	hash_add(vb_hash, &p->node, p->phy_addr);
-	spin_unlock(&g_hash_lock);
+	mutex_unlock(&g_hash_lock);
 
 	return (vb_blk)p;
 }

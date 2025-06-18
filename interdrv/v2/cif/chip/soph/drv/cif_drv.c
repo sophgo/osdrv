@@ -2007,12 +2007,18 @@ void cif_set_pd(struct cif_ctx *ctx, short clock_lane)
 			frist_clock = CIF_PHY_LANE_0;
 		} else if (ctx->mac_num == 3) {
 			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 5) {
+			frist_clock = CIF_PHY_LANE_15;
 		}
 	} else if (ctx->phy_mode == 2) {
 		if (ctx->mac_num == 0) {
 			frist_clock = CIF_PHY_LANE_0;
 		} else if (ctx->mac_num == 3) {
 			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 4) {
+			frist_clock = CIF_PHY_LANE_12;
+		} else if (ctx->mac_num == 5) {
+			frist_clock = CIF_PHY_LANE_15;
 		}
 	} else if (ctx->phy_mode == 3) {
 		if (ctx->mac_num == 0) {
@@ -2023,16 +2029,40 @@ void cif_set_pd(struct cif_ctx *ctx, short clock_lane)
 			frist_clock = CIF_PHY_LANE_12;
 		}
 	} else if (ctx->phy_mode == 4) {
-
 		if (ctx->mac_num == 0) {
 			frist_clock = CIF_PHY_LANE_0;
 		} else if (ctx->mac_num == 3) {
 			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 4) {
+			frist_clock = CIF_PHY_LANE_12;
+		} else if (ctx->mac_num == 5) {
+			frist_clock = CIF_PHY_LANE_15;
 		}
-
 	} else if (ctx->phy_mode == 5) {
 		if (ctx->mac_num == 0) {
 			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 2) {
+			frist_clock = CIF_PHY_LANE_6;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 4) {
+			frist_clock = CIF_PHY_LANE_12;
+		} else if (ctx->mac_num == 5) {
+			frist_clock = CIF_PHY_LANE_15;
+		}
+	} else if (ctx->phy_mode == 6) {
+		if (ctx->mac_num == 0) {
+			frist_clock = CIF_PHY_LANE_0;
+		} else if (ctx->mac_num == 1) {
+			frist_clock = CIF_PHY_LANE_3;
+		} else if (ctx->mac_num == 2) {
+			frist_clock = CIF_PHY_LANE_6;
+		} else if (ctx->mac_num == 3) {
+			frist_clock = CIF_PHY_LANE_9;
+		} else if (ctx->mac_num == 4) {
+			frist_clock = CIF_PHY_LANE_12;
+		} else if (ctx->mac_num == 5) {
+			frist_clock = CIF_PHY_LANE_15;
 		}
 	}
 	mask = ((1 << (clock_lane + 1)) - 1) & ~((1 << frist_clock) - 1);

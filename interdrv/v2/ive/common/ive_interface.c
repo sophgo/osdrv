@@ -93,11 +93,16 @@ const char * const ive_irq_name[IVE_DEV_MAX] = {"ive_irq0", "ive_irq1"};
 static int ive_proc_open(struct inode *inode, struct file *file);
 static ssize_t ive_proc_write(struct file *file, const char __user *user_buf,
 			      size_t count, loff_t *ppos);
+
 // file_operations function
 static int ive_open(struct inode *inode, struct file *filp);
 static int ive_close(struct inode *inode, struct file *filp);
 static long ive_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg);
+
+//global lock
+static struct mutex g_ive_lock;
+
 #ifdef CONFIG_COMPAT
 static long ive_compat_ioctl(struct file *filp, unsigned int cmd,
 				 unsigned long arg);
@@ -700,8 +705,10 @@ static int ive_suspend(struct platform_device *pdev, pm_message_t state)
 	atomic_set(&ndev->core[1].dev_state, IVE_DEV_STATE_END);
 	atomic_set(&ndev->clk_flg, IVE_READY_SUSPEND);
 
+	mutex_lock(&g_ive_lock);
 	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
 		del_timer(&timer_proc);
+	mutex_unlock(&g_ive_lock);
 
 	ive_clk_deinit(ndev);
 	pr_info("ive suspended\n");
@@ -729,9 +736,12 @@ static int ive_resume(struct platform_device *pdev)
 	atomic_set(&ndev->clk_flg, IVE_READY_RESUME);
 
 	ive_clk_init(ndev);
+	mutex_lock(&g_ive_lock);
 	if (atomic_cmpxchg(&g_timer_added, 0, 1) == 0)
 		add_timer(&timer_proc);
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
+	mutex_unlock(&g_ive_lock);
+
 	pr_info("ive resumed\n");
 
 	return ret;
@@ -1439,6 +1449,7 @@ static int ive_sw_init(struct ive_device *ndev)
 
 	INIT_LIST_HEAD(&ndev->tsk_list);
 	init_waitqueue_head(&ndev->wait);
+	mutex_init(&g_ive_lock);
 	sema_init(&ndev->sem, 0);
 	ndev->evt = IVE_EVENT_BUSY_OR_NOT_STAT;
 	ndev->work_thread = kthread_run(ive_event_handler_th, (void *)ndev, "ive_event_handler_th");
@@ -1450,14 +1461,16 @@ static int ive_sw_init(struct ive_device *ndev)
 	// Same as sched_set_fifo in linux 5.x
 	task.sched_priority = MAX_USER_RT_PRIO - 10;
 	ret = sched_setscheduler(ndev->work_thread, SCHED_FIFO, &task);
+
+	register_timer_fun(ive_timer_core_update, (void *)ndev);
+
 	if (ret)
 		TRACE_IVE(IVE_DBG_WARN, "ive thread priority update failed: %d\n", ret);
-
+	mutex_lock(&g_ive_lock);
 	if (atomic_cmpxchg(&g_timer_added,0, 1) == 0)
 		add_timer(&timer_proc);
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
-
-	register_timer_fun(ive_timer_core_update, (void *)ndev);
+	mutex_unlock(&g_ive_lock);
 
 	return ret;
 }
@@ -1475,10 +1488,12 @@ static void ive_sw_deinit(struct ive_device *ndev)
 
 	list_del_init(&ndev->tsk_list);
 
+	mutex_lock(&g_ive_lock);
 	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
 		del_timer_sync(&timer_proc);
+	mutex_unlock(&g_ive_lock);
 
-
+	mutex_destroy(&g_ive_lock);
 }
 static int instance_init(struct platform_device *pdev)
 {
@@ -1607,7 +1622,6 @@ static int ive_probe(struct platform_device *pdev)
 	}
 
 	instance_init(pdev);
-
 	// stcandicorner_workaround(ndev);
 	return 0;
 }

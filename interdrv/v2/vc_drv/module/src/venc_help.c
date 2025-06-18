@@ -242,9 +242,9 @@ BOOL venc_help_h265_sps_add_vui(H265Vui *pVui, void **ppBuffer, Int32 *pBufferSi
 void venc_help_gen_qpmap_from_roiregion(RoiParam *roiParam, Uint32 picWidth, Uint32 picHeight, int initQp, Uint8 *roiCtuMap, CodStd bitstreamFormat) {
 
     Int32 i, blk_addr;
-    Uint32 mapWidth, mapHeight = 0;
+    Uint32 mapWidth = 0, mapHeight = 0;
     Uint32 roi_map_size;
-    int blkSize, operand;
+    int blkSize, operand = 0;
     VpuRect *region = NULL;
     VpuRect *rect;
     Uint32 x, y;
@@ -362,14 +362,14 @@ int venc_help_set_mapdata(int core_idx, RoiParam *roi_rect, int roi_base_qp, int
 
         roiMapBuf = (Uint8 *)osal_malloc(sizeof(Uint8) * sub_ctu_num);   //MAX_SUB_CTU_NUM
         if (roiMapBuf == NULL) {
-                VLOG(ERR, "%s:%d fail to allocate  buffer\n", __FUNCTION__, __LINE__);
+                VLOG(ERR, "fail to allocate roiMapBuf sub_ctu_num:%d\n", sub_ctu_num);
                 return RETCODE_FAILURE;
         }
         osal_memset(roiMapBuf, 0, sub_ctu_num);
 
         HEVCcustomMapBuf = (EncCustomMap*)osal_malloc(sizeof(EncCustomMap) * ctu_num);
         if (HEVCcustomMapBuf == NULL) {
-                VLOG(ERR, "%s:%d fail to allocate buffer\n", __FUNCTION__, __LINE__);
+                VLOG(ERR, "fail to allocate HEVCcustomMapBuf ctu_num:%d\n", ctu_num);
                 return RETCODE_FAILURE;
         }
         osal_memset(HEVCcustomMapBuf, 0x00, ctu_num * 8);

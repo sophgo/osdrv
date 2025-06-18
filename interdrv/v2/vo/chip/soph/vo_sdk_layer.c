@@ -211,6 +211,10 @@ vo_sync_info_s sync_info[VO_OUTPUT_BUTT] = {
 		, .vact = 1280, .vbb = 4, .vfb = 6
 		, .hact = 720, .hbb = 36, .hfb = 128
 		, .vpw = 16, .hpw = 64, .idv = 0, .ihs = 0, .ivs = 1},
+	[VO_OUTPUT_480x640_60] = {.synm = 1, .iop = 1, .frame_rate = 60
+		, .vact = 640, .vbb = 20, .vfb = 20
+		, .hact = 480, .hbb = 60, .hfb = 60
+		, .vpw = 10, .hpw = 10, .idv = 0, .ihs = 0, .ivs = 1},
 	[VO_OUTPUT_1080x1920_60] = {.synm = 1, .iop = 1, .frame_rate = 60
 		, .vact = 1920, .vbb = 36, .vfb = 6
 		, .hact = 1080, .hbb = 148, .hfb = 88

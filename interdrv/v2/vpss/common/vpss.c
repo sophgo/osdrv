@@ -82,8 +82,6 @@ static struct vpss_ext_ctx g_vpss_ext_ctx[VPSS_MAX_GRP_NUM];
 
 static struct vpss_jobs_ctx g_vpss_vb_jobs[VPSS_MAX_GRP_NUM];
 
-static unsigned char g_is_bm_scene = false;
-
 // Motion level for vcodec
 static struct mlv_i_s g_mlv_i[VI_MAX_DEV_NUM];
 
@@ -171,7 +169,7 @@ void vpss_wkup_frame_done_handle(void *pdata)
 {
 	struct vpss_job *job = container_of(pdata, struct vpss_job, data);
 
-	if(!g_is_bm_scene)
+	if(!job->cfg.grp_cfg.bm_scene)
 		queue_work(g_vpss_workqueue, &job->job_work);
 	else {
 		struct vpss_stitch_data *data = (struct vpss_stitch_data *)job->data;
@@ -1224,6 +1222,7 @@ static signed int commit_hw_settings(struct vpss_ctx *ctx)
 	hw_grp_cfg->fbd_enable = (vb_in != NULL)
 				? (vb_in->buf.compress_mode == COMPRESS_MODE_FRAME) : false;
 	hw_grp_cfg->upsample = false;
+	hw_grp_cfg->bm_scene = false;
 
 	for (chn_id = 0; chn_id < VPSS_MAX_CHN_NUM; ++chn_id) {
 		chn_cfg = &ctx->chn_cfgs[chn_id];
@@ -2246,7 +2245,6 @@ signed int vpss_create_grp(vpss_grp grp_id, const vpss_grp_attr_s *grp_attr)
 	_vpss_grp_raram_init(grp_id);
 	mutex_lock(&g_vpss_lock);
 	g_vpss_grp_used[grp_id] = true;
-	if(g_is_bm_scene) g_is_bm_scene = false;
 	mutex_unlock(&g_vpss_lock);
 
 	TRACE_VPSS(DBG_INFO, "Grp(%d) max_w(%d) max_h(%d) PixelFmt(%d) online_from_isp(%d)\n",
@@ -4275,8 +4273,6 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	struct vpss_hal_chn_cfg *chn_hw_cfg = &job->cfg.chn_cfg[0];
 	struct vpss_stitch_data data;
 
-	if(!g_is_bm_scene) g_is_bm_scene = true;
-
 	init_waitqueue_head(&data.wait);
 	data.flag = 0;
 
@@ -4375,6 +4371,13 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 
 	if(vpss_cfg->coverex_cfg.rgn_coverex_cfg.rgn_coverex_param[0].enable){
 		chn_hw_cfg->rgn_coverex_cfg = vpss_cfg->coverex_cfg.rgn_coverex_cfg;
+	}
+
+	// borrowing unused structures to maintain compatibility with the previous ioctl
+	chn_hw_cfg->circle_cfg.cfg0.raw = vpss_cfg->chn_attr.chn_attr.frame_rate.src_frame_rate;
+	if (chn_hw_cfg->circle_cfg.cfg0.b.enable) {
+		chn_hw_cfg->circle_cfg.cfg1.raw = vpss_cfg->chn_attr.chn_attr.frame_rate.dst_frame_rate;
+		chn_hw_cfg->circle_cfg.radius = vpss_cfg->chn_attr.chn_attr.video_format;
 	}
 
 	for(i = 0; i < RGN_MAX_LAYER_VPSS; i++)
