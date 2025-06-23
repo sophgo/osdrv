@@ -894,7 +894,7 @@ static int thread_decode(void *param)
 
     while(!stop_thread[core_idx]) {
         if (vdec_get_handle_count(core_idx) == 0) {
-            msleep(1);
+            msleep_interruptible(1);
             continue;
         }
 
