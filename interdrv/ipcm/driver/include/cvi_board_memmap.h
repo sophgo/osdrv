@@ -1,5 +1,5 @@
-#ifndef __BOARD_MMAP__c680abd0__
-#define __BOARD_MMAP__c680abd0__
+#ifndef __BOARD_MMAP__f3a4ce59__
+#define __BOARD_MMAP__f3a4ce59__
 
 #define CONFIG_SYS_TEXT_BASE 0x83800000  /* offset 56.0MiB */
 #define CVIMMAP_ALIOS_COMPRESS_BIN_ADDR 0x82000000  /* offset 32.0MiB */
@@ -44,9 +44,9 @@
 #define CVIMMAP_SHARE_PARAM_ADDR 0x80640000  /* offset 6.25MiB */
 #define CVIMMAP_SHARE_PARAM_ADDR_BAK 0x80650000  /* offset 6.3125MiB */
 #define CVIMMAP_SHARE_PARAM_SIZE 0x10000  /* 64.0KiB */
-#define CVIMMAP_SPL_FDT_ADDR 0x817ff800  /* offset 23.998046875MiB */
-#define CVIMMAP_SPL_FDT_SIZE 0x400  /* 1.0KiB */
+#define CVIMMAP_SPL_FDT_ADDR 0x816ffc00  /* offset 22.9990234375MiB */
+#define CVIMMAP_SPL_FDT_SIZE 0x100000  /* 1.0MiB */
 #define CVIMMAP_UIMAG_ADDR 0x81800000  /* offset 24.0MiB */
 #define CVIMMAP_UIMAG_SIZE 0x600000  /* 6.0MiB */
 
-#endif /* __BOARD_MMAP__c680abd0__ */
+#endif /* __BOARD_MMAP__f3a4ce59__ */

@@ -1,0 +1,9 @@
+#
+# Touchscreen driver configuration
+#
+
+config TOUCHSCREEN_GT9XX
+	tristate "GT9XX tp"
+	default m
+	---help-- -
+	GT9XX for cardv.
