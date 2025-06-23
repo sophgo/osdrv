@@ -8354,8 +8354,6 @@ static void _isp_postraw_done_handler(struct cvi_vi_dev *vdev)
 	if (_isp_clk_dynamic_en(vdev, false) < 0)
 		return;
 
-	++ctx->isp_pipe_cfg[raw_num].first_frm_cnt;
-
 	if (_is_fe_be_online(ctx) && !ctx->is_slice_buf_on) { //fe->be->dram->post
 		struct isp_buffer *ispb, *ispb_se;
 
@@ -8421,6 +8419,7 @@ static void _isp_postraw_done_handler(struct cvi_vi_dev *vdev)
 	if (_is_be_post_online(ctx) && ctx->isp_pipe_cfg[raw_num].is_yuv_bypass_path)
 		atomic_set(&vdev->pre_be_state[ISP_BE_CH0], ISP_PRE_BE_IDLE);
 
+	++ctx->isp_pipe_cfg[raw_num].first_frm_cnt;
 	++vdev->postraw_frame_number[raw_num];
 
 	vi_pr(VI_DBG, "Postraw_%d frm_done frm_num=%d\n", raw_num, vdev->postraw_frame_number[raw_num]);
