@@ -676,6 +676,11 @@ CVI_S32 vb_qbuf(MMF_CHN_S chn, enum CHN_TYPE_E chn_type, VB_BLK blk)
 		return -1;
 	}
 
+	if (atomic_read(&vb->usr_cnt) == 0) {
+		CVI_TRACE_BASE(CVI_BASE_DBG_ERR, "mod(%s), error, vb released\n", sys_get_modname(chn.enModId));
+		return -1;
+	}
+
 	atomic_fetch_add(1, &vb->usr_cnt);
 	if (chn_type == CHN_TYPE_OUT) {
 		mutex_lock(&jobs->lock);

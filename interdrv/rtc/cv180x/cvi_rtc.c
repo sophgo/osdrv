@@ -45,7 +45,9 @@
 
 #define RTC_SEC_MAX_VAL		0xFFFFFFFF
 
-#define CVI_RTC_HANDLE_IRQ
+#ifndef CONFIG_PM_SLEEP
+	#define CVI_RTC_HANDLE_IRQ
+#endif
 #define CV_RTC_FINE_CALIB /* use rtc 32k calibration flow */
 
 struct cvi_rtc_info {

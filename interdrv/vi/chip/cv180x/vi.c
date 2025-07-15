@@ -2856,6 +2856,10 @@ void _vi_scene_ctrl(struct cvi_vi_dev *vdev, enum cvi_isp_raw *raw_max)
 		}
 	}
 
+#ifdef CONFIG_PM_SLEEP
+	ctx->is_fbc_on = false;
+#endif
+
 	vi_pr(VI_INFO, "Total_chn_num=%d, rawb_chnstr_num=%d\n",
 			ctx->total_chn_num, ctx->rawb_chnstr_num);
 }
@@ -4160,14 +4164,6 @@ static inline void _post_ctrl_update(struct cvi_vi_dev *vdev, const enum cvi_isp
 		isp_first_frm_reset(ctx, 0);
 	}
 
-	if (ctx->suspend_resume_en) {
-		if (vdev->preraw_first_frm[raw_num]) {
-			vdev->preraw_first_frm[raw_num] = false;
-			isp_first_frm_reset(ctx, 1);
-		} else {
-			isp_first_frm_reset(ctx, 0);
-		}
-	}
 }
 
 static uint8_t _pre_be_sts_in_use_chk(struct cvi_vi_dev *vdev, const enum cvi_isp_raw raw_num, const u8 chn_num)
@@ -4636,9 +4632,6 @@ void vi_resume(struct cvi_vi_dev *vdev)
 	if (vdev && atomic_read(&vdev->isp_streamoff)) {
 		atomic_set(&vdev->isp_streamon, 1);
 		atomic_set(&vdev->isp_streamoff, 0);
-
-		isp_first_frm_reset(&vdev->ctx, 1);
-		vdev->preraw_first_frm[0] = true;
 
 		vi_set_dev_attr(0, &tmp_dev_attr);
 		vi_enable_dev(0);

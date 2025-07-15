@@ -38,6 +38,7 @@
 #include <vip_common.h>
 #include <base_cb.h>
 #include <cif_cb.h>
+#include <snsr_i2c.h>
 
 #define MIPI_IF
 #define DVP_IF
@@ -2693,6 +2694,18 @@ static long _cif_ioctl(struct cvi_cif_dev *dev, unsigned int cmd,
 			memcpy(&sns_gpio, (void *)arg, sizeof(sns_gpio));
 		return cif_gpio_init(pdev, sns_gpio);
 	}
+	case CVI_MIPI_SET_SNS_I2C_INFO:
+	{
+		if (from_user) {
+			if (copy_from_user(&dev->sensor_i2c_info, (void *)arg, sizeof(struct sns_i2c_info))) {
+				dev_err(_dev, "copy_from_user failed.\n");
+				return -ENOMEM;
+			}
+		} else {
+			memcpy(&dev->sensor_i2c_info, (void *)arg, sizeof(struct sns_i2c_info));
+		}
+		return 0;
+	}
 	default:
 		return -ENOIOCTLCMD;
 	}
@@ -3366,6 +3379,40 @@ static int cvi_cif_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+void sensor_i2c_write(struct isp_i2c_data *i2c_data, unsigned short reg_addr, unsigned short data)
+{
+	i2c_data->reg_addr = reg_addr;
+	i2c_data->data = data;
+	vip_sys_cmm_cb_i2c(CVI_SNS_I2C_WRITE, (void *)i2c_data);
+}
+
+void sensor_standby_restart(struct cvi_cif_dev *dev, bool enable)
+{
+	int i;
+	struct isp_i2c_data *i2c_data;
+	i2c_data = kzalloc(sizeof(struct isp_i2c_data), __GFP_RETRY_MAYFAIL);
+	if (!i2c_data) {
+		printk("i2c_data kzalloc failed\n");
+	}
+
+	i2c_data->i2c_dev = dev->sensor_i2c_info.i2c_base_info.i2c_dev;
+	i2c_data->dev_addr = dev->sensor_i2c_info.i2c_base_info.dev_addr;
+	i2c_data->addr_bytes = dev->sensor_i2c_info.i2c_base_info.addr_bytes;
+	i2c_data->data_bytes = dev->sensor_i2c_info.i2c_base_info.data_bytes;
+	if (enable) {
+		for (i = 0; i < dev->sensor_i2c_info.i2c_base_info.resume_seq_length; i++) {
+			sensor_i2c_write(i2c_data, dev->sensor_i2c_info.sns_resume_info[i].addr,
+				dev->sensor_i2c_info.sns_resume_info[i].data);
+		}
+	} else {
+		for (i = 0; i < dev->sensor_i2c_info.i2c_base_info.suspend_seq_length; i++) {
+			sensor_i2c_write(i2c_data, dev->sensor_i2c_info.sns_suspend_info[i].addr,
+				dev->sensor_i2c_info.sns_suspend_info[i].data);
+		}
+	}
+	kfree(i2c_data);
+	i2c_data = NULL;
+}
 static int cvi_cif_suspend(struct platform_device *pdev)
 {
 	struct cvi_cif_dev *dev;
@@ -3383,6 +3430,9 @@ static int cvi_cif_suspend(struct platform_device *pdev)
 		return 0;
 	}
 
+	sensor_standby_restart(dev, 0);
+	cif_enable_snsr_clk(dev, 0, 0);
+  
 	for (i = 0; i < MAX_LINK_NUM; i++) {
 		dev->is_mac_on[i] = dev->link[i].is_on;
 		if (dev->is_mac_on[i]) {
@@ -3391,6 +3441,7 @@ static int cvi_cif_suspend(struct platform_device *pdev)
 		}
 	}
 	proc_remove(cif_proc_entry);
+
 	dev_info(&pdev->dev, "cif suspend end");
 	return 0;
 }
@@ -3418,6 +3469,10 @@ static int cvi_cif_resume(struct platform_device *pdev)
 			cif_set_dev_attr(dev, &dev->cif_combo_dev_attr[i]);
 		}
 	}
+
+	cif_enable_snsr_clk(dev, 0, 1);
+	sensor_standby_restart(dev, 1);
+
 	dev_info(&pdev->dev, "cif resume end");
 	return 0;
 }

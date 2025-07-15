@@ -1465,7 +1465,7 @@ void isp_first_frm_reset(struct isp_ctx *ctx, uint8_t reset)
 	//[2]: TNR
 	//[3]: MMAP
 	ISP_WR_BITS(isptopb, REG_ISP_TOP_T, FIRST_FRAME, FIRST_FRAME_SW, reset ? 0xF : 0x0);
-	ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_8, FORCE_DMA_DISABLE, reset ? 0x3F : 0x0);
+	ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_8, FORCE_DMA_DISABLE, reset ? 0x3F : 0);
 }
 
 void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
@@ -1705,11 +1705,7 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 		}
 	} else { //RGB sensor
 		//Enable 3DNR dma
-#ifdef CONFIG_PM_SLEEP
-		ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_8, FORCE_DMA_DISABLE, 0x3f);
-#else
 		ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_8, FORCE_DMA_DISABLE, 0);
-#endif
 		ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_4, REG_422_444, 0);
 		ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_5, TDNR_ENABLE, 1);
 		ISP_WR_BITS(tnr, REG_ISP_444_422_T, REG_4, SWAP, 0);

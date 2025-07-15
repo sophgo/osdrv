@@ -62,6 +62,7 @@ struct cvi_cif_dev {
 	void			*pad_ctrl;
 	struct combo_dev_attr_s cif_combo_dev_attr[MAX_LINK_NUM];
 	bool is_mac_on[MAX_LINK_NUM];
+	struct sns_i2c_info sensor_i2c_info;
 };
 
 #endif

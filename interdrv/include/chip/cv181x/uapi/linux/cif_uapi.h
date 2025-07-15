@@ -386,6 +386,26 @@ struct snsr_rst_gpio_s {
 	int			snsr_rst_pol;
 };
 
+struct sns_i2c_attr {
+	unsigned char	i2c_dev;
+	unsigned char	dev_addr;
+	unsigned short	addr_bytes;
+	unsigned short	data_bytes;
+	int suspend_seq_length;
+	int resume_seq_length;
+};
+
+struct addr_data_seq {
+	int addr;
+	int data;
+};
+
+struct sns_i2c_info {
+	struct sns_i2c_attr i2c_base_info;
+	struct addr_data_seq sns_suspend_info[5];
+	struct addr_data_seq sns_resume_info[5];
+};
+
 /* mipi_rx ioctl commands related definition */
 #define CVI_MIPI_IOC_MAGIC		'm'
 
@@ -426,6 +446,8 @@ struct snsr_rst_gpio_s {
 						0x29, struct cif_yuv_swap_s)
 #define CVI_MIPI_GPIO_INIT		_IOW(CVI_MIPI_IOC_MAGIC, \
 						0x30, struct snsr_rst_gpio_s)
+#define CVI_MIPI_SET_SNS_I2C_INFO	_IOW(CVI_MIPI_IOC_MAGIC, \
+						0x30, struct sns_i2c_info)
 /* Unsupport commands */
 #define CVI_MIPI_SET_PHY_CMVMODE	_IOW(CVI_MIPI_IOC_MAGIC, \
 						0x04, unsigned int)
