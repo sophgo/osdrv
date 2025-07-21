@@ -2,8 +2,10 @@
 
 CONFIG_LOG = 1
 
-ifeq ($(CONFIG_LOG), 1)
-ccflags-y += -DCONFIG_LOG
+ccflags-y += -DCONFIG_LOG=$(CONFIG_LOG)
+
+ifneq ($(CONFIG_LOG), 1)
+ccflags-y += -Wno-unused-but-set-variable -Wno-unused-variable
 endif
 
 ifeq ($(SUBTYPE), fpga)

@@ -71,4 +71,5 @@ clean:
 	@rm -f *.o .*.cmd modules.order Module.symvers *.ko *.mod.c *.mod
 	@rm -rf .tmp_versions
 	@rm -rf $(IPCM_OUT_DIR)
+	@rm -rf $(PWD)/driver/include/cvi_board_memmap.h
 	@find . -name \*.o* -type f -delete
