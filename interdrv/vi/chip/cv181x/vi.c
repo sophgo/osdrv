@@ -1804,9 +1804,14 @@ static void _isp_yuvtop_init(struct cvi_vi_dev *vdev)
 	ispblk_pre_ee_config(ictx, true);
 	ispblk_ee_config(ictx, false);
 #ifdef COVER_WITH_BLACK
-	memset(ycur_data, 0, sizeof(ycur_data));
-	ispblk_ycur_config(ictx, false, 0, ycur_data);
-	ispblk_ycur_enable(ictx, true, 0);
+	if (!ictx->suspend_resume_en) {
+		memset(ycur_data, 0, sizeof(ycur_data));
+		ispblk_ycur_config(ictx, false, 0, ycur_data);
+		ispblk_ycur_enable(ictx, true, 0);
+	} else {
+		ispblk_ycur_config(ictx, false, 0, ycur_data);
+		ispblk_ycur_enable(ictx, false, 0);
+	}
 #else
 	ispblk_ycur_config(ictx, false, 0, ycur_data);
 	ispblk_ycur_enable(ictx, false, 0);
@@ -3099,6 +3104,12 @@ int vi_start_streaming(struct cvi_vi_dev *vdev)
 	_vi_postraw_ctrl_setup(vdev);
 	_vi_dma_setup(ctx, raw_max);
 	_vi_dma_set_sw_mode(ctx);
+
+	if (ctx->suspend_resume_en) {
+		pre_fe_tuning_update(ctx, ISP_PRERAW_A);
+		pre_be_tuning_update(ctx, ISP_PRERAW_A);
+		postraw_tuning_update(ctx, ISP_PRERAW_A);
+	}
 
 	vi_pr(VI_INFO, "ISP scene path, be_off=%d, post_off=%d, slice_buff_on=%d\n",
 			ctx->is_offline_be, ctx->is_offline_postraw, ctx->is_slice_buf_on);

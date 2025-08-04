@@ -1727,15 +1727,45 @@ void ispblk_post_yuv_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_
 	_ispblk_yuvtop_cfg_update(ctx, raw_num);
 }
 
+void _ispblk_lsc_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
+{
+	uintptr_t lsc = ctx->phys_regs[ISP_BLK_ID_LSC];
+
+	int width = ctx->img_width;
+	int height = ctx->img_height;
+	int F_D = 15;
+	int mesh_num = 37;
+	int InnerBlkX = mesh_num - 1 - 2;
+	int InnerBlkY = mesh_num - 1 - 2;
+	int mesh_x_coord_unit = (InnerBlkX * (1 << F_D)) / width;
+	int mesh_y_coord_unit = (InnerBlkY * (1 << F_D)) / height;
+	u32 reg_lsc_xstep = mesh_x_coord_unit + 1;
+	u32 reg_lsc_ystep = mesh_y_coord_unit + 1;
+
+	int image_w_in_mesh_unit = width * reg_lsc_xstep;
+	int image_h_in_mesh_unit = height * reg_lsc_ystep;
+	int OuterBlkX = InnerBlkX + 2;
+	int OuterBlkY = InnerBlkY + 2;
+	u32 reg_lsc_imgx0 = (OuterBlkX * (1 << F_D) - image_w_in_mesh_unit) / 2;
+	u32 reg_lsc_imgy0 = (OuterBlkY * (1 << F_D) - image_h_in_mesh_unit) / 2;
+
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_XSTEP, reg_lsc_xstep);
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_YSTEP, reg_lsc_ystep);
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_IMGX0, reg_lsc_imgx0);
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_IMGY0, reg_lsc_imgy0);
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_INITX0, reg_lsc_imgx0);
+	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_INITY0, reg_lsc_imgy0);
+}
+
 void ispblk_post_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
 {
 	ispblk_raw_rdma_ctrl_config(ctx, raw_num);
 	ispblk_rawtop_config(ctx, raw_num);
 	ispblk_rgbtop_config(ctx, raw_num);
 	ispblk_yuvtop_config(ctx, raw_num);
-#if 0
+
 	_ispblk_lsc_cfg_update(ctx, raw_num);
-#endif
+
 	//LTM grid_size update
 	{
 		uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_HDRLTM];

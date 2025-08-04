@@ -6,6 +6,8 @@ $(CVIARCH_L)_pwm-objs = $(PWM_PATH)/cvi_pwm.o
 
 obj-m += $(CVIARCH_L)_pwm.o
 
+subdir-ccflags-y += -I$(srctree)/drivers/pwm/
+
 all:
 	$(MAKE) ARCH=${ARCH} -C $(KERNEL_DIR) M=$(PWD) modules
 
