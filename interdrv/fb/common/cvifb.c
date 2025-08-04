@@ -25,7 +25,6 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 #include <linux/dma-map-ops.h>
 #endif
-#include <linux/cvi_defines.h>
 
 #include "scaler.h"
 #include "ion/ion.h"
