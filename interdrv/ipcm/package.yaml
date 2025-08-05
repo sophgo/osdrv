@@ -78,9 +78,9 @@ license: Copyright (C) Cvitek Co., Ltd. 2019-2020. All rights reserved.    # <å
 #     - libs                               #   -Llibs
 build_config:
   internal_include:
+    - ../include/common/uapi
 
   include:
-    - ../include/common/uapi
     - driver/include
     - platform/alios/include
     - driver/test/common

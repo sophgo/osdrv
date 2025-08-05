@@ -1,2 +1,0 @@
-/root/.jenkins/workspace/mars3_dev_daily_build/mars3_source/osdrv/extdrv/tp/ts_gt9xx/gt9xx.o
-

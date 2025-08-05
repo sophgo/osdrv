@@ -4,24 +4,12 @@ SHELL=/bin/bash
 export CHIP_ARCH_L := $(shell echo $(CHIP_ARCH) | tr A-Z a-z)
 INTERDRV_PATH := interdrv
 
-KO_RLS_DIR :=
-ifeq ($(DUAL_OS),y)
-KO_RLS_DIR = ko_$(SDK_VER)_dual
-else
-KO_RLS_DIR = ko_$(SDK_VER)_single
-endif
-ifeq ($(wildcard $(INTERDRV_PATH)/$(KO_RLS_DIR)),)
-$(error $(INTERDRV_PATH)/$(KO_RLS_DIR) not exist!)
-else
-$(shell rm -rf $(INTERDRV_PATH)/ko && cd $(INTERDRV_PATH) && cp -rlf $(KO_RLS_DIR) ko)
-endif
-
 ifeq ($(KERNEL_DIR), )
 $(error Please set KERNEL_DIR global variable!!)
 endif
 
 ifeq ($(INSTALL_DIR), )
-$(error Please set INSTALL_DIR global variable!!)
+INSTALL_DIR = ko
 endif
 
 CUR_DIR = $(PWD)
@@ -39,7 +27,7 @@ endif
 
 define MAKE_KO
 	( cd $(1) && $(MAKE) KERNEL_DIR=$(KERNEL_DIR) CONFIG_DUAL_OS=$(CONFIG_DUAL_OS) all -j$(shell nproc))
-	if [ $$(find $(1) -name '*.ko' | wc -l) -gt 0 ]; then \
+	if [ $$(find -L $(1) -name '*.ko' | wc -l) -gt 0 ]; then \
 		cd $(1) && cp -f *.ko $(INSTALL_DIR); \
 	fi
 endef
@@ -56,20 +44,26 @@ define MAKE_EXT_KO
 	$(call MAKE_EXT_KO_CP, $(1))
 endef
 
-SUBDIRS = $(shell find ./interdrv -maxdepth 1 -mindepth 1 -type d | grep -v "git" | grep -v "include" | grep -v "ko")
+SUBDIRS = $(shell find ./interdrv -maxdepth 1 -mindepth 1 -type d | grep -v "git" | grep -v "include")
+SUBDIRS += $(shell find ./interdrv -maxdepth 1 -mindepth 1 -type l | grep -v "git" | grep -v "include")
 SUBDIRS += $(shell find ./extdrv -maxdepth 1 -mindepth 1 -type d | grep -v "git")
+exclude_dirs = ./interdrv/include ./interdrv/vc_drv
+SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 
+MEDIA_INCLUDE_DIR = $(BUILD_DIR)/media/include
 
 # prepare ko list
-KO_LIST :=
 ifeq ($(CONFIG_DUAL_OS), y)
-KO_LIST = ipcm
+KO_LIST = osal base ipcm tde gfbg
+else
+KO_LIST = osal base sys cif snsr_i2c vi vpss vc_drv rgn ldc vo mipi_tx gfbg tde
 endif
 
 OTHERS :=
 
 ifeq (, ${CONFIG_NO_TP})
 KO_LIST += tp
+OTHERS += cp_ext_tp
 endif
 
 ifeq (y, ${CONFIG_CP_EXT_WIRELESS})
@@ -87,10 +81,54 @@ all: prepare $(KO_LIST) $(OTHERS)
 
 prepare:
 	@mkdir -p $(INSTALL_DIR)/3rd
-	@cp -f $(INTERDRV_PATH)/ko/*.ko $(INSTALL_DIR)
+	@cp -f $(MEDIA_INCLUDE_DIR)/internal/osdrv_uapi/* $(INTERDRV_PATH)/include/common/uapi/
+	@cp -f $(MEDIA_INCLUDE_DIR)/internal/comm/* $(INTERDRV_PATH)/include/common/uapi/
+	@cp -f $(MEDIA_INCLUDE_DIR)/release/cvi_defines.h $(INTERDRV_PATH)/include/chip/$(CHIP_ARCH_L)/uapi/defines.h
 
 # osdrv/interdrv
+osal:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+base: osal prepare
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+sys: osal base
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
 ipcm:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+cif: base
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+snsr_i2c: sys
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+vi: sys
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+vpss: sys
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+vc_drv: sys
+	@cp -f ${INTERDRV_PATH}/${@}/${SDK_VER}/*.ko $(INSTALL_DIR)
+
+rgn: base
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+ldc: sys
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+vo: sys
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+mipi_tx: vo
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+gfbg:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+tde: base
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 # osdrv/extdrv
@@ -109,8 +147,11 @@ gyro_i2c:
 cp_ext_wireless:
 	find extdrv/wireless -name '*.ko' -print -exec cp {} $(INSTALL_DIR)/3rd/ \;;
 
+cp_ext_tp:
+	find extdrv/tp -name '*.ko' -print -exec cp {} $(INSTALL_DIR)/3rd/ \;;
+
 clean:
 	@for subdir in $(SUBDIRS); do echo $$subdir; cd $$subdir && $(MAKE) OS_TYPE=LINUX clean && cd $(CUR_DIR); done
-	@rm -f $(INSTALL_DIR)/*.ko
-	@rm -f $(INSTALL_DIR)/3rd/*.ko
+	@rm -f $(INTERDRV_PATH)/include/common/uapi/*.h
+	@rm -f $(INTERDRV_PATH)/include/chip/$(CHIP_ARCH_L)/uapi/defines.h
 

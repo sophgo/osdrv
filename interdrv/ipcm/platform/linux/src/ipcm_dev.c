@@ -380,12 +380,12 @@ static int ipcm_dev_remove(struct platform_device *pdev)
 #endif
 	ipcm_cust_deregister_dev();
 	ipcmsg_deregister_dev();
-	ipcm_register_dev();
+	ipcm_deregister_dev();
 	platform_set_drvdata(pdev, NULL);
 
 	ipcm_cust_cli_uninit();
 	ipcm_port_uninit();
-	ipcm_uninit();
+	// ipcm_uninit();
 	ipcm_debug("%s DONE\n", __func__);
 
 	return 0;

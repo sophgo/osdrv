@@ -11,6 +11,10 @@
 
 // #define _DEBUG
 
+#if (CONFIG_LOG == 0)
+#define IPCM_SHIRNK
+#endif
+
 #ifndef NULL
 #define NULL 0
 #endif
@@ -52,7 +56,7 @@ typedef int s32;
  */
 typedef enum _IPCM_LOG_LEVEL_E {
 	IPCM_LOG_NONE,     // No logging
-	IPCM_LOG_ERR,      // Error messages only  
+	IPCM_LOG_ERR,      // Error messages only
 	IPCM_LOG_WARNING,  // Warnings and errors
 	IPCM_LOG_INFO,     // General information
 	IPCM_LOG_DEBUG,    // Debug level messages
@@ -67,7 +71,7 @@ typedef enum _RTOS_BOOT_STATUS_E {
     RTOS_IPCM_DONE,         // IPCM initialization complete
     RTOS_IPCMSG_DONE,       // IPCM messaging ready
     RTOS_VI_DONE,           // Video input ready
-    RTOS_VPSS_DONE,         // Video processing ready 
+    RTOS_VPSS_DONE,         // Video processing ready
     RTOS_VENC_DONE,         // Video encoding ready
     RTOS_BOOTLOGO_DONE,     // Boot logo display complete
     RTOS_BOOT_STATUS_BUTT,
@@ -84,10 +88,10 @@ extern IPCM_LOG_LEVEL_E g_ipcm_log_level;
 #define EQNULL		204 /* queue not init , is null*/
 
 #ifdef IPCM_SHIRNK
-#define ipcm_err(x, args...)
-#define ipcm_warning(x, args...)
-#define ipcm_info(x, args...)
-#define ipcm_debug(x, args...)
+#define ipcm_err(x, args...) do {} while (0)
+#define ipcm_warning(x, args...) do {} while (0)
+#define ipcm_info(x, args...) do {} while (0)
+#define ipcm_debug(x, args...) do {} while (0)
 #else
 #define ipcm_err(x, args...) do {if (g_ipcm_log_level >= IPCM_LOG_ERR) \
 			PR("<err>[%s:%d]"x, __func__, __LINE__, ##args); } \

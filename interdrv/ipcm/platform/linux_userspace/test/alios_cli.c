@@ -186,6 +186,7 @@ void *thread_get_log(void *arg)
 				print_log(base, 0, (segment_idx << 6));
 			}
 		}
+		printf("\n");
 
 		read_segment_idx = segment_idx;
 		read_mirror_times = mirror_times;
