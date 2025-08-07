@@ -4,6 +4,7 @@ ifneq ($(KERNELRELEASE),)
 
 obj-m += $(CVIARCH_L)_ive.o
 $(CVIARCH_L)_ive-y += common/ive_interface.o
+$(CVIARCH_L)_ive-y += common/ive_core_res.o
 $(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/reg.o
 $(CVIARCH_L)_ive-y += hal/$(CVIARCH_L)/ive_platform.o
 

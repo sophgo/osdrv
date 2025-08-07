@@ -15,13 +15,10 @@
 #include <uapi/linux/sched/types.h>
 #include <linux/semaphore.h>
 #include <linux/clk.h>
+#include "ive_core_res.h"
 
 
-#if defined(__CV186X__)
 #define IVE_DEV_MAX 2
-#else
-#define IVE_DEV_MAX 1
-#endif
 #define IVE_SYNC_IO_WAIT_TIMEOUT_MS (1000*10)
 #define IVE_IDLE_WAIT_TIMEOUT_MS    (1000*5)
 #define IVE_EOF_WAIT_TIMEOUT_MS     (1000*1)
@@ -53,9 +50,7 @@ enum ive_clk_state {
 
 enum ive_dev_type {
 	DEV_IVE_0 = 0,
-#if defined(__CV186X__)
 	DEV_IVE_1,
-#endif
 	DEV_IVE_MAX,
 };
 
@@ -63,17 +58,6 @@ enum ive_task_state {
 	IVE_TASK_STATE_READY,
 	IVE_TASK_STATE_RUNNING,
 	IVE_TASK_STATE_DONE,
-};
-
-struct ive_task {
-	struct list_head node;// task node
-	atomic_t state;// ive_task_state
-	unsigned int task_type;
-	char *input_data;
-	void *buffer;
-	int dev_id;
-	wait_queue_head_t task_done_wait;
-	bool task_done_evt;
 };
 
 struct ive_dev_core {
@@ -98,8 +82,6 @@ struct ive_dev_core {
 	u32 hw_duration_total;
 	u32 duty_ratio;
 //for task func
-	atomic_t dev_state;//device_state
-	struct ive_task *work_tsk;
 	struct work_struct work_frm_done;
 	wait_queue_head_t cmdq_wq;
 };

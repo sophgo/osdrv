@@ -100,8 +100,19 @@ static int ive_close(struct inode *inode, struct file *filp);
 static long ive_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg);
 
+// Function Declaration
+int ive_set_core_state(int dev_id);
+int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned int task_type);
+// static int ive_try_commit_task(struct ive_device *ndev, struct ive_task *task);
+
 //global lock
 static struct mutex g_ive_lock;
+
+//global core state
+atomic_t dev_state[IVE_DEV_MAX] = {
+	{IVE_CORE_STATE_END},
+	{IVE_CORE_STATE_END},
+	};
 
 #ifdef CONFIG_COMPAT
 static long ive_compat_ioctl(struct file *filp, unsigned int cmd,
@@ -301,13 +312,13 @@ static irqreturn_t ive_irq_handler(int irq, void *data)
 	spin_lock(&ndev->core[dev_id].dev_lock);
 	//pr_info("[IVE] ive use_count %d\n", ndev->use_count);
 	if (ndev->use_count == 0) {
-		atomic_set(&ndev->core[i].dev_state, IVE_CORE_STATE_END);
+		atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
 		spin_unlock(&ndev->core[dev_id].dev_lock);
 		return IRQ_HANDLED;
 	}
 
 	ret = platform_ive_irq(ndev, dev_id);
-	atomic_set(&ndev->core[i].dev_state, IVE_CORE_STATE_END);
+	atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
 	spin_unlock(&ndev->core[dev_id].dev_lock);
 
 	return ret;
@@ -456,115 +467,41 @@ static long ive_compat_ioctl(struct file *file, unsigned int cmd,
 					  (unsigned long)compat_ptr(arg));
 }
 #endif
-static long ive_add_task(struct ive_device *ndev, unsigned int cmd, unsigned long arg, char *kdata, void *buffer)
+
+void ive_task_done(int dev_id)
 {
-	struct ive_task *task;
-	unsigned long flags;
-	s32 sync_io_ret = 1;
-	s32 ret = -1;
 
-	unsigned long timeout = msecs_to_jiffies(IVE_SYNC_IO_WAIT_TIMEOUT_MS);
-	if (ndev == NULL) {
-		TRACE_IVE(IVE_DBG_ERR, "drv point is NULL\n");
-		return ret;
-	}
-
-	spin_lock_irqsave(&ndev->close_lock, flags);
-	task = kzalloc(sizeof(struct ive_task), GFP_ATOMIC);
-	atomic_set(&task->state, IVE_TASK_STATE_READY);
-	list_add_tail(&task->node, &ndev->tsk_list);
-	task->dev_id = -1;
-	task->task_type = cmd;
-	task->input_data = kdata;
-	task->buffer = buffer;
-	init_waitqueue_head(&task->task_done_wait);
-	task->task_done_evt = false;
-	spin_unlock_irqrestore(&ndev->close_lock, flags);
-	TRACE_IVE(IVE_DBG_DEBUG, "add task success, task[%p], input data [%p], task type[%d]\n"
-		, task, task->input_data, _IOC_NR(cmd));
-
-	ive_notify_wkup_evt_kth(ndev, IVE_EVENT_WKUP);
-
-	sync_io_ret = wait_event_timeout(task->task_done_wait, task->task_done_evt, timeout);
-	if (sync_io_ret <= 0) {
-		TRACE_IVE(IVE_DBG_ERR, "user thread wait timeout, ret[%d]\n", sync_io_ret);
-		ret = -1;
-	} else
-		ret = 0;
-	ive_notify_wkup_evt_kth(ndev, IVE_EVENT_EOF);
-
-
-	if (atomic_read(&task->state) == IVE_TASK_STATE_DONE) {
-		kfree(task);
-		task = NULL;
-	}
-	return ret;
-
-}
-static void ive_task_done(struct ive_device *ndev, struct ive_task *task)
-{
-	unsigned long flags;
-
-	if (!task) {
-		TRACE_IVE(IVE_DBG_ERR, "task is NULL\n");
-		return;
-	}
-
-	if (atomic_read(&task->state) == IVE_TASK_STATE_RUNNING) {
-		atomic_set(&task->state, IVE_TASK_STATE_DONE);
-		atomic_set(&ndev->core[task->dev_id].dev_state, IVE_CORE_STATE_END);
-
-		spin_lock_irqsave(&ndev->close_lock, flags);
-		task->task_done_evt = true;
-		spin_unlock_irqrestore(&ndev->close_lock, flags);
-		wake_up(&task->task_done_wait);
-
-		TRACE_IVE(IVE_DBG_DEBUG, "task done ,wake up user thread\n");
+	if (atomic_cmpxchg(&dev_state[dev_id], IVE_CORE_STATE_RUNNING, IVE_CORE_STATE_END)
+			== IVE_CORE_STATE_RUNNING) {
+		TRACE_IVE(IVE_DBG_DEBUG, "task done core[%d]\n", dev_id);
 	} else {
-		TRACE_IVE(IVE_DBG_DEBUG, "task state is invaild\n");
+		TRACE_IVE(IVE_DBG_DEBUG, "task already finish\n");
 	}
+	return;
 }
 
-void ive_notify_wkup_evt_kth(void *data, enum ive_wait_evt evt)
-{
-	struct ive_device *ndev = (struct ive_device *)data;
-	unsigned long flags;
 
-
-	if (!ndev) {
-		TRACE_IVE(IVE_DBG_ERR, "ive device isn't created yet\n");
-		return;
-	}
-
-	spin_lock_irqsave(&ndev->close_lock, flags);
-	ndev->evt |= evt;
-	TRACE_IVE(IVE_DBG_DEBUG, "wakeup kthread dev evt[%d]", ndev->evt);
-	spin_unlock_irqrestore(&ndev->close_lock, flags);
-
-	wake_up_interruptible(&ndev->wait);
-}
 
 static long ive_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg)
 {
 	struct ive_device *ndev = filp->private_data;
-	struct ive_ioctl_arg *ioctl_arg;
+	struct ive_ioctl_arg ioctl_arg;
 	s32 ret = -1;
 	char *kdata = NULL;
 	bool copy_buf = false;
 	void *buffer = NULL;
 
-	ioctl_arg = (struct ive_ioctl_arg *)arg;
-	kdata = kmalloc(512,GFP_KERNEL);
+	kdata = kmalloc(512, GFP_KERNEL);
 	if (!kdata) {
 		TRACE_IVE(IVE_DBG_ERR, "vmalloc fail\n");
 		goto error;
 	}
-	if (copy_from_user(ioctl_arg, (void __user *)arg, sizeof(ioctl_arg)) != 0) {
+	if (copy_from_user(&ioctl_arg, (void __user *)arg, sizeof(ioctl_arg)) != 0) {
 		TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 		goto error;
 	}
-	if (copy_from_user(kdata, (void __user *)ioctl_arg->input_data, 512) != 0) {
+	if (copy_from_user(kdata, (void __user *)ioctl_arg.input_data, 512) != 0) {
 		TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 		goto error;
 	}
@@ -573,34 +510,37 @@ static long ive_ioctl(struct file *filp, unsigned int cmd,
 		cmd == IVE_IOC_CCL || cmd == IVE_IOC_MATCH_BGMODEM ||
 		cmd == IVE_IOC_UPDATE_BGMODEL) {
 
-		buffer = kmalloc(ioctl_arg->size,GFP_KERNEL);
+		buffer = kmalloc(ioctl_arg.size, GFP_KERNEL);
 		if (!buffer) {
 			TRACE_IVE(IVE_DBG_ERR, "vmalloc fail\n");
 			goto error;
 		}
 		copy_buf = true;
-		if (copy_from_user(buffer, (void __user *)ioctl_arg->buffer, ioctl_arg->size) != 0) {
+		if (copy_from_user(buffer, (void __user *)ioctl_arg.buffer, ioctl_arg.size) != 0) {
 			TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 			goto error;
 		}
 	}
 
-	ret = ive_add_task(ndev, cmd, arg, kdata, buffer);
+	ret = ive_submit_hw(ndev, kdata, buffer, cmd);
+	if (ret) {
+		TRACE_IVE(IVE_DBG_ERR, "ive_submit_hw fail task_type[%d]\n", cmd);
+	}
 
 
 	if (copy_buf) {
-		if (copy_to_user((void __user *)ioctl_arg->buffer, buffer, ioctl_arg->size) != 0) {
+		if (copy_to_user((void __user *)ioctl_arg.buffer, buffer, ioctl_arg.size) != 0) {
 			TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 			ret = -EFAULT;
 		}
 	}
 
-	if (copy_to_user((void __user *)ioctl_arg->input_data, kdata, 512) != 0) {
+	if (copy_to_user((void __user *)ioctl_arg.input_data, kdata, 512) != 0) {
 		TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 		ret = -EFAULT;
 	}
 
-	if (copy_to_user((void __user *)arg, ioctl_arg, sizeof(ioctl_arg)) != 0) {
+	if (copy_to_user((void __user *)arg, &ioctl_arg, sizeof(ioctl_arg)) != 0) {
 		TRACE_IVE(IVE_DBG_ERR, "copy to user fail\n");
 		ret = -EFAULT;
 	}
@@ -686,13 +626,9 @@ static int ive_suspend(struct platform_device *pdev, pm_message_t state)
 		TRACE_IVE(IVE_DBG_ERR, "dev ptr is null\n");
 		return 1;
 	}
-	if (!ndev->work_thread) {
-		TRACE_IVE(IVE_DBG_ERR, "ive thread not initialized yet\n");
-		return 1;
-	}
 
-	if (!list_empty(&ndev->tsk_list) || atomic_read(&ndev->core[0].dev_state) == IVE_DEV_STATE_RUNNING
-		|| atomic_read(&ndev->core[1].dev_state) == IVE_DEV_STATE_RUNNING) {
+	if (atomic_read(&dev_state[0]) == IVE_DEV_STATE_RUNNING
+		|| atomic_read(&dev_state[1]) == IVE_DEV_STATE_RUNNING) {
 			sema_init(&ndev->sem, 0);
 			ret = down_timeout(&ndev->sem, msecs_to_jiffies(IVE_IDLE_WAIT_TIMEOUT_MS));
 			if (ret == -ETIME) {
@@ -701,8 +637,8 @@ static int ive_suspend(struct platform_device *pdev, pm_message_t state)
 			}
 	}
 
-	atomic_set(&ndev->core[0].dev_state, IVE_DEV_STATE_END);
-	atomic_set(&ndev->core[1].dev_state, IVE_DEV_STATE_END);
+	atomic_set(&dev_state[0], IVE_DEV_STATE_END);
+	atomic_set(&dev_state[1], IVE_DEV_STATE_END);
 	atomic_set(&ndev->clk_flg, IVE_READY_SUSPEND);
 
 	mutex_lock(&g_ive_lock);
@@ -726,13 +662,11 @@ static int ive_resume(struct platform_device *pdev)
 		TRACE_IVE(IVE_DBG_ERR, "dev ptr is null\n");
 		return 1;
 	}
-	if (!ndev->work_thread) {
-		TRACE_IVE(IVE_DBG_ERR, "ive thread not initialized yet\n");
-		return 1;
-	}
+	// if (!ndev->work_thread) {
+	// 	TRACE_IVE(IVE_DBG_ERR, "ive thread not initialized yet\n");
+	// 	return 1;
+	// }
 
-	atomic_set(&ndev->core[0].dev_state, IVE_DEV_STATE_END);
-	atomic_set(&ndev->core[1].dev_state, IVE_DEV_STATE_END);
 	atomic_set(&ndev->clk_flg, IVE_READY_RESUME);
 
 	ive_clk_init(ndev);
@@ -782,24 +716,6 @@ static int ive_close(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-//int cvi_ive_register_misc(struct ive_device *ndev)
-//{
-//	int rc;
-//
-//	ndev->miscdev.minor = MISC_DYNAMIC_MINOR;
-//	ndev->miscdev.name = IVE_CDEV_NAME;
-//	ndev->miscdev.fops = &ive_fops;
-//
-//	rc = misc_register(&ndev->miscdev);
-//	if (rc) {
-//		dev_err(ndev->dev,
-//		"cvi_ive: failed to register misc device.\n");
-//		return rc;
-//	}
-//
-//	return 0;
-//}
-
 int ive_register_cdev(struct ive_device *ndev)
 {
 	int ret;
@@ -827,640 +743,489 @@ int ive_register_cdev(struct ive_device *ndev)
 	return 0;
 }
 
-static u8 ive_get_idle_coreid(struct ive_device *ndev)
+int ive_set_core_state(int dev_id)
 {
-	u8 coreid;
-	enum ive_core_state state;
 
-	for (coreid = 0; coreid < IVE_DEV_MAX; coreid++) {
-		state = atomic_read(&ndev->core[coreid].dev_state);
-		if (state == IVE_CORE_STATE_END)
-			break;
+	if (atomic_cmpxchg(&dev_state[dev_id], IVE_CORE_STATE_END, IVE_CORE_STATE_RUNNING)
+					== IVE_CORE_STATE_END) {
+		TRACE_IVE(IVE_DBG_DEBUG, "set core[%d] state running\n", dev_id);
+		return SUCCESS;
+	} else {
+		TRACE_IVE(IVE_DBG_ERR, "set core[%d] state fail!\n", dev_id);
+		return FAILURE;
 	}
 
-	return coreid;
 }
 
-static void ive_submit_hw(struct ive_device *ndev, int top_id, struct ive_task *task)
+int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned int task_type)
 {
-	unsigned long flags;
 	s32 ret = -1;
-	char *g_kdata;
+	int idle_coreid = -1;
 
-	g_kdata = task->input_data;
-	spin_lock_irqsave(&ndev->close_lock, flags);
-	task->dev_id = top_id;
-	atomic_set(&task->state, IVE_TASK_STATE_RUNNING);
-	atomic_set(&ndev->core[top_id].dev_state, IVE_CORE_STATE_RUNNING);
-	ndev->core[top_id].work_tsk = task;
-	spin_unlock_irqrestore(&ndev->close_lock, flags);
-	TRACE_IVE(IVE_DBG_DEBUG, "use core[%d]\n", task->dev_id);
-	TRACE_IVE(IVE_DBG_DEBUG, "task type[%d], input ptr[%p]\n", _IOC_NR(task->task_type), task->input_data);
-
-
-		switch (task->task_type) {
-		case IVE_IOC_QUERY: {
-			bool bFinish;
-			struct ive_query_arg *val =
-					(struct ive_query_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_QUERY], "QUERY");
-			ret = ive_query(ndev, &bFinish, val->bBlock, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_QUERY]);
-		} break;
-		case IVE_IOC_RESET: {
-			start_ioctl_time(&g_time_infos[MOD_RESET], "RESET");
-			ret = _ive_reset(ndev, *((int *) g_kdata), task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_RESET]);
-		} break;
-		case IVE_IOC_DUMP: {
-			start_ioctl_time(&g_time_infos[MOD_DUMP], "DUMP");
-			ret = ive_dump_reg_state(true);    // not use dev_id ,use d_num
-			stop_ioctl_time(&g_time_infos[MOD_DUMP]);
-		} break;
-		case IVE_IOC_TEST: {
-			struct ive_test_arg *val =
-					(struct ive_test_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_TEST], "Test");
-			ret = ive_test(ndev, val->addr, &val->width,
-						&val->height);
-			stop_ioctl_time(&g_time_infos[MOD_TEST]);
-		} break;
-		case IVE_IOC_DMA: {
-			struct ive_ioctl_dma_arg *val =
-					(struct ive_ioctl_dma_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_DMA], "DMA");
-			ret = ive_dma(ndev, &val->src, &val->dst,
-						&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_DMA]);
-		} break;
-		case IVE_IOC_AND: {
-			struct ive_ioctl_and_arg *val =
-					(struct ive_ioctl_and_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_AND], "And");
-			ret = ive_and(ndev, &val->src1, &val->src2,
-						&val->dst, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_AND]);
-		} break;
-		case IVE_IOC_OR: {
-			struct ive_ioctl_or_arg *val =
-					(struct ive_ioctl_or_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_OR], "Or");
-			ret = ive_or(ndev, &val->src1, &val->src2,
-						&val->dst, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_OR]);
-		} break;
-		case IVE_IOC_XOR: {
-			struct ive_ioctl_xor_arg *val =
-					(struct ive_ioctl_xor_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_XOR], "Xor");
-			ret = ive_xor(ndev, &val->src1, &val->src2,
-						&val->dst, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_XOR]);
-		} break;
-		case IVE_IOC_ADD: {
-			struct ive_ioctl_add_arg *val =
-					(struct ive_ioctl_add_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_ADD], "Add");
-			ret = ive_add(ndev, &val->src1, &val->src2,
-						&val->dst, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_ADD]);
-		} break;
-		case IVE_IOC_SUB: {
-			struct ive_ioctl_sub_arg *val =
-					(struct ive_ioctl_sub_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_SUB], "Sub");
-			ret = ive_sub(ndev, &val->src1, &val->src2,
-						&val->dst, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_SUB]);
-		} break;
-		case IVE_IOC_THRESH: {
-			struct ive_ioctl_thresh_arg *val =
-					(struct ive_ioctl_thresh_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_THRESH], "Thresh");
-			ret = ive_thresh(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_THRESH]);
-		} break;
-		case IVE_IOC_DILATE: {
-			struct ive_ioctl_dilate_arg *val =
-					(struct ive_ioctl_dilate_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_DILA], "Dilate");
-			ret = ive_dilate(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_DILA]);
-		} break;
-		case IVE_IOC_ERODE: {
-			struct ive_ioctl_erode_arg *val =
-					(struct ive_ioctl_erode_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_ERO], "Erode");
-			ret = ive_erode(ndev, &val->src, &val->dst,
-						&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_ERO]);
-		} break;
-		case IVE_IOC_MATCH_BGMODEM: {
-			struct ive_ioctl_match_bgmodel_arg *val =
-					(struct ive_ioctl_match_bgmodel_arg *) g_kdata;
-
-			task->buffer = (ive_bg_stat_data_s *)task->buffer;
-			start_ioctl_time(&g_time_infos[MOD_BGM], "MatchBgModel");
-			ret = ive_match_bg_model(ndev, &val->cur_img,
-							&val->bg_model,
-							&val->fg_flag, &val->stDiffFg,
-							task->buffer, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_BGM]);
-		} break;
-		case IVE_IOC_UPDATE_BGMODEL: {
-			struct ive_ioctl_update_bgmodel_arg *val =
-					(struct ive_ioctl_update_bgmodel_arg *) g_kdata;
-
-			task->buffer = (ive_bg_stat_data_s *)task->buffer;
-			start_ioctl_time(&g_time_infos[MOD_BGU], "UpdateBgModel");
-			ret = ive_update_bg_model(ndev, &val->cur_img,
-							&val->bg_model,
-							&val->fg_flag, &val->bg_img,
-							&val->chg_sta,
-							task->buffer,
-							&val->ctrl, val->instant,
-							task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_BGU]);
-		} break;
-		case IVE_IOC_GMM: {
-			struct ive_ioctl_gmm_arg *val =
-					(struct ive_ioctl_gmm_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_GMM], "GMM");
-			ret = ive_gmm(ndev, &val->src, &val->fg,
-						&val->bg, &val->model, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_GMM]);
-		} break;
-		case IVE_IOC_GMM2: {
-			struct ive_ioctl_gmm2_arg *val =
-					(struct ive_ioctl_gmm2_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_GMM2], "GMM2");
-			ret = ive_gmm2(ndev, &val->src, &val->factor,
-						&val->fg, &val->bg, &val->stInfo,
-						&val->model, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_GMM2]);
-		} break;
-
-		case IVE_IOC_BERNSEN: {
-			struct ive_ioctl_bernsen_arg *val =
-					(struct ive_ioctl_bernsen_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_BERNSEN], "Bernsen");
-			ret = ive_bernsen(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_BERNSEN]);
-		} break;
-		case IVE_IOC_FILTER: {
-			struct ive_ioctl_filter_arg *val =
-					(struct ive_ioctl_filter_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_FILTER3CH], "Filter");
-			ret = ive_filter(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_FILTER3CH]);
-		} break;
-		case IVE_IOC_SOBEL: {
-			struct ive_ioctl_sobel_arg *val =
-					(struct ive_ioctl_sobel_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_SOBEL], "Sobel");
-			ret = ive_sobel(ndev, &val->src, &val->dst_h,
-						&val->dst_v, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_SOBEL]);
-		} break;
-		case IVE_IOC_MAG_AND_ANG: {
-			struct ive_ioctl_maganang_arg *val =
-					(struct ive_ioctl_maganang_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_MAG], "MagAndAng");
-			ret = ive_mag_and_ang(ndev, &val->src, &val->dst_mag,
-						&val->dst_ang, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_MAG]);
-		} break;
-		case IVE_IOC_CSC: {
-			struct ive_ioctl_csc_arg *val =
-					(struct ive_ioctl_csc_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_CSC], "CSC");
-			ret = ive_csc(ndev, &val->src, &val->dst,
-						&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_CSC]);
-		} break;
-		case IVE_IOC_HIST: {
-			struct ive_ioctl_hist_arg *val =
-					(struct ive_ioctl_hist_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_HIST], "Hist");
-			ret = ive_hist(ndev, &val->src, &val->dst,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_HIST]);
-		} break;
-		case IVE_IOC_FILTER_AND_CSC: {
-			struct ive_ioctl_filter_and_csc_arg *val =
-					(struct ive_ioctl_filter_and_csc_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_FILTERCSC], "FilterAndCSC");
-			ret = ive_filter_and_csc(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_FILTERCSC]);
-		} break;
-		case IVE_IOC_MAP: {
-			struct ive_ioctl_map_arg *val =
-					(struct ive_ioctl_map_arg *) g_kdata;
-
-			task->buffer = (u16 *)task->buffer;
-			start_ioctl_time(&g_time_infos[MOD_MAP], "Map");
-			ret = ive_map(ndev, &val->src, task->buffer,
-						&val->dst, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_MAP]);
-		} break;
-		case IVE_IOC_NCC: {
-			struct ive_ioctl_ncc_arg *val =
-					(struct ive_ioctl_ncc_arg *) g_kdata;
-
-			task->buffer = (ive_ncc_dst_mem_s *)task->buffer;
-			start_ioctl_time(&g_time_infos[MOD_NCC], "NCC");
-			ret = ive_ncc(ndev, &val->src1, &val->src2,
-						task->buffer, val->instant, task->dev_id);
-
-			stop_ioctl_time(&g_time_infos[MOD_NCC]);
-		} break;
-		case IVE_IOC_INTEG: {
-			struct ive_ioctl_integ_arg *val =
-					(struct ive_ioctl_integ_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_INTEG], "Integ");
-			ret = ive_integ(ndev, &val->src, &val->dst,
-						&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_INTEG]);
-		} break;
-		case IVE_IOC_LBP: {
-			struct ive_ioctl_lbp_arg *val =
-					(struct ive_ioctl_lbp_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_LBP], "LBP");
-			ret = ive_lbp(ndev, &val->src, &val->dst,
-						&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_LBP]);
-		} break;
-		case IVE_IOC_THRESH_S16: {
-			struct ive_ioctl_thresh_s16_arg *val =
-					(struct ive_ioctl_thresh_s16_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_THRS16], "Thresh_S16");
-			ret = ive_thresh_s16(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_THRS16]);
-		} break;
-		case IVE_IOC_THRESH_U16: {
-			struct ive_ioctl_thresh_u16_arg *val =
-					(struct ive_ioctl_thresh_u16_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_THRU16], "Thresh_U16");
-			ret = ive_thresh_u16(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_THRU16]);
-		} break;
-		case IVE_IOC_16BIT_TO_8BIT: {
-			struct ive_ioctl_16bit_to_8bit_arg *val =
-					(struct ive_ioctl_16bit_to_8bit_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_16To8], "16BitTo8Bit");
-			ret = ive_16bit_to_8bit(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_16To8]);
-		} break;
-		case IVE_IOC_ORD_STAT_FILTER: {
-			struct ive_ioctl_ord_stat_filter_arg *val =
-					(struct ive_ioctl_ord_stat_filter_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_ORDSTAFTR], "OrdStatFilter");
-			ret = ive_ord_stat_filter(ndev, &val->src,
-							&val->dst, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_ORDSTAFTR]);
-		} break;
-		case IVE_IOC_CANNYHYSEDGE: {
-			struct ive_ioctl_canny_hys_edge_arg *val =
-					(struct ive_ioctl_canny_hys_edge_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_CANNY], "CannyHysEdge");
-			ret = ive_canny_hys_edge(ndev, &val->src, &val->dst,
-							&val->stack, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_CANNY]);
-		} break;
-		case IVE_IOC_NORMGRAD: {
-			struct ive_ioctl_norm_grad_arg *val =
-					(struct ive_ioctl_norm_grad_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_NORMG], "NormGrad");
-			ret = ive_norm_grad(ndev, &val->src, &val->dst_h,
-							&val->dst_v, &val->dst_hv,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_NORMG]);
-		} break;
-		case IVE_IOC_GRADFG: {
-			struct ive_ioctl_grad_fg_arg *val =
-					(struct ive_ioctl_grad_fg_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_GRADFG], "GradFg");
-			ret = ive_grad_fg(ndev, &val->bg_diff_fg,
-							&val->cur_grad, &val->bg_grad,
-							&val->grad_fg, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_GRADFG]);
-		} break;
-		case IVE_IOC_SAD: {
-			struct ive_ioctl_sad_arg *val =
-					(struct ive_ioctl_sad_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_SAD], "SAD");
-			ret = ive_sad(ndev, &val->src1, &val->src2,
-						&val->sad, &val->thr, &val->ctrl,
-						val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_SAD]);
-		} break;
-		case IVE_IOC_RESIZE: {
-			struct ive_ioctl_resize_arg *val =
-					(struct ive_ioctl_resize_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_RESIZE], "Resize");
-			ret = ive_resize(ndev, &val->src, &val->dst, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_RESIZE]);
-		} break;
-		case IVE_IOC_CCL: {
-			struct ive_ioctl_ccl_arg *val =
-					(struct ive_ioctl_ccl_arg *) g_kdata;
-
-			val->blob.vir_addr = (uintptr_t)task->buffer;
-			start_ioctl_time(&g_time_infos[MOD_NORMG], "CCL");
-			ret = ive_ccl(ndev, &val->src_dst,
-							&val->blob, &val->ccl_ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_NORMG]);
-		} break;
-		case IVE_IOC_IMGIN_To_ODMA: {
-			struct ive_ioctl_filter_arg *val =
-					(struct ive_ioctl_filter_arg *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_BYP], "imgInToOdma");
-			ret = ive_imgIn_to_odma(ndev, &val->src, &val->dst,
-							&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_BYP]);
-		} break;
-		case IVE_IOC_RGBP2YUV2ERODE2DILATE: {
-			struct ive_ioctl_rgbPToYuvToErodeToDilate *val =
-					(struct ive_ioctl_rgbPToYuvToErodeToDilate *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_ED],
-					"rgbPToYuvToErodeToDilate");
-			ret = ive_rgbp_to_yuv_to_erode_to_dilate(
-				ndev, &val->src, &val->dst1, &val->dst2,
-				&val->ctrl, val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_ED]);
-		} break;
-		case IVE_IOC_ST_CANDI_CORNER: {
-			struct ive_ioctl_stcandicorner *val =
-					(struct ive_ioctl_stcandicorner *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_STCANDI], "STCandiCorner");
-			start_ioctl_time(&g_time_infos[MOD_STBOX], "STBox");
-			ret = ive_stcandi_corner(ndev, &val->src,
-							&val->dst, &val->ctrl,
-							val->instant, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_STCANDI]);
-			stop_ioctl_time(&g_time_infos[MOD_STBOX]);
-		} break;
-		case IVE_IOC_MD: {
-			struct ive_ioctl_md *val = (struct ive_ioctl_md *) g_kdata;
-
-			start_ioctl_time(&g_time_infos[MOD_MD], "FrameDiffDetect");
-			ret = ive_frame_diff_motion(ndev, &val->src1,
-								&val->src2, &val->dst,
-								&val->ctrl,
-								val->instant,
-								task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_MD]);
-		} break;
-		case IVE_IOC_CMDQ: {
-			start_ioctl_time(&g_time_infos[MOD_CMDQ], "CmdQ");
-			ret = ive_cmdq(ndev, task->dev_id);
-			stop_ioctl_time(&g_time_infos[MOD_CMDQ]);
-		} break;
-		default:
-			atomic_set(&ndev->core[task->dev_id].dev_state, IVE_CORE_STATE_END);
-			ive_task_done(ndev, task);
-			TRACE_IVE(IVE_DBG_ERR, "invalid ioctl cmd[%d]\n", task->task_type);
-		}
-		if (ret) {
-			atomic_set(&ndev->core[task->dev_id].dev_state, IVE_CORE_STATE_END);
-			ive_task_done(ndev, task);
-			dev_err(ndev->dev,
-				"[IVE] ioctl _IOC_NR(%d) fail\n", _IOC_NR(task->task_type));
-		}
-	// }
-	ive_task_done(ndev, task);
-	atomic_set(&ndev->core[task->dev_id].dev_state, IVE_CORE_STATE_END);
-}
-
-static int ive_try_submit_hw(struct ive_device *ndev, struct ive_task *task)
-{
-	int i, top_id, ret = -1;
-	enum ive_core_state state;
-
-	for (i = 0; i < IVE_DEV_MAX; i++) {
-		state = atomic_read(&ndev->core[i].dev_state);
-
-		if (state == IVE_CORE_STATE_END) {
-			top_id = i;
-
-			ive_submit_hw(ndev, top_id, task);
-			ret = 0;
-			break;
-		}
+	if (is_ive_suspend(ndev)) {
+		TRACE_IVE(IVE_DBG_ERR, "ive device suspend, no idle core, drop this task!\n");
+		return ret;
 	}
 
-	if (ret)
-		TRACE_IVE(IVE_DBG_NOTICE, "ive submit hw fail, hw busy\n");
+	idle_coreid = ive_core_request_resource(IVE_IDLE_WAIT_TIMEOUT_MS);
+	if (idle_coreid < 0) {
+		TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core, drop this task!\n");
+		return ret;
+	}
+
+	if (ive_set_core_state(idle_coreid)) {
+		TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core, drop this task!\n");
+		return ret;
+	}
+
+	switch (task_type) {
+	case IVE_IOC_QUERY: {
+		bool bFinish;
+		struct ive_query_arg *val =
+				(struct ive_query_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_QUERY], "QUERY");
+		ret = ive_query(ndev, &bFinish, val->bBlock, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_QUERY]);
+	} break;
+	case IVE_IOC_RESET: {
+		start_ioctl_time(&g_time_infos[MOD_RESET], "RESET");
+		ret = _ive_reset(ndev, *((int *) g_kdata), idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_RESET]);
+	} break;
+	case IVE_IOC_DUMP: {
+		start_ioctl_time(&g_time_infos[MOD_DUMP], "DUMP");
+		ret = ive_dump_reg_state(true);    // not use dev_id ,use d_num
+		stop_ioctl_time(&g_time_infos[MOD_DUMP]);
+	} break;
+	case IVE_IOC_TEST: {
+		struct ive_test_arg *val =
+				(struct ive_test_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_TEST], "Test");
+		ret = ive_test(ndev, val->addr, &val->width,
+					&val->height);
+		stop_ioctl_time(&g_time_infos[MOD_TEST]);
+	} break;
+	case IVE_IOC_DMA: {
+		struct ive_ioctl_dma_arg *val =
+				(struct ive_ioctl_dma_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_DMA], "DMA");
+		ret = ive_dma(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_DMA]);
+	} break;
+	case IVE_IOC_AND: {
+		struct ive_ioctl_and_arg *val =
+				(struct ive_ioctl_and_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_AND], "And");
+		ret = ive_and(ndev, &val->src1, &val->src2,
+					&val->dst, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_AND]);
+	} break;
+	case IVE_IOC_OR: {
+		struct ive_ioctl_or_arg *val =
+				(struct ive_ioctl_or_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_OR], "Or");
+		ret = ive_or(ndev, &val->src1, &val->src2,
+					&val->dst, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_OR]);
+	} break;
+	case IVE_IOC_XOR: {
+		struct ive_ioctl_xor_arg *val =
+				(struct ive_ioctl_xor_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_XOR], "Xor");
+		ret = ive_xor(ndev, &val->src1, &val->src2,
+					&val->dst, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_XOR]);
+	} break;
+	case IVE_IOC_ADD: {
+		struct ive_ioctl_add_arg *val =
+				(struct ive_ioctl_add_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_ADD], "Add");
+		ret = ive_add(ndev, &val->src1, &val->src2,
+					&val->dst, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_ADD]);
+	} break;
+	case IVE_IOC_SUB: {
+		struct ive_ioctl_sub_arg *val =
+				(struct ive_ioctl_sub_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_SUB], "Sub");
+		ret = ive_sub(ndev, &val->src1, &val->src2,
+					&val->dst, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_SUB]);
+	} break;
+	case IVE_IOC_THRESH: {
+		struct ive_ioctl_thresh_arg *val =
+				(struct ive_ioctl_thresh_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_THRESH], "Thresh");
+		ret = ive_thresh(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_THRESH]);
+	} break;
+	case IVE_IOC_DILATE: {
+		struct ive_ioctl_dilate_arg *val =
+				(struct ive_ioctl_dilate_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_DILA], "Dilate");
+		ret = ive_dilate(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_DILA]);
+	} break;
+	case IVE_IOC_ERODE: {
+		struct ive_ioctl_erode_arg *val =
+				(struct ive_ioctl_erode_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_ERO], "Erode");
+		ret = ive_erode(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_ERO]);
+	} break;
+	case IVE_IOC_MATCH_BGMODEM: {
+		struct ive_ioctl_match_bgmodel_arg *val =
+				(struct ive_ioctl_match_bgmodel_arg *) g_kdata;
+
+		buffer = (ive_bg_stat_data_s *)buffer;
+		start_ioctl_time(&g_time_infos[MOD_BGM], "MatchBgModel");
+		ret = ive_match_bg_model(ndev, &val->cur_img,
+						&val->bg_model,
+						&val->fg_flag, &val->stDiffFg,
+						buffer, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_BGM]);
+	} break;
+	case IVE_IOC_UPDATE_BGMODEL: {
+		struct ive_ioctl_update_bgmodel_arg *val =
+				(struct ive_ioctl_update_bgmodel_arg *) g_kdata;
+
+		buffer = (ive_bg_stat_data_s *)buffer;
+		start_ioctl_time(&g_time_infos[MOD_BGU], "UpdateBgModel");
+		ret = ive_update_bg_model(ndev, &val->cur_img,
+						&val->bg_model,
+						&val->fg_flag, &val->bg_img,
+						&val->chg_sta,
+						buffer,
+						&val->ctrl, val->instant,
+						idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_BGU]);
+	} break;
+	case IVE_IOC_GMM: {
+		struct ive_ioctl_gmm_arg *val =
+				(struct ive_ioctl_gmm_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_GMM], "GMM");
+		ret = ive_gmm(ndev, &val->src, &val->fg,
+					&val->bg, &val->model, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_GMM]);
+	} break;
+	case IVE_IOC_GMM2: {
+		struct ive_ioctl_gmm2_arg *val =
+				(struct ive_ioctl_gmm2_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_GMM2], "GMM2");
+		ret = ive_gmm2(ndev, &val->src, &val->factor,
+					&val->fg, &val->bg, &val->stInfo,
+					&val->model, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_GMM2]);
+	} break;
+
+	case IVE_IOC_BERNSEN: {
+		struct ive_ioctl_bernsen_arg *val =
+				(struct ive_ioctl_bernsen_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_BERNSEN], "Bernsen");
+		ret = ive_bernsen(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_BERNSEN]);
+	} break;
+	case IVE_IOC_FILTER: {
+		struct ive_ioctl_filter_arg *val =
+				(struct ive_ioctl_filter_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_FILTER3CH], "Filter");
+		ret = ive_filter(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_FILTER3CH]);
+	} break;
+	case IVE_IOC_SOBEL: {
+		struct ive_ioctl_sobel_arg *val =
+				(struct ive_ioctl_sobel_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_SOBEL], "Sobel");
+		ret = ive_sobel(ndev, &val->src, &val->dst_h,
+					&val->dst_v, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_SOBEL]);
+	} break;
+	case IVE_IOC_MAG_AND_ANG: {
+		struct ive_ioctl_maganang_arg *val =
+				(struct ive_ioctl_maganang_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_MAG], "MagAndAng");
+		ret = ive_mag_and_ang(ndev, &val->src, &val->dst_mag,
+					&val->dst_ang, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_MAG]);
+	} break;
+	case IVE_IOC_CSC: {
+		struct ive_ioctl_csc_arg *val =
+				(struct ive_ioctl_csc_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_CSC], "CSC");
+		ret = ive_csc(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_CSC]);
+	} break;
+	case IVE_IOC_HIST: {
+		struct ive_ioctl_hist_arg *val =
+				(struct ive_ioctl_hist_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_HIST], "Hist");
+		ret = ive_hist(ndev, &val->src, &val->dst,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_HIST]);
+	} break;
+	case IVE_IOC_FILTER_AND_CSC: {
+		struct ive_ioctl_filter_and_csc_arg *val =
+				(struct ive_ioctl_filter_and_csc_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_FILTERCSC], "FilterAndCSC");
+		ret = ive_filter_and_csc(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_FILTERCSC]);
+	} break;
+	case IVE_IOC_MAP: {
+		struct ive_ioctl_map_arg *val =
+				(struct ive_ioctl_map_arg *) g_kdata;
+
+		buffer = (u16 *)buffer;
+		start_ioctl_time(&g_time_infos[MOD_MAP], "Map");
+		ret = ive_map(ndev, &val->src, buffer,
+					&val->dst, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_MAP]);
+	} break;
+	case IVE_IOC_NCC: {
+		struct ive_ioctl_ncc_arg *val =
+				(struct ive_ioctl_ncc_arg *) g_kdata;
+
+		buffer = (ive_ncc_dst_mem_s *)buffer;
+		start_ioctl_time(&g_time_infos[MOD_NCC], "NCC");
+		ret = ive_ncc(ndev, &val->src1, &val->src2,
+					buffer, val->instant, idle_coreid);
+
+		stop_ioctl_time(&g_time_infos[MOD_NCC]);
+	} break;
+	case IVE_IOC_INTEG: {
+		struct ive_ioctl_integ_arg *val =
+				(struct ive_ioctl_integ_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_INTEG], "Integ");
+		ret = ive_integ(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_INTEG]);
+	} break;
+	case IVE_IOC_LBP: {
+		struct ive_ioctl_lbp_arg *val =
+				(struct ive_ioctl_lbp_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_LBP], "LBP");
+		ret = ive_lbp(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_LBP]);
+	} break;
+	case IVE_IOC_THRESH_S16: {
+		struct ive_ioctl_thresh_s16_arg *val =
+				(struct ive_ioctl_thresh_s16_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_THRS16], "Thresh_S16");
+		ret = ive_thresh_s16(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_THRS16]);
+	} break;
+	case IVE_IOC_THRESH_U16: {
+		struct ive_ioctl_thresh_u16_arg *val =
+				(struct ive_ioctl_thresh_u16_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_THRU16], "Thresh_U16");
+		ret = ive_thresh_u16(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_THRU16]);
+	} break;
+	case IVE_IOC_16BIT_TO_8BIT: {
+		struct ive_ioctl_16bit_to_8bit_arg *val =
+				(struct ive_ioctl_16bit_to_8bit_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_16To8], "16BitTo8Bit");
+		ret = ive_16bit_to_8bit(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_16To8]);
+	} break;
+	case IVE_IOC_ORD_STAT_FILTER: {
+		struct ive_ioctl_ord_stat_filter_arg *val =
+				(struct ive_ioctl_ord_stat_filter_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_ORDSTAFTR], "OrdStatFilter");
+		ret = ive_ord_stat_filter(ndev, &val->src,
+						&val->dst, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_ORDSTAFTR]);
+	} break;
+	case IVE_IOC_CANNYHYSEDGE: {
+		struct ive_ioctl_canny_hys_edge_arg *val =
+				(struct ive_ioctl_canny_hys_edge_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_CANNY], "CannyHysEdge");
+		ret = ive_canny_hys_edge(ndev, &val->src, &val->dst,
+						&val->stack, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_CANNY]);
+	} break;
+	case IVE_IOC_NORMGRAD: {
+		struct ive_ioctl_norm_grad_arg *val =
+				(struct ive_ioctl_norm_grad_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_NORMG], "NormGrad");
+		ret = ive_norm_grad(ndev, &val->src, &val->dst_h,
+						&val->dst_v, &val->dst_hv,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_NORMG]);
+	} break;
+	case IVE_IOC_GRADFG: {
+		struct ive_ioctl_grad_fg_arg *val =
+				(struct ive_ioctl_grad_fg_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_GRADFG], "GradFg");
+		ret = ive_grad_fg(ndev, &val->bg_diff_fg,
+						&val->cur_grad, &val->bg_grad,
+						&val->grad_fg, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_GRADFG]);
+	} break;
+	case IVE_IOC_SAD: {
+		struct ive_ioctl_sad_arg *val =
+				(struct ive_ioctl_sad_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_SAD], "SAD");
+		ret = ive_sad(ndev, &val->src1, &val->src2,
+					&val->sad, &val->thr, &val->ctrl,
+					val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_SAD]);
+	} break;
+	case IVE_IOC_RESIZE: {
+		struct ive_ioctl_resize_arg *val =
+				(struct ive_ioctl_resize_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_RESIZE], "Resize");
+		ret = ive_resize(ndev, &val->src, &val->dst, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_RESIZE]);
+	} break;
+	case IVE_IOC_CCL: {
+		struct ive_ioctl_ccl_arg *val =
+				(struct ive_ioctl_ccl_arg *) g_kdata;
+
+		val->blob.vir_addr = (uintptr_t)buffer;
+		start_ioctl_time(&g_time_infos[MOD_NORMG], "CCL");
+		ret = ive_ccl(ndev, &val->src_dst,
+						&val->blob, &val->ccl_ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_NORMG]);
+	} break;
+	case IVE_IOC_IMGIN_To_ODMA: {
+		struct ive_ioctl_filter_arg *val =
+				(struct ive_ioctl_filter_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_BYP], "imgInToOdma");
+		ret = ive_imgIn_to_odma(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_BYP]);
+	} break;
+	case IVE_IOC_RGBP2YUV2ERODE2DILATE: {
+		struct ive_ioctl_rgbPToYuvToErodeToDilate *val =
+				(struct ive_ioctl_rgbPToYuvToErodeToDilate *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_ED],
+				"rgbPToYuvToErodeToDilate");
+		ret = ive_rgbp_to_yuv_to_erode_to_dilate(
+			ndev, &val->src, &val->dst1, &val->dst2,
+			&val->ctrl, val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_ED]);
+	} break;
+	case IVE_IOC_ST_CANDI_CORNER: {
+		struct ive_ioctl_stcandicorner *val =
+				(struct ive_ioctl_stcandicorner *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_STCANDI], "STCandiCorner");
+		start_ioctl_time(&g_time_infos[MOD_STBOX], "STBox");
+		ret = ive_stcandi_corner(ndev, &val->src,
+						&val->dst, &val->ctrl,
+						val->instant, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_STCANDI]);
+		stop_ioctl_time(&g_time_infos[MOD_STBOX]);
+	} break;
+	case IVE_IOC_MD: {
+		struct ive_ioctl_md *val = (struct ive_ioctl_md *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_MD], "FrameDiffDetect");
+		ret = ive_frame_diff_motion(ndev, &val->src1,
+							&val->src2, &val->dst,
+							&val->ctrl,
+							val->instant,
+							idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_MD]);
+	} break;
+	case IVE_IOC_CMDQ: {
+		start_ioctl_time(&g_time_infos[MOD_CMDQ], "CmdQ");
+		ret = ive_cmdq(ndev, idle_coreid);
+		stop_ioctl_time(&g_time_infos[MOD_CMDQ]);
+	} break;
+	default:
+		TRACE_IVE(IVE_DBG_ERR, "invalid ioctl cmd[%d]\n", task_type);
+	}
+	if (ret) {
+		ive_core_release_resource(idle_coreid);
+		ive_task_done(idle_coreid);
+		dev_err(ndev->dev,
+			"[IVE] ioctl _IOC_NR(%d) fail\n", _IOC_NR(task_type));
+		return ret;
+	}
+
+	ret = ive_core_release_resource(idle_coreid);
+	if (ret) {
+		TRACE_IVE(IVE_DBG_ERR, "ive_core_release_resource core[%d] fail\n", idle_coreid);
+	}
+	ive_task_done(idle_coreid);
+
 	return ret;
 }
 
-static bool ive_have_idle_core(struct ive_device *ndev)
-{
-	u8 coreid;
-	enum ive_core_state state;
-
-	for (coreid = 0; coreid < IVE_DEV_MAX; coreid++) {
-		state = atomic_read(&ndev->core[coreid].dev_state);
-		if (state == IVE_CORE_STATE_END)
-			return true;
-	}
-	return false;
-}
-
-static void ive_try_commit_task(struct ive_device *ndev, struct ive_task *task)
-{
-
-	if (!ndev || !task) {
-		TRACE_IVE(IVE_DBG_ERR, "ndev or task is nullptr\n");
-		return;
-	}
-
-	if (atomic_read(&task->state) != IVE_TASK_STATE_RUNNING) {
-		TRACE_IVE(IVE_DBG_ERR, "task is working, try commit task failed\n");
-		return;
-	}
-
-	if (!ive_have_idle_core(ndev)) {
-		TRACE_IVE(IVE_DBG_ERR, "no idle core\n");
-		return;
-	}
-
-	ive_try_submit_hw(ndev, task);
-
-	return;
-
-}
-static void ive_clr_evt_kth(void *data)
-{
-	struct ive_device *ndev = (struct ive_device *)data;
-	unsigned long flags;
-	enum ive_wait_evt evt;
-
-	if (!ndev) {
-		TRACE_IVE(IVE_DBG_ERR, "ive device isn't created yet\n");
-		return;
-	}
-
-	spin_lock_irqsave(&ndev->close_lock, flags);
-	evt = ndev->evt;
-	ndev->evt &= ~evt;
-	TRACE_IVE(IVE_DBG_DEBUG, "old evt[%d], new evt[%d]", evt, ndev->evt);
-	spin_unlock_irqrestore(&ndev->close_lock, flags);
-}
-
-static int ive_event_handler_th(void *data)
-{
-	struct ive_device *ndev = (struct ive_device *)data;
-	struct ive_task *task, *task_tmp;
-	unsigned long flags;
-	int ret;
-	unsigned long idle_timeout = msecs_to_jiffies(IVE_IDLE_WAIT_TIMEOUT_MS);
-	unsigned long eof_timeout = msecs_to_jiffies(IVE_EOF_WAIT_TIMEOUT_MS);
-	unsigned long timeout = idle_timeout;
-	u8 idle_coreid;
-	bool have_idle_task = false;
-
-	if (!ndev) {
-		TRACE_IVE(IVE_DBG_ERR, "ive device isn't created yet\n");
-		return -1;
-	}
-
-	while (!kthread_should_stop()) {
-		if (!ndev)
-			break;
-
-		ret = wait_event_interruptible_timeout(ndev->wait,
-			ndev->evt || kthread_should_stop(), timeout);
-
-		if (ret < 0 || kthread_should_stop())
-			break;
-
-		idle_coreid = ive_get_idle_coreid(ndev);
-
-		if (idle_coreid >= IVE_DEV_MAX) {
-			TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core\n");
-			goto continue_th;
-		}
-
-		if (is_ive_suspend(ndev))
-			continue;
-
-		if (list_empty(&ndev->tsk_list)) {
-			TRACE_IVE(IVE_DBG_DEBUG, "task list is empty\n");
-			goto continue_th;
-		}
-
-		spin_lock_irqsave(&ndev->close_lock, flags);
-		list_for_each_entry_safe(task, task_tmp, &ndev->tsk_list, node) {
-			if (task->dev_id == -1) {
-				TRACE_IVE(IVE_DBG_DEBUG, "got idle task[%p]", task);
-				have_idle_task = true;
-				break;
-			}
-		}
-
-		if (!have_idle_task) {
-			TRACE_IVE(IVE_DBG_DEBUG, "no idle task ,task[%p] task_tmp[%p] dev_id[%d]"
-				, task, task_tmp, task_tmp->dev_id);
-			spin_unlock_irqrestore(&ndev->close_lock, flags);
-			goto continue_th;
-		}
-		atomic_set(&task->state, IVE_TASK_STATE_RUNNING);
-		list_del(&task->node);
-		TRACE_IVE(IVE_DBG_DEBUG, "del list node[%p]", task);
-		spin_unlock_irqrestore(&ndev->close_lock, flags);
-
-		ive_try_commit_task(ndev, task);
-
-continue_th:
-		ive_clr_evt_kth(ndev);
-
-		timeout = list_empty(&ndev->tsk_list) ? idle_timeout : eof_timeout;
-
-	}
-
-	return 0;
-}
 
 static int ive_sw_init(struct ive_device *ndev)
 {
 	s32 ret = SUCCESS;
-	struct sched_param task;
+	// struct sched_param task;
 
 	if (ndev == NULL) {
 		TRACE_IVE(IVE_DBG_ERR, "drv point is NULL\n");
 		return FAILURE;
 	}
 
-	INIT_LIST_HEAD(&ndev->tsk_list);
 	init_waitqueue_head(&ndev->wait);
 	mutex_init(&g_ive_lock);
 	sema_init(&ndev->sem, 0);
 	ndev->evt = IVE_EVENT_BUSY_OR_NOT_STAT;
-	ndev->work_thread = kthread_run(ive_event_handler_th, (void *)ndev, "ive_event_handler_th");
-	if (IS_ERR(ndev->work_thread)) {
-		TRACE_IVE(IVE_DBG_ERR, "create ive thread failed\n");
-		return -1;
-	}
-
-	// Same as sched_set_fifo in linux 5.x
-	task.sched_priority = MAX_USER_RT_PRIO - 10;
-	ret = sched_setscheduler(ndev->work_thread, SCHED_FIFO, &task);
 
 	register_timer_fun(ive_timer_core_update, (void *)ndev);
 
@@ -1472,6 +1237,8 @@ static int ive_sw_init(struct ive_device *ndev)
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 	mutex_unlock(&g_ive_lock);
 
+	ive_core_init_resources(IVE_DEV_MAX);
+
 	return ret;
 }
 
@@ -1481,19 +1248,14 @@ static void ive_sw_deinit(struct ive_device *ndev)
 		return;
 	}
 
-	if (!IS_ERR(ndev->work_thread)) {
-		if (kthread_stop(ndev->work_thread))
-			TRACE_IVE(IVE_DBG_ERR, "stop ive work_thread failed\n");
-	}
-
-	list_del_init(&ndev->tsk_list);
-
 	mutex_lock(&g_ive_lock);
 	if (atomic_cmpxchg(&g_timer_added, 1, 0) == 1)
 		del_timer_sync(&timer_proc);
 	mutex_unlock(&g_ive_lock);
 
 	mutex_destroy(&g_ive_lock);
+
+	ive_core_cleanup_resources();
 }
 static int instance_init(struct platform_device *pdev)
 {
@@ -1526,7 +1288,7 @@ static int ive_probe(struct platform_device *pdev)
 	struct resource *res[IVE_DEV_MAX];
 	int i,ret;
 
-	TRACE_IVE(IVE_DBG_INFO, "ive probe statrt\n");
+	TRACE_IVE(IVE_DBG_INFO, "ive probe start\n");
 	// Alloc a zero ive_device struct, and it will auto free when remod
 	ndev = devm_kzalloc(&pdev->dev, sizeof(struct ive_device),
 			    GFP_KERNEL);
@@ -1564,7 +1326,7 @@ static int ive_probe(struct platform_device *pdev)
 		spin_lock_init(&ndev->core[i].dev_lock);
 		init_completion(&ndev->core[i].frame_done);
 		init_completion(&ndev->core[i].op_done);
-		atomic_set(&ndev->core[i].dev_state, IVE_CORE_STATE_END);
+		atomic_set(&dev_state[i], IVE_CORE_STATE_END);
 #if 1
 		ret = devm_request_irq(&pdev->dev, ndev->ive_irq[i], ive_irq_handler,
 						IRQF_TRIGGER_NONE, ive_irq_name[i], ndev);
@@ -1586,6 +1348,7 @@ static int ive_probe(struct platform_device *pdev)
 	spin_lock_init(&ndev->close_lock);
 	init_completion(&ndev->frame_done);
 	init_completion(&ndev->op_done);
+	atomic_set(&ndev->clk_flg, IVE_IDLE);
 
 	g_time_infos = devm_kzalloc(&pdev->dev,
 				  MOD_ALL * sizeof(struct ive_profiling_info),
@@ -1651,24 +1414,6 @@ static int ive_remove(struct platform_device *pdev)
 	return 0;
 }
 
-// #ifdef CONFIG_PM
-// static int cvi_ive_suspend(struct device *dev)
-// {
-// 	//[TODO]
-// 	pr_debug("[IVE] ive_suspend\n");
-// 	return 0;
-// }
-
-// static int cvi_ive_resume(struct device *dev)
-// {
-// 	//[TODO]
-// 	pr_debug("[IVE] ive_resume\n");
-// 	return 0;
-// }
-// #endif
-// #ifdef CONFIG_PM
-// static SIMPLE_DEV_PM_OPS(cvi_ive_pm_ops, cvi_ive_suspend, cvi_ive_resume);
-// #endif
 static const struct of_device_id ive_match[] = {
 	{ .compatible = "cvitek,ive" },
 	{},
