@@ -617,17 +617,6 @@ void isp_splt_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 void isp_pre_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num, const u8 chn_num)
 {
-	struct sop_vi_dev *vdev;
-
-	vdev = container_of(ctx, struct sop_vi_dev, ctx);
-	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_pre_trig_done) == 1)) {
-		vi_pr(VI_DBG, "already trig preraw\n");
-		return;
-	}
-	if (atomic_read(&vdev->is_suspend) == 1) {
-		atomic_set(&vdev->is_suspend_pre_trig_done, 1);
-	}
-
 	if (ctx->isp_pipe_cfg[raw_num].is_raw_replay_be) { //dram->be
 		uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
 		union reg_isp_top_sw_ctrl_0 sw_ctrl_0;
@@ -748,19 +737,8 @@ void isp_post_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 	union reg_isp_top_sw_ctrl_0 sw_ctrl_0;
 	union reg_isp_top_sw_ctrl_1 sw_ctrl_1;
-	struct sop_vi_dev *vdev;
-
-	vdev = container_of(ctx, struct sop_vi_dev, ctx);
 
 	sw_ctrl_0.raw = sw_ctrl_1.raw = 0;
-
-	if ((atomic_read(&vdev->is_suspend) == 1) && (atomic_read(&vdev->is_suspend_post_trig_done) == 1)) {
-		vi_pr(VI_DBG, "already trig postraw\n");
-		return;
-	}
-	if (atomic_read(&vdev->is_suspend) == 1) {
-		atomic_set(&vdev->is_suspend_post_trig_done, 1);
-	}
 
 	if (_is_fe_be_online(ctx) && !ctx->is_slice_buf_on) { //fe->be->dram->post
 		vi_pr(VI_DBG, "dram->post trig raw_num(%d), is_slice_buf_on(%d)\n",
@@ -2903,6 +2881,9 @@ void ispblk_pre_be_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_nu
 	ISP_WR_BITS(sts, reg_isp_af_t, mxn_image_width_m1, af_mxn_image_height, ctx->img_height - 1);
 }
 
+/****************************************************************************
+ *	Error Handler Flow Config
+ ****************************************************************************/
 int isp_frm_err_handler(struct isp_ctx *ctx, const enum sop_isp_raw err_raw_num, const u8 step)
 {
 	uintptr_t isptopb = ctx->phys_regs[ISP_BLK_ID_ISPTOP];
@@ -2931,6 +2912,34 @@ int isp_frm_err_handler(struct isp_ctx *ctx, const enum sop_isp_raw err_raw_num,
 			ISP_WR_BITS(ba, reg_pre_raw_fe_t, pre_raw_frame_vld, fe_frame_vld_ch2, 0);
 			ISP_WR_BITS(ba, reg_pre_raw_fe_t, pre_raw_frame_vld, fe_frame_vld_ch3, 0);
 		}
+	} else if (step == 2) {
+		sw_rst.raw = 0;
+		sw_rst.bits.axi_rst = 0;
+		ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, sw_rst.raw);
+		if (err_raw_num == ISP_PRERAW0) {
+			sw_rst.bits.csi0_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW1) {
+			sw_rst.bits.csi1_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW2) {
+			sw_rst.bits.csi2_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW3) {
+			sw_rst_fe345.bits.csi3_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW4) {
+			sw_rst_fe345.bits.csi4_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW5) {
+			sw_rst_fe345.bits.csi5_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW_LITE0) {
+			sw_rst.bits.bdg0_lite_rst = 1;
+		} else if (err_raw_num == ISP_PRERAW_LITE1) {
+			sw_rst.bits.bdg1_lite_rst = 1;
+		} else {
+			vi_pr(VI_ERR, "Size error handler no csibdg:%d\n", err_raw_num);
+			return 0;
+		}
+		ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst, sw_rst.raw);
+		ISP_WR_REG(isptopb, reg_isp_top_t, sw_rst_fe345, sw_rst_fe345.raw);
+
+		vi_pr(VI_INFO, "ISP CSI rst pull up\n");
 	} else if (step == 3) {
 		int id = csibdg_find_hwid(err_raw_num);
 		uintptr_t ba = ctx->phys_regs[id];

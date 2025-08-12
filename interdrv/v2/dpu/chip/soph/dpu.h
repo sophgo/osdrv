@@ -160,6 +160,7 @@ struct dpu_chn_cfg_s {
 struct dpu_ctx_s {
 	unsigned char iscreated;
 	unsigned char isstarted;
+	unsigned char bm_scene;
 	dpu_grp_attr_s grp_attr;
 	struct dpu_chn_cfg_s chn_cfgs[DPU_MAX_CHN_NUM];
 	struct mutex lock;
@@ -177,7 +178,8 @@ struct dpu_ctx_s {
 	int frame_num;
 	int cost_time_for_sec;
 	unsigned long long phyaddr_chfh;
-	void *   viraddr_chfh;
+	void* viraddr_chfh;
+	void* data;
 };
 
 struct dpu_handle_info_s {
@@ -260,6 +262,8 @@ int dpu_get_frame(dpu_grp dpu_grp_id,\
 int dpu_release_frame(dpu_grp dpu_grp_id,\
 							dpu_chn dpu_chn_id,\
                             const video_frame_info_s *vdeo_frame_info);
+
+int dpu_edge_send_frame(struct bm_dpu_cfg *cfg);
 
 void dpu_check_reg_write(void);
 

@@ -64,6 +64,12 @@ enum sop_vi_err {
 	ISP_RUNNING,
 };
 
+enum sop_err_type {
+	ISP_NO_ERROR,
+	ISP_OVERFLOW,
+	ISP_SIZE_ERROR,
+};
+
 /* struct mempool
  * @base: the address of the mempool
  * @size: the size of the mempool

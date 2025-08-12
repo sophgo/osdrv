@@ -59,7 +59,7 @@ SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 
 # prepare ko list
 
-KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
+KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc motor
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
 	KO_LIST += vi snsr_i2c cif vpss ldc vo mipi_tx rgn ive 2d_engine dpu stitch spacc
@@ -231,6 +231,9 @@ gyro_i2c:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
 ms9132:
+	@$(call MAKE_EXT_KO, extdrv/${@})
+
+motor:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
 cp_ext_wireless:

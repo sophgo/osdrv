@@ -551,10 +551,12 @@ int32_t vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs,
 		return -1;
 	}
 
+	atomic_fetch_add(1, &vb->usr_cnt);
 	mutex_lock(&jobs->lock);
 	if (chn_type == CHN_TYPE_OUT) {
 		if (FIFO_FULL(&jobs->workq)) {
 			mutex_unlock(&jobs->lock);
+			atomic_dec(&vb->usr_cnt);
 			TRACE_BASE(DBG_ERR, "%s workq is full. drop new one.\n"
 				     , sys_get_modname(chn.mod_id));
 			return -ENOBUFS;
@@ -564,6 +566,7 @@ int32_t vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs,
 	} else {
 		if (FIFO_FULL(&jobs->waitq)) {
 			mutex_unlock(&jobs->lock);
+			atomic_dec(&vb->usr_cnt);
 			TRACE_BASE(DBG_ERR, "%s dev(%d) chn(%d) waitq is full. drop new one.\n"
 				     , sys_get_modname(chn.mod_id), chn.dev_id, chn.chn_id);
 			return -ENOBUFS;
@@ -571,10 +574,9 @@ int32_t vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs,
 		FIFO_PUSH(&jobs->waitq, vb);
 		up(&jobs->sem);
 	}
+	atomic_long_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
 	mutex_unlock(&jobs->lock);
 
-	atomic_fetch_add(1, &vb->usr_cnt);
-	atomic_long_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(vb_qbuf);

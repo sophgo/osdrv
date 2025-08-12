@@ -1014,13 +1014,15 @@ static int ldc_event_handler_th(void *data)
 			goto continue_th;
 		}
 
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		job = list_first_entry_or_null(&wdev->job_list, struct ldc_job, node);
+
 		if (!ldc_have_idle_core(wdev, job->devs_type)) {
 			TRACE_LDC(DBG_INFO, "core busy, not have idle core\n");
+			spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 			goto continue_th;
 		}
 
-		spin_lock_irqsave(&wdev->wdev_lock, flags);
-		job = list_first_entry_or_null(&wdev->job_list, struct ldc_job, node);
 		list_del(&job->node);
 		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
@@ -1765,35 +1767,38 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 	return 0;
 }
 
-int ldc_attach_vb_pool(vb_pool vb_pool)
+int ldc_attach_vb_pool(struct ldc_vb_pool_cfg *cfg)
 {
 	unsigned long flags;
 	struct ldc_vdev *wdev = ldc_get_dev();
+	vb_pool vb_pool = (unsigned int)cfg->vb_pool;
+	mmf_chn_s *chn = (mmf_chn_s *)(&(cfg->mmf_chn));
 
 	if (!wdev)
 		return -1;
 
 	spin_lock_irqsave(&wdev->wdev_lock, flags);
-	wdev->vb_pool = vb_pool;
+	wdev->vb_pool[chn->mod_id == ID_VI ? 0 : chn->mod_id == ID_VPSS ? 1 : 2][chn->dev_id][chn->chn_id] = vb_pool;
 	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
-	TRACE_LDC(DBG_DEBUG, "attach vb pool(%d)\n", vb_pool);
+	TRACE_LDC(DBG_DEBUG, "attach vb pool(%d) mod %d dev %d chn %d done\n", vb_pool, chn->mod_id, chn->dev_id, chn->chn_id);
 	return 0;
 }
 
-int ldc_detach_vb_pool(void)
+int ldc_detach_vb_pool(struct ldc_vb_pool_cfg *cfg)
 {
 	unsigned long flags;
 	struct ldc_vdev *wdev = ldc_get_dev();
+	mmf_chn_s *chn = (mmf_chn_s *)(&(cfg->mmf_chn));
 
 	if (!wdev)
 		return -1;
 
 	spin_lock_irqsave(&wdev->wdev_lock, flags);
-	wdev->vb_pool = VB_INVALID_POOLID;
+	wdev->vb_pool[chn->mod_id == ID_VI ? 0 : chn->mod_id == ID_VPSS ? 1 : 2][chn->dev_id][chn->chn_id] = VB_INVALID_POOLID;
 	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
-	TRACE_LDC(DBG_DEBUG, "dettach vb pool\n");
+	TRACE_LDC(DBG_DEBUG, "dettach vb pool mod %d dev %d chn %d done\n", chn->mod_id, chn->dev_id, chn->chn_id);
 	return 0;
 }
 
@@ -1803,7 +1808,7 @@ int ldc_detach_vb_pool(void)
 int ldc_sw_init(struct ldc_vdev *wdev)
 {
 	struct sched_param tsk;
-	int ret = 0;
+	int ret = 0, i, j, k;
 	unsigned char coreid;
 
 	ret = ldc_check_null_ptr(wdev);
@@ -1819,7 +1824,13 @@ int ldc_sw_init(struct ldc_vdev *wdev)
 	INIT_LIST_HEAD(&wdev->job_list);
 	wdev->core_num = LDC_DEV_MAX_CNT;
 	wdev->evt = LDC_EVENT_BUSY_OR_NOT_STAT;
-	wdev->vb_pool = VB_INVALID_POOLID;
+	for (i = 0; i < MAX_CB_MOD_NUM; i++) {
+		for (j = 0; j < MAX_CB_DEV_NUM; j++) {
+			for (k = 0; k < MAX_CB_CHN_NUM; k++) {
+				wdev->vb_pool[i][j][k] = VB_INVALID_POOLID;
+			}
+		}
+	}
 	wdev->job_cnt = 0;
 
 	for (coreid = 0; coreid < wdev->core_num; coreid++) {

@@ -431,8 +431,8 @@ static int vo_proc_show(struct seq_file *m, void *v)
 
 	// video layer status 3
 	seq_puts(m, "\n-------------------------------VIDEO LAYER STATUS 3 (continue)------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s\n",
-		"LayerId", "BufLen", "Depth", "SrcFrt", "RealFrt", "BwFail", "OsdBwFail");
+	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s\n",
+		"LayerId", "BufLen", "Depth", "SrcFrt", "RealFrt", "BwFail", "OsdBwFail", "VbPoolId");
 	for (i = 0; i < VO_MAX_VIDEO_LAYER_NUM; ++i) {
 
 		cnt = 0;
@@ -441,7 +441,7 @@ static int vo_proc_show(struct seq_file *m, void *v)
 				cnt++;
 		}
 
-		seq_printf(m, "%8s%2d%10d%10d%10d%10d%10d%10d\n",
+		seq_printf(m, "%8s%2d%10d%10d%10d%10d%10d%10d%10d\n",
 				"#",
 				i,
 				vo_ctx_p->layer_ctx[i].display_buflen,
@@ -449,7 +449,8 @@ static int vo_proc_show(struct seq_file *m, void *v)
 				vo_ctx_p->layer_ctx[i].src_frame_rate,
 				vo_ctx_p->layer_ctx[i].frame_rate,
 				vo_ctx_p->layer_ctx[i].bw_fail,
-				vo_ctx_p->layer_ctx[i].vgop_bw_fail);
+				vo_ctx_p->layer_ctx[i].vgop_bw_fail,
+				vo_ctx_p->layer_ctx[i].vb_pool_id);
 	}
 
 	// gragphic layer status 1
@@ -639,19 +640,20 @@ static int vo_proc_show(struct seq_file *m, void *v)
 	}
 
 	seq_puts(m, "\n-------------------------------WBC INFO 2 (continue)----------------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%20s\n",
-		"WbcId", "WbcMode", "WbcFrt", "RealFrt", "OdmafifoFullCnt");
+	seq_printf(m, "%10s%10s%10s%10s%20s%10s\n",
+		"WbcId", "WbcMode", "WbcFrt", "RealFrt", "OdmafifoFullCnt", "VbPoolId");
 	for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
 		memset(c, 0, sizeof(c));
 		wbc_mode_to_string(vo_ctx_p->wbc_ctx[i].wbc_mode, c, sizeof(c));
 
-		seq_printf(m, "%8s%2d%10s%10d%10d%20d\n",
+		seq_printf(m, "%8s%2d%10s%10d%10d%20d%10d\n",
 				"#",
 				i,
 				c,
 				vo_ctx_p->wbc_ctx[i].wbc_attr.frame_rate,
 				vo_ctx_p->wbc_ctx[i].frame_rate,
-				vo_ctx_p->wbc_ctx[i].odma_fifofull);
+				vo_ctx_p->wbc_ctx[i].odma_fifofull,
+				vo_ctx_p->wbc_ctx[i].vb_pool_id);
 	}
 
 	return 0;

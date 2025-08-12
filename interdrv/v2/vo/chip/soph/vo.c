@@ -936,7 +936,7 @@ static int layer_process(struct vo_layer_ctx *layer_ctx)
 					  DATA_BITWIDTH_8,
 					  COMPRESS_MODE_NONE, DEFAULT_ALIGN, &vb_cal_config);
 
-		blk_next = vb_get_block_with_id(VB_INVALID_POOLID, vb_cal_config.vb_size, ID_VO);
+		blk_next = vb_get_block_with_id(layer_ctx->vb_pool_id, vb_cal_config.vb_size, ID_VO);
 		if (blk_next == VB_INVALID_HANDLE) {
 			TRACE_VO(DBG_ERR, "get vb block fail.\n");
 			return -1;
@@ -2463,6 +2463,7 @@ static int _vo_init_param(struct vo_ctx *ctx)
 		ctx->layer_ctx[i].bind_dev_id = i;
 		ctx->layer_ctx[i].layer = i;
 		ctx->layer_ctx[i].display_buflen = 2;
+		ctx->layer_ctx[i].vb_pool_id = VB_INVALID_POOLID;
 
 		spin_lock_init(&ctx->layer_ctx[i].list_lock);
 		INIT_LIST_HEAD(&ctx->layer_ctx[i].list_wait);
@@ -2505,6 +2506,7 @@ static int _vo_init_param(struct vo_ctx *ctx)
 		ctx->wbc_ctx[i].done_cnt = 0;
 		ctx->wbc_ctx[i].frame_num = 0;
 		ctx->wbc_ctx[i].frame_rate = 0;
+		ctx->wbc_ctx[i].vb_pool_id = VB_INVALID_POOLID;
 		mutex_init(&ctx->wbc_ctx[i].wbc_lock);
 	}
 

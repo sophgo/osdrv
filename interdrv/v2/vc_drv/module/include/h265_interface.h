@@ -160,6 +160,7 @@ typedef struct _EncOnePicCfg_ {
     PhysicalAddress phyAddrCb;
     PhysicalAddress phyAddrCr;
     int stride;
+    int height;
     int cbcrInterleave;
     int nv21;
     int picMotionLevel;
@@ -701,6 +702,7 @@ typedef struct _InitDecConfig_ {
     int reorder_enable;
     unsigned int picWidth;
     unsigned int picHeight;
+    unsigned char async_getframe;
 
     // alloc buffer by user
     void* bitstream_buffer;
@@ -773,7 +775,7 @@ int vdec_open(InitDecConfig *pInitDecCfg, void **pHandle);
 int vdec_close(void *pHandle);
 int vdec_reset(void *pHandle);
 int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms);
-int vdec_get_frame(void *pHandle, DispFrameCfg *pdfc);
+int vdec_get_frame(void *pHandle, DispFrameCfg *pdfc, int timeout_ms);
 void vdec_release_frame(void *pHandle, void *arg, PhysicalAddress addr);
 void vdec_attach_vb(void *pHandle, VB_INFO vb_info);
 void vdec_attach_callback(DRV_VDEC_DRV_CALLBACK pCbFunc);

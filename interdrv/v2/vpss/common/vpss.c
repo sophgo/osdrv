@@ -1188,10 +1188,6 @@ static signed int commit_hw_settings(struct vpss_ctx *ctx)
 	struct vb_jobs_t *jobs;
 	unsigned char is_grp_changed = false;
 	unsigned char chn_num = 0, i;
-	struct mutex *rgn_mutex;
-	struct rgn_canvas_ctx *rgn_canvas;
-	struct rgn_canvas_q *rgn_canvas_waitq;
-	struct rgn_canvas_q *rgn_canvas_doneq;
 
 	grp_attr = &ctx->grp_attr;
 
@@ -1254,26 +1250,6 @@ static signed int commit_hw_settings(struct vpss_ctx *ctx)
 		for (i = 0; i < RGN_MAX_LAYER_VPSS; ++i) {
 			if (chn_cfg->rgn_cfg[i].rgn_lut_cfg.is_updated) {
 				chn_cfg->rgn_cfg[i].rgn_lut_cfg.is_updated = false;
-			}
-			if (chn_cfg->rgn_cfg[i].odec.enable && chn_cfg->rgn_cfg[i].odec.canvas_updated) {
-				rgn_canvas_waitq =
-					(struct rgn_canvas_q *)chn_cfg->rgn_cfg[i].odec.rgn_canvas_waitq;
-				rgn_canvas_doneq =
-					(struct rgn_canvas_q *)chn_cfg->rgn_cfg[i].odec.rgn_canvas_doneq;
-				rgn_mutex = (struct mutex *)chn_cfg->rgn_cfg[i].odec.canvas_mutex_lock;
-				mutex_lock(rgn_mutex);
-				if (FIFO_SIZE(rgn_canvas_doneq) != 2) {
-					TRACE_VPSS(DBG_ERR
-						, "grp(%d) chn(%d) rgn layer(%d) doneq size isn't right.\n"
-						, grp_id, chn_id, i);
-					chn_cfg->rgn_cfg[i].odec.canvas_updated = false;
-					mutex_unlock(rgn_mutex);
-				} else {
-					FIFO_POP(rgn_canvas_doneq, &rgn_canvas);
-					FIFO_PUSH(rgn_canvas_waitq, rgn_canvas);
-					chn_cfg->rgn_cfg[i].odec.canvas_updated = false;
-					mutex_unlock(rgn_mutex);
-				}
 			}
 		}
 
@@ -1856,19 +1832,19 @@ vpss_next_job:
 	return -1;
 }
 
-// static void vpss_timeout(struct vpss_ctx *ctx)
-// {
-// 	struct vpss_job *job = (struct vpss_job *)ctx->job_buffer;
+static void vpss_timeout(struct vpss_ctx *ctx)
+{
+	struct vpss_job *job = (struct vpss_job *)ctx->job_buffer;
 
-// 	TRACE_VPSS(DBG_INFO, "vpss grp(%d) timeout...\n", ctx->vpss_grp);
+	TRACE_VPSS(DBG_INFO, "vpss grp(%d) timeout...\n", ctx->vpss_grp);
 
-// 	mutex_lock(&ctx->lock);
-// 	vpss_hal_remove_job(job);
-// 	FIFO_PUSH(&ctx->jobq, job);
-// 	release_buffers(ctx);
-// 	ctx->hdl_state = HANDLER_STATE_STOP;
-// 	mutex_unlock(&ctx->lock);
-// }
+	mutex_lock(&ctx->lock);
+	vpss_hal_remove_job(job);
+	FIFO_PUSH(&ctx->jobq, job);
+	release_buffers(ctx);
+	atomic_set(&ctx->hdl_state, HANDLER_STATE_STOP);
+	mutex_unlock(&ctx->lock);
+}
 
 static unsigned char vpss_handler_is_idle(void)
 {
@@ -1923,8 +1899,8 @@ static int vpss_event_handler(void *arg)
 			if (!g_vpss_ctx[grp] || !g_vpss_ctx[grp]->is_started)
 				continue;
 			if (atomic_read(&g_vpss_ctx[grp]->hdl_state) == HANDLER_STATE_RUN) {
-				// if (get_diff_in_us(vpss_ctx[grp]->time, time) > (eof_timeout * 1000))
-				// 	vpss_timeout(vpss_ctx[grp]);
+				if (get_diff_in_us(g_vpss_ctx[grp]->time, time) > (eof_timeout * 1000))
+					vpss_timeout(g_vpss_ctx[grp]);
 				continue;
 			}
 			jobs = &g_vpss_vb_jobs[grp].ins;
@@ -4261,7 +4237,7 @@ signed int video_frame_dmabuf_fd_to_paddr(video_frame_s *video_frame){
 		(long unsigned int)video_frame->phyaddr[1], (long unsigned int)video_frame->phyaddr[2]);
 	if(!video_frame->phyaddr[0]){
 		TRACE_VPSS(DBG_ERR, "vpss_dmabuf_fd_to_paddr fail\n");
-		return -1;
+		return 5; //ret nomem
 	}
 	return 0;
 }
@@ -4468,16 +4444,16 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 		ret = 0;
 		data.flag = 0;
 	} else
-		ret = -1;
+		ret = 3; //ret timeout
 
 	if ((atomic_read(&job->job_state) == JOB_WAIT) ||
 		(atomic_read(&job->job_state) == JOB_WORKING)){
-		vpss_hal_remove_job(job);
 		for (i = 0; i < VPSS_MAX; i++) {
 			if (!(job->vpss_dev_mask & BIT(i)))
 				continue;
 			vpss_hal_down_reg(i);
 		}
+		vpss_hal_remove_job(job);
 	}
 	up(&g_vpss_core_sem);
 	kfree(job);

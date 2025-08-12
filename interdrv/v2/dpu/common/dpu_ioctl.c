@@ -72,6 +72,7 @@ long dpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			(struct dpu_grp_attr *)kdata;
 		CHECK_IOCTL_CMD(cmd, struct dpu_grp_attr);
 		ret = dpu_create_grp(attr->dpu_grp_id, &attr->grp_attr);
+
 		break;
 	}
 
@@ -136,6 +137,7 @@ long dpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		grp_attr = &cfg->grp_attr;
 
 		ret = dpu_set_grp_attr(dpu_grp_id, grp_attr);
+
 		break;
 	}
 
@@ -167,6 +169,7 @@ long dpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		ret = dpu_send_frame(dpu_grp_id, src_left_frame,\
 								 src_right_frame,millisec);
+
 		break;
 	}
 
@@ -296,6 +299,15 @@ long dpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	}
 
+	case DPU_EDGE_SEND_FRAME:
+	{
+		struct bm_dpu_cfg *cfg = (struct bm_dpu_cfg *)kdata;
+		CHECK_IOCTL_CMD(cmd, struct bm_dpu_cfg);
+
+		ret = dpu_edge_send_frame(cfg);
+		// dpu_check_reg_read();
+		break;
+	}
 
 	default:
 		TRACE_DPU(DBG_DEBUG, "unknown cmd(0x%x)\n", cmd);

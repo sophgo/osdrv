@@ -5,6 +5,8 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
+#include <asm/io.h>
+
 #include "jpuapi.h"
 #include "jpeg_api.h"
 #include "jpulog.h"
@@ -15,6 +17,8 @@
 #include "bind.h"
 #include "ion.h"
 #include "datastructure.h"
+#include "platform.h"
+#include "cdma.h"
 
 #ifdef MAX
 #undef MAX
@@ -62,6 +66,7 @@ typedef struct {
     JpgEncHandle        handle;
     jpu_buffer_t        stream_buffer;
     jpu_buffer_t        header_buffer;
+    jpu_buffer_t        cross4g_temp_buffer; // only be used for transfer when soure buffer is in different 4G memory region
     jpeg_stream_info    stream_buffer_ex;//for stream buffer for
     JpgEncOpenParam     open_param;
     JpgEncParamSet      header_param;
@@ -614,11 +619,6 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
             JLOG(ERR, "fail to allocate bitstream buffer\n" );
             goto ERR_ENC_INIT;
         }
-
-        if (jdi_invalidate_cache(&pst_handle->stream_buffer) < 0) {
-            JLOG(ERR, "fail to invalidate bitstream buffer\n");
-            goto ERR_ENC_INIT;
-        }
     } else {
         pst_handle->stream_buffer.phys_addr = config.u.enc.external_bs_addr;
         pst_handle->stream_buffer.virt_addr = (unsigned long)phys_to_virt(config.u.enc.external_bs_addr);
@@ -634,10 +634,6 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
         goto ERR_ENC_INIT;
     }
 
-    if (jdi_invalidate_cache(&pst_handle->header_buffer) < 0) {
-        JLOG(ERR, "fail to invalidate jpeg header bitstream buffer\n");
-        goto ERR_ENC_INIT;
-    }
     pst_handle->header_param.pParaSet = (BYTE *)pst_handle->header_buffer.virt_addr;
     pst_handle->header_param.size = pst_handle->header_buffer.size;
 
@@ -731,10 +727,6 @@ int jpeg_dec_open(drv_jpg_handle handle, drv_jpg_config config)
     } else {
         if (jdi_allocate_dma_memory(&pst_handle->stream_buffer) < 0) {
             JLOG(ERR, "fail to allocate bitstream buffer size:%ld\n", pst_handle->stream_buffer.size);
-            goto ERR_DEC_JPU_OPEN;
-        }
-        if (jdi_invalidate_cache(&pst_handle->stream_buffer) < 0) {
-            JLOG(ERR, "fail to invalidate bitstream buffer cache addr:%lx\n", pst_handle->stream_buffer.phys_addr);
             goto ERR_DEC_JPU_OPEN;
         }
     }
@@ -844,6 +836,9 @@ int jpeg_enc_close(drv_jpg_handle handle)
 
     if(pst_handle->header_buffer.base)
         jdi_free_dma_memory(&pst_handle->header_buffer);
+
+    if(pst_handle->cross4g_temp_buffer.base)
+        jdi_free_dma_memory(&pst_handle->cross4g_temp_buffer);
 
     if(pst_handle->stream_buffer.base)
         jdi_free_dma_memory(&pst_handle->stream_buffer);
@@ -986,29 +981,32 @@ static int _process_stream_buffer_full(drv_jpg_handle handle)
         return JPG_RET_FAILURE;
     }
 
-    if (jdi_invalidate_cache(&stream_buffer) < 0) {
-        JLOG(ERR, "fail to invalidate bitstream buffer cache addr:%lx\n", stream_buffer.phys_addr);
-        return JPG_RET_FAILURE;
-    }
-
     JPU_EncGetBitstreamBuffer(pst_handle->handle, &rd_ptr, &wr_ptr, &stream_size);
 
     if(pst_handle->stream_buffer_ex.stream_len) {
+#ifdef PLATFORM_SOC
         jdi_read_memory(pst_handle->stream_buffer_ex.buffer.phys_addr,
                         (unsigned char *)stream_buffer.virt_addr,
                         pst_handle->stream_buffer_ex.stream_len,
                         pst_handle->open_param.streamEndian);
-
+#else
+        pcie_memcpy_c2c(stream_buffer.phys_addr,
+                        pst_handle->stream_buffer_ex.buffer.phys_addr,
+                        pst_handle->stream_buffer_ex.stream_len);
+#endif
         jdi_free_dma_memory(&pst_handle->stream_buffer_ex.buffer);
     }
 
     JPU_GetExtAddr(pst_handle->core_idx, &ex_addr);
     rd_ptr |= (PhysicalAddress)(ex_addr) << 32;
+#ifdef PLATFORM_SOC
     jdi_read_memory(rd_ptr,
                     (unsigned char *)(stream_buffer.virt_addr + pst_handle->stream_buffer_ex.stream_len),
                     stream_size,
                     pst_handle->open_param.streamEndian);
-
+#else
+    pcie_memcpy_c2c(stream_buffer.phys_addr + pst_handle->stream_buffer_ex.stream_len, rd_ptr, stream_size);
+#endif
     pst_handle->stream_buffer_ex.stream_len += stream_size;
     memcpy(&pst_handle->stream_buffer_ex.buffer, &stream_buffer, sizeof(jpu_buffer_t));
 
@@ -1022,14 +1020,35 @@ static int _jpeg_dump_register(int core_idx, int inst_idx)
     for (i=0; i<=0x250; i=i+16)
     {
         JLOG(ERR, "0x%04xh: 0x%08lx 0x%08lx 0x%08lx 0x%08lx\n", i,
-            jdi_read_register_ext(core_idx, i),
-            jdi_read_register_ext(core_idx, i+4),
-            jdi_read_register_ext(core_idx, i+8),
-            jdi_read_register_ext(core_idx, i+0xc));
+            jdi_read_register(core_idx, i),
+            jdi_read_register(core_idx, i+4),
+            jdi_read_register(core_idx, i+8),
+            jdi_read_register(core_idx, i+0xc));
     }
 
     return 0;
 }
+
+static int get_frame_total_size(DRVFRAMEBUF *data)
+{
+   switch (data->format) {
+        case DRV_FORMAT_420:
+            return data->strideY * data->height + data->strideC * data->height;
+        case DRV_FORMAT_422:
+        case DRV_FORMAT_224:
+        case DRV_FORMAT_444:
+            return data->strideY * data->height + data->strideC * data->height * 2;
+        case DRV_FORMAT_400:
+            return data->strideY * data->height;
+        default:
+            return 0;
+    }
+}
+
+static int is_cross_4g(uint64_t addr, uint64_t size, uint64_t ref_addr) {
+    return ((addr >> 32) != (ref_addr >> 32)) || ((addr >> 32) != ((addr + size) >> 32));
+}
+
 /* send jpu data to decode or encode */
 int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
 {
@@ -1038,8 +1057,10 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     FrameBuffer source_buffer;
     int int_reason = 0;
     JPEG_ENC_HANDLE *pst_handle;
-    JpgEncHandle pst_jpeg_enc_handle = NULL;
     int enc_timeout;
+    uint64_t total_size = 0;
+    uint64_t dst_base = 0;
+    struct cdma_1d_param param1d;
 
     if (NULL == handle) {
         JLOG(ERR,"handle = NULL\n");
@@ -1047,7 +1068,6 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     }
 
     pst_handle = (JPEG_ENC_HANDLE *)handle;
-    pst_jpeg_enc_handle = pst_handle->handle;
 
     enc_timeout = (timeout > 0) ? timeout : JPU_INTERRUPT_TIMEOUT_MS;
 
@@ -1067,7 +1087,7 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             jpeg_rc_reset(pst_handle);
         }
         pst_handle->config->encQualityPercentage = jpeg_rc_estimate_pic_qs(pst_handle);
-        JPU_EncGiveCommand(pst_jpeg_enc_handle, SET_JPG_QUALITY_FACTOR, &pst_handle->config->encQualityPercentage);
+        JPU_EncGiveCommand(pst_handle->handle, SET_JPG_QUALITY_FACTOR, &pst_handle->config->encQualityPercentage);
     }
 
     if (pst_handle->header_mode == ENC_HEADER_MODE_NORMAL) {
@@ -1077,26 +1097,63 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
         pst_handle->header_param.disableAPPMarker = 0;
         pst_handle->header_param.enableSofStuffing = TRUE;
         if (pst_handle->header_param.headerMode == ENC_HEADER_MODE_NORMAL) {
-            JPU_EncGiveCommand(pst_jpeg_enc_handle, ENC_JPG_GET_HEADER, &pst_handle->header_param);
+#ifndef PLATFORM_SOC
+            pst_handle->header_param.pParaSet = vmalloc(pst_handle->header_param.size);
+#endif
+            JPU_EncGiveCommand(pst_handle->handle, ENC_JPG_GET_HEADER, &pst_handle->header_param);
+#ifndef PLATFORM_SOC
+            jdi_write_memory(pst_handle->header_buffer.phys_addr, pst_handle->header_param.pParaSet, pst_handle->header_param.size, pst_handle->open_param.streamEndian);
+            vfree(pst_handle->header_param.pParaSet);
+#endif
             JLOG(INFO, "JPU_EncGiveCommand[ENC_JPG_GET_HEADER] header size=%d\n", pst_handle->header_param.size);
         }
     }
 
-    source_buffer.bufY = data->vbY.phys_addr;
-    source_buffer.bufCb = data->vbCb.phys_addr;
-    source_buffer.bufCr = data->vbCr.phys_addr;
+    total_size = get_frame_total_size(data);
+    dst_base = data->vbY.phys_addr;
+    /*  check the following conditions:
+        1. input framebuffer and stream buffer is in the same 4GB space
+        2. input framebuffer is crossing 4GB boundary,
+        we need to allocate a new buffer and copy the data to it before sending to JPU.
+    */
+    if(is_cross_4g(data->vbY.phys_addr, total_size, pst_handle->stream_buffer.phys_addr))
+    {
+        JLOG(WARN, "source buffer and stream buffer are not in the same 4GB space:"
+           " vbY.phys_addr=0x%lx, stream_buffer.phys_addr=0x%lx, total_size=%zu, vbY.phys_addr+total_size=0x%lx. Need to allocate new buffer.\n",
+           data->vbY.phys_addr, pst_handle->stream_buffer.phys_addr, total_size, data->vbY.phys_addr + total_size);
+
+        pst_handle->cross4g_temp_buffer.size = total_size;
+        pst_handle->cross4g_temp_buffer.is_cached = 0;
+        if (jdi_allocate_dma_memory(&pst_handle->cross4g_temp_buffer) < 0) {
+            JLOG(ERR, "fail to allocate pst_handle->cross4g_temp_buffer size:%ld\n", pst_handle->cross4g_temp_buffer.size);
+            return JPG_RET_FAILURE;
+        }
+
+        param1d.data_type = CDMA_DATA_TYPE_8BIT;
+        param1d.src_addr = data->vbY.phys_addr;
+        param1d.dst_addr = pst_handle->cross4g_temp_buffer.phys_addr;
+        param1d.len = total_size;
+
+        cdma_copy1d(&param1d);
+
+        dst_base = pst_handle->cross4g_temp_buffer.phys_addr;
+    }
+
+    source_buffer.bufY  = dst_base;
+    source_buffer.bufCb = dst_base + (data->vbCb.phys_addr - data->vbY.phys_addr);
+    source_buffer.bufCr = dst_base + (data->vbCr.phys_addr - data->vbY.phys_addr);
     source_buffer.stride = data->strideY;
     source_buffer.strideC = data->strideC;
     source_buffer.format = data->format;
     enc_param.sourceFrame = &source_buffer;
 
-    pst_jpeg_enc_handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
+    pst_handle->handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
     if (pst_handle->core_idx < 0)
         return JPG_RET_FAILURE;
 
     JPU_SetExtAddr(pst_handle->core_idx, source_buffer.bufY >> 32);
 
-    ret = JPU_EncStartOneFrame(pst_jpeg_enc_handle, &enc_param);
+    ret = JPU_EncStartOneFrame(pst_handle->handle, &enc_param);
     if( ret != JPG_RET_SUCCESS ) {
         JLOG(ERR, "JPU_EncStartOneFrame failed Error code is 0x%x \n", ret );
         JPU_ReleaseCore(pst_handle->core_idx);
@@ -1104,12 +1161,12 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     }
 
     while(1) {
-        int_reason = JPU_WaitInterrupt(pst_jpeg_enc_handle, enc_timeout);
+        int_reason = JPU_WaitInterrupt(pst_handle->handle, enc_timeout);
         if (int_reason == -1) {
             JLOG(ERR, "Error enc: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d\n",
-            pst_handle->core_idx, pst_jpeg_enc_handle->instIndex, int_reason,
+            pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
             irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
-            _jpeg_dump_register(pst_handle->core_idx, pst_jpeg_enc_handle->instIndex);
+            _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
             ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
@@ -1126,10 +1183,10 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
         }
 
         if (int_reason & (1<<INT_JPU_BIT_BUF_FULL)) {
-            JLOG(ERR, "INT_JPU_BIT_BUF_FULL interrupt issued INSTANCE %d \n", pst_jpeg_enc_handle->instIndex);
+            JLOG(ERR, "INT_JPU_BIT_BUF_FULL interrupt issued INSTANCE %d \n", pst_handle->handle->instIndex);
             ret = _process_stream_buffer_full(pst_handle);
             if (ret != JPG_RET_SUCCESS) {
-                JPU_SetJpgPendingInstEx(pst_jpeg_enc_handle, NULL);
+                JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
                 JPU_ReleaseCore(pst_handle->core_idx);
                 return ret;
             }
@@ -1137,15 +1194,15 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             if(!pst_handle->stream_buffer.base)
                 JLOG(WARN, "external bs size: %ld is small, realloc in drv. Notice it, external addr: %lx will be invalid\n", pst_handle->stream_buffer.size, pst_handle->stream_buffer.phys_addr);
 
-            JPU_EncUpdateBitstreamBuffer(pst_jpeg_enc_handle, 0);
-            JPU_ClrStatus(pst_jpeg_enc_handle, (1<<INT_JPU_BIT_BUF_FULL));
+            JPU_EncUpdateBitstreamBuffer(pst_handle->handle, 0);
+            JPU_ClrStatus(pst_handle->handle, (1<<INT_JPU_BIT_BUF_FULL));
             jpu_enable_irq(pst_handle->core_idx);
             continue;
         }
     }
 
-    pst_jpeg_enc_handle->u64EndTime = jpgGetCurrentTime();
-    ret = JPU_EncGetOutputInfo(pst_jpeg_enc_handle, &pst_handle->output_info);
+    pst_handle->handle->u64EndTime = jpgGetCurrentTime();
+    ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
     if (ret != JPG_RET_SUCCESS) {
         JPU_ReleaseCore(pst_handle->core_idx);
         JLOG(ERR, "JPU_EncGetOutputInfo failed Error code is 0x%x \n", ret);
@@ -1153,14 +1210,19 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     }
 
     if(pst_handle->stream_buffer_ex.stream_len) {
+#ifdef PLATFORM_SOC
         jdi_read_memory(pst_handle->stream_buffer.phys_addr,
                     (unsigned char *)(pst_handle->stream_buffer_ex.buffer.virt_addr + pst_handle->stream_buffer_ex.stream_len),
                     pst_handle->output_info.bitstreamSize,
                     pst_handle->open_param.streamEndian);
+#else
+        pcie_memcpy_c2c(pst_handle->stream_buffer_ex.buffer.phys_addr + pst_handle->stream_buffer_ex.stream_len,
+                        pst_handle->stream_buffer.phys_addr, pst_handle->output_info.bitstreamSize);
+#endif
         pst_handle->stream_buffer_ex.stream_len += pst_handle->output_info.bitstreamSize;
     }
 
-    JPU_EncUpdateBitstreamBuffer(pst_jpeg_enc_handle, 0);
+    JPU_EncUpdateBitstreamBuffer(pst_handle->handle, 0);
     pst_handle->valid_cnt++;
     JPU_ReleaseCore(pst_handle->core_idx);
 
@@ -1407,7 +1469,6 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
     JpgDecParam decParam = { 0 };
     int int_reason = 0;
     JPEG_DEC_HANDLE *pst_handle;
-    JpgDecHandle pst_jpeg_dec_handle = NULL;
     int dec_timeout;
 
     if (NULL == handle) {
@@ -1416,7 +1477,6 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
     }
 
     pst_handle = (JPEG_DEC_HANDLE *)handle;
-    pst_jpeg_dec_handle = pst_handle->handle;
 
     dec_timeout = (timeout > 0) ? timeout : JPU_INTERRUPT_TIMEOUT_MS;
 
@@ -1428,11 +1488,11 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
 
     update_bind_mode(pst_handle);
 
-    pst_jpeg_dec_handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
+    pst_handle->handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
     if (pst_handle->core_idx < 0)
         return JPG_RET_FAILURE;
 
-    ret = JPU_DecSetRdPtr(pst_jpeg_dec_handle, pst_handle->stream_buffer.phys_addr, 1);
+    ret = JPU_DecSetRdPtr(pst_handle->handle, pst_handle->stream_buffer.phys_addr, 1);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR, "JPU_DecSetRdPtr ret:%d\n", ret);
         JPU_ReleaseCore(pst_handle->core_idx);
@@ -1446,20 +1506,22 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
         return ret;
     }
 
-    ret = JPU_DecUpdateBitstreamBuffer(pst_jpeg_dec_handle, length);
+    ret = JPU_DecUpdateBitstreamBuffer(pst_handle->handle, length);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR, "JPU_DecUpdateBitstreamBuffer ret:%d\n", ret);
         JPU_ReleaseCore(pst_handle->core_idx);
         return ret;
     }
 
-    ret = JPU_DecUpdateBitstreamBuffer(pst_jpeg_dec_handle, STREAM_END_SIZE);
+    ret = JPU_DecUpdateBitstreamBuffer(pst_handle->handle, STREAM_END_SIZE);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR, "JPU_DecUpdateBitstreamBuffer ret:%d\n", ret);
         JPU_ReleaseCore(pst_handle->core_idx);
         return ret;
     }
-
+#ifndef PLATFORM_SOC
+    pst_handle->handle->JpgInfo->decInfo.pBitStream = data;
+#endif
     ret = _jpeg_register_framebuffer(pst_handle);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR, "_jpeg_register_framebuffer ret:%d\n", ret);
@@ -1467,11 +1529,11 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
         return ret;
     }
 
-    ret = JPU_DecStartOneFrame(pst_jpeg_dec_handle, &decParam);
+    ret = JPU_DecStartOneFrame(pst_handle->handle, &decParam);
     if (ret != JPG_RET_SUCCESS && ret != JPG_RET_EOS) {
         if (ret == JPG_RET_BIT_EMPTY) {
             JLOG(ERR, "BITSTREAM NOT ENOUGH.............\n");
-            JPU_ReleaseCore(pst_jpeg_dec_handle->coreIndex);
+            JPU_ReleaseCore(pst_handle->handle->coreIndex);
             return ret;
         }
 
@@ -1480,12 +1542,12 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
     }
 
     while(1) {
-        if ((int_reason=JPU_WaitInterrupt(pst_jpeg_dec_handle, dec_timeout)) == -1) {
+        if ((int_reason=JPU_WaitInterrupt(pst_handle->handle, dec_timeout)) == -1) {
             JLOG(ERR, "Error dec: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d\n",
-            pst_handle->core_idx, pst_jpeg_dec_handle->instIndex, int_reason,
+            pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
             irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
-            _jpeg_dump_register(pst_handle->core_idx, pst_jpeg_dec_handle->instIndex);
-            JPU_SetJpgPendingInstEx(pst_jpeg_dec_handle, NULL);
+            _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
+            JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
             return JPG_RET_FAILURE;
@@ -1497,21 +1559,21 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
         }
 
         if (int_reason & ((1<<INT_JPU_DONE) | (1<<INT_JPU_ERROR) | (1<<INT_JPU_SLICE_DONE))) {
-            JLOG(INFO, "\tINSTANCE #%d int_reason: %08x\n", pst_jpeg_dec_handle->instIndex, int_reason);
+            JLOG(INFO, "\tINSTANCE #%d int_reason: %08x\n", pst_handle->handle->instIndex, int_reason);
             ret = JPG_RET_SUCCESS;
             break;
         }
 
         if (int_reason & (1<<INT_JPU_BIT_BUF_EMPTY)) {
             //need more jpeg data,we need the same coreidx here?
-            JPU_ClrStatus(pst_jpeg_dec_handle, (1<<INT_JPU_BIT_BUF_EMPTY));
+            JPU_ClrStatus(pst_handle->handle, (1<<INT_JPU_BIT_BUF_EMPTY));
             ret = JPG_RET_BIT_EMPTY;
             break;
         }
     }
 
-    pst_jpeg_dec_handle->u64EndTime = jpgGetCurrentTime();
-    ret = JPU_DecGetOutputInfo(pst_jpeg_dec_handle, &pst_handle->output_info);
+    pst_handle->handle->u64EndTime = jpgGetCurrentTime();
+    ret = JPU_DecGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(ERR, "JPU_DecGetOutputInfo failed Error code is 0x%x \n", ret );
         JPU_ReleaseCore(pst_handle->core_idx);
@@ -1545,7 +1607,6 @@ int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu
 {
     int ret = JPG_RET_SUCCESS;
     JPEG_ENC_HANDLE *pst_handle = (JPEG_ENC_HANDLE *)handle;
-    JpgEncHandle pst_jpeg_enc_handle = NULL;
     JPG_BUF *pStream = (JPG_BUF *)data;
 
     if (NULL == handle) {
@@ -1553,8 +1614,7 @@ int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu
         return -1;
     }
 
-    pst_jpeg_enc_handle = pst_handle->handle;
-    ret = CheckJpgInstValidity(pst_jpeg_enc_handle);
+    ret = CheckJpgInstValidity(pst_handle->handle);
     if (ret != JPG_RET_SUCCESS) {
         JLOG(INFO, "CheckJpgInstValidity fail, return %d\n", ret);
         return ret;
@@ -1586,7 +1646,7 @@ int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu
     }
 
     if (pu64HwTime) {
-        *pu64HwTime = pst_jpeg_enc_handle->u64EndTime - pst_jpeg_enc_handle->u64StartTime;
+        *pu64HwTime = pst_handle->handle->u64EndTime - pst_handle->handle->u64StartTime;
     }
 
     return ret;
@@ -1595,14 +1655,12 @@ int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu
 int jpeg_dec_get_frame(drv_jpg_handle handle, void *data, unsigned long int *pu64HwTime)
 {
     JPEG_DEC_HANDLE *pst_handle = (JPEG_DEC_HANDLE *)handle;
-    JpgDecHandle pst_jpeg_dec_handle = NULL;
     DRVFRAMEBUF *frame;
 
     if (NULL == handle) {
         JLOG(ERR,"handle = NULL\n");
         return -1;
     }
-    pst_jpeg_dec_handle = pst_handle->handle;
 
     frame = Queue_Dequeue(pst_handle->disp_frame);
     if (frame == NULL)
@@ -1613,7 +1671,7 @@ int jpeg_dec_get_frame(drv_jpg_handle handle, void *data, unsigned long int *pu6
         pst_handle->valid_cnt--;
 
     if (pu64HwTime) {
-        *pu64HwTime = pst_jpeg_dec_handle->u64EndTime - pst_jpeg_dec_handle->u64StartTime;
+        *pu64HwTime = pst_handle->handle->u64EndTime - pst_handle->handle->u64StartTime;
     }
 
     return JPG_RET_SUCCESS;

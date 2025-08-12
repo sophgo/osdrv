@@ -171,6 +171,7 @@ static int mesh_gdc_do_rot(struct ldc_vdev *wdev, struct vb_s *vb_in
 	int ret;
 	size_s size_out;
 	struct _gdc_cb_param *p_cb_param;
+	mmf_chn_s *chn;
 
 	if (rotation == ROTATION_0 || rotation == ROTATION_180) {
 		size_out = vb_in->buf.size;
@@ -189,7 +190,9 @@ static int mesh_gdc_do_rot(struct ldc_vdev *wdev, struct vb_s *vb_in
 	// get buf for gdc output.
 	buf_size = common_getpicbuffersize(size_out.width, size_out.height
 		, PIXEL_FORMAT_NV21, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DEFAULT_ALIGN);
-	blk = vb_get_block_with_id(wdev->vb_pool, buf_size, ID_GDC);
+	p_cb_param = (struct _gdc_cb_param *)cb_param;
+	chn = (mmf_chn_s *)(&(p_cb_param->chn));
+	blk = vb_get_block_with_id(wdev->vb_pool[chn->mod_id == ID_VI ? 0 : chn->mod_id == ID_VPSS ? 1 : 2][chn->dev_id][chn->chn_id], buf_size, ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		TRACE_LDC(DBG_ERR, "get vb fail\n");
 		ret = ERR_GDC_NOBUF;
@@ -229,7 +232,6 @@ static int mesh_gdc_do_rot(struct ldc_vdev *wdev, struct vb_s *vb_in
 	job->identity.sync_io = sync_io;
 	job->identity.mod_id = mod_id;
 	job->identity.id = vb_in->buf.frm_num;
-	p_cb_param = (struct _gdc_cb_param *)cb_param;
 	snprintf(job->identity.name, sizeof(job->identity.name)
 		, "dev_%d_chn_%d", p_cb_param->chn.dev_id, p_cb_param->chn.chn_id);
 
@@ -268,6 +270,7 @@ static int mesh_dwa_do_ldc_fisheye_gridinfo(struct ldc_vdev *wdev, enum ldc_usag
 	unsigned char i;
 	struct ldc_job *job;
 	struct _gdc_cb_param *p_cb_param;
+	mmf_chn_s *chn;
 
 	pst_task = vmalloc(sizeof(*pst_task));
 	if (!pst_task) {
@@ -287,7 +290,9 @@ static int mesh_dwa_do_ldc_fisheye_gridinfo(struct ldc_vdev *wdev, enum ldc_usag
 	// get buf for gdc output.
 	buf_size = common_getpicbuffersize(size_out.width, size_out.height
 		, en_pixformat, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DWA_ALIGNMENT);
-	blk = vb_get_block_with_id(wdev->vb_pool, buf_size, ID_GDC);
+	p_cb_param = (struct _gdc_cb_param *)cb_param;
+	chn = (mmf_chn_s *)(&(p_cb_param->chn));
+	blk = vb_get_block_with_id(wdev->vb_pool[chn->mod_id == ID_VI ? 0 : chn->mod_id == ID_VPSS ? 1 : 2][chn->dev_id][chn->chn_id], buf_size, ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		TRACE_LDC(DBG_ERR, "get vb fail\n");
 		vb_release_block((vb_blk)vb_in);
@@ -451,6 +456,7 @@ static int mesh_dwa_do_ldc_fisheye(struct ldc_vdev *wdev, enum ldc_usage usage, 
 	unsigned char i;
 	struct ldc_job *job;
 	struct _gdc_cb_param *p_cb_param;
+	mmf_chn_s *chn;
 
 	ptask = vmalloc(sizeof(struct gdc_task_attr));
 	if (!ptask) {
@@ -470,7 +476,9 @@ static int mesh_dwa_do_ldc_fisheye(struct ldc_vdev *wdev, enum ldc_usage usage, 
 	// get buf for gdc output.
 	buf_size = common_getpicbuffersize(size_out.width, size_out.height
 		, PIXEL_FORMAT_YUV_PLANAR_420, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DWA_ALIGNMENT);
-	blk = vb_get_block_with_id(wdev->vb_pool, buf_size, ID_GDC);
+	p_cb_param = (struct _gdc_cb_param *)cb_param;
+	chn = (mmf_chn_s *)(&(p_cb_param->chn));
+	blk = vb_get_block_with_id(wdev->vb_pool[chn->mod_id == ID_VI ? 0 : chn->mod_id == ID_VPSS ? 1 : 2][chn->dev_id][chn->chn_id], buf_size, ID_GDC);
 	if (blk == VB_INVALID_HANDLE) {
 		TRACE_LDC(DBG_ERR, "get vb fail\n");
 		vb_release_block((vb_blk)vb_in);

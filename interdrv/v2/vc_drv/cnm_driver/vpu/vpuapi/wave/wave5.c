@@ -14,6 +14,7 @@
 #include "wave/wave5_regdefine.h"
 #include <linux/dma-mapping.h>
 #include "vdi_debug.h"
+#include "platform.h"
 
 Uint32 Wave5VpuIsInit(Uint32 coreIdx)
 {
@@ -222,9 +223,10 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     }
 
     if (coreIdx == 0) {
-        unsigned int *reg_addr = ioremap(VE_TOP_EXT_ADDR, 4);
-        originValue = readl(reg_addr);
-        writel((codeBase>>32) | originValue, reg_addr);
+        unsigned int *reg_addr = platform_ioremap(VE_TOP_EXT_ADDR, 4);
+        originValue = platform_readl(VE_TOP_EXT_ADDR, reg_addr);
+        platform_writel(VE_TOP_EXT_ADDR, reg_addr, (codeBase>>32) | originValue);
+        platform_iounmap((void *)reg_addr);
     } else {
         vdi_fio_write_register(coreIdx, 0xFEC0, codeBase>>32);
         vdi_fio_write_register(coreIdx, 0x8EC0, codeBase>>32);
@@ -2608,13 +2610,14 @@ RetCode Wave5VpuEncInitSeq(CodecInst* instance)
 
     if (VpuReadReg(coreIdx, W5_RET_SUCCESS) == 0) {
         regVal = VpuReadReg(instance->coreIdx, W5_RET_FAIL_REASON);
-        if (regVal != WAVE5_SYSERR_QUEUEING_FAIL)
+        if (regVal != WAVE5_SYSERR_QUEUEING_FAIL) {
             VLOG(ERR, "FAIL_REASON = 0x%x\n", regVal);
             // ERR_DATA_ADDR_ALIGNMENT, Unrecoverable failure. Restart VPU
             if (regVal == 0x10) {
                 VLOG(ERR, "start reset core:0x%x\n", coreIdx);
                 vdi_hw_reset(coreIdx);
             }
+        }
         if (regVal == WAVE5_SYSERR_QUEUEING_FAIL) {
             regVal = VpuReadReg(instance->coreIdx, W5_RET_QUEUE_FAIL_REASON);
             VLOG(ERR, "QUEUE_FAIL_REASON = 0x%x\n", regVal);

@@ -15,7 +15,7 @@
 
 #include "vc_drv_proc.h"
 #include "venc_rc.h"
-
+#include "platform.h"
 
 extern wait_queue_head_t tVencWaitQueue[];
 
@@ -2652,16 +2652,23 @@ static int _drv_process_result(venc_chn_context *pChnHandle,
         if (pstStream->u32PackCount > 0) {
             venc_pack_s *ppack = &pstStream->pstPack[pstStream->u32PackCount -1];
             int j;
-
-            for (j = (ppack->u32Len - ppack->u32Offset - 1); j > 0;
-                 j--) {
-                unsigned char *tmp_ptr =
-                    ppack->pu8Addr + ppack->u32Offset + j;
+            char *ptr_stream;
+#ifdef PLATFORM_SOC
+            ptr_stream = ppack->pu8Addr;
+#else
+            ptr_stream = vzalloc(ppack->u32Len);
+            pcie_memcpy_d2s(ptr_stream, ppack->u64PhyAddr, ppack->u32Len);
+#endif
+            for (j = (ppack->u32Len - ppack->u32Offset - 1); j > 0; j--) {
+                unsigned char *tmp_ptr = ptr_stream + ppack->u32Offset + j;
                 if (tmp_ptr[0] == 0xd9 && tmp_ptr[-1] == 0xff) {
                     break;
                 }
             }
             ppack->u32Len = ppack->u32Offset + j + 1;
+#ifndef PLATFORM_SOC
+            vfree(ptr_stream);
+#endif
         }
     }
 
@@ -3307,21 +3314,14 @@ int drv_venc_start_recvframe(venc_chn VeChn,
     handle->chn_status[VeChn] = venc_chn_STATE_START_ENC;
 
     if (pVbCtx->currBindMode == 1) {
-        // struct sched_param param = {
-        //     .sched_priority = 95,
-        // };
+        char thread_name[32] = {0};
         if (!pVbCtx->thread) {
-            pVbCtx->thread = kthread_run(_venc_event_handler,
-                            (void *)pChnHandle,
-                            "soph_vc_bh%d", VeChn);
-
-            if (IS_ERR(pVbCtx->thread)) {
-                DRV_VENC_ERR(
-                    "failed to create venc binde mode thread for chn %d\n",
-                    VeChn);
+            sprintf(thread_name, "soph_vc_bh%d", VeChn);
+            pVbCtx->thread = osal_thread_create(_venc_event_handler, (void *)pChnHandle, thread_name);
+            if (pVbCtx->thread == NULL) {
+                DRV_VENC_ERR("failed to create venc binde mode thread for chn %d\n", VeChn);
                 return -1;
             }
-            // sched_setscheduler(pVbCtx->thread, SCHED_RR, &param);
             SEMA_POST(&pChnVars->sem_send);
         }
     }

@@ -647,8 +647,6 @@ static int _rgn_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s*pchn
 			cfg.odec.attached_ow	= rgn_idx;
 			cfg.odec.bso_sz	= ctx->canvas_info[ctx->canvas_idx].compressed_size;
 			cfg.odec.canvas_mutex_lock = (u64)&ctx->rgn_canvas_q_lock;
-			cfg.odec.rgn_canvas_waitq = (u64)&ctx->rgn_canvas_waitq;
-			cfg.odec.rgn_canvas_doneq = (u64)&ctx->rgn_canvas_doneq;
 			cfg.odec.canvas_updated = ctx->canvas_updated;
 			break;
 		} else
@@ -1600,16 +1598,12 @@ int rgn_attach_to_chn(rgn_handle handle, const mmf_chn_s*pchn, const rgn_chn_att
 				((pixel_format == PIXEL_FORMAT_8BIT_MODE) ? 1 : 2));
 		}
 		if (ctx->canvas_info[0].compressed && (canvas_num > 1)) {
-			FIFO_INIT(&ctx->rgn_canvas_waitq, canvas_num);
-			FIFO_INIT(&ctx->rgn_canvas_doneq, canvas_num);
 			rgn_canvas_ctx[proc_idx][0].phy_addr = ctx->canvas_info[0].phy_addr;
 			rgn_canvas_ctx[proc_idx][0].virt_addr = ctx->canvas_info[0].virt_addr;
 			rgn_canvas_ctx[proc_idx][0].len = ctx->ion_len;
 			rgn_canvas_ctx[proc_idx][1].phy_addr = ctx->canvas_info[1].phy_addr;
 			rgn_canvas_ctx[proc_idx][1].virt_addr = ctx->canvas_info[1].virt_addr;
 			rgn_canvas_ctx[proc_idx][1].len = ctx->ion_len;
-			FIFO_PUSH(&ctx->rgn_canvas_doneq, &rgn_canvas_ctx[proc_idx][0]);
-			FIFO_PUSH(&ctx->rgn_canvas_waitq, &rgn_canvas_ctx[proc_idx][1]);
 		}
 
 		 // update rgn proc canvas info
@@ -1688,11 +1682,6 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s*pchn)
 			base_ion_free(ctx->canvas_info[0].phy_addr);
 	}
 
-	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == OVERLAYEX_RGN) {
-		FIFO_EXIT(&ctx->rgn_canvas_waitq);
-		FIFO_EXIT(&ctx->rgn_canvas_doneq);
-	}
-
 	mutex_unlock(&g_rgnlock);
 
 	return ret;
@@ -1767,7 +1756,7 @@ int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 	unsigned int proc_idx;
 	unsigned int canvas_num;
 	int ret;
-	struct rgn_canvas_ctx *rgn_canvas;
+	struct _rgn_get_ow_addr_cb_param cb_param;
 	int cnt = 0;
 
 	ret = check_rgn_handle(&ctx, handle);
@@ -1800,19 +1789,29 @@ int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 		, handle, pcanvas_info->pixel_format, pcanvas_info->size.width
 		, pcanvas_info->size.height, pcanvas_info->stride, pcanvas_info->compressed);
 
-	if (ctx->canvas_info[0].compressed) {
-		while (FIFO_EMPTY(&ctx->rgn_canvas_waitq)) {
-			cnt++;
-			if (cnt % 5000 == 0) {
-				CVI_TRACE_RGN(RGN_WARN, "handle(%d) waitq fifo empty for too long!", handle);
-				cnt = 0;
+	if ((canvas_num > 1) && (pcanvas_info->compressed)) {
+		CVI_TRACE_RGN(RGN_INFO, "canvas p_addr(%llx) v_addr(%lx).\n"
+			, pcanvas_info->phy_addr, (uintptr_t)pcanvas_info->virt_addr);
+
+		cb_param.chn = ctx->chn;
+		cb_param.handle = handle;
+		cb_param.layer = RGN_ODEC_LAYER_VPSS;
+
+		do {
+			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_ADDR, &cb_param) != 0) {
+				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_ADDR is failed\n");
+					return ERR_RGN_ILLEGAL_PARAM;
 			}
+			cnt++;
 			usleep_range(1000, 2000);
+		} while ((cb_param.addr == pcanvas_info->phy_addr) && (cnt <= 500) && ctx->chn_attr.show);
+
+		CVI_TRACE_RGN(RGN_INFO, "VPSS_CB_GET_RGN_OW_ADDR PhyAaddr:%llx cnt:%d.\n",
+			cb_param.addr, cnt);
+		CVI_TRACE_RGN(RGN_INFO, "ow addr(%llx).\n", cb_param.addr);
+		if (cb_param.addr == pcanvas_info->phy_addr) {
+			CVI_TRACE_RGN(RGN_INFO, "get a using canvas!\n");
 		}
-		mutex_lock(&ctx->rgn_canvas_q_lock);
-		FIFO_POP(&ctx->rgn_canvas_waitq, &rgn_canvas);
-		FIFO_PUSH(&ctx->rgn_canvas_doneq, rgn_canvas);
-		mutex_unlock(&ctx->rgn_canvas_q_lock);
 	}
 	ctx->canvas_get = 1;
 

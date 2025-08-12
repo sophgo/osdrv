@@ -17,6 +17,104 @@
 static JPUCap   g_JpuAttributes;
 extern int jpu_enable_irq(int coreidx);
 
+/* Structure representing JPU instance statistics */
+typedef struct jpu_instance_stats {
+    int core_id;             // Core identifier
+    int instance_id;         // Instance identifier
+
+    enum { DEC = 1, ENC } state;// Current state (1: decoding, 2: encoding)
+    int width;               // Frame width
+    int height;              // Frame height
+
+    unsigned long long dec_nr;          // Total decoded frames
+    unsigned long long dec_err_nr;      // Total decoding errors
+    unsigned long long enc_nr;          // Total encoded frames
+    unsigned long long enc_err_nr;      // Total encoding errors
+    int last_dec_err;                  // Last enc error code
+    int last_enc_err;                  // Last enc error code
+
+    int fps;                 // Calculated frames per second
+    u64 last_fps_ts;
+    int fps_counter;
+    u64 last_frame_ts;
+} jpu_inst_info_t;    // from jpeg.c
+
+extern jpu_inst_info_t jpu_inst_info[MAX_NUM_JPU_CORE];
+
+static u64 jpuapi_get_current_time(void)
+{
+    struct timespec64 ts;
+
+    ktime_get_ts64(&ts);
+
+    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // in ms
+}
+
+static void _update_inst_common_info(JpgHandle handle)
+{
+    JpgInst *pJpgInst = (JpgInst *)handle;
+    JpgDecInfo* pDecInfo = NULL;
+    JpgEncInfo* pEncInfo = NULL;
+    u64 currentTs = jpuapi_get_current_time();
+    int core_idx = pJpgInst->coreIndex;
+    if (core_idx >= MAX_NUM_JPU_CORE || core_idx < 0) {
+        JLOG(ERR, "Invalid core index %d\n", core_idx);
+        return;
+    }
+
+    jpu_inst_info_t *pInstInfo = &jpu_inst_info[core_idx];
+    pInstInfo->core_id = core_idx;
+    pInstInfo->instance_id = pJpgInst->instIndex;
+    pInstInfo->state = pJpgInst->isDecoder ? DEC : ENC;
+
+    if (pJpgInst->isDecoder) {
+        pDecInfo = &pJpgInst->JpgInfo->decInfo;
+        pInstInfo->width = pDecInfo->alignedWidth;
+        pInstInfo->height = pDecInfo->alignedHeight;
+        pInstInfo->dec_nr++;
+    } else {
+        pEncInfo = &pJpgInst->JpgInfo->encInfo;
+        pInstInfo->width = pEncInfo->alignedWidth;
+        pInstInfo->height = pEncInfo->alignedHeight;
+        pInstInfo->enc_nr++;
+    }
+
+    //Calculate fps
+    if (pInstInfo->last_fps_ts == 0) {
+        pInstInfo->last_fps_ts = currentTs;
+        pInstInfo->fps_counter = 0;
+        pInstInfo->fps = 0;
+    }
+
+    pInstInfo->fps_counter++;
+    pInstInfo->last_frame_ts = currentTs;
+
+    if (currentTs - pInstInfo->last_fps_ts >= 1000) {
+        pInstInfo->fps = pInstInfo->fps_counter;
+        pInstInfo->fps_counter = 0;
+        pInstInfo->last_fps_ts = currentTs;
+    }
+}
+
+static void _update_inst_error_info(JpgHandle handle, Int32 err_code)
+{
+    JpgInst *pJpgInst = (JpgInst *)handle;
+    int core_idx = pJpgInst->coreIndex;
+    if (core_idx >= MAX_NUM_JPU_CORE || core_idx < 0) {
+        JLOG(ERR, "Invalid core index %d\n", core_idx);
+        return;
+    }
+
+    jpu_inst_info_t *pInstInfo = &jpu_inst_info[core_idx];
+
+    if (pJpgInst->isDecoder) {
+        pInstInfo->dec_err_nr++;
+        pInstInfo->last_dec_err = err_code;
+    } else {
+        pInstInfo->enc_err_nr++;
+        pInstInfo->last_enc_err = err_code;
+    }
+}
 
 int JPU_IsBusy(JpgHandle handle)
 {
@@ -100,17 +198,30 @@ Int32 JPU_WaitInterrupt(JpgHandle handle, int timeout)
         instRegIndex = 0;
     }
 
+    _update_inst_common_info(handle);
     reason = jdi_wait_interrupt(pJpgInst->coreIndex, timeout, instRegIndex);
-    if (reason == -1)
+    if (reason == -1) {
+        _update_inst_error_info(handle, -1);
         return -1;
+    }
 
     if (reason & (1<<INT_JPU_DONE) || reason & (1<<INT_JPU_SLICE_DONE)) {
         val = JpuReadReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_STATUS_REG);
         if ((((val & 0xf) >> instRegIndex) & 0x01) == 0) {
             jpu_enable_irq(pJpgInst->coreIndex);
+            _update_inst_error_info(handle, -2);
             return -2;
         }
     }
+
+    if (reason & (1<<INT_JPU_ERROR))
+        _update_inst_error_info(handle, INT_JPU_ERROR);
+
+    // Note: INT_JPU_BIT_BUF_EMPTY and INT_JPU_BIT_BUF_FULL have the same value (2).
+    // This interrupt bit indicates "bitstream buffer empty" in decoding mode,
+    // and "bitstream buffer full" in encoding mode.
+    if (reason & (1<<INT_JPU_BIT_BUF_EMPTY))
+        _update_inst_error_info(handle, INT_JPU_BIT_BUF_EMPTY);
 
     return reason;
 }
@@ -1508,6 +1619,9 @@ JpgRet JPU_EncStartOneFrame(JpgEncHandle handle, JpgEncParam * param)
     else {
         instRegIndex = 0;
     }
+
+    // when jpu suspend -> resume, need to reset the instance controller
+    JpuWriteReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_START_REG, (1<<0));
 
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_INTR_MASK_REG, ((~pEncInfo->intrEnableBit) & 0x3ff));
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_SLICE_INFO_REG, pEncInfo->sliceHeight);

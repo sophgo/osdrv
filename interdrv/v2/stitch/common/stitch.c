@@ -1656,6 +1656,10 @@ int stitch_grp_qbuf(mmf_chn_s chn, vb_blk blk) {
 	}
 	if (stitch_is_grp_waitq_ready(grp_id)) {
 		work = (struct grp_work *)kmalloc(sizeof(*work), GFP_ATOMIC);
+        if (unlikely(!work)) {
+            TRACE_STITCH(DBG_ERR,"grp_work alloc failed for grp_idx[%d]\n", grp_id);
+            return -ENOMEM;
+        }
 		work->grp = grp_id;
 		work->private = stitch_ctx[grp_id];
 		mutex_lock(&stitch_get_grp_lock);
@@ -1810,6 +1814,10 @@ int stitch_send_frame(stitch_grp grp_id, stitch_src_idx src_idx, video_frame_inf
 	}
 	if (stitch_is_grp_waitq_ready(grp_id)) {
 		work = (struct grp_work *)kmalloc(sizeof(*work), GFP_ATOMIC);
+        if (unlikely(!work)) {
+            TRACE_STITCH(DBG_ERR,"grp_work alloc failed for grp_idx[%d]\n", grp_id);
+            return -ENOMEM;
+        }
 		work->grp = grp_id;
 		work->private = stitch_ctx[grp_id];
 		mutex_lock(&stitch_get_grp_lock);

@@ -2400,6 +2400,31 @@ static int _cif_set_mac_clk(struct cif_dev *cdev, uint32_t devno,
 	//}
 
 	{
+	/* A2 MAC0-MAC5 MAX CLK SETTING */
+	switch(ctx->mac_num) {
+	case CIF_MAC_0:
+		clk_val = clk_val > MAC0_MAX_CLK ? MAC0_MAX_CLK : clk_val;
+		break;
+	case CIF_MAC_1:
+		clk_val = clk_val > MAC1_MAX_CLK ? MAC1_MAX_CLK : clk_val;
+		break;
+	case CIF_MAC_2:
+		clk_val = clk_val > MAC2_MAX_CLK ? MAC2_MAX_CLK : clk_val;
+		break;
+	case CIF_MAC_3:
+		clk_val = clk_val > MAC3_MAX_CLK ? MAC3_MAX_CLK : clk_val;
+		break;
+	case CIF_MAC_4:
+		clk_val = clk_val > MAC4_MAX_CLK ? MAC4_MAX_CLK : clk_val;
+		break;
+	case CIF_MAC_5:
+		clk_val = clk_val > MAC5_MAX_CLK ? MAC5_MAX_CLK : clk_val;
+		break;
+	default:
+		clk_val = MAC5_MAX_CLK;
+		break;
+	}
+
 	switch (ctx->mac_num) {
 	case CIF_MAC_0:
 		/* target = source * (1 + ratio) / 32, ratio <= 0x1F */
@@ -3150,6 +3175,7 @@ static int cif_reset_snsr_gpio(struct cif_dev *dev,
 			return 0;
 		}
 	}
+	gpio_free(reset_pin);
 
 	return 0;
 }
@@ -4231,6 +4257,66 @@ static int cif_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int cif_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct cif_dev *cif_dev = NULL;
+	int i = 0;
+
+	if (!pdev) {
+		dev_err(&pdev->dev, "invalid param");
+		return -EINVAL;
+	}
+
+	cif_dev = dev_get_drvdata(&pdev->dev);
+	if (!cif_dev) {
+		dev_err(&pdev->dev, "Can not get cif drvdata");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_LINK_NUM; i++) {
+		struct link *link = &cif_dev->link[i];
+
+		if (link->is_on) {
+			cif_mask_csi_int_sts(&link->cif_ctx, 0x1F);
+			cif_enable_snsr_clk(cif_dev, i, 0);
+		}
+	}
+
+	dev_info(&pdev->dev, "cif suspend done\n");
+
+	return 0;
+}
+
+static int cif_resume(struct platform_device *pdev)
+{
+	struct cif_dev *cif_dev = NULL;
+	int i = 0;
+
+	if (!pdev) {
+		dev_err(&pdev->dev, "invalid param");
+		return -EINVAL;
+	}
+
+	cif_dev = dev_get_drvdata(&pdev->dev);
+	if (!cif_dev) {
+		dev_err(&pdev->dev, "Can not get cif drvdata");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_LINK_NUM; i++) {
+		struct link *link = &cif_dev->link[i];
+
+		if (link->is_on) {
+			cif_set_dev_attr(cif_dev, &link->attr);
+			cif_enable_snsr_clk(cif_dev, i, 1);
+		}
+	}
+
+	dev_info(&pdev->dev, "cif resume done\n");
+
+	return 0;
+}
+
 static const struct of_device_id cif_dt_match[] = {
 	{.compatible = "cvitek,cif"},
 	{}
@@ -4250,6 +4336,8 @@ static struct platform_device cif_pdev = {
 static struct platform_driver cif_pdrv = {
 	.probe      = cif_probe,
 	.remove     = cif_remove,
+	.suspend    = cif_suspend,
+	.resume     = cif_resume,
 	.driver     = {
 		.name		= "cif",
 		.owner		= THIS_MODULE,

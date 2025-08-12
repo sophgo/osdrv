@@ -29,8 +29,10 @@ long stitch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	/* If necessary, allocate buffer for ioctl argument */
 	if (ksize > sizeof(stack_kdata)) {
 		kdata = kmalloc(ksize, GFP_KERNEL);
-		if (!kdata)
-			return -ENOMEM;
+		if (unlikely(!kdata)) {
+            TRACE_STITCH(DBG_ERR, "kmalloc kdata failed\n");
+            return -ENOMEM;
+        }
 	}
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

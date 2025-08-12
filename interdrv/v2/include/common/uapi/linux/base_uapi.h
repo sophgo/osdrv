@@ -10,6 +10,7 @@
 
 #define VB_POOL_NAME_LEN        (32)
 #define VB_COMM_POOL_MAX_CNT    (16)
+#define VB_POOL_MAX_BLK         (128)
 
 #define BASE_LOG_LEVEL_OFFSET       (0x0)
 #define LOG_LEVEL_RSV_SIZE          (sizeof(int32_t) * ID_BUTT)
@@ -25,6 +26,7 @@ enum VB_IOCTL {
 	VB_IOCTL_INIT,
 	VB_IOCTL_EXIT,
 	VB_IOCTL_CREATE_POOL,
+	VB_IOCTL_CREATE_EX_POOL,
 	VB_IOCTL_DESTROY_POOL,
 	VB_IOCTL_PHYS_TO_HANDLE,
 	VB_IOCTL_GET_BLK_INFO,
@@ -52,6 +54,17 @@ struct vb_pool_cfg {
 	__u8 pool_name[VB_POOL_NAME_LEN];
 	__u32 pool_id;
 	__u64 mem_base;
+};
+
+/*
+ * blk_cnt: number of blk in the pool.
+ * addr_p: phy addr of blk
+ * pool_id: pool id
+ */
+struct vb_pool_ex_cfg {
+	__u32 blk_cnt;
+	__u64 addr_p[VB_POOL_MAX_BLK][3];
+	__u32 pool_id;
 };
 
 /*

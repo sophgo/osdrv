@@ -104,7 +104,7 @@ struct ldc_buf_wrap_cfg {
 };
 
 struct ldc_vb_pool_cfg {
-	void *reserved;
+	mmf_chn_s mmf_chn;
 	unsigned int vb_pool;
 };
 
@@ -122,7 +122,7 @@ struct ldc_vb_pool_cfg {
 // #define LDC_SET_BUF_WRAP _IOW('L', 0x0a, struct ldc_buf_wrap_cfg)
 // #define LDC_GET_BUF_WRAP _IOWR('L', 0x0b, struct ldc_buf_wrap_cfg)
 #define LDC_ATTACH_VB_POOL _IOW('L', 0x0c, struct ldc_vb_pool_cfg)
-#define LDC_DETACH_VB_POOL _IO('L', 0x0d)
+#define LDC_DETACH_VB_POOL _IOW('L', 0x0d, struct ldc_vb_pool_cfg)
 #define LDC_SUSPEND _IO('L',0x0e)
 #define LDC_RESUME _IO('L',0x0f)
 #define LDC_ADD_COR_TASK _IOW('D', 0x10, struct gdc_task_attr)

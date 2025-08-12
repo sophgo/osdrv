@@ -96,6 +96,7 @@ struct vb_pool_ctx {
 	uint32_t blk_cnt;
 	vb_remap_mode_e remap_mode;
 	uint8_t is_comm_pool;
+	uint8_t is_ex_pool;
 	uint32_t free_blk_cnt;
 	uint32_t min_free_blk_cnt;
 	char pool_name[VB_POOL_NAME_LEN];
@@ -116,6 +117,7 @@ void vb_cleanup(void);
 int32_t vb_get_config(struct vb_cfg *vb_config);
 
 int32_t vb_create_pool(struct vb_pool_cfg *config);
+int32_t vb_create_ex_pool(struct vb_pool_ex_cfg *config);
 int32_t vb_destroy_pool(uint32_t pool_id);
 
 vb_blk vb_phys_addr2handle(uint64_t phy_addr);

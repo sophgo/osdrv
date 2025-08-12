@@ -30,7 +30,7 @@ DEFINE_HASHTABLE(vb_hash, 8);
 	do {									\
 		if ((x) == NULL) {						\
 			TRACE_BASE(DBG_ERR, " NULL VB HANDLE\n");		\
-			return -EINVAL;				\
+			return ERR_VB_NULL_PTR;				\
 		}								\
 	} while (0)
 
@@ -38,7 +38,7 @@ DEFINE_HASHTABLE(vb_hash, 8);
 	do {									\
 		if ((x)->magic != VB_MAGIC) {	\
 			TRACE_BASE(DBG_ERR, " invalid VB Handle\n");	\
-			return -EINVAL;				\
+			return ERR_VB_INVALID;				\
 		}								\
 	} while (0)
 
@@ -50,11 +50,11 @@ DEFINE_HASHTABLE(vb_hash, 8);
 			break;							\
 		if ((x) >= (vb_max_pools)) {					\
 			TRACE_BASE(DBG_ERR, " invalid VB Pool(%d)\n", x);	\
-			return -EINVAL;			\
+			return ERR_VB_ILLEGAL_PARAM;			\
 		}								\
 		if (!is_pool_inited(x)) {						\
 			TRACE_BASE(DBG_ERR, "vb_pool(%d) isn't init yet.\n", x); \
-			return -EINVAL;			\
+			return ERR_VB_NOTREADY;			\
 		}								\
 	} while (0)
 
@@ -62,11 +62,11 @@ DEFINE_HASHTABLE(vb_hash, 8);
 	do {									\
 		if ((x) >= (vb_max_pools)) {					\
 			TRACE_BASE(DBG_ERR, " invalid VB Pool(%d)\n", x);	\
-			return -EINVAL; 		\
+			return ERR_VB_ILLEGAL_PARAM; 		\
 		}								\
 		if (!is_pool_inited(x)) { 					\
 			TRACE_BASE(DBG_ERR, "vb_pool(%d) isn't init yet.\n", x); \
-			return -EINVAL; 		\
+			return ERR_VB_NOTREADY; 		\
 		}								\
 	} while (0)
 
@@ -162,10 +162,9 @@ static int32_t _vb_set_config(struct vb_cfg *vb_cfg)
 {
 	int i;
 
-	if (vb_cfg->comm_pool_cnt > VB_COMM_POOL_MAX_CNT
-		|| vb_cfg->comm_pool_cnt == 0) {
+	if (vb_cfg->comm_pool_cnt > VB_COMM_POOL_MAX_CNT) {
 		TRACE_BASE(DBG_ERR, "Invalid comm_pool_cnt(%d)\n", vb_cfg->comm_pool_cnt);
-		return -EINVAL;
+		return ERR_VB_ILLEGAL_PARAM;
 	}
 
 	for (i = 0; i < vb_cfg->comm_pool_cnt; ++i) {
@@ -175,7 +174,7 @@ static int32_t _vb_set_config(struct vb_cfg *vb_cfg)
 			TRACE_BASE(DBG_ERR, "Invalid pool cfg, pool(%d), blk_size(%d), blk_cnt(%d)\n",
 				i, vb_cfg->comm_pool[i].blk_size,
 				vb_cfg->comm_pool[i].blk_cnt);
-			return -EINVAL;
+			return ERR_VB_ILLEGAL_PARAM;
 		}
 	}
 	g_vb_config = *vb_cfg;
@@ -263,6 +262,7 @@ static int32_t _vb_create_pool(struct vb_pool_cfg *config, bool is_comm)
 	pool_ctx->blk_size = config->blk_size;
 	pool_ctx->remap_mode = config->remap_mode;
 	pool_ctx->is_comm_pool = is_comm;
+	pool_ctx->is_ex_pool = false;
 	pool_ctx->free_blk_cnt = config->blk_cnt;
 	pool_ctx->min_free_blk_cnt = pool_ctx->free_blk_cnt;
 	if (strlen(config->pool_name) != 0)
@@ -282,6 +282,56 @@ static int32_t _vb_create_pool(struct vb_pool_cfg *config, bool is_comm)
 		p->magic = VB_MAGIC;
 		atomic_long_set(&p->mod_ids, 0);
 		p->external = false;
+		FIFO_PUSH(&pool_ctx->freelist, p);
+		mutex_lock(&g_hash_lock);
+		hash_add(vb_hash, &p->node, p->phy_addr);
+		mutex_unlock(&g_hash_lock);
+	}
+	mutex_unlock(&pool_ctx->lock);
+
+	return 0;
+}
+
+static int32_t _vb_create_ex_pool(struct vb_pool_ex_cfg *config)
+{
+	struct vb_s *p;
+	int32_t i;
+	vb_pool pool_id = config->pool_id;
+	struct vb_pool_ctx *pool_ctx;
+
+	pool_ctx = &g_vb_ctx[pool_id];
+
+	STAILQ_INIT(&pool_ctx->reqq);
+	mutex_init(&pool_ctx->reqq_lock);
+	mutex_init(&pool_ctx->lock);
+	mutex_lock(&pool_ctx->lock);
+	pool_ctx->poolid = pool_id;
+	pool_ctx->ownerid = POOL_OWNER_PRIVATE;
+	pool_ctx->membase = config->addr_p[0][0];
+	pool_ctx->vmembase = 0;
+	pool_ctx->blk_cnt = config->blk_cnt;
+	pool_ctx->blk_size = 0xffffffff;
+	pool_ctx->remap_mode = 0;
+	pool_ctx->is_comm_pool = false;
+	pool_ctx->is_ex_pool = true;
+	pool_ctx->free_blk_cnt = config->blk_cnt;
+	pool_ctx->min_free_blk_cnt = pool_ctx->free_blk_cnt;
+	strncpy(pool_ctx->pool_name, "vbpoolex", sizeof(pool_ctx->pool_name));
+	pool_ctx->pool_name[VB_POOL_NAME_LEN - 1] = '\0';
+
+	FIFO_INIT(&pool_ctx->freelist, pool_ctx->blk_cnt);
+	for (i = 0; i < pool_ctx->blk_cnt; ++i) {
+		p = vzalloc(sizeof(*p));
+		p->phy_addr = config->addr_p[i][0];
+		p->vir_addr = 0;
+		p->poolid = pool_id;
+		atomic_set(&p->usr_cnt, 0);
+		p->magic = VB_MAGIC;
+		atomic_long_set(&p->mod_ids, 0);
+		p->external = true;
+		p->buf.phy_addr[0] = config->addr_p[i][0];
+		p->buf.phy_addr[1] = config->addr_p[i][1];
+		p->buf.phy_addr[2] = config->addr_p[i][2];
 		FIFO_PUSH(&pool_ctx->freelist, p);
 		mutex_lock(&g_hash_lock);
 		hash_add(vb_hash, &p->node, p->phy_addr);
@@ -313,7 +363,8 @@ static int32_t _vb_destroy_pool(vb_pool poolid)
 		vfree(vb);
 	}
 	FIFO_EXIT(&pool_ctx->freelist);
-	base_ion_free(pool_ctx->membase);
+	if (!pool_ctx->is_ex_pool)
+		base_ion_free(pool_ctx->membase);
 	mutex_unlock(&pool_ctx->lock);
 	mutex_destroy(&pool_ctx->lock);
 
@@ -534,7 +585,7 @@ int32_t vb_get_config(struct vb_cfg *vb_config)
 {
 	if (!vb_config) {
 		TRACE_BASE(DBG_ERR, "vb_get_config NULL ptr!\n");
-		return -EINVAL;
+		return ERR_VB_NULL_PTR;
 	}
 
 	*vb_config = g_vb_config;
@@ -552,7 +603,7 @@ int32_t vb_create_pool(struct vb_pool_cfg *config)
 		|| (config->blk_cnt > vb_pool_max_blk)) {
 		TRACE_BASE(DBG_ERR, "Invalid pool cfg, blk_size(%d), blk_cnt(%d)\n",
 				config->blk_size, config->blk_cnt);
-		return -EINVAL;
+		return ERR_VB_ILLEGAL_PARAM;
 	}
 
 	mutex_lock(&g_pool_lock);
@@ -563,7 +614,7 @@ int32_t vb_create_pool(struct vb_pool_cfg *config)
 	if (i >= vb_max_pools) {
 		TRACE_BASE(DBG_ERR, "Exceed vb_max_pools cnt: %d\n", vb_max_pools);
 		mutex_unlock(&g_pool_lock);
-		return -ENOMEM;
+		return ERR_VB_BUSY;
 	}
 
 	config->pool_id = i;
@@ -578,6 +629,44 @@ int32_t vb_create_pool(struct vb_pool_cfg *config)
 }
 EXPORT_SYMBOL_GPL(vb_create_pool);
 
+int32_t vb_create_ex_pool(struct vb_pool_ex_cfg *config)
+{
+	uint32_t i;
+	int32_t ret;
+
+	config->pool_id = VB_INVALID_POOLID;
+	if ((config->blk_cnt == 0) || (config->blk_cnt > vb_pool_max_blk)) {
+		TRACE_BASE(DBG_ERR, "Invalid pool cfg, blk_cnt(%d)\n", config->blk_cnt);
+		return ERR_VB_ILLEGAL_PARAM;
+	}
+
+	if (atomic_read(&ref_count) == 0) {
+		TRACE_BASE(DBG_ERR, "vb module hasn't inited yet.\n");
+		return ERR_VB_NOTREADY;
+	}
+
+	mutex_lock(&g_pool_lock);
+	for (i = VB_MAX_COMM_POOLS; i < vb_max_pools; ++i) {
+		if (!is_pool_inited(i))
+			break;
+	}
+	if (i >= vb_max_pools) {
+		TRACE_BASE(DBG_ERR, "Exceed vb_max_pools cnt: %d\n", vb_max_pools);
+		mutex_unlock(&g_pool_lock);
+		return ERR_VB_BUSY;
+	}
+
+	config->pool_id = i;
+	ret = _vb_create_ex_pool(config);
+	if (ret) {
+		TRACE_BASE(DBG_ERR, "_vb_create_ex_pool fail, ret(%d)\n", ret);
+		mutex_unlock(&g_pool_lock);
+		return ret;
+	}
+	mutex_unlock(&g_pool_lock);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(vb_create_ex_pool);
 
 int32_t vb_destroy_pool(vb_pool pool_id)
 {
@@ -676,7 +765,7 @@ int32_t vb_release_block(vb_blk blk)
 		TRACE_BASE(DBG_DEBUG, "%p phy-addr(%#llx) release.\n",
 			__builtin_return_address(0), vb->phy_addr);
 
-		if (vb->external) {
+		if ((vb->poolid == VB_EXTERNAL_POOLID) && vb->external) {
 			TRACE_BASE(DBG_DEBUG, "external buffer phy-addr(%#llx) release.\n", vb->phy_addr);
 			_vb_hash_del(vb->phy_addr);
 			vfree(vb);
@@ -695,7 +784,7 @@ int32_t vb_release_block(vb_blk blk)
 
 		if (cnt < 0) {
 			int i = 0;
-			TRACE_BASE(DBG_INFO, "vb usr_cnt is zero.\n");
+			TRACE_BASE(DBG_WARN, "vb->phy_addr(%#llx) usr_cnt is zero.\n", vb->phy_addr);
 			pool = &g_vb_ctx[vb->poolid];
 			mutex_lock(&pool->lock);
 			FIFO_FOREACH(vb_tmp, &pool->freelist, i) {
@@ -883,6 +972,7 @@ long vb_ctrl(unsigned long arg)
 
 		if (atomic_read(&ref_count)) {
 			TRACE_BASE(DBG_ERR, "vb has already inited, set_config cmd has no effect\n");
+			ret = ERR_VB_NOT_PERM;
 			break;
 		}
 
@@ -929,6 +1019,29 @@ long vb_ctrl(unsigned long arg)
 				ret = -ENOMEM;
 			}
 		}
+		break;
+	}
+
+	case VB_IOCTL_CREATE_EX_POOL: {
+		struct vb_pool_ex_cfg *cfg;
+
+		cfg = (struct vb_pool_ex_cfg *)kmalloc(sizeof(struct vb_pool_ex_cfg), GFP_KERNEL);
+		memset(cfg, 0, sizeof(struct vb_pool_ex_cfg));
+		if (copy_from_user(cfg, p.ptr, sizeof(struct vb_pool_ex_cfg))) {
+			TRACE_BASE(DBG_ERR, "VB_IOCTL_CREATE_EX_POOL copy_from_user failed.\n");
+			ret = -ENOMEM;
+			kfree(cfg);
+			break;
+		}
+
+		ret = vb_create_ex_pool(cfg);
+		if (ret == 0) {
+			if (copy_to_user(p.ptr, cfg, sizeof(struct vb_pool_ex_cfg))) {
+				TRACE_BASE(DBG_ERR, "VB_IOCTL_CREATE_EX_POOL copy_to_user failed.\n");
+				ret = -ENOMEM;
+			}
+		}
+		kfree(cfg);
 		break;
 	}
 

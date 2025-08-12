@@ -158,10 +158,10 @@ s32 vpss_set_rgn_mosaic_cfg(vpss_grp vpss_grp, vpss_chn vpss_chn, struct rgn_mos
 s32 vpss_get_rgn_ow_addr(vpss_grp vpss_grp, vpss_chn vpss_chn, u32 layer,
 		rgn_handle handle, u64 *addr)
 {
-#if 0
-	s32 ret, dev_idx, i;
+	s32 ret, dev_idx, i, j;
 	u8 ow_inst;
 	mmf_chn_s chn;
+	struct vpss_job *job;
 	struct vpss_ctx **vpss_ctx = vpss_get_ctx();
 
 	ret = mod_check_null_ptr(ID_VPSS, addr);
@@ -176,7 +176,17 @@ s32 vpss_get_rgn_ow_addr(vpss_grp vpss_grp, vpss_chn vpss_chn, u32 layer,
 	chn.mod_id = ID_VPSS;
 	chn.dev_id = vpss_grp;
 	chn.chn_id = vpss_chn;
-	dev_idx = get_dev_info_by_chn(chn, CHN_TYPE_OUT);
+
+	job = (struct vpss_job *)vpss_ctx[vpss_grp]->job_buffer;
+	for (i = 0, j = 0; i < VPSS_MAX; i++) {
+		if ((job->vpss_dev_mask & BIT(i))) {
+			if (j == vpss_chn) {
+				dev_idx = i;
+				break;
+			}
+			j++;
+		}
+	}
 
 	for (i = 0; i < RGN_MAX_NUM_VPSS; ++i) {
 		if (vpss_ctx[vpss_grp]->chn_cfgs[vpss_chn].rgn_handle[layer][i] == handle) {
@@ -186,12 +196,12 @@ s32 vpss_get_rgn_ow_addr(vpss_grp vpss_grp, vpss_chn vpss_chn, u32 layer,
 	}
 	if (i == RGN_MAX_NUM_VPSS) {
 		mutex_unlock(&vpss_ctx[vpss_grp]->lock);
-		return FAILURE;
+		return -1;
 	}
 
 	sclr_gop_ow_get_addr(dev_idx, layer, ow_inst, addr);
 	mutex_unlock(&vpss_ctx[vpss_grp]->lock);
-#endif
+
 	return 0;
 }
 
