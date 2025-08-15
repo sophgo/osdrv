@@ -50,26 +50,26 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT601 ||
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT1120_STANDARD ||
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_BT1120_INTERLEAVED)
-				memcpy(o, "BT", sizeof(o));
+				memcpy(o, "BT", strlen("BT") + 1);
 			else if (pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI ||
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV420_NORMAL ||
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV420_LEGACY ||
 				pviProcCtx->devAttr[i].enIntfMode == VI_MODE_MIPI_YUV422)
-				memcpy(o, "MIPI", sizeof(o));
+				memcpy(o, "MIPI", strlen("MIPI") + 1);
 			else if (pviProcCtx->devAttr[i].enIntfMode == VI_MODE_LVDS)
-				memcpy(o, "LVDS", sizeof(o));
+				memcpy(o, "LVDS", strlen("LVDS") + 1);
 
 			memset(p, 0, 8);
 			if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_1Multiplex)
-				memcpy(p, "1MUX", sizeof(p));
+				memcpy(p, "1MUX", strlen("1MUX") + 1);
 			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_2Multiplex)
-				memcpy(p, "2MUX", sizeof(p));
+				memcpy(p, "2MUX", strlen("2MUX") + 1);
 			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_3Multiplex)
-				memcpy(p, "3MUX", sizeof(p));
+				memcpy(p, "3MUX", strlen("3MUX") + 1);
 			else if (pviProcCtx->devAttr[i].enWorkMode == VI_WORK_MODE_4Multiplex)
-				memcpy(p, "4MUX", sizeof(p));
+				memcpy(p, "4MUX", strlen("4MUX") + 1);
 			else
-				memcpy(p, "Other", sizeof(p));
+				memcpy(p, "Other", strlen("Other") + 1);
 
 			seq_printf(m, "\t%4s\t%4s\t%3s\n", o, p,
 				(pviProcCtx->devAttr[i].enScanMode == VI_SCAN_INTERLACED) ? "I" : "P");
@@ -82,17 +82,17 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 		if (pviProcCtx->isDevEnable[i]) {
 			memset(o, 0, 8);
 			if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_VUVU)
-				memcpy(o, "VUVU", sizeof(o));
+				memcpy(o, "VUVU", strlen("VUVU") + 1);
 			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_UVUV)
-				memcpy(o, "UVUV", sizeof(o));
+				memcpy(o, "UVUV", strlen("UVUV") + 1);
 			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_UYVY)
-				memcpy(o, "UYVY", sizeof(o));
+				memcpy(o, "UYVY", strlen("UYVY") + 1);
 			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_VYUY)
-				memcpy(o, "VYUY", sizeof(o));
+				memcpy(o, "VYUY", strlen("VYUY") + 1);
 			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_YUYV)
-				memcpy(o, "YUYV", sizeof(o));
+				memcpy(o, "YUYV", strlen("YUYV") + 1);
 			else if (pviProcCtx->devAttr[i].enDataSeq == VI_DATA_SEQ_YVYU)
-				memcpy(o, "YVYU", sizeof(o));
+				memcpy(o, "YVYU", strlen("YVYU") + 1);
 
 			isRGB = (pviProcCtx->devAttr[i].enInputDataType == VI_DATA_TYPE_RGB);
 
@@ -142,15 +142,15 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 
 				memset(o, 0, 8);
 				if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_422)
-					memcpy(o, "422P", sizeof(o));
+					memcpy(o, "422P", strlen("422P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_420)
-					memcpy(o, "420P", sizeof(o));
+					memcpy(o, "420P", strlen("420P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_444)
-					memcpy(o, "444P", sizeof(o));
+					memcpy(o, "444P", strlen("444P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV12)
-					memcpy(o, "NV12", sizeof(o));
+					memcpy(o, "NV12", strlen("NV12") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV21)
-					memcpy(o, "NV21", sizeof(o));
+					memcpy(o, "NV21", strlen("NV21") + 1);
 
 				seq_printf(m, "\t%3d\t%3d\t%4d\t%4d\t%3s\t%2s\t%4d\t\t%4d\t\t%3s\t%6s\t\t%4d\n", i, j,
 					pviProcCtx->chnAttr[chn].stSize.u32Width,
@@ -177,9 +177,9 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 					break;
 				memset(o, 0, 8);
 				if (pviProcCtx->chnAttr[chn].enCompressMode == COMPRESS_MODE_NONE)
-					memcpy(o, "None", sizeof(o));
+					memcpy(o, "None", strlen("None") + 1);
 				else
-					memcpy(o, "Y", sizeof(o));
+					memcpy(o, "Y", strlen("Y") + 1);
 
 				seq_printf(m, "\t%3d\t%3d\t%4s\t\t%3d\t%3d\n", i, j,
 					o, pviProcCtx->chnAttr[chn].u32Depth, 32);
@@ -201,21 +201,21 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 
 				memset(o, 0, 8);
 				if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_422)
-					memcpy(o, "422P", sizeof(o));
+					memcpy(o, "422P", strlen("422P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_420)
-					memcpy(o, "420P", sizeof(o));
+					memcpy(o, "420P", strlen("420P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_YUV_PLANAR_444)
-					memcpy(o, "444P", sizeof(o));
+					memcpy(o, "444P", strlen("444P") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV12)
-					memcpy(o, "NV12", sizeof(o));
+					memcpy(o, "NV12", strlen("NV12") + 1);
 				else if (pviProcCtx->chnAttr[chn].enPixelFormat == PIXEL_FORMAT_NV21)
-					memcpy(o, "NV21", sizeof(o));
+					memcpy(o, "NV21", strlen("NV21") + 1);
 
 				memset(p, 0, 8);
 				if (pviProcCtx->chnAttr[chn].enCompressMode == COMPRESS_MODE_NONE)
-					memcpy(p, "None", sizeof(p));
+					memcpy(p, "None", strlen("None") + 1);
 				else
-					memcpy(p, "Y", sizeof(p));
+					memcpy(p, "Y", strlen("Y") + 1);
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%2s\t%4d\t%4d\t%3s\t%6s\t\t%6s\t\t%5d\n", i, j,
 					(pviProcCtx->chnAttr[chn].bMirror) ? "Y" : "N",
@@ -243,15 +243,15 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 
 				memset(o, 0, 8);
 				if (pviProcCtx->enRotation[chn] == ROTATION_0)
-					memcpy(o, "0", sizeof(o));
+					memcpy(o, "0", strlen("0") + 1);
 				else if (pviProcCtx->enRotation[chn] == ROTATION_90)
-					memcpy(o, "90", sizeof(o));
+					memcpy(o, "90", strlen("90") + 1);
 				else if (pviProcCtx->enRotation[chn] == ROTATION_180)
-					memcpy(o, "180", sizeof(o));
+					memcpy(o, "180", strlen("180") + 1);
 				else if (pviProcCtx->enRotation[chn] == ROTATION_270)
-					memcpy(o, "270", sizeof(o));
+					memcpy(o, "270", strlen("270") + 1);
 				else
-					memcpy(o, "Invalid", sizeof(o));
+					memcpy(o, "Invalid", strlen("Invalid") + 1);
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\n", i, j, o);
 			}
@@ -291,9 +291,9 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 
 				memset(o, 0, 8);
 				if (pviProcCtx->chnCrop[chn].enCropCoordinate == VI_CROP_RATIO_COOR)
-					memcpy(o, "RAT", sizeof(o));
+					memcpy(o, "RAT", strlen("RAT") + 1);
 				else
-					memcpy(o, "ABS", sizeof(o));
+					memcpy(o, "ABS", strlen("ABS") + 1);
 
 				seq_printf(m, "\t%3d\t%3d\t%3s\t%5s\t\t%4d\t%4d\t%4d\t%4d\t%4d\t%3d\t%3d\t%4d\n", i, j,
 					pviProcCtx->chnCrop[chn].bEnable ? "Y" : "N", o,

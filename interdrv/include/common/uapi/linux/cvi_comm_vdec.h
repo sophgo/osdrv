@@ -63,10 +63,11 @@ extern vdec_dbg vdecDbg;
 
 #define CVI_VDEC_ERR(msg, ...)	\
 	do {	\
-		if (vdecDbg.currMask & CVI_VDEC_MASK_ERR) \
+		if (vdecDbg.currMask & CVI_VDEC_MASK_ERR) {\
 			CVI_TRACE(CVI_DBG_ERR, CVI_ID_VDEC, "%s:%d:%s()[ERR]: "msg, \
 			__FILENAME__, __LINE__, __func__, ##__VA_ARGS__); \
 			printf("[ERR] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+		}   \
 	} while (0)
 #define CVI_VDEC_WARN(msg, ...)	\
 	do {	\

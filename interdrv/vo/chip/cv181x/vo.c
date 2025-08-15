@@ -1297,7 +1297,7 @@ int vo_create_thread(struct cvi_vo_dev *vdev, enum E_VO_TH th_id)
 	if (vdev->vo_th[th_id].w_thread == NULL) {
 		switch (th_id) {
 		case E_VO_TH_DISP:
-			memcpy(vdev->vo_th[th_id].th_name, "cvitask_disp", sizeof(vdev->vo_th[th_id].th_name));
+			memcpy(vdev->vo_th[th_id].th_name, "cvitask_disp", strlen("cvitask_disp") + 1);
 			vdev->vo_th[th_id].th_handler = _vo_disp_thread;
 			break;
 

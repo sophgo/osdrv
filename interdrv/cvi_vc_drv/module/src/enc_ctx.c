@@ -356,6 +356,48 @@ static CVI_VOID setSrcInfo(CVIFRAMEBUF *psi, venc_enc_ctx *pEncCtx,
 		psi->vbCr.phys_addr = pstVFrame->u64PhyAddr[2] +
 				      psi->strideC * pvecb->y + pvecb->x / 2;
 		break;
+
+	case PIXEL_FORMAT_YUYV:
+		psi->format = CVI_FORMAT_422;
+		psi->packedFormat = CVI_PACKED_FORMAT_422_YUYV;
+		psi->chromaInterleave = CVI_CBCR_SEPARATED;
+		psi->vbCb.phys_addr = 0;
+		psi->vbCr.phys_addr = 0;
+		break;
+	case PIXEL_FORMAT_UYVY:
+		psi->format = CVI_FORMAT_422;
+		psi->packedFormat = CVI_PACKED_FORMAT_422_UYVY;
+		psi->chromaInterleave = CVI_CBCR_SEPARATED;
+		psi->vbCb.phys_addr = 0;
+		psi->vbCr.phys_addr = 0;
+		break;
+	case PIXEL_FORMAT_YVYU:
+		psi->format = CVI_FORMAT_422;
+		psi->packedFormat = CVI_PACKED_FORMAT_422_YVYU;
+		psi->chromaInterleave = CVI_CBCR_SEPARATED;
+		psi->vbCb.phys_addr = 0;
+		psi->vbCr.phys_addr = 0;
+		break;
+	case PIXEL_FORMAT_VYUY:
+		psi->format = CVI_FORMAT_422;
+		psi->packedFormat = CVI_PACKED_FORMAT_422_VYUY;
+		psi->chromaInterleave = CVI_CBCR_SEPARATED;
+		psi->vbCb.phys_addr = 0;
+		psi->vbCr.phys_addr = 0;
+		break;
+	case PIXEL_FORMAT_NV16:
+	case PIXEL_FORMAT_NV61:
+		psi->format = CVI_FORMAT_422;
+		psi->packedFormat = CVI_PACKED_FORMAT_NONE;
+		psi->chromaInterleave =
+			(pstVFrame->enPixelFormat == PIXEL_FORMAT_NV16) ?
+						CVI_CBCR_INTERLEAVE :
+						CVI_CRCB_INTERLEAVE;
+		psi->vbCb.phys_addr = pstVFrame->u64PhyAddr[1] +
+						psi->strideC * pvecb->y  + pvecb->x;
+		psi->vbCr.phys_addr = 0;
+		break;
+
 	case PIXEL_FORMAT_NV12:
 	case PIXEL_FORMAT_NV21:
 		psi->format = CVI_FORMAT_420;
