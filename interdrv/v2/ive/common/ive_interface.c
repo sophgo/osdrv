@@ -109,10 +109,8 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 static struct mutex g_ive_lock;
 
 //global core state
-atomic_t dev_state[IVE_DEV_MAX] = {
-	{IVE_CORE_STATE_END},
-	{IVE_CORE_STATE_END},
-	};
+atomic_t dev_state[IVE_DEV_MAX];
+
 
 #ifdef CONFIG_COMPAT
 static long ive_compat_ioctl(struct file *filp, unsigned int cmd,
@@ -468,20 +466,6 @@ static long ive_compat_ioctl(struct file *file, unsigned int cmd,
 }
 #endif
 
-void ive_task_done(int dev_id)
-{
-
-	if (atomic_cmpxchg(&dev_state[dev_id], IVE_CORE_STATE_RUNNING, IVE_CORE_STATE_END)
-			== IVE_CORE_STATE_RUNNING) {
-		TRACE_IVE(IVE_DBG_DEBUG, "task done core[%d]\n", dev_id);
-	} else {
-		TRACE_IVE(IVE_DBG_DEBUG, "task already finish\n");
-	}
-	return;
-}
-
-
-
 static long ive_ioctl(struct file *filp, unsigned int cmd,
 			  unsigned long arg)
 {
@@ -743,20 +727,6 @@ int ive_register_cdev(struct ive_device *ndev)
 	return 0;
 }
 
-int ive_set_core_state(int dev_id)
-{
-
-	if (atomic_cmpxchg(&dev_state[dev_id], IVE_CORE_STATE_END, IVE_CORE_STATE_RUNNING)
-					== IVE_CORE_STATE_END) {
-		TRACE_IVE(IVE_DBG_DEBUG, "set core[%d] state running\n", dev_id);
-		return SUCCESS;
-	} else {
-		TRACE_IVE(IVE_DBG_ERR, "set core[%d] state fail!\n", dev_id);
-		return FAILURE;
-	}
-
-}
-
 int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned int task_type)
 {
 	s32 ret = -1;
@@ -769,11 +739,6 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 
 	idle_coreid = ive_core_request_resource(IVE_IDLE_WAIT_TIMEOUT_MS);
 	if (idle_coreid < 0) {
-		TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core, drop this task!\n");
-		return ret;
-	}
-
-	if (ive_set_core_state(idle_coreid)) {
 		TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core, drop this task!\n");
 		return ret;
 	}
@@ -1196,7 +1161,6 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 	}
 	if (ret) {
 		ive_core_release_resource(idle_coreid);
-		ive_task_done(idle_coreid);
 		dev_err(ndev->dev,
 			"[IVE] ioctl _IOC_NR(%d) fail\n", _IOC_NR(task_type));
 		return ret;
@@ -1206,7 +1170,6 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 	if (ret) {
 		TRACE_IVE(IVE_DBG_ERR, "ive_core_release_resource core[%d] fail\n", idle_coreid);
 	}
-	ive_task_done(idle_coreid);
 
 	return ret;
 }
@@ -1237,7 +1200,7 @@ static int ive_sw_init(struct ive_device *ndev)
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 	mutex_unlock(&g_ive_lock);
 
-	ive_core_init_resources(IVE_DEV_MAX);
+	ive_core_init_resources(IVE_DEV_USE_MAX);
 
 	return ret;
 }

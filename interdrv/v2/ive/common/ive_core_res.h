@@ -8,7 +8,6 @@
 #ifndef __IVE_CORE_RES_H__
 #define __IVE_CORE_RES_H__
 
-
 int ive_core_request_resource(int timeout);
 int ive_core_release_resource(int id);
 int ive_core_init_resources(unsigned int core_num);
