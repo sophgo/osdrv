@@ -54,6 +54,7 @@ struct tde_core {
 	osal_semaphore sem_intr; //for isr
 	osal_spinlock lock;
 	osal_clk *clk;
+	osal_clk *isp_top_clk;
 	osal_task *thread;
 	unsigned int stop_flag;
 	struct osal_list_head job_list;
@@ -65,7 +66,12 @@ int tde_core_deinit(struct tde_core *core);
 int tde_core_open(struct tde_core *core);
 int tde_core_release(struct tde_core *core);
 
+int tde_core_suspend(struct tde_core *core);
+int tde_core_resume(struct tde_core *core);
+
 int tde_core_isr(struct tde_core *core);
 
+int tde_reg_cb(struct tde_core *core);
+int tde_rm_cb(void);
 
 #endif

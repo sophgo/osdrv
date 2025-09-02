@@ -12,8 +12,9 @@
  *  File operations for core
  ******************************************************/
 void vi_sw_init(struct sop_vi_dev *vdev);
-void vi_suspend(struct sop_vi_dev *vdev);
-void vi_resume(struct sop_vi_dev *vdev);
+void vi_sw_deinit(struct sop_vi_dev *vdev);
+int vi_suspend(struct sop_vi_dev *vdev);
+int vi_resume(struct sop_vi_dev *vdev);
 void vi_irq_handler(struct sop_vi_dev *vdev);
 int vi_create_instance(struct sop_vi_dev *vdev);
 int vi_destroy_instance(struct sop_vi_dev *vdev);
@@ -31,7 +32,6 @@ int vi_csi_start_streaming(struct sop_vi_dev *vdev, uint8_t raw_num);
 int vi_isp_start_streaming(struct sop_vi_dev *vdev, uint8_t pipe, uint8_t chn);
 int vi_csi_stop_streaming(struct sop_vi_dev *vdev, uint8_t raw_num);
 int vi_isp_stop_streaming(struct sop_vi_dev *vdev, uint8_t pipe, uint8_t chn);
-int clean_misc_resources(struct sop_vi_dev *vdev);
 
 void isp_snr_cfg_enq(struct sop_isp_snr_update *snr_node, const enum sop_isp_raw raw_num);
 

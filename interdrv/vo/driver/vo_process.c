@@ -373,11 +373,17 @@ static int vo_get_chn_buffers(struct vo_layer_ctx *layer_ctx, vb_blk *blk)
 
 		if (chn_ctx->pause) {
 			osal_mutex_lock(&jobs->lock);
-			if (!FIFO_EMPTY(&jobs->workq)) {
-				FIFO_GET_FRONT(&jobs->workq, &vb);
-				blk[chn] = (vb_blk)(uintptr_t)vb;
-				chn_num++;
+			if (FIFO_EMPTY(&jobs->workq)) {
+				osal_mutex_unlock(&jobs->lock);
+				continue;
 			}
+			while (FIFO_SIZE(&jobs->workq) != 1) {
+				FIFO_POP(&jobs->workq, &vb);
+				vb_release_block((vb_blk)(uintptr_t)vb);
+			}
+			FIFO_GET_FRONT(&jobs->workq, &vb);
+			blk[chn] = (vb_blk)(uintptr_t)vb;
+			chn_num++;
 			osal_mutex_unlock(&jobs->lock);
 			continue;
 		}

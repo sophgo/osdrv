@@ -15,6 +15,7 @@
 #include <linux/clk.h>
 #include <linux/version.h>
 #include <linux/ctype.h>
+#include <linux/cost_time.h>
 
 #include "base_uapi.h"
 #include "osal.h"
@@ -444,6 +445,19 @@ static long base_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EINVAL;
 
 		ret = base_ion_cache_flush(stCacheOp.addr_p, stCacheOp.addr_v, stCacheOp.size);
+		break;
+	}
+
+	case BASE_GET_TIMESTAMP:
+	{
+		uint64_t timestamp;
+
+		CHECK_IOCTL_CMD(cmd, uint64_t);
+
+		timestamp = read_time_us();
+		if (copy_to_user((uint64_t __user *)arg, &timestamp,
+					sizeof(uint64_t)))
+			return -EINVAL;
 		break;
 	}
 

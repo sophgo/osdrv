@@ -8,6 +8,7 @@
 long driver_vo_ioctl(unsigned int cmd, unsigned long arg);
 int driver_vo_exit();
 int driver_vo_init();
+int driver_vo_release();
 
 #ifdef __cplusplus
 }

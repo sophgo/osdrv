@@ -49,8 +49,6 @@ static int _vi_clk_ctrl(struct platform_vi_dev *vi_dev, u8 enable)
 			} else {
 				if (osal_clk_is_enabled(vdev->clk_isp[i]))
 					osal_clk_disable_unprepare(vdev->clk_isp[i]);
-				else
-					osal_clk_unprepare(vdev->clk_isp[i]);
 			}
 		} else {
 			vi_pr(VI_ERR, "clk_isp(%d) is null\n", i);
@@ -66,8 +64,6 @@ static int _vi_clk_ctrl(struct platform_vi_dev *vi_dev, u8 enable)
 			} else {
 				if (osal_clk_is_enabled(vdev->clk_mac[i]))
 					osal_clk_disable_unprepare(vdev->clk_mac[i]);
-				else
-					osal_clk_unprepare(vdev->clk_mac[i]);
 			}
 		} else {
 			vi_pr(VI_ERR, "clk_mac(%d) is null\n", i);
@@ -479,6 +475,7 @@ err_destroy_instance:
 
 int vi_core_suspend(void)
 {
+	int ret = 0;
 	struct platform_vi_dev *dev = g_vi_dev;
 
 	if (!dev) {
@@ -486,33 +483,82 @@ int vi_core_suspend(void)
 		return OSAL_EINVAL;
 	}
 
-	vi_suspend(&dev->vdev);
+	osal_atomic_set(&dev->vdev.state, E_STATE_SUSPEND);
+
+	ret = vi_suspend(&dev->vdev);
+	if (ret) {
+		vi_pr(VI_ERR, "Failed to suspend vi, err %d\n", ret);
+		goto err_suspend;
+	}
+
+	_vi_clk_ctrl(dev, false);
 
 	vi_pr(VI_INFO, "-\n");
 
-	return 0;
+	return ret;
+
+err_suspend:
+	vi_resume(&dev->vdev);
+
+	osal_atomic_set(&dev->vdev.state, E_STATE_DEFAULT);
+
+	return ret;
 }
 
 int vi_core_resume(void)
 {
+	int ret = 0;
 	struct platform_vi_dev *dev = g_vi_dev;
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct sop_vi_dev *vdev = NULL;
 
 	if (!dev) {
 		vi_pr(VI_ERR, "VI device is not initialized!\n");
 		return OSAL_EINVAL;
 	}
 
-	vi_resume(vdev);
-
-#ifdef CLK_CTRL
+	vdev = &dev->vdev;
 	_vi_clk_ctrl(dev, true);
-#endif
+
+	ret = vi_resume(vdev);
+	if (ret) {
+		vi_pr(VI_ERR, "Failed to resume vi, err %d\n", ret);
+		goto err_resume;
+	}
 
 	vi_pr(VI_INFO, "-\n");
 
-	return 0;
+	osal_atomic_set(&dev->vdev.state, E_STATE_DEFAULT);
+
+	return ret;
+
+err_resume:
+	return ret;
 }
+
+static void vi_suspend_resume(int32_t argc, char **argv)
+{
+	int is_suspend = 0;
+
+	if (argc < 2) {
+		osal_printk("Usage: vi_suspend_resume [0|1]\n");
+		return;
+	}
+	is_suspend = atoi(argv[1]);
+	if (is_suspend < 0 || is_suspend > 3) {
+		osal_printk("Invalid log level: %d\n", is_suspend);
+		return;
+	}
+
+	if (is_suspend == 1) {
+		vi_core_suspend();
+	} else if (is_suspend == 0) {
+		vi_core_resume();
+	} else {
+		osal_printk("Invalid log level: %d\n", is_suspend);
+		return;
+	}
+}
+ALIOS_CLI_CMD_REGISTER(vi_suspend_resume, vi_suspend_resume, vi_suspend_resume);
 
 static void set_vi_log_level(int32_t argc, char **argv)
 {

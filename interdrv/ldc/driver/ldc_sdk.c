@@ -985,6 +985,10 @@ static int ldc_event_handler_th(void *data)
 			goto continue_th;
 		}
 
+		if (ctx->suspend == true) {
+			goto continue_th;
+		}
+
 		osal_spin_lock_irqsave(&ctx->ctx_lock, &flags);
 		job = osal_list_first_entry(&ctx->job_list, struct ldc_job, node);
 		osal_list_del(&job->node);
@@ -1086,6 +1090,41 @@ int ldc_suspend(void)
 	return ret;
 }
 
+int ldc_core_suspend(void)
+{
+	int ret = 0;
+	int cnt;
+	unsigned char coreid;
+	struct ldc_ctx *ctx = get_ldc_ctx();
+
+	osal_mutex_lock(&ldc_reg_lock);
+
+	ctx->suspend = true;
+
+	for (cnt = 0; cnt <= 500; cnt++) {
+		bool all_idle = true;
+		for (coreid = 0; coreid < ctx->core_num; coreid++) {
+			if (osal_atomic_read(&ctx->core[coreid].state) != LDC_CORE_STATE_IDLE) {
+				all_idle = false;
+				break;
+			}
+		}
+		if (all_idle)
+			break;
+		osal_msleep(2);
+	}
+
+	if (cnt > 500) {
+		osal_mutex_unlock(&ldc_reg_lock);
+		TRACE_LDC(DBG_ERR, "not all cores are idle, can't suspend\n");
+		return -1;
+	}
+
+	osal_mutex_unlock(&ldc_reg_lock);
+
+	return ret;
+}
+
 s32 ldc_resume(void)
 {
 	int ret = 0;
@@ -1105,6 +1144,15 @@ s32 ldc_resume(void)
 	osal_mutex_unlock(&ldc_reg_lock);
 
 	TRACE_LDC(DBG_ERR, "gdc resume!\n");
+	return ret;
+}
+
+s32 ldc_core_resume(void)
+{
+	int ret = 0;
+
+	ctx->suspend = false;
+
 	return ret;
 }
 

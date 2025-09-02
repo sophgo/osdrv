@@ -89,6 +89,13 @@ void driver_vpss_exit(void)
 	}
 }
 
+void driver_vpss_release(void)
+{
+	TRACE_VPSS(DBG_WARN, " +\n");
+	vpss_core_stop(vpss_cores);
+	TRACE_VPSS(DBG_WARN, " -\n");
+}
+
 static void set_vpss_log_level(int32_t argc, char **argv)
 {
 	int level;

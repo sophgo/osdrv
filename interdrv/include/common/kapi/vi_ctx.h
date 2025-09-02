@@ -12,7 +12,6 @@
 #define VI_SHARE_MEM_SIZE           (0x2000)
 
 struct sop_vi_ctx {
-	vi_state_e vi_stt;
 	__u8 total_chn_num;
 	__u8 total_dev_num;
 	__u8 is_chn_enable[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];

@@ -635,32 +635,63 @@ err_destroy_instance:
 
 static int vi_core_suspend(struct platform_device *pdev, pm_message_t state)
 {
+	int ret = 0;
 	struct platform_vi_dev *dev = dev_get_drvdata(&pdev->dev);
-	dev_info(&pdev->dev, "vi suspend start\n");
 
-	vi_suspend(&dev->vdev);
+	if (!dev) {
+		vi_pr(VI_ERR, "VI device is not initialized!\n");
+		return OSAL_EINVAL;
+	}
+
+	osal_atomic_set(&dev->vdev.state, E_STATE_SUSPEND);
+
+	ret = vi_suspend(&dev->vdev);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to suspend vi, err %d\n", ret);
+		goto err_suspend;
+	}
 
 	_vi_clk_ctrl(dev, false);
 
-	dev_info(&pdev->dev, "vi suspend end\n");
+	vi_pr(VI_INFO, "-\n");
+
+	return ret;
+err_suspend:
+	vi_resume(&dev->vdev);
+
+	osal_atomic_set(&dev->vdev.state, E_STATE_DEFAULT);
 
 	return 0;
 }
 
 static int vi_core_resume(struct platform_device *pdev)
 {
+	int ret = 0;
 	struct platform_vi_dev *dev = dev_get_drvdata(&pdev->dev);
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct sop_vi_dev *vdev = NULL;
 
-	dev_info(&pdev->dev, "vi resume start\n");
+	if (!dev) {
+		vi_pr(VI_ERR, "VI device is not initialized!\n");
+		return OSAL_EINVAL;
+	}
 
-	vi_resume(vdev);
-
+	vdev = &dev->vdev;
 	_vi_clk_ctrl(dev, true);
 
-	dev_info(&pdev->dev, "vi resume end\n");
+	ret = vi_resume(vdev);
+	if (ret) {
+		vi_pr(VI_ERR, "Failed to resume vi, err %d\n", ret);
+		goto err_resume;
+	}
 
-	return 0;
+	vi_pr(VI_INFO, "-\n");
+
+	osal_atomic_set(&dev->vdev.state, E_STATE_DEFAULT);
+
+	return ret;
+
+err_resume:
+	return ret;
 }
 
 static const struct of_device_id vi_core_match[] = {

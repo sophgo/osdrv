@@ -76,6 +76,8 @@ int ldc_set_identity(struct ldc_ctx *wdev,
 
 int ldc_suspend(void);
 int ldc_resume(void);
+int ldc_core_suspend(void);
+int ldc_core_resume(void);
 
 #define LDC_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_NV21) || (fmt == PIXEL_FORMAT_NV12) || (fmt == PIXEL_FORMAT_YUV_400))

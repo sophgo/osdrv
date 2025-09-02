@@ -701,13 +701,17 @@ static const struct of_device_id ldc_dt_match[] = {
 #ifdef CONFIG_PM_SLEEP
 int gdc_suspend(struct device *dev)
 {
-	TRACE_LDC(DBG_WARN, "ldc suspended\n");
+	TRACE_LDC(DBG_WARN, "ldc suspended +\n");
+	ldc_core_suspend();
+	TRACE_LDC(DBG_WARN, "ldc suspended -\n");
 	return 0;
 }
 
 int gdc_resume(struct device *dev)
 {
-	TRACE_LDC(DBG_WARN, "ldc resumed\n");
+	TRACE_LDC(DBG_WARN, "ldc resumed +\n");
+	ldc_core_resume();
+	TRACE_LDC(DBG_WARN, "ldc resumed -\n");
 	return 0;
 }
 

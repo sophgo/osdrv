@@ -19,10 +19,18 @@ typedef struct {
 } gfbg_compre_info;
 
 typedef struct {
+	unsigned long tde_paddr;	/* Start of tde buffer mem */
+	void *tde_vaddr;
+	unsigned long tde_size;
+} gfbg_tde_info;
+
+typedef struct {
 	struct fb_info *info;
 	unsigned long layer_size;       /* layer_size = fb.smem_len, For display buf, KB */
 	gfbg_compre_info compre_info[2];
 	int index; /* index for compress buffer */
+	gfbg_tde_info tde_info;
+	int rot;
 } gfbg_layer;
 
 struct gfbg_vo_dev {

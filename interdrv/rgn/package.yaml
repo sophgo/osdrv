@@ -77,6 +77,8 @@ license: Copyright (C) Cvitek Co., Ltd. 2019-2020. All rights reserved.    # <�
 #   libpath:                               # 指定静态库所在的路径（相对于该组件路径）
 #     - libs                               #   -Llibs
 build_config:
+  define:
+    - CONFIG_DUAL_OS
   internal_include:
   - driver
   - chip/cv184x

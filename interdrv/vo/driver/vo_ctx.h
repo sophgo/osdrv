@@ -94,6 +94,7 @@ struct vo_dev_ctx {
 
 struct vo_ctx {
 	bool suspend;
+	osal_clk *clk_vo[3];
 	struct vo_dev_ctx dev_ctx[VO_MAX_DEV_NUM];
 	struct vo_layer_ctx layer_ctx[VO_MAX_VIDEO_LAYER_NUM];
 	struct vo_overlay_ctx overlay_ctx[VO_MAX_GRAPHIC_LAYER_NUM];

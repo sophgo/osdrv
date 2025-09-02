@@ -96,7 +96,7 @@ build_config:
 source_file:
   - driver/*.c ? <CONFIG_SUPPORT_VO>
   - chip/cv184x/*.c ? <CONFIG_SUPPORT_VO>
-  - platform/alios/proc/*.c ? <CONFIG_MIPI_TX_SUPPORT_PROC && CONFIG_SUPPORT_VO>
+  - platform/alios/proc/*.c ? <CONFIG_MIPI_TX_SUPPORT_PROC>
   - platform/alios/*.c ? <CONFIG_SUPPORT_VO>
 
 

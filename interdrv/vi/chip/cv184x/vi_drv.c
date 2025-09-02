@@ -1386,7 +1386,7 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	ip_en2.raw = ISP_RD_REG(isptopb, reg_isp_top_t, ip_enable2);
 
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) {
 			scene_ctrl.bits.pre2yuv_422_enable = 1;
 			scene_ctrl.bits.hdr_enable = 0;
 			scene_ctrl.bits.be2raw_l_enable = 0;
@@ -1399,33 +1399,8 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 			scene_ctrl.bits.yuv_in_sel_mode = 1;
 			scene_ctrl.bits.yuv_format = 1;
 			scene_ctrl.bits.be_src_sel = 0;
-			// close ip
-			// raw_top
-			ip_en1.bits.raw_llsc_enable = 0;
-			ip_en1.bits.raw_clsc_enable = 0;
-			ip_en1.bits.raw_drc_enable = 0;
-			ip_en1.bits.raw_dpc_enable = 0;
-			ip_en1.bits.raw_ae_0_enable = 0;
-			ip_en1.bits.raw_ae_1_enable = 0;
-			// rgb_top
-			ip_en1.bits.rgb_clut_enable = 0;
-			ip_en1.bits.sram_ee_ext_enable = 0;
-			ip_en1.bits.pfr_enable = 0;
-			ip_en1.bits.sram_pfr_enable = 0;
-			ip_en1.bits.ee_ext_enable = 0;
-			ip_en1.bits.rgb_ccm_enable = 0;
-			ip_en1.bits.rgb_gamma_enable = 0;
-			ip_en1.bits.rgb_dhz_enable = 0;
-			ip_en1.bits.rgb_rgbdither_enable = 0;
-			ip_en1.bits.rgb_clut_enable = 0;
-			// yuv_top
-			ip_en2.bits.yuv_ee_f_enable = 0;
-			ip_en2.bits.yuv_ee_b_enable = 0;
-			ip_en2.bits.yuv_3dnr_enable = 0;
-			ip_en2.bits.yuv_cnr_enable = 0;
-			ip_en2.bits.yuv_postee_enable = 0;
-			ip_en2.bits.yuv_ycurve_enable = 0;
-			ip_en2.bits.yuv_ldci_enable = 0;
+			ip_en2.bits.yuv_3dnr_enable = (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP);
+			ip_en2.bits.yuv_ldci_enable = (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP);
 		} else if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS) {
 			scene_ctrl.bits.pre2yuv_422_enable = 0;
 			scene_ctrl.bits.hdr_enable = 0;
@@ -1433,6 +1408,8 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 			scene_ctrl.bits.be2raw_s_enable = 0;
 			scene_ctrl.bits.be_rdma_l_enable = 0;
 			scene_ctrl.bits.be_rdma_s_enable = 0;
+			ip_en2.bits.yuv_3dnr_enable = 1;
+			ip_en2.bits.yuv_ldci_enable = 1;
 		}
 	} else { //RGB sensor
 		scene_ctrl.bits.pre2yuv_422_enable = 0;
@@ -1447,33 +1424,6 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 		scene_ctrl.bits.be2raw_s_enable = ctx->isp_pipe_cfg[pipe].is_hdr_on;
 		scene_ctrl.bits.be_rdma_l_enable = 1;
 		scene_ctrl.bits.be_rdma_s_enable = ctx->isp_pipe_cfg[pipe].is_hdr_on;
-		// close ip
-		// raw_top
-		ip_en1.bits.raw_llsc_enable = 1;
-		ip_en1.bits.raw_clsc_enable = 1;
-		ip_en1.bits.raw_drc_enable = 1;
-		ip_en1.bits.raw_dpc_enable = 1;
-		ip_en1.bits.raw_ae_0_enable = 3;
-		ip_en1.bits.raw_ae_1_enable = 1;
-		// rgb_top
-		ip_en1.bits.rgb_clut_enable = 1;
-		ip_en1.bits.sram_ee_ext_enable = 1;
-		ip_en1.bits.pfr_enable = 1;
-		ip_en1.bits.sram_pfr_enable = 1;
-		ip_en1.bits.ee_ext_enable = 1;
-		ip_en1.bits.rgb_ccm_enable = 1;
-		ip_en1.bits.rgb_gamma_enable = 1;
-		ip_en1.bits.rgb_dhz_enable = 1;
-		ip_en1.bits.rgb_rgbdither_enable = 1;
-		ip_en1.bits.rgb_clut_enable = 1;
-		// yuv_top
-		ip_en2.bits.yuv_ee_f_enable = 1;
-		ip_en2.bits.yuv_ee_b_enable = 1;
-		ip_en2.bits.yuv_3dnr_enable = 1;
-		ip_en2.bits.yuv_cnr_enable = 1;
-		ip_en2.bits.yuv_postee_enable = 1;
-		ip_en2.bits.yuv_ycurve_enable = 1;
-		ip_en2.bits.yuv_ldci_enable = 1;
 	}
 
 	ISP_WR_REG(isptopb, reg_isp_top_t, scenarios_ctrl, scene_ctrl.raw);
@@ -1503,42 +1453,41 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 
 	// close raw_top ip
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-			//AF
-			ispblk_af_config(ctx, false);
-			//LSC
-			ISP_WR_BITS(clsc, reg_isp_lsc_t, sc_wrap_0, lsc_enable, 0);
-			//LSCR
-			ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_1, lscr_enable, 0);
-			ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_1, blc_enable, 0);
-			ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_width, ctx->isp_pipe_cfg[pipe].post_img_w - 1);
-			ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_height, ctx->isp_pipe_cfg[pipe].post_img_h - 1);
-			ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, lsc_bayer_starting, ctx->isp_pipe_cfg[pipe].rgb_color_mode);
-			//BNR
-			ISP_WR_BITS(bnr, reg_isp_bnr_t, bnr_00, u1_bnr_enable, 0);
-			//BLC
-			ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, blc_le_enable, 0);
-			ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, blc_se_enable, 0);
-			ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, wbg_le_enable, 0);
-			ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, wbg_se_enable, 0);
-			ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, blc_le_enable, 0);
-			ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, blc_se_enable, 0);
-			ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, wbg_le_enable, 0);
-			ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, wbg_se_enable, 0);
-			//DPC
-			ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, dpc_enable, 0);
-			ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, spc_enable, 0);
-			//GE
-			ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, ge_enable, 0);
-			//DRC
-			ispblk_drc_config(ctx, false);
-			//FUSION
-			ispblk_fusion_config(ctx, false, ISP_FS_OUT_LONG);
-			//MAP_CURVE
-			ISP_WR_BITS(map_curve, reg_map_curve_t, reg_01, u1_fcurve16_en, 0);
-			//CFA
-			ISP_WR_BITS(cfa, reg_isp_cfa_t, reg_00, cfa_enable, 0);
-		}
+		//AF
+		ispblk_af_config(ctx, false);
+		//LSC
+		ISP_WR_BITS(clsc, reg_isp_lsc_t, sc_wrap_0, lsc_enable, 0);
+		//LSCR
+		ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_1, lscr_enable, 0);
+		ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_1, blc_enable, 0);
+		ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_width, ctx->isp_pipe_cfg[pipe].post_img_w - 1);
+		ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_height, ctx->isp_pipe_cfg[pipe].post_img_h - 1);
+		ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, lsc_bayer_starting,
+								ctx->isp_pipe_cfg[pipe].rgb_color_mode);
+		//BNR
+		ISP_WR_BITS(bnr, reg_isp_bnr_t, bnr_00, u1_bnr_enable, 0);
+		//BLC
+		ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, blc_le_enable, 0);
+		ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, blc_se_enable, 0);
+		ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, wbg_le_enable, 0);
+		ISP_WR_BITS(blc_db_wb_0, reg_blc_dg_wb_t, base_config, wbg_se_enable, 0);
+		ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, blc_le_enable, 0);
+		ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, blc_se_enable, 0);
+		ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, wbg_le_enable, 0);
+		ISP_WR_BITS(blc_db_wb_1, reg_blc_dg_wb_t, base_config, wbg_se_enable, 0);
+		//DPC
+		ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, dpc_enable, 0);
+		ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, spc_enable, 0);
+		//GE
+		ISP_WR_BITS(dpc, reg_isp_dpc_t, base_config, ge_enable, 0);
+		//DRC
+		ispblk_drc_config(ctx, false);
+		//FUSION
+		ispblk_fusion_config(ctx, false, ISP_FS_OUT_LONG);
+		//MAP_CURVE
+		ISP_WR_BITS(map_curve, reg_map_curve_t, reg_01, u1_fcurve16_en, 0);
+		//CFA
+		ISP_WR_BITS(cfa, reg_isp_cfa_t, reg_00, cfa_enable, 0);
 	} else {
 		//AF
 		ispblk_af_config(ctx, true);
@@ -1566,22 +1515,20 @@ void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 
 	// close raw_top ip
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-			//PFR
-			ISP_WR_BITS(pfr, reg_pfr_t, pfr_reg0, pfr_en, 0);
-			//CCM
-			ISP_WR_BITS(ccm, reg_isp_ccm_t, ccm_ctrl, ccm_enable, 0);
-			//RGB_GAMMA
-			ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_ctrl, gamma_enable, 0);
-			//CLUT
-			ISP_WR_BITS(clut, reg_isp_clut_t, clut_ctrl, clut_enable, 0);
-			//EE_EXIT
-			ISP_WR_BITS(ee_ext, reg_ee_ext_t, ee_ext_reg0, ee_enable, 0);
-			//CSC
-			ISP_WR_BITS(csc, reg_isp_csc_t, reg_0, csc_enable, 0);
-			//RGB_dither
-			ispblk_rgbdither_config(ctx, false, false, false, false);
-		}
+		//PFR
+		ISP_WR_BITS(pfr, reg_pfr_t, pfr_reg0, pfr_en, 0);
+		//CCM
+		ISP_WR_BITS(ccm, reg_isp_ccm_t, ccm_ctrl, ccm_enable, 0);
+		//RGB_GAMMA
+		ISP_WR_BITS(gamma, reg_isp_gamma_t, gamma_ctrl, gamma_enable, 0);
+		//CLUT
+		ISP_WR_BITS(clut, reg_isp_clut_t, clut_ctrl, clut_enable, 0);
+		//EE_EXIT
+		ISP_WR_BITS(ee_ext, reg_ee_ext_t, ee_ext_reg0, ee_enable, 0);
+		//CSC
+		ISP_WR_BITS(csc, reg_isp_csc_t, reg_0, csc_enable, 0);
+		//RGB_dither
+		ispblk_rgbdither_config(ctx, false, false, false, false);
 	} else {
 		//RGB_dither
 		ispblk_rgbdither_config(ctx, true, false, false, false);
@@ -1601,48 +1548,47 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	ispblk_yuvtop_config(ctx);
 
 	//close yuv_top ip
-	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-			//PRE_EE
-			ISP_WR_BITS(ee_front, reg_ee_add_t, ee_add_reg0, ee_enable, 0);
-			ISP_WR_BITS(ee_back, reg_ee_add_back_t, ee_add_b_reg0, ee_enable, 0);
-			//EE
-			ISP_WR_BITS(post_ee, reg_isp_ee_t, reg_00, ee_enable, 0);
-			//TNR
-			ispblk_yuvdither_config(ctx, 0, false, false, false, false);
-			ispblk_yuvdither_config(ctx, 1, false, false, false, false);
-			//CNR
-			ispblk_cnr_config(ctx, false, 0, 0, 0);
-			//CACP
-			ISP_WR_BITS(cacp, reg_ca_t, reg_00, cacp_enable, 0);
-			//CA_LITE
-			ISP_WR_BITS(ca_lite, reg_ca_lite_t, reg_00, ca_lite_enable, 0);
-			//YCUR
-			ISP_WR_BITS(ycur, reg_isp_ycurv_t, ycur_ctrl, ycur_enable, 0);
-			//LDCI&DCI
-			ispblk_ldci_config(ctx, false, false);
-			//RESIZE
-			if (!ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
-				ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, resize_enable, false);
-				ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, dma_enable, false);
-			}
-		}
+	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
+		ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ONLINE) { //YUV sensor without isp
+		//PRE_EE
+		ISP_WR_BITS(ee_front, reg_ee_add_t, ee_add_reg0, ee_enable, 0);
+		ISP_WR_BITS(ee_back, reg_ee_add_back_t, ee_add_b_reg0, ee_enable, 0);
+		//EE
+		ISP_WR_BITS(post_ee, reg_isp_ee_t, reg_00, ee_enable, 0);
+		//TNR
+		ispblk_yuvdither_config(ctx, 0, false, false, false, false);
+		ispblk_yuvdither_config(ctx, 1, false, false, false, false);
+		//CNR
+		ispblk_cnr_config(ctx, false, 0, 0, 0);
+		//CACP
+		ISP_WR_BITS(cacp, reg_ca_t, reg_00, cacp_enable, 0);
+		//CA_LITE
+		ISP_WR_BITS(ca_lite, reg_ca_lite_t, reg_00, ca_lite_enable, 0);
+		//YCUR
+		ISP_WR_BITS(ycur, reg_isp_ycurv_t, ycur_ctrl, ycur_enable, 0);
+		//RESIZE
+		ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, resize_enable, false);
+		ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, dma_enable, false);
 	} else {
 		//TNR
 		ispblk_yuvdither_config(ctx, 0, true, true, true, true);
 		ispblk_yuvdither_config(ctx, 1, true, true, true, true);
 		//CNR
 		ispblk_cnr_config(ctx, true, 0, 0, 0);
-		//LDCI&DCI
-		ispblk_ldci_config(ctx, false, false);
 		//RESIZE
 		ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, resize_enable,
 				osal_atomic_read(&ctx->isp_pipe_cfg[pipe].resize_en));
 		ISP_WR_BITS(resize, reg_motion_resize_t, resize_00, dma_enable,
 				osal_atomic_read(&ctx->isp_pipe_cfg[pipe].resize_en));
 	}
+
+	//LDCI&DCI
+	ispblk_ldci_config(ctx, false, false);
 }
 
+/*
+ * Update all YUV related blocks, rewriting by post_tuning
+ */
 void ispblk_post_yuv_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 {
 	_ispblk_isptop_cfg_update(ctx, pipe);

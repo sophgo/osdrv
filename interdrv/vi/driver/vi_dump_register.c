@@ -286,9 +286,57 @@ static void _dump_gamma_table(void *addr, struct gamma_tbl *tbl, int *offset)
 	*offset = pos;
 }
 
-int vi_dump_register(struct sop_vi_dev *vdev, void *addr, int *size)
+static void _dump_clut_table(struct sop_vi_dev *vdev, int pipe, void *addr, int *offset)
 {
-	uint32_t i = 0, j = 0, k = 0;
+	uint32_t length = 17 * 17 * 17;
+	uint32_t *data_clut_r = NULL;
+	uint32_t *data_clut_g = NULL;
+	uint32_t *data_clut_b = NULL;
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint32_t *p_clut = (uint32_t *)osal_phys_to_virt(ctx->isp_bufpool[pipe].clut);
+	char name[32] = {0};
+	int pos = *offset;
+	uint32_t r_idx, g_idx, b_idx, idx;
+	uint32_t packed_value;
+	int i = 0;
+
+	data_clut_r = osal_vmalloc(sizeof(uint32_t) * length);
+	data_clut_g = osal_vmalloc(sizeof(uint32_t) * length);
+	data_clut_b = osal_vmalloc(sizeof(uint32_t) * length);
+
+	for (b_idx = 0; b_idx < 17; b_idx++) {
+		for (g_idx = 0; g_idx < 17; g_idx++) {
+			for (r_idx = 0; r_idx < 17; r_idx++) {
+				idx = b_idx * 289 + g_idx * 17 + r_idx;
+				packed_value = p_clut[idx];
+
+				// Extract values from packed data
+				data_clut_b[idx] = packed_value & 0x3FF;          // bits 0-9
+				data_clut_g[idx] = (packed_value >> 10) & 0x3FF;  // bits 10-19
+				data_clut_r[idx] = (packed_value >> 20) & 0x3FF;  // bits 20-29
+			}
+		}
+	}
+
+	snprintf(name, sizeof(name), "clut_r");
+	FPRINTF_TBL(data_clut_r);
+
+	snprintf(name, sizeof(name), "clut_g");
+	FPRINTF_TBL(data_clut_g);
+
+	snprintf(name, sizeof(name), "clut_b");
+	FPRINTF_TBL(data_clut_b);
+
+	osal_vfree(data_clut_r);
+	osal_vfree(data_clut_g);
+	osal_vfree(data_clut_b);
+
+	*offset = pos;
+}
+
+int vi_dump_register(struct sop_vi_dev *vdev, int pipe, void *addr, int *size)
+{
+	uint32_t i = 0, j = 0;
 	int ret = 0;
 	int pos = 0;
 	int val = 0;
@@ -381,73 +429,7 @@ int vi_dump_register(struct sop_vi_dev *vdev, void *addr, int *size)
 
 	//clut
 	{
-		uint32_t r_idx = 17;
-		uint32_t g_idx = 17;
-		uint32_t b_idx = 17;
-		uint32_t rgb_idx = 0;
-		uint32_t *data_clut_r = NULL;
-		uint32_t *data_clut_g = NULL;
-		uint32_t *data_clut_b = NULL;
-		uint8_t enable = 0;
-		uint8_t shdw_sel = 0;
-
-		length = r_idx * g_idx * b_idx;
-		data_clut_r = osal_vmalloc(sizeof(uint32_t) * length);
-		data_clut_g = osal_vmalloc(sizeof(uint32_t) * length);
-		data_clut_b = osal_vmalloc(sizeof(uint32_t) * length);
-
-		reg_base = m_block[ISP_BLK_ID_CLUT].reg_base;
-
-		GET_REGISTER_COMMON(0x0, 0, enable);
-		GET_REGISTER_COMMON(0x0, 1, shdw_sel);
-
-		SET_REGISTER_COMMON(0x0, 0, 0); // reg_clut_enable
-		SET_REGISTER_COMMON(0x0, 1, 0); // reg_clut_shdw_sel
-		// SET_REGISTER_COMMON(0x0, 2, 0); // reg_force_clk_enable
-		// WAIT_IP_DISABLE(0x0, 0);
-
-		SET_REGISTER_COMMON(0x0, 3, 1); // reg_prog_en
-
-		for (i = 0 ; i < b_idx; i++) {
-			for (j = 0 ; j < g_idx; j++) {
-				for (k = 0 ; k < r_idx; k++) {
-					rgb_idx = i * g_idx * r_idx + j * r_idx + k;
-
-					reg_addr = reg_base + 0x04; // reg_sram_r_idx/reg_sram_g_idx/reg_sram_b_idx
-					data = (i << 16) | (j << 8) | k;
-					ISP_WR_REG_BA(reg_addr, data);
-
-					reg_addr = reg_base + 0x0C; // reg_sram_rd
-					data = (0x1 << 31);
-					ISP_WR_REG_BA(reg_addr, data);
-
-					reg_addr = reg_base + 0x0C; // reg_sram_rdata
-					data = ISP_RD_REG_BA(reg_addr);
-
-					data_clut_r[rgb_idx] = (data >> 20) & 0x3FF;
-					data_clut_g[rgb_idx] = (data >> 10) & 0x3FF;
-					data_clut_b[rgb_idx] = data & 0x3FF;
-				}
-			}
-		}
-
-		SET_REGISTER_COMMON(0x0, 3, 0); // reg_prog_en
-		SET_REGISTER_COMMON(0x0, 1, shdw_sel); // reg_clut_shdw_sel
-		SET_REGISTER_COMMON(0x0, 0, enable); // reg_clut_enable
-
-		snprintf(name, sizeof(name), "clut_r");
-		FPRINTF_TBL(data_clut_r);
-
-		snprintf(name, sizeof(name), "clut_g");
-		FPRINTF_TBL(data_clut_g);
-
-		snprintf(name, sizeof(name), "clut_b");
-		FPRINTF_TBL(data_clut_b);
-
-		osal_vfree(data_clut_r);
-		osal_vfree(data_clut_g);
-		osal_vfree(data_clut_b);
-
+		_dump_clut_table(vdev, pipe, addr, &pos);
 		vi_pr(VI_DBG, "CLUT\n");
 	}
 
@@ -558,8 +540,10 @@ int vi_dump_register(struct sop_vi_dev *vdev, void *addr, int *size)
 	//YCURVE
 	{
 		uint8_t r_sel = 0;
-		uint32_t *data_ycurve = osal_vmalloc(sizeof(uint32_t) * length);
+		uint32_t *data_ycurve = NULL;
 
+		length = 64;
+		data_ycurve = osal_vmalloc(sizeof(uint32_t) * length);
 		reg_base = m_block[ISP_BLK_ID_YCURVE].reg_base;
 
 		SET_REGISTER_COMMON(0x4, 8, 1); // reg_ycur_prog_en

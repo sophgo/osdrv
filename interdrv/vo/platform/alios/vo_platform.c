@@ -327,9 +327,8 @@ void vo_sdk_release()
 int vo_release()
 {
 	int ret = 0;
-	osal_atomic_dec(&dev_open_cnt);
-	if (!osal_atomic_read(&dev_open_cnt)) {
-		vo_sdk_release();
-	}
+
+	vo_sdk_release();
+
 	return ret;
 }

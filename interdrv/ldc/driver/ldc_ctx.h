@@ -72,5 +72,6 @@ struct ldc_ctx {
 	osal_semaphore sem;
 	bool thread_created;
 	osal_timer timer;
+	bool suspend;
 };
 #endif

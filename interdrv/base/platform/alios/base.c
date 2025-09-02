@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <aos/cli.h>
 #include <debug/dbg.h>
+#include <time.h>
 #include "osal.h"
 #include "bind.h"
 #include "ion.h"
@@ -262,6 +263,19 @@ long driver_base_ioctl(unsigned int cmd, unsigned long arg)
 		break;
 	}
 
+	case BASE_GET_TIMESTAMP:
+	{
+		uint64_t timestamp;
+		struct timespec ts;
+
+		CHECK_IOCTL_CMD(cmd, uint64_t);
+
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		timestamp = ts.tv_sec*1000000 + ts.tv_nsec/1000;
+		osal_memcpy((uint64_t *)arg, &timestamp, sizeof(uint64_t));
+		break;
+	}
+
 	default:
 		TRACE_BASE(DBG_ERR, "Not support functions");
 		return -1;
@@ -289,6 +303,14 @@ void driver_base_exit(void)
 	vb_cleanup();
 	vb_destroy_instance();
 	base_ion_deinit();
+}
+
+void driver_base_release(void)
+{
+	TRACE_BASE(DBG_WARN, "+\n");
+	bind_deinit();
+	bind_init();
+	TRACE_BASE(DBG_WARN, "-\n");
 }
 
 static void set_base_log_level(int32_t argc, char **argv)

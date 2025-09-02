@@ -20,7 +20,7 @@
 #include <linux/io.h>
 #include <linux/interrupt.h>
 #include <linux/version.h>
-
+#include <linux/delay.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
@@ -34,6 +34,7 @@
 
 #define IPCM_DEV_NAME "ipcm"
 
+#define IPCM_RESUME_TIMEOUT_CNT 10000
 // IPCM device structure
 struct ipcm_device {
 	struct device *dev;
@@ -391,6 +392,57 @@ static int ipcm_dev_remove(struct platform_device *pdev)
 	return 0;
 }
 
+// #ifdef CONFIG_PM
+#if 1
+static int ipcm_dev_suspend(struct platform_device *pdev, pm_message_t state)
+{
+    ipcm_mailbox_irq_disable;
+    ipcm_cust_cli_uninit();
+    ipcm_port_uninit();
+    ipcm_err("%s DONE\n", __func__);
+    return 0;
+}
+
+static int ipcm_dev_resume(struct platform_device *pdev)
+{
+	int ret = 0;
+
+    int timeout_cnt = 0;
+
+    while (!(s_ctx.alios_stat & (1<<RTOS_IPCM_DONE)) && timeout_cnt < IPCM_RESUME_TIMEOUT_CNT) {
+    	ipcm_info("wait alios ready stat is %u timeout_cnt:%d\n",
+    		s_ctx.alios_stat, timeout_cnt);
+    	timeout_cnt ++;
+    	msleep(10);
+    	ipcm_get_rtos_boot_status(&s_ctx.alios_stat);
+    }
+
+    if (!(s_ctx.alios_stat & (1<<RTOS_IPCM_DONE))) {
+    	ipcm_err("alios ipcm not ready stat is %u timeout_cnt:%d\n",
+    		s_ctx.alios_stat, timeout_cnt);
+    	return -EFAULT;
+    }
+
+    ret = ipcm_port_init();
+    if (ret) {
+        ipcm_err("ipcm_port_init failed ret:%d.\n", ret);
+        return ret;
+    }
+
+	ret = ipcm_cust_cli_init();
+	if (ret) {
+		ipcm_err("ipcm_cust_cli_init failed.\n");
+	}
+
+	ipcm_mailbox_irq_enable;
+	ipcm_info("%s DONE\n", __func__);
+	return ret;
+}
+#else
+#define ipcm_dev_suspend NULL
+#define ipcm_dev_resume NULL
+#endif
+
 static const struct of_device_id ipcm_match[] = {
 	{ .compatible = "cvitek,rtos_cmdqu" },
 	{},
@@ -399,6 +451,8 @@ static const struct of_device_id ipcm_match[] = {
 static struct platform_driver ipcm_driver = {
 	.probe = ipcm_dev_probe,
 	.remove = ipcm_dev_remove,
+	.suspend = ipcm_dev_suspend,
+	.resume = ipcm_dev_resume,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = IPCM_DEV_NAME,

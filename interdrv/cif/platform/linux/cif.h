@@ -96,6 +96,7 @@ struct cif_dev {
 	unsigned int		max_mac_clk;
 	void				*pad_ctrl;
 	bool				is_mac_on[MAX_LINK_NUM];
+	struct combo_dev_attr_s	saved_attr[MAX_LINK_NUM];
 };
 
  /*driver function for cif_comm.c*/

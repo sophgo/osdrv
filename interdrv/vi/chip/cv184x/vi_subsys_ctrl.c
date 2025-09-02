@@ -39,7 +39,7 @@ void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 	ISP_WR_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_1, vi_sel_1.raw);
 
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) {
 			ISP_WR_BITS(vi_sel, reg_pre_raw_vi_sel_t, reg_0, csi_in_format, 1);
 		}
 		//dpcm off
@@ -88,7 +88,7 @@ void ispblk_rawtop_config(struct isp_ctx *ctx)
 
 	rawtop1_raw_4.raw = ISP_RD_REG(rawtop1, reg_raw_top1_t, raw_4);
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+		if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) {
 			rawtop1_raw_4.bits.yuv_path = 1;
 		}
 	} else {

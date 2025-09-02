@@ -2,6 +2,7 @@
 #include "cif_l.h"
 #include "cif_ioctl.h"
 #include "cif.h"
+#include "snsr_cb.h"
 
 static struct proc_dir_entry *cif_proc_entry;
 const struct proc_ops cif_proc_fops;
@@ -122,6 +123,42 @@ static int cif_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+void sensor_i2c_write(struct isp_i2c_data *i2c_data, unsigned short reg_addr, unsigned short data)
+{
+	i2c_data->reg_addr = reg_addr;
+	i2c_data->data = data;
+	vi_sys_cmm_cb_i2c(CVI_SNS_I2C_WRITE, (void *)i2c_data);
+}
+
+void sensor_standby_restart(struct cif_dev *dev, uint32_t devno, bool enable)
+{
+	int i;
+	struct isp_i2c_data *i2c_data;
+	struct sns_ctrl_info *sns_ctrl_info = &dev->link[devno].attr.sns_resume_i2c_info;
+	i2c_data = kzalloc(sizeof(struct isp_i2c_data), __GFP_RETRY_MAYFAIL);
+	if (!i2c_data) {
+		printk("i2c_data kzalloc failed\n");
+	}
+
+	i2c_data->i2c_dev = sns_ctrl_info->i2c_base_info.i2c_dev;
+	i2c_data->dev_addr = sns_ctrl_info->i2c_base_info.dev_addr;
+	i2c_data->addr_bytes = sns_ctrl_info->i2c_base_info.addr_bytes;
+	i2c_data->data_bytes = sns_ctrl_info->i2c_base_info.data_bytes;
+	if (enable) {
+		for (i = 0; i < sns_ctrl_info->i2c_base_info.resume_seq_length; i++) {
+			sensor_i2c_write(i2c_data, sns_ctrl_info->sns_resume_info[i].addr,
+				sns_ctrl_info->sns_resume_info[i].data);
+		}
+	} else {
+		for (i = 0; i < sns_ctrl_info->i2c_base_info.suspend_seq_length; i++) {
+			sensor_i2c_write(i2c_data, sns_ctrl_info->sns_suspend_info[i].addr,
+				sns_ctrl_info->sns_suspend_info[i].data);
+		}
+	}
+	kfree(i2c_data);
+	i2c_data = NULL;
+}
+
 static int cvi_cif_suspend(struct platform_device *pdev)
 {
 	struct cif_dev *dev;
@@ -141,7 +178,10 @@ static int cvi_cif_suspend(struct platform_device *pdev)
 
 	for (i = 0; i < MAX_LINK_NUM; i++) {
 		dev->is_mac_on[i] = dev->link[i].is_on;
+		dev->saved_attr[i] = dev->link[i].attr;
 		if (dev->is_mac_on[i]) {
+			sensor_standby_restart(dev, i, 0);
+			cif_enable_snsr_clk(dev, i, 0);
 			cif_reset_mipi(dev, i);
 		}
 	}
@@ -169,10 +209,14 @@ static int cvi_cif_resume(struct platform_device *pdev)
 
 	cif_proc_entry = proc_create_data("mipi-rx", 0, NULL, &cif_proc_fops, dev);
 	for (i = 0; i < MAX_LINK_NUM; i++) {
+		dev->link[i].attr = dev->saved_attr[i];
 		if (dev->is_mac_on[i]) {
 			cif_set_dev_attr(dev, &dev->link[i].attr);
+			cif_enable_snsr_clk(dev, i, 1);
+			sensor_standby_restart(dev, i, 1);
 		}
 	}
+
 	dev_info(&pdev->dev, "cif resume end");
 	return 0;
 }

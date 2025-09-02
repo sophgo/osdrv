@@ -68,6 +68,7 @@ struct vpss_hal_ctx {
 	struct osal_list_head job_wait_queue;
 	struct osal_list_head job_online_queue;
 	struct vpss_cmdq_buf cmdq_buf;
+	u8 is_suspend;
 };
 
 struct vpss_device {

@@ -178,5 +178,7 @@ void vpss_ctx_param_init(struct vpss_ctx *ctx);
 void vpss_init(struct vpss_ctx *ctx);
 void vpss_deinit(struct vpss_ctx *ctx);
 
+int vpss_handler_suspend(struct vpss_ctx *ctx);
+int vpss_handler_resume(struct vpss_ctx *ctx);
 
 #endif /* _VPSS_H_ */

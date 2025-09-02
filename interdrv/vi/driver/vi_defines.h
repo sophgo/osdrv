@@ -34,6 +34,12 @@ enum E_AI_WAKE_TYPE {
 	E_AI_WAKE_TYPE_AI_ISP_TH,
 };
 
+enum E_STATE_S {
+	E_STATE_DEFAULT,
+	E_STATE_SUSPEND,
+	E_STATE_RESUME,
+	E_STATE_MAX
+};
 struct vi_thread_attr {
 	char			th_name[32];
 	osal_task		*w_thread;
@@ -155,6 +161,7 @@ struct sop_vi_dev {
 
 	osal_atomic			pre_fe_state[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];
 	osal_atomic			postraw_state;
+	osal_atomic			state;
 
 	osal_atomic			is_drop;
 

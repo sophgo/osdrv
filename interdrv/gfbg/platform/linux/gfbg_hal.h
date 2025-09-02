@@ -17,7 +17,7 @@ void gfbg_hal_set_layer_stride(vo_dev dev_id, vo_layer layer_id, unsigned int st
 void gfbg_hal_set_layer_rect(vo_dev dev_id, vo_layer layer_id, fb_rect *rect,
 			     const gfbg_display_info *display_info);
 void gfbg_hal_set_layer_zoom(vo_dev dev_id, vo_layer layer_id, bool hscl_en, bool vscl_en,
-			     const gfbg_display_info *display_info);
+			     const gfbg_display_info *display_info, int rot);
 void gfbg_hal_set_layer_addr(vo_dev dev_id, vo_layer layer_id, phys_addr_t addr);
 void gfbg_hal_set_layer_colorkey(vo_dev dev_id, vo_layer layer_id,
 				 const gfbg_colorkeyex *colorkey);

@@ -42,6 +42,7 @@ static IPCMPA_MUTEX mailbox_mutex;
 // Message handlers
 static ipcm_pre_handle _m_pre_process = NULL;
 static ipcm_pre_handle _m_pre_send = NULL;
+static ipcm_pre_handle _m_send_hook   = NULL;
 
 // Message statistics
 static u32 _m_msg_recv_cnt = 0;
@@ -201,6 +202,19 @@ s32 ipcm_register_pre_send_handle(ipcm_pre_handle pre_send)
 }
 
 /**
+ * @brief Register send hook
+ *
+ * @param send_hook Hook function to call before sending messages
+ * @return Status code (0 on success, negative on error)
+ */
+
+s32 ipcm_register_send_hook(ipcm_pre_handle send_hook)
+{
+	_m_send_hook = send_hook;
+	return 0;
+}
+
+/**
  * @brief Send message through IPCM
  *
  * Processes and sends message:
@@ -218,6 +232,12 @@ s32 ipcm_send_msg(MsgData *data)
 	if (data == NULL) {
 		ipcm_err("data is null.\n");
 		return -EFAULT;
+	}
+
+	if (_m_send_hook){
+		ret = _m_send_hook(data->grp_id, data);
+		if (ret) // msg send has been hooked
+			return ret;
 	}
 
 	IPCM_DBG_R_MSG_SEND((void *)data);

@@ -401,7 +401,9 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 		}
 
 		for (chn_num = ISP_FE_CH0; chn_num < chn_max; chn_num++) {
-			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
+			pipe = ctx->isp_csi_cfg[raw_num].is_hdr_on
+					? ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0]
+					: ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
 			seq_printf(m, "VIPreFECh%dCnt\t\t:%4d\n", chn_num, vdev->pre_fe_frm_num[raw_num][chn_num]);
 			seq_printf(m, "VIPostPipe%dCnt\t\t:%4d\n", pipe, vdev->postraw_frame_number[pipe]);
 		}

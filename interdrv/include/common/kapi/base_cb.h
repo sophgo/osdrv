@@ -25,6 +25,7 @@
 		MOD(BMTPU)	\
 		MOD(HDMI)	\
 		MOD(GFBG)	\
+		MOD(TDE)	\
 		MOD(BUTT)	\
 	}
 

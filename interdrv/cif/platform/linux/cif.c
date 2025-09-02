@@ -1,3 +1,4 @@
+#define DEBUG
 #include <linux/types.h>
 #include <linux/delay.h>
 #include "cif_comm.h"
@@ -1525,6 +1526,8 @@ int cif_set_dev_attr(struct cif_dev *dev, struct combo_dev_attr_s *attr)
 	}
 #endif
 
+	cif_dump_dev_attr(dev, attr);
+
 	rc = cif_check_dev_attr(dev, attr);
 	if (rc < 0) {
 		dev_err(_dev, "check attr fail %d\n", rc);
@@ -1534,8 +1537,6 @@ int cif_set_dev_attr(struct cif_dev *dev, struct combo_dev_attr_s *attr)
 	ctx = &dev->link[attr->devno].cif_ctx;
 	param = &dev->link[attr->devno].param;
 	rx_attr = &dev->link[attr->devno].attr;
-
-	cif_dump_dev_attr(dev, attr);
 
 	memset(param, 0, sizeof(*param));
 	ctx->cur_config = param;

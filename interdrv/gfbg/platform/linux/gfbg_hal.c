@@ -65,7 +65,7 @@ void gfbg_hal_set_layer_rect(vo_dev dev_id, vo_layer layer_id, fb_rect *rect, co
 		cfg->ow_cfg[0].mem_size.w = ALIGN(cfg->ow_cfg[0].img_size.w * bytesperpixel, 16);
 	}
 
-	cfg->ow_cfg[0].mem_size.h = rect->height;
+	cfg->ow_cfg[0].mem_size.h = ALIGN(cfg->ow_cfg[0].img_size.h * bytesperpixel, 16);
 
 	cfg->ow_cfg[0].end.x = cfg->ow_cfg[0].start.x + (cfg->ow_cfg[0].img_size.w <<
 			       cfg->gop_ctrl.b.hscl_en) - cfg->gop_ctrl.b.hscl_en;
@@ -88,9 +88,10 @@ void gfbg_hal_set_layer_rect(vo_dev dev_id, vo_layer layer_id, fb_rect *rect, co
 }
 
 void gfbg_hal_set_layer_zoom(vo_dev dev_id, vo_layer layer_id, bool hscl_en, bool vscl_en,
-			     const gfbg_display_info *display_info)
+			     const gfbg_display_info *display_info, int rot)
 {
 	struct disp_gop_cfg *cfg = gfbg_gop_get_cfg(dev_id, layer_id);
+	struct disp_gop_ow_cfg ow_cfg = {0};
 
 	cfg->gop_ctrl.b.hscl_en = hscl_en;
 	cfg->gop_ctrl.b.vscl_en = vscl_en;
@@ -110,8 +111,19 @@ void gfbg_hal_set_layer_zoom(vo_dev dev_id, vo_layer layer_id, bool hscl_en, boo
 	if (cfg->ow_cfg[0].end.y > display_info->max_screen_height)
 		cfg->ow_cfg[0].end.y = display_info->max_screen_height - cfg->gop_ctrl.b.vscl_en;
 
+	ow_cfg = cfg->ow_cfg[0];
+
+	if (rot) {
+		ow_cfg.start.x = cfg->ow_cfg[0].start.y;
+		ow_cfg.start.y = cfg->ow_cfg[0].start.x;
+		ow_cfg.end.x = cfg->ow_cfg[0].end.y;
+		ow_cfg.end.y = cfg->ow_cfg[0].end.x;
+		ow_cfg.mem_size.w = cfg->ow_cfg[0].mem_size.h;
+		ow_cfg.mem_size.h = cfg->ow_cfg[0].mem_size.w;
+	}
+
 	gfbg_gop_set_cfg(dev_id, layer_id, cfg, true);
-	gfbg_gop_ow_set_cfg(dev_id, layer_id, 0, &(cfg->ow_cfg[0]), true);
+	gfbg_gop_ow_set_cfg(dev_id, layer_id, 0, &ow_cfg, true);
 
 	TRACE_GFBG(DBG_INFO, "%s: dev(%d) layer (%d) - (%d,%d,%d,%d)\n", __func__,
 		   dev_id, layer_id, cfg->ow_cfg[0].start.x, cfg->ow_cfg[0].start.y,

@@ -16,6 +16,8 @@ char gfbg_cfg[128] = "gfbg:vram0_size:8100";
 module_param_string(video, gfbg_cfg, 128, 0000);
 static int compre_size = 250;     //default 250KB
 module_param(compre_size, int, 0444);
+static int tde_rot = 0; //default 0, 1:90 degree, 2:270 degree
+module_param(tde_rot, int, 0444);
 
 gfbg_layer g_layer[GFBG_MAX_LAYER_NUM];
 
@@ -113,6 +115,7 @@ static void parse_cfg_change_layer_size(const char *sc_str, vo_layer layer_id)
 	g_layer[layer_id].layer_size = layer_size;
 	g_layer[layer_id].compre_info[0].compre_size = compre_size * 1024; // convert to bytes
 	g_layer[layer_id].compre_info[1].compre_size = compre_size * 1024; // convert to bytes
+	g_layer[layer_id].rot = tde_rot;
 
 	TRACE_GFBG(DBG_INFO, "layer_id = %u; layer_size = %lu, compre_size = %lu;\n",
 		   layer_id, layer_size, g_layer[layer_id].compre_info[0].compre_size);

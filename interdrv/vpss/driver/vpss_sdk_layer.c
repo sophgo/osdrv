@@ -276,6 +276,7 @@ vpss_grp vpss_get_available_grp(struct vpss_cores *cores)
 
 	for (i = 0; i < VPSS_ONLINE_NUM; i++) {
 		if ((cores->vi_vpss_mode.mode[i] == VI_ONLINE_VPSS_ONLINE) ||
+			(cores->vi_vpss_mode.mode[i] == VI_SLICE_VPSS_ONLINE) ||
 			(cores->vi_vpss_mode.mode[i] == VI_OFFLINE_VPSS_ONLINE))
 			grp = VPSS_ONLINE_NUM;
 	}
@@ -346,6 +347,7 @@ int vpss_create_grp(vpss_grp grp_id, const vpss_grp_attr_s *grp_attr, struct vps
 
 	if ((grp_id < VPSS_ONLINE_NUM) &&
 		((cores->vi_vpss_mode.mode[grp_id] == VI_OFFLINE_VPSS_ONLINE) ||
+		(cores->vi_vpss_mode.mode[grp_id] == VI_SLICE_VPSS_ONLINE) ||
 		(cores->vi_vpss_mode.mode[grp_id] == VI_ONLINE_VPSS_ONLINE))) {
 		online_from_isp = true;
 		job_num = VPSS_ONLINE_JOB_NUM;

@@ -33,6 +33,34 @@ static u32 _init_status = 0;
 
 unsigned long long t_recv;
 
+s32 ipcm_release_buff_by_msg(void *msg)
+{
+	if (msg) {
+		MsgData *msg_data = (MsgData *)msg;
+		if (msg_data->func_type == MSG_TYPE_SHM) {
+			pool_free_by_offset(_port_ctx.pool_mgr_base,
+					msg_data->msg_param.msg_ptr.data_pos);
+		}
+		return 0;
+	}
+	return -EFAULT;
+}
+
+static s32 _ipcm_send_hook(u8 port_id, void *msg)
+{
+	u32 stat = 0;
+	ipcm_get_rtos_boot_status(&stat);
+	if (!(stat & (1 << RTOS_IPCM_DONE))) {
+		ipcm_debug("alios may be in reset process, stat is %u\n", stat);
+		// hooked, and free pool buff
+		if (msg) {
+			ipcm_release_buff_by_msg(msg);
+		}
+		return 1;
+	}
+	return 0;
+}
+
 static s32 _ipcm_irq_pre_process(u8 port_id, void *msg)
 {
 	if (_port_ctx.open_recv_send_log || ipcm_log_level_debug()) {
@@ -85,6 +113,12 @@ s32 ipcm_port_init(void)
 		ipcm_err("ipcm_init failed.\n");
 		return ret;
 	}
+	
+	if (_port_ctx.rtos_stat_base == NULL) {
+		_port_ctx.rtos_stat_base = ipcmpa_ioremap(RTOS_BOOT_STATUS_REG , 0x4);
+		if(_port_ctx.rtos_stat_base == NULL)
+			ipcm_err("rtos_stat_base ioremap %x failed!\n", RTOS_BOOT_STATUS_REG);
+	}
 
 	_port_ctx.pool_mgr_base = (POOLMGRHANDLE)(long)IPCMPA_MEMREMAP((unsigned long)_port_ctx.pool_mgr_paddr, _port_ctx.pool_mgr_capacity);
 
@@ -95,6 +129,8 @@ s32 ipcm_port_init(void)
 	ret = ipcm_register_irq_handle(_ipcm_irq_pre_process);
 
 	ret = ipcm_register_pre_send_handle(_ipcm_send_pre_process);
+
+	ret = ipcm_register_send_hook(_ipcm_send_hook);
 
 	ipcm_set_rtos_boot_bit(RTOS_IPCM_DONE, 1);
 
@@ -129,10 +165,16 @@ s32 ipcm_port_uninit(void)
 		IPCMPA_MUTEX_UNINIT(&_port_ctx.data_lock[i]);
 	}
 
+	if (_port_ctx.rtos_stat_base)
+		ipcmpa_iounmap(_port_ctx.rtos_stat_base);
+
 	if (_port_ctx.pool_mgr_base)
 		IPCMPA_MEMUNMAP(_port_ctx.pool_mgr_base);
 
-	// IPCM_DBG_R_PROC_UNINIT
+	ipcm_register_send_hook(NULL);
+	ipcm_register_irq_handle(NULL);
+	ipcm_register_pre_send_handle(NULL);
+        // IPCM_DBG_R_PROC_UNINIT
 
 	ipcm_uninit();
 
@@ -423,24 +465,24 @@ IPCMPA_EXPORT_SYMBOL_GPL(ipcm_port_data_packed);
  */
 s32 ipcm_get_rtos_boot_status(u32 *stat)
 {
-	void *__IPCMPA_IOMEM rtos_stat_base = NULL;
+    void * __IPCMPA_IOMEM rtos_stat_base = NULL;
+    if (NULL == stat) {
+        ipcm_err("stat is null.\n");
+        return -EINVAL;
+    }
+    if (rtos_stat_base == NULL) {
+        rtos_stat_base = ipcmpa_ioremap(RTOS_BOOT_STATUS_REG, 0x4);
+        if (rtos_stat_base == NULL) {
+            ipcm_err("rtos_stat_base ioremap %x failed!\n",
+                     RTOS_BOOT_STATUS_REG);
+            return -1;
+        }
+    }
 
-	if (NULL == stat) {
-		ipcm_err("stat is null.\n");
-		return -EINVAL;
-	}
+    *stat = ipcmpa_ioread32(rtos_stat_base);
+    ipcm_debug("rtos status = 0x%x\n", *stat);
 
-	rtos_stat_base = ipcmpa_ioremap(RTOS_BOOT_STATUS_REG , 0x4);
-	if(rtos_stat_base == NULL) {
-		ipcm_err("ipcmpa_ioremap %x failed!\n", RTOS_BOOT_STATUS_REG);
-		return -1;
-	} else {
-		*stat = ipcmpa_ioread32(rtos_stat_base);
-		ipcm_info("rtos status = 0x%x\n", *stat);
-		ipcmpa_iounmap(rtos_stat_base);
-	}
-
-	return 0;
+    return 0;
 }
 
 /**

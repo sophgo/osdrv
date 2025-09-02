@@ -45,6 +45,7 @@ struct vpss_handler_ctx {
 	osal_atomic active_cnt;
 	u32 stop_flag;
 	u8 events;
+	u8 is_suspend;
 };
 
 struct _vpss_gdc_cb_param {

@@ -1652,6 +1652,9 @@ static int vpss_event_handler(void *arg)
 			continue;
 		}
 
+		if (hdl_ctx->is_suspend)
+			continue;
+
 		//TRACE_VPSS(DBG_DEBUG, "vpss thread, events:%d\n", ctx->events);
 		osal_spin_lock(&hdl_ctx->hdl_lock);
 		hdl_ctx->events &= ~CTX_EVENT_WKUP;
@@ -1744,7 +1747,6 @@ void _update_vpss_chn_real_frame_rate(struct vpss_ctx *ctx, unsigned int duratio
 	int i, j;
 	struct vpss_chn_ctx *chn_ctx;
 
-
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (ctx->grp_ctx[i] && ctx->grp_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
@@ -1752,7 +1754,8 @@ void _update_vpss_chn_real_frame_rate(struct vpss_ctx *ctx, unsigned int duratio
 
 				if (chn_ctx->is_enabled) {
 					chn_ctx->chn_work_status.real_frame_rate
-						= chn_ctx->chn_work_status.frame_num * duration_us / 1000000;
+						= ((chn_ctx->chn_work_status.frame_num * 1000000)
+						+ (duration_us / 2)) / duration_us;
 					chn_ctx->chn_work_status.frame_num = 0;
 				}
 			}
@@ -1793,6 +1796,7 @@ void vpss_init(struct vpss_ctx *ctx)
 	osal_spin_lock_init(&hdl_ctx->hdl_lock);
 	osal_atomic_set(&hdl_ctx->active_cnt, 0);
 	hdl_ctx->events = 0;
+	hdl_ctx->is_suspend = 0;
 	hdl_ctx->stop_flag = 0;
 
 	hdl_ctx->thread = osal_kthread_create(vpss_event_handler, ctx, "task_vpss_hdl", 0);
@@ -1815,5 +1819,55 @@ void vpss_deinit(struct vpss_ctx *ctx)
 
 	osal_mutex_destroy(&ctx->lock);
 	base_unregister_recv_cb(ID_VPSS);
+}
+
+int vpss_handler_suspend(struct vpss_ctx *ctx)
+{
+	int count;
+	vpss_grp grp_id;
+	struct vpss_grp_ctx *grp_ctx;
+	struct vpss_handler_ctx *hdl_ctx = &ctx->hdl_ctx;
+
+	if (!hdl_ctx->thread) {
+		TRACE_VPSS(DBG_ERR, "vpss thread not initialized yet\n");
+		return -1;
+	}
+
+	osal_spin_lock(&hdl_ctx->hdl_lock);
+	hdl_ctx->is_suspend = 1;
+	osal_spin_unlock(&hdl_ctx->hdl_lock);
+
+	for (grp_id = 0; grp_id < VPSS_MAX_GRP_NUM; ++grp_id) {
+		if (!ctx->grp_ctx[grp_id])
+			continue;
+
+		grp_ctx = ctx->grp_ctx[grp_id];
+
+		//wait frame done
+		count = 40;
+		while (!grp_ctx->online_from_isp && --count > 0) {
+			if (osal_atomic_read(&grp_ctx->hdl_state) == HANDLER_STATE_STOP)
+				break;
+			osal_msleep(1);
+		}
+		if (count == 0) {
+			TRACE_VPSS(DBG_ERR, "Grp(%d) Wait timeout, HW hang.\n", grp_id);
+			//TODO: reset dev and job
+		}
+	}
+
+	return 0;
+}
+
+int vpss_handler_resume(struct vpss_ctx *ctx)
+{
+	struct vpss_handler_ctx *hdl_ctx = &ctx->hdl_ctx;
+
+	osal_spin_lock(&hdl_ctx->hdl_lock);
+	hdl_ctx->is_suspend = 0;
+	osal_wait_wakeup(&hdl_ctx->wait);
+	osal_spin_unlock(&hdl_ctx->hdl_lock);
+
+	return 0;
 }
 

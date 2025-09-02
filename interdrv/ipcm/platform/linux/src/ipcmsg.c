@@ -511,7 +511,7 @@ int ipcmsg_send_async(int s32Id, CVI_IPCMSG_MESSAGE_S *pstMsg)
 		CVI_TRACE_IPCMSG(CVI_DBG_ERR, "_send_msg failed.");
 		goto err;
 	}
-	atomic_fetch_add(1, &s_status.SendOnlyCnt);
+	atomic_fetch_add(1, &s_status.SendASyncCnt);
 
 	return 0;
 err:
@@ -559,7 +559,7 @@ int ipcmsg_send_sync(int s32Id, CVI_IPCMSG_MESSAGE_S *pstMsg,
 		CVI_TRACE_IPCMSG(CVI_DBG_ERR, "_send_msg failed.");
 		goto err;
 	}
-	atomic_fetch_add(1, &s_status.SendOnlyCnt);
+	atomic_fetch_add(1, &s_status.SendSyncCnt);
 
 	if (s32TimeoutMs < 0) {
 		s32Ret = wait_event_interruptible(item->wait, item->avail);

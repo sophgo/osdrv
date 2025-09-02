@@ -274,6 +274,10 @@ vo_sync_info_s sync_info[VO_OUTPUT_BUTT] = {
 		, .vact = 1920, .vbb = 30, .vfb = 150
 		, .hact = 440, .hbb = 50, .hfb = 150
 		, .vpw = 20, .hpw = 30, .idv = 0, .ihs = 1, .ivs = 0},
+	[VO_OUTPUT_480x640_60] = {.synm = 1, .iop = 1, .frame_rate = 60
+		, .vact = 640, .vbb = 30, .vfb = 14
+		, .hact = 480, .hbb = 37, .hfb = 37
+		, .vpw = 6, .hpw = 30, .idv = 0, .ihs = 0, .ivs = 1},
 };
 
 const struct disp_pattern patterns[VO_PAT_MAX] = {
@@ -1848,6 +1852,61 @@ static int vo_set_chnrotation(vo_layer layer, vo_chn chn, rotation_e rotation)
 	return 0;
 }
 
+int vo_resume(void)
+{
+	int ret = -1;
+	vo_layer layer;
+	vo_dev dev = 0;
+
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+		if (g_vo_ctx->layer_ctx[layer].is_layer_enable && g_vo_ctx->suspend) {
+			ret = vo_create_thread(layer);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo create thread\n");
+			}
+		}
+
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
+			ret = vo_start_streaming(dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo start streaming\n");
+			}
+		}
+
+	g_vo_ctx->suspend = false;
+	TRACE_VO(DBG_WARN, "vo resumed\n");
+
+	return 0;
+}
+
+int vo_suspend(void)
+{
+	int ret = -1;
+	vo_layer layer;
+	vo_dev dev = 0;
+
+	g_vo_ctx->suspend = true;
+
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+		if (g_vo_ctx->layer_ctx[layer].is_layer_enable) {
+			ret = vo_destroy_thread(layer);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo destory thread\n");
+			}
+		}
+
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+		if (g_vo_ctx->dev_ctx[dev].is_dev_enable) {
+			ret = vo_stop_streaming(dev);
+			if (ret) {
+				TRACE_VO(DBG_ERR, "Failed to vo stop streaming\n");
+			}
+		}
+
+	return 0;
+}
+
 /*****************************************************************************
  *  SDK layer ioctl operations
  ****************************************************************************/
@@ -2216,6 +2275,18 @@ long vo_sdk_ctrl(struct vo_ext_control *p)
 		osal_memcpy(&cfg, p->ptr, sizeof(struct vo_chn_cfg));
 
 		rc = vo_resume_chn(cfg.layer, cfg.chn);
+	}
+	break;
+
+	case VO_SDK_SUSPEND: {
+
+		rc = vo_suspend();
+	}
+	break;
+
+	case VO_SDK_RESUME: {
+
+		rc = vo_resume();
 	}
 	break;
 

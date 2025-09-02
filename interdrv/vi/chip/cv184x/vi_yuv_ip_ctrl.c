@@ -217,9 +217,6 @@ void ispblk_ldci_config(struct isp_ctx *ctx, bool ldci_en, bool dci_en)
 	ISP_WR_REG(ldci, reg_ldci_t, ldci_ctl, ldci_ctl.raw);
 	ISP_WR_BITS(ldci, reg_ldci_t, ldci_hw_ctl, ldci_force_ck_en, 1);
 
-	if (!ldci_en)
-		return;
-
 	blk_size_x = img_w / blk_num_x;
 	blk_size_y = img_h / blk_num_y;
 	ISP_WR_BITS(ldci, reg_ldci_t, ldci_blk_num, ldci_blk_num_h, blk_num_x);

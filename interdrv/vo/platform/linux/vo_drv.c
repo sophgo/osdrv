@@ -16,7 +16,7 @@
 #define VO_CLASS_NAME          "soph-vo"
 
 static const char *const clk_vo_name[] = {
-	"clk_vo_disp", "clk_vo_mac",
+	"reg_clk_disp_vip_en", "reg_clk_dsi_mac_vip_en", "reg_clk_vo_mac_vip_en"
 };
 
 static long vo_core_ioctl(struct file *filp, u_int cmd, u_long arg)
@@ -122,23 +122,16 @@ static int vo_core_unregister_cdev(struct vo_core_dev *dev)
 
 static int vo_core_clk_init(struct platform_device *pdev)
 {
-	struct vo_core_dev *dev;
-	// unsigned char i = 0;
+	unsigned int i = 0;
 
-	dev = dev_get_drvdata(&pdev->dev);
-	if (!dev) {
-		dev_err(&pdev->dev, "Can not get vo drvdata\n");
-		return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(clk_vo_name); ++i) {
+		g_vo_ctx->clk_vo[i] = osal_clk_get(&pdev->dev, clk_vo_name[i]);
+		if (g_vo_ctx->clk_vo[i] == NULL) {
+			dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_vo_name[i]);
+			return PTR_ERR(g_vo_ctx->clk_vo[i]);
+		}
+		osal_clk_prepare_enable(g_vo_ctx->clk_vo[i]);
 	}
-
-	// for (i = 0; i < ARRAY_SIZE(clk_vo_name); ++i) {
-	//	dev->clk_vo[i] = devm_clk_get(&pdev->dev, clk_vo_name[i]);
-	//	if (IS_ERR(dev->clk_vo[i])) {
-	//		dev_err(&pdev->dev, "Cannot get clk for %s\n", clk_vo_name[i]);
-	//		return PTR_ERR(dev->clk_vo[i]);
-	//	}
-	//	clk_prepare_enable(dev->clk_vo[i]);
-	// }
 
 	return 0;
 }
@@ -170,8 +163,6 @@ static int vo_core_resources_init(struct platform_device *pdev)
 		dphy_set_base_addr(i, dev->reg_base[i * 4 + 2]);
 		vo_mac_set_base_addr(i, dev->reg_base[i * 4 + 3]);
 	}
-
-	ret = vo_core_clk_init(pdev);
 
 	return ret;
 }
@@ -214,6 +205,8 @@ static int vo_core_probe(struct platform_device *pdev)
 		goto vo_core_register_cb_err;
 	}
 
+	ret = vo_core_clk_init(pdev);
+
 	return ret;
 
 vo_core_register_cb_err:
@@ -226,6 +219,7 @@ vo_create_instance_err:
 static int vo_core_remove(struct platform_device *pdev)
 {
 	int ret = 0;
+	unsigned int i = 0;
 
 	struct vo_core_dev *dev = dev_get_drvdata(&pdev->dev);
 
@@ -240,10 +234,14 @@ static int vo_core_remove(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to rm vo cb, err %d\n", ret);
 	}
 
-	// for (i = 0; i < ARRAY_SIZE(dev->clk_vo); ++i) {
-	//	if ((dev->clk_vo[i]) && __clk_is_enabled(dev->clk_vo[i]))
-	//		clk_disable_unprepare(dev->clk_vo[i]);
-	// }
+	for (i = 0; i < ARRAY_SIZE(g_vo_ctx->clk_vo); ++i) {
+		if ((g_vo_ctx->clk_vo[i]) && osal_clk_is_enabled(g_vo_ctx->clk_vo[i])) {
+			osal_clk_disable_unprepare(g_vo_ctx->clk_vo[i]);
+			osal_clk_put(&pdev->dev, g_vo_ctx->clk_vo[i]);
+			g_vo_ctx->clk_vo[i] = NULL;
+		}
+	}
+
 
 	device_destroy(dev->vo_class, dev->cdev_id);
 	cdev_del(&dev->cdev);
@@ -292,6 +290,8 @@ int vo_core_resume(struct platform_device *pdev)
 	int ret = -1;
 	vo_layer layer;
 	vo_dev dev = 0;
+
+	disp_ctrl_init(true);
 
 	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
 		if (g_vo_ctx->layer_ctx[layer].is_layer_enable && g_vo_ctx->suspend) {

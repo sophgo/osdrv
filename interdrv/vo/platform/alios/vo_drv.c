@@ -68,6 +68,12 @@ err_destroy_instance:
 	return ret;
 }
 
+int driver_vo_release()
+{
+	vo_release();
+	return 0;
+}
+
 static void set_vo_log_level(int32_t argc, char **argv)
 {
 	int level;

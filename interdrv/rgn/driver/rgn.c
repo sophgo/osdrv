@@ -9,6 +9,9 @@
 #include "rgn_proc.h"
 #include "rgn_cb.h"
 #include "vpss_cb.h"
+#if !defined(CONFIG_DUAL_OS)
+#include "rtos_cmdqu.h"
+#endif
 
 #define RGB888_2_ARGB1555(rgb888) \
 	(BIT(15) | ((rgb888 & 0x00f80000) >> 9) | ((rgb888 & 0x0000f800) >> 6) | ((rgb888 & 0x000000f8) >> 3))
@@ -29,6 +32,14 @@ enum rgn_op {
 	RGN_OP_INSERT,
 	RGN_OP_REMOVE,
 };
+
+enum CMDQU_CB_CMD {
+	CMDQU_CB_RGN_COMPRESS,
+	CMDQU_CB_RGN_GET_COMPRESS_SIZE,
+	CMDQU_CB_RGN_COMPRESS_DONE,
+	CMDQU_CB_MAX
+};
+
 /*******************************************************
  *  Global variables
  ******************************************************/
@@ -297,7 +308,7 @@ int _rgn_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 		if (is_rect_overlap(&rect_old, &rect_new)) {
 			TRACE_RGN(RGN_ERR, "rgn_handle(%d) is overlapped on another rgn_handle(%d).\n"
 				, hdl, hdls[i]);
-			TRACE_RGN(RGN_DEBUG, "(%d %d %d %d) <-> (%d %d %d %d)\n"
+			TRACE_RGN(RGN_INFO, "(%d %d %d %d) <-> (%d %d %d %d)\n"
 				, rect_new.x, rect_new.y, rect_new.width, rect_new.height
 				, rect_old.x, rect_old.y, rect_old.width, rect_old.height);
 			return ERR_RGN_NOT_PERM;
@@ -307,7 +318,7 @@ int _rgn_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE) {
 			hdls[i] = hdl;
-			TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			TRACE_RGN(RGN_INFO, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			return 0;
 		}
 
@@ -324,7 +335,7 @@ int _rgn_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 				for (j = size - 1; j > i; j--)
 					hdls[j] = hdls[j - 1];
 			hdls[i] = hdl;
-			TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			TRACE_RGN(RGN_INFO, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			return 0;
 		}
 	}
@@ -355,7 +366,7 @@ int _rgn_ex_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 	for (i = 0; i < size; ++i) {
 		if (hdls[i] == RGN_INVALID_HANDLE) {
 			hdls[i] = hdl;
-			TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			TRACE_RGN(RGN_INFO, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			return 0;
 		}
 
@@ -372,7 +383,7 @@ int _rgn_ex_insert(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 				for (j = size - 1; j > i; j--)
 					hdls[j] = hdls[j - 1];
 			hdls[i] = hdl;
-			TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			TRACE_RGN(RGN_INFO, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			return 0;
 		}
 	}
@@ -391,7 +402,7 @@ int _rgn_remove(rgn_handle hdls[], unsigned char size, rgn_handle hdl)
 			if ((i + 1) < size)
 				memmove(&hdls[i], &hdls[i + 1], sizeof(hdls[i]) * (size - 1 - i));
 			hdls[size - 1] = RGN_INVALID_HANDLE;
-			TRACE_RGN(RGN_DEBUG, "rgn_handle(%d) at index(%d).\n", hdl, i);
+			TRACE_RGN(RGN_INFO, "rgn_handle(%d) at index(%d).\n", hdl, i);
 			break;
 		}
 	}
@@ -902,7 +913,7 @@ static int _rgn_mosaic_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn
 		}
 	}
 
-	TRACE_RGN(RGN_DEBUG, "mosaic num(%d),rect(%d %d %d %d), phy_addr:0x%llx buf_len:%d.\n",
+	TRACE_RGN(RGN_INFO, "mosaic num(%d),rect(%d %d %d %d), phy_addr:0x%llx buf_len:%d.\n",
 		rgn_idx, start_x, start_y, end_x, end_y, phy_addr, buf_size);
 
 	mosaic_cfg.start_x = start_x;
@@ -1808,7 +1819,7 @@ int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 					return ERR_RGN_ILLEGAL_PARAM;
 			}
 			cnt++;
-			osal_msleep(1);
+			osal_mdelay(1);
 		} while ((cb_param.addr == pcanvas_info->phy_addr) && (cnt <= 500) && ctx->chn_attr.show);
 
 		TRACE_RGN(RGN_INFO, "VPSS_CB_GET_RGN_OW_ADDR PhyAaddr:%llx cnt:%d.\n",
@@ -1846,39 +1857,146 @@ int rgn_update_canvas(rgn_handle handle)
 	}
 
 	if (ctx->canvas_info[0].compressed) {
-		#if 0 /*bs size is passed from ioctl*/
-		if (ctx->canvas_info[0].osd_compress_mode == OSD_COMPRESS_MODE_SW) {
-			rgn_canvas_info_s *pcanvas_info = &ctx->canvas_info[ctx->canvas_idx];
-			// first 8 bytes restores compress data header, original header:
-			// bit[0:7] version
-			// bit[8:11] osd_format
-			// bit[12:14] reserved
-			// bit[15:22] palette_cache_size
-			// bit[23:24] alpha truncate
-			// bit[25:26] reserved
-			// bit[27:28] rgb truncate
-			// bit[29:30] reserved
-			// bit[31:46] image_width minus 1
-			// bit[47:62] image_height minus 1
+#if !defined(CONFIG_DUAL_OS) && !defined(CONFIG_SUSPEND)
+		int i, j;
+		unsigned int proc_idx;
+		cmdqu_t cmdq;
 
-			// bitstream size is saved in bit[32:63], after bitstream size is get,
-			// restore it to image width and height
-			// bit[0:7] version
-			// bit[8:11] osd_format
-			// bit[12:14] reserved
-			// bit[15:22] palette_cache_size
-			// bit[23:24] alpha truncate
-			// bit[25:26] reserved
-			// bit[27:28] rgb truncate
-			// bit[29:30] reserved
-			// bit[32:63] bitstream size
-			pcanvas_info->compressed_size =
-				*((unsigned int *)pcanvas_info->virt_addr + 1);
-			*((unsigned int *)pcanvas_info->virt_addr + 1) =
-				(((pcanvas_info->size.width - 1) & 0xFFFF) |
-				(((pcanvas_info->size.height - 1) << 16) & 0xFFFF0000)) >> 1;
+		proc_idx = _rgn_proc_get_idx(handle);
+		if (ctx->canvas_info[0].osd_compress_mode == OSD_COMPRESS_MODE_HW) {
+			rgn_canvas_info_s *pcanvas_info = NULL;
+			rgn_canvas_cmpr_attr_s *pcanvas_cmprattr = NULL, canvas_cmprattr_tmp;
+			rgn_cmpr_obj_attr_s *pobj_attr = NULL;
+
+			if (ctx->canvas_info[ctx->canvas_idx].virt_addr == NULL) {
+				TRACE_RGN(RGN_ERR, "ctx->canvas_info[ctx->canvas_idx].virt_addr NULL!\n");
+					return ERR_RGN_SYS_NOTREADY;
+			}
+			pcanvas_info = &ctx->canvas_info[ctx->canvas_idx];
+			pcanvas_cmprattr = (rgn_canvas_cmpr_attr_s *)pcanvas_info->virt_addr;
+			pobj_attr = (rgn_cmpr_obj_attr_s *)(pcanvas_info->virt_addr +
+				sizeof(rgn_canvas_cmpr_attr_s));
+			memcpy(&canvas_cmprattr_tmp, pcanvas_cmprattr, sizeof(canvas_cmprattr_tmp));
+			#if 0
+			sys_cache_invalidate(pcanvas_info->phy_addr, pcanvas_info->virt_addr,
+				pcanvas_info->u32Stride * pcanvas_info->stSize.height);
+			#endif
+
+			TRACE_RGN(RGN_INFO, "PAddr(%llx) Width(%d) Height(%d) bsSize(%d)\n",
+				pcanvas_info->phy_addr, pcanvas_cmprattr->width,
+				pcanvas_cmprattr->height, pcanvas_cmprattr->bs_size);
+			TRACE_RGN(RGN_INFO, "BgColor(0x%x) Pixelformat(%d), pcanvas_cmprattr->obj_num is %d, sizeof(RGN_CANVAS_CMPR_ATTR_S) is %zu\n",
+				pcanvas_cmprattr->bg_color, pcanvas_cmprattr->pixel_format, pcanvas_cmprattr->obj_num, sizeof(rgn_canvas_cmpr_attr_s) );
+			for (i = 0; i < pcanvas_cmprattr->obj_num; ++i) {
+				if (pobj_attr[i].obj_type == RGN_CMPR_LINE) {
+					TRACE_RGN(RGN_INFO, "start(%d %d) end(%d %d) Thick(%d) Color(0x%x)\n",
+						pobj_attr[i].line.point_start.x,
+						pobj_attr[i].line.point_start.y,
+						pobj_attr[i].line.point_end.x,
+						pobj_attr[i].line.point_end.y,
+						pobj_attr[i].line.thick,
+						pobj_attr[i].line.color);
+				} else if (pobj_attr[i].obj_type == RGN_CMPR_RECT) {
+					TRACE_RGN(RGN_INFO,
+						"xywh(%d %d %d %d) Thick(%d) Color(0x%x) is_fill(%d)\n",
+						pobj_attr[i].rgn_rect.rect.x,
+						pobj_attr[i].rgn_rect.rect.y,
+						pobj_attr[i].rgn_rect.rect.width,
+						pobj_attr[i].rgn_rect.rect.height,
+						pobj_attr[i].rgn_rect.thick,
+						pobj_attr[i].rgn_rect.color,
+						pobj_attr[i].rgn_rect.is_fill);
+				} else if (pobj_attr[i].obj_type == RGN_CMPR_BIT_MAP) {
+					TRACE_RGN(RGN_INFO, "xywh(%d %d %d %d) bitmap_paddr(%llx)\n",
+						pobj_attr[i].bitmap.rect.x,
+						pobj_attr[i].bitmap.rect.y,
+						pobj_attr[i].bitmap.rect.width,
+						pobj_attr[i].bitmap.rect.height,
+						pobj_attr[i].bitmap.bitmap_paddr);
+				}
+			}
+
+			#if 0
+			sys_cache_flush(pcanvas_info->phy_addr, pcanvas_info->virt_addr,
+				pcanvas_info->u32Stride * pcanvas_info->stSize.height);
+			#endif
+			if (pcanvas_cmprattr->bs_size != ctx->ion_len)
+				pcanvas_cmprattr->bs_size = ctx->ion_len;
+retry:
+			base_ion_cache_flush(pcanvas_info->phy_addr, pcanvas_info->virt_addr, ctx->max_need_ion);
+			base_ion_cache_invalidate(pcanvas_info->phy_addr, pcanvas_info->virt_addr, ctx->max_need_ion);
+
+			cmdq.ip_id = IP_RGN;
+			cmdq.cmd_id = CMDQU_CB_RGN_COMPRESS;
+			cmdq.block = 1;
+			cmdq.param_ptr = (unsigned int)pcanvas_info->phy_addr;
+			cmdq.resv.mstime = 1000;
+
+			ret = rtos_cmdqu_send_wait(&cmdq, cmdq.cmd_id);
+
+			base_ion_cache_invalidate(pcanvas_info->phy_addr, pcanvas_info->virt_addr, ctx->max_need_ion);
+
+			for (j = 0; j < 5; ++j) {
+				if ((ret == -EEXIST) || (ret == -ENOMEM)) {
+					TRACE_RGN(RGN_ERR, "Region(%d) OSDC fail (%d) times! ret is %X.\n",
+						handle, j, ret);
+					goto retry;
+				} else {
+					break;
+				}
+			}
+
+			if (ret) {
+				TRACE_RGN(RGN_ERR, "Region(%d) OSDC failed!. ret is %X.\n", handle, ret);
+				return ERR_RGN_SYS_NOTREADY;
+			}
+
+			// if C906L osdc status error,
+			// status and real bs_size will be returned in pcanvas_info->virt_addr
+			if (*(unsigned int *)pcanvas_info->virt_addr == 0xFFFFFFFF) {
+				TRACE_RGN(RGN_ERR, "Region(%d) needs ion size(%d), current size(%d).\n",
+					handle, *((unsigned int *)pcanvas_info->virt_addr + 1), ctx->ion_len);
+				ctx->max_need_ion = rgn_prc_ctx[proc_idx].max_need_ion =
+					*((unsigned int *)pcanvas_info->virt_addr + 1);
+				canvas_cmprattr_tmp.obj_num = 0;
+				//pcanvas_cmprattr is modified in C906L
+				memcpy(pcanvas_cmprattr, &canvas_cmprattr_tmp, sizeof(canvas_cmprattr_tmp));
+				rtos_cmdqu_send_wait(&cmdq, cmdq.cmd_id);
+			} else {
+				// first 8 bytes restores compress data header, original header:
+				// bit[0:7] version
+				// bit[8:11] osd_format
+				// bit[12:14] reserved
+				// bit[15:22] palette_cache_size
+				// bit[23:24] alpha truncate
+				// bit[25:26] reserved
+				// bit[27:28] rgb truncate
+				// bit[29:30] reserved
+				// bit[31:46] image_width minus 1
+				// bit[47:62] image_height minus 1
+
+				// bitstream size is saved in bit[32:63], after bitstream size is get,
+				// restore it to image width and height
+				// bit[0:7] version
+				// bit[8:11] osd_format
+				// bit[12:14] reserved
+				// bit[15:22] palette_cache_size
+				// bit[23:24] alpha truncate
+				// bit[25:26] reserved
+				// bit[27:28] rgb truncate
+				// bit[29:30] reserved
+				// bit[32:63] bitstream size
+				ctx->canvas_info[ctx->canvas_idx].compressed_size =
+					*((unsigned int *)pcanvas_info->virt_addr + 1);
+				TRACE_RGN(RGN_INFO, "Region(%d) OSDC compressed size(%d), pcanvas_info->virt_addr is %p.\n",
+					handle, ctx->canvas_info[ctx->canvas_idx].compressed_size, pcanvas_info->virt_addr);
+				*((unsigned int *)pcanvas_info->virt_addr) |= ((canvas_cmprattr_tmp.width - 1) & 0x01) << 31;
+				*((unsigned int *)pcanvas_info->virt_addr + 1) =
+					(((canvas_cmprattr_tmp.width - 1) >> 1) & 0x7FFF) |
+					(((canvas_cmprattr_tmp.height - 1) << 15) & 0x7FFF8000);
+			}
 		}
-		#endif
+#endif
 		ctx->odec_data_valid = true;
 	}
 

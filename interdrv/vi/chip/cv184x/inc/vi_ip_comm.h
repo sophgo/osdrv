@@ -366,6 +366,8 @@ struct _csi_cfg {
 
 	u32			drop_ref_frm_num;
 	u32			drop_frm_cnt;
+	u32			rx_frm_cnt;
+	u32			rx_ref_frm_num;
 
 	struct vi_rect		crop[ISP_FE_CHN_MAX];
 	struct vi_rect		rawdump_crop[ISP_FE_CHN_MAX];

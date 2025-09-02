@@ -7,6 +7,8 @@ $(info PWD = $(PWD))
 
 obj-m += $(CHIP_ARCH_L)_rgn.o
 
+EXTRA_CFLAGS += -I$(PWD)/../../../linux_5.10/drivers/soc/cvitek/rtos_cmdqu
+
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../osal/Module.symvers

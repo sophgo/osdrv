@@ -81,15 +81,13 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 
 	device->start_cnt++;
 	osal_atomic_set(&device->state, VPSS_RUNNING);
-	osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
-
 	osal_atomic_set(&job->job_state, JOB_WORKING);
+	osal_gettimeofday(&device->ts_start);
+	osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 
 	TRACE_VPSS(DBG_INFO, "Grp(%d) job working, chn enable(%d %d %d %d), dev(%d).\n",
 		job->grp_id, cfg->chn_enable[0], cfg->chn_enable[1],
 		cfg->chn_enable[2], cfg->chn_enable[3], device->id);
-
-	osal_gettimeofday(&device->ts_start);
 
 	img_start(first_idx, device->core_num);
 
@@ -166,6 +164,7 @@ int vpss_hal_init(struct vpss_hal_ctx *hal_ctx)
 	hal_ctx->cmdq_buf.cmdq_phy_addr = 0;
 	hal_ctx->cmdq_buf.cmdq_vir_addr = NULL;
 	hal_ctx->cmdq_buf.cmdq_buf_size = 0;
+	hal_ctx->is_suspend = 0;
 
 	return 0;
 }
@@ -227,7 +226,7 @@ int vpss_hal_push_online_job(struct vpss_job *job, struct vpss_hal_ctx *hal_ctx)
 int vpss_hal_remove_job(struct vpss_job *job, struct vpss_hal_ctx *hal_ctx)
 {
 	int i, count = 40;
-	unsigned long flags, flags_job;
+	unsigned long flags, flags_job, flags_dev;
 	struct vpss_job *job_item;
 	enum job_state job_state;
 	struct vpss_cores *cores = osal_container_of(hal_ctx, struct vpss_cores, hal_ctx);
@@ -256,6 +255,8 @@ int vpss_hal_remove_job(struct vpss_job *job, struct vpss_hal_ctx *hal_ctx)
 		//hw hang
 		if (count == 0) {
 			TRACE_VPSS(DBG_ERR, "Grp(%d) device(%d) Wait timeout, HW hang.\n", job->grp_id, job->dev_id);
+
+			osal_spin_lock_irqsave(&device->dev_lock, &flags_dev);
 			for (i = 0; i < device->core_num; i++) {
 				vpss_stauts(device->core_list[i]->vpss_type);
 				vpss_ip_reset(device->core_list[i]->vpss_type, device->core_list[i]->is_sbm, true);
@@ -263,6 +264,7 @@ int vpss_hal_remove_job(struct vpss_job *job, struct vpss_hal_ctx *hal_ctx)
 			}
 			device->job = NULL;
 			osal_atomic_set(&device->state, VPSS_IDLE);
+			osal_spin_unlock_irqrestore(&device->dev_lock, &flags_dev);
 		}
 	}
 
@@ -350,6 +352,11 @@ int vpss_hal_online_run(struct vpss_online_cb *param, struct vpss_hal_ctx *hal_c
 
 	osal_spin_lock_irqsave(&hal_ctx->task_lock, &flags);
 
+	if (hal_ctx->is_suspend) {
+		osal_spin_unlock_irqrestore(&hal_ctx->task_lock, &flags);
+		return -1;
+	}
+
 	osal_list_for_each_entry(job_item, &hal_ctx->job_online_queue, list) {
 		if (job_item->grp_id == param->snr_num) {
 			work_job = job_item;
@@ -412,7 +419,7 @@ err0:
 void vpss_hal_job_finish(struct vpss_device *device)
 {
 	u8 i;
-	unsigned long flags_job;
+	unsigned long flags;
 	struct vpss_job *job = (struct vpss_job *)device->job;
 	struct vpss_cores *cores = osal_container_of(device, struct vpss_cores, device[device->id]);
 
@@ -421,11 +428,11 @@ void vpss_hal_job_finish(struct vpss_device *device)
 		return;
 	}
 
-	osal_spin_lock_irqsave(&device->dev_lock, &flags_job);
+	osal_spin_lock_irqsave(&device->dev_lock, &flags);
 
 	for (i = 0; i < device->core_num; i++) {
 		if (osal_atomic_read(&device->core_list[i]->state) != VPSS_END) {
-			osal_spin_unlock_irqrestore(&device->dev_lock, &flags_job);
+			osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 			return;
 		}
 	}
@@ -448,7 +455,7 @@ void vpss_hal_job_finish(struct vpss_device *device)
 	osal_atomic_set(&job->job_state, JOB_END);
 	job->job_cb(job);
 
-	osal_spin_unlock_irqrestore(&device->dev_lock, &flags_job);
+	osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 
 	if (device->is_online) {
 		if (device->isp_triggered) {

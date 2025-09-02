@@ -45,9 +45,12 @@ void vpss_core_init(struct vpss_cores *cores);
 void vpss_core_deinit(struct vpss_cores *cores);
 void vpss_core_open(struct vpss_cores *cores);
 void vpss_core_release(struct vpss_cores *cores);
+void vpss_core_stop(struct vpss_cores *cores);
 
 void vpss_core_isr(int irq, void *data);
 void vpss_core_set_mode(struct vpss_cores *cores, const vpss_mode_s *vpss_mode);
 
+int vpss_core_suspend(struct vpss_cores *cores);
+int vpss_core_resume(struct vpss_cores *cores);
 
 #endif /* _VPSS_CORE_H_ */

@@ -587,7 +587,8 @@ void ispblk_csibdg_yuv_bypass_config(struct isp_ctx *ctx, const enum sop_isp_raw
 					ctx->isp_csi_cfg[raw_num].csibdg_height - 1);
 
 	// pre_raw must input UYVY or VYUY
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor && ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
+		ctx->isp_csi_cfg[raw_num].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) {
 		if (ctx->isp_csi_cfg[raw_num].data_seq == VI_DATA_SEQ_YUYV ||
 				ctx->isp_csi_cfg[raw_num].data_seq == VI_DATA_SEQ_YVYU) {
 			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, bayer_type_clk_gate_yuv_swap, yuv_ch_swap_en, 1);

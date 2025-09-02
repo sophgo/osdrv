@@ -48,6 +48,8 @@ s32 ipcm_register_irq_handle(ipcm_pre_handle pre_process);
 
 s32 ipcm_register_pre_send_handle(ipcm_pre_handle pre_send);
 
+s32 ipcm_register_send_hook(ipcm_pre_handle send_hook);
+
 s32 ipcm_send_msg(MsgData *data);
 
 u32 ipcm_get_recv_msg_cnt(void);

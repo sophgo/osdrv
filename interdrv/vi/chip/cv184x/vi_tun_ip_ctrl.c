@@ -1397,14 +1397,11 @@ void ispblk_ycur_tun_cfg(
 	}
 }
 
-void postraw_tuning_update(
+void ispblk_post_rawtop_tun_cfg(
 	struct isp_ctx *ctx,
+	struct sop_vip_isp_post_tun_cfg *post_tun,
 	const u8 pipe)
 {
-	u8 tun_idx = 0;
-	static int stop_update = -1;
-	struct sop_vip_isp_post_cfg     *post_cfg;
-	struct sop_vip_isp_post_tun_cfg *post_tun;
 	//rawtop
 	struct sop_vip_isp_wbg_config *wbg_cfg;
 	struct sop_vip_isp_fusion_config *fusion_cfg;
@@ -1416,57 +1413,6 @@ void postraw_tuning_update(
 	struct sop_vip_isp_lscr_config *lscr_cfg;
 	struct sop_vip_isp_drc_config *drc_cfg;
 	struct sop_vip_isp_demosiac_config *demosiac_cfg;
-
-	//rgb_top
-	struct sop_vip_isp_ee_ext_config *ee_ext_cfg; // New
-	struct sop_vip_isp_pfr_config *pfr_cfg; // New
-	struct sop_vip_isp_ccm_config *ccm_cfg; // A2 change
-	struct sop_vip_isp_gamma_config *gamma_cfg; // A2 change
-	struct sop_vip_isp_clut_config *clut_cfg; // A2
-	struct sop_vip_isp_csc_config *csc_cfg; // A2
-
-	//yuvtop
-	struct sop_vip_isp_pre_ee_config *pre_ee_cfg; // New
-	struct sop_vip_isp_ldci_config *ldci_cfg; // New
-	struct sop_vip_isp_dci_config *dci_cfg; // New
-	struct sop_vip_isp_tnr_config *tnr_cfg; // New
-	struct sop_vip_isp_cnr_config *cnr_cfg; // New
-	struct sop_vip_isp_ee_config *ee_cfg; // New
-	struct sop_vip_isp_cacp_config *cacp_cfg; // A2
-	struct sop_vip_isp_ca2_config *ca2_cfg; // A2
-	struct sop_vip_isp_ycur_config *ycur_cfg; // A2
-
-
-	post_cfg = (struct sop_vip_isp_post_cfg *)tuning_buf_addr.post_vir[pipe];
-	tun_idx  = post_cfg->tun_idx;
-
-	vi_pr(VI_DBG, "Postraw_(%d->%d) tuning update(%d):idx(%d)\n", ctx->isp_pipe_cfg[pipe].bind_raw,
-			pipe, post_cfg->tun_update[tun_idx], tun_idx);
-
-	if ((tun_idx >= TUNING_NODE_NUM) || (post_cfg->tun_update[tun_idx] == 0))
-		return;
-
-	if (ctx->isp_csi_cfg[ctx->isp_pipe_cfg[pipe].bind_raw].is_yuv_sensor) {
-		return;
-	}
-
-	post_tun = &post_cfg->tun_cfg[tun_idx];
-
-	if (tuning_dis[2]) {
-		if (tuning_dis[0] == 0) {
-			vi_pr(VI_DBG, "raw_%d stop tuning_update immediately\n", pipe);
-			return;
-		} else if ((tuning_dis[0] - 1) == pipe) {//stop on next
-			if (stop_update > 0) {
-				vi_pr(VI_DBG, "raw_%d stop tuning_update\n", pipe);
-				return;
-			}
-			stop_update = 1;
-		} else {//must update tuning buf for sensor, it's will be not trrigered
-			stop_update = 0;
-		}
-	} else
-		stop_update = 0;
 
 	wbg_cfg = &post_tun->wbg_cfg;
 	ispblk_blc_dg_wb_tun_cfg(ctx, wbg_cfg);
@@ -1497,6 +1443,20 @@ void postraw_tuning_update(
 
 	demosiac_cfg = &post_tun->demosiac_cfg;
 	ispblk_demosiac_tun_cfg(ctx, demosiac_cfg);
+}
+
+void ispblk_post_rgbtop_tun_cfg(
+	struct isp_ctx *ctx,
+	struct sop_vip_isp_post_tun_cfg *post_tun,
+	const u8 pipe)
+{
+	//rgb_top
+	struct sop_vip_isp_ee_ext_config *ee_ext_cfg; // New
+	struct sop_vip_isp_pfr_config *pfr_cfg; // New
+	struct sop_vip_isp_ccm_config *ccm_cfg; // A2 change
+	struct sop_vip_isp_gamma_config *gamma_cfg; // A2 change
+	struct sop_vip_isp_clut_config *clut_cfg; // A2
+	struct sop_vip_isp_csc_config *csc_cfg; // A2
 
 	ee_ext_cfg = &post_tun->ee_ext_cfg;
 	ispblk_ee_ext_tun_cfg(ctx, ee_ext_cfg);
@@ -1515,15 +1475,32 @@ void postraw_tuning_update(
 
 	csc_cfg = &post_tun->csc_cfg;
 	ispblk_csc_tun_cfg(ctx, csc_cfg);
+}
+
+void ispblk_post_yuvtop_tun_cfg(
+	struct isp_ctx *ctx,
+	struct sop_vip_isp_post_tun_cfg *post_tun,
+	const u8 pipe)
+{
+	//yuvtop
+	struct sop_vip_isp_pre_ee_config *pre_ee_cfg; // New
+	struct sop_vip_isp_ldci_config *ldci_cfg; // New
+	struct sop_vip_isp_dci_config *dci_cfg; // New
+	struct sop_vip_isp_tnr_config *tnr_cfg; // New
+	struct sop_vip_isp_cnr_config *cnr_cfg; // New
+	struct sop_vip_isp_ee_config *ee_cfg; // New
+	struct sop_vip_isp_cacp_config *cacp_cfg; // A2
+	struct sop_vip_isp_ca2_config *ca2_cfg; // A2
+	struct sop_vip_isp_ycur_config *ycur_cfg; // A2
+
+	pre_ee_cfg = &post_tun->pre_ee_cfg;
+	ispblk_pre_ee_tun_cfg(ctx, pre_ee_cfg);
 
 	ldci_cfg = &post_tun->ldci_cfg;
 	ispblk_ldci_tun_cfg(ctx, ldci_cfg);
 
 	dci_cfg = &post_tun->dci_cfg;
 	ispblk_dci_tun_cfg(ctx, dci_cfg);
-
-	pre_ee_cfg = &post_tun->pre_ee_cfg;
-	ispblk_pre_ee_tun_cfg(ctx, pre_ee_cfg);
 
 	tnr_cfg = &post_tun->tnr_cfg;
 	ispblk_tnr_tun_cfg(ctx, tnr_cfg, pipe);
@@ -1542,4 +1519,55 @@ void postraw_tuning_update(
 
 	ycur_cfg = &post_tun->ycur_cfg;
 	ispblk_ycur_tun_cfg(ctx, ycur_cfg);
+}
+
+void postraw_tuning_update(
+	struct isp_ctx *ctx,
+	const u8 pipe)
+{
+	u8 tun_idx = 0;
+	static int stop_update = -1;
+	struct sop_vip_isp_post_cfg     *post_cfg;
+	struct sop_vip_isp_post_tun_cfg *post_tun;
+
+	post_cfg = (struct sop_vip_isp_post_cfg *)tuning_buf_addr.post_vir[pipe];
+	tun_idx  = post_cfg->tun_idx;
+
+	vi_pr(VI_DBG, "Postraw_(%d->%d) tuning update(%d):idx(%d)\n", ctx->isp_pipe_cfg[pipe].bind_raw,
+			pipe, post_cfg->tun_update[tun_idx], tun_idx);
+
+	if ((tun_idx >= TUNING_NODE_NUM) || (post_cfg->tun_update[tun_idx] == 0))
+		return;
+
+	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
+		ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ONLINE) {
+		vi_pr(VI_DBG, "Postraw_%d stop tuning_update for yuv sensor\n", pipe);
+		return;
+	}
+
+	post_tun = &post_cfg->tun_cfg[tun_idx];
+
+	if (tuning_dis[2]) {
+		if (tuning_dis[0] == 0) {
+			vi_pr(VI_DBG, "raw_%d stop tuning_update immediately\n", pipe);
+			return;
+		} else if ((tuning_dis[0] - 1) == pipe) {//stop on next
+			if (stop_update > 0) {
+				vi_pr(VI_DBG, "raw_%d stop tuning_update\n", pipe);
+				return;
+			}
+			stop_update = 1;
+		} else {//must update tuning buf for sensor, it's will be not trrigered
+			stop_update = 0;
+		}
+	} else
+		stop_update = 0;
+
+
+	if (!ctx->isp_pipe_cfg[pipe].is_yuv_sensor) {
+		ispblk_post_rawtop_tun_cfg(ctx, post_tun, pipe);
+		ispblk_post_rgbtop_tun_cfg(ctx, post_tun, pipe);
+	}
+
+	ispblk_post_yuvtop_tun_cfg(ctx, post_tun, pipe);
 }

@@ -37,6 +37,7 @@ static int vpss_online_err_cb(u8 snr_num, struct vpss_cores *cores)
 {
 	int i;
 	struct vpss_device *device = NULL;
+	unsigned long flags;
 
 	for (i = 0; i < VPSS_DEVICE_NUM; i++)
 		if (cores->device[i].is_online)
@@ -74,8 +75,10 @@ static int vpss_online_err_cb(u8 snr_num, struct vpss_cores *cores)
 	}
 
 	if (device->job) {
+		osal_spin_lock_irqsave(&device->dev_lock, &flags);
 		vpss_hal_reset(device->job, &cores->hal_ctx);
 		device->job = NULL;
+		osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 	}
 
 	return 0;
@@ -474,6 +477,7 @@ static void _vpss_timer_core_update(struct vpss_cores *cores, unsigned int durat
 static void _vpss_timer_callback(unsigned long data)
 {
 	int i;
+	unsigned long flags;
 	unsigned int diff_us;
 	osal_timeval now;
 	static osal_timeval prev_time = {0, 0};
@@ -485,22 +489,28 @@ static void _vpss_timer_callback(unsigned long data)
 	_update_vpss_chn_real_frame_rate(&cores->ctx, diff_us);
 	_vpss_timer_core_update(cores, diff_us);
 
-	//timout reset
+	//timout reset, only offline
 	for (i = 0; i < VPSS_DEVICE_NUM; ++i) {
-		if (osal_atomic_read(&cores->device[i].state) == VPSS_RUNNING) {
+		osal_spin_lock_irqsave(&cores->device[i].dev_lock, &flags);
+		if (cores->device[i].core_num && (!cores->device[i].is_online) &&
+			(osal_atomic_read(&cores->device[i].state) == VPSS_RUNNING)) {
 			diff_us = get_diff_in_us(cores->device[i].ts_start, now);
 			if (diff_us > VPSS_TIMEOUT_US) {
 				vpss_hal_reset(cores->device[i].job, &cores->hal_ctx);
 				cores->device[i].job = NULL;
+
+				osal_spin_unlock_irqrestore(&cores->device[i].dev_lock, &flags);
 				if (cores->device[i].is_online) {
 					_vpss_call_vi_reset();
 				} else {
 					vpss_hal_try_schedule(&cores->hal_ctx);
 				}
+				osal_spin_lock_irqsave(&cores->device[i].dev_lock, &flags);
 				TRACE_VPSS(DBG_NOTICE, "device-%d %s timeout...\n",
 					i, cores->device[i].is_online ? "online" : "offline");
 			}
 		}
+		osal_spin_unlock_irqrestore(&cores->device[i].dev_lock, &flags);
 	}
 	prev_time = now;
 
@@ -592,6 +602,7 @@ void vpss_core_deinit(struct vpss_cores *cores)
 
 	vpss_deinit(&cores->ctx);
 	vpss_hal_deinit(&cores->hal_ctx);
+	osal_timer_destroy_sync(&cores->timer);
 
 	for (i = 0; i < VPSS_DEVICE_NUM; ++i) {
 		osal_spin_lock_destroy(&cores->device[i].dev_lock);
@@ -599,7 +610,6 @@ void vpss_core_deinit(struct vpss_cores *cores)
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		osal_spin_lock_destroy(&cores->core[i].core_lock);
 	}
-	osal_timer_destroy_sync(&cores->timer);
 	osal_spin_lock_destroy(&cores->lock);
 
 	_vpss_core_rm_cb();
@@ -633,6 +643,11 @@ void vpss_core_release(struct vpss_cores *cores)
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		osal_clk_disable_unprepare(cores->core[i].clk);
 	}
+}
+
+void vpss_core_stop(struct vpss_cores *cores)
+{
+	vpss_release_all_grp(&cores->ctx);
 }
 
 static void vpss_irq_handler(struct vpss_core *core)
@@ -693,5 +708,66 @@ void vpss_core_isr(int irq, void *data)
 		core->checksum = vpss_get_checksum(vpss_idx);
 		vpss_irq_handler(core);
 	}
+}
+
+int vpss_core_suspend(struct vpss_cores *cores)
+{
+	int ret, i;
+	int count;
+	unsigned long flags;
+
+	/*step 1 set suspend */
+	osal_spin_lock_irqsave(&cores->hal_ctx.task_lock, &flags);
+	cores->hal_ctx.is_suspend = 1;
+	osal_spin_unlock_irqrestore(&cores->hal_ctx.task_lock, &flags);
+
+	/*step 2 wait device idle*/
+	for (i = 0; i < VPSS_DEVICE_NUM; ++i) {
+		count = 40;
+		while (osal_atomic_read(&cores->device[i].state) == VPSS_RUNNING) {
+			if (!count--)
+				break;
+			TRACE_VPSS(DBG_NOTICE, "wait count(%d)\n", count);
+			osal_msleep(1);
+		}
+		if (count == 0) {
+			TRACE_VPSS(DBG_ERR, "device(%d) Wait timeout, HW hang.\n", i);
+		}
+	}
+
+	/*step 3 suspend envent_handlers*/
+	ret = vpss_handler_suspend(&cores->ctx);
+	if (ret) {
+		TRACE_VPSS(DBG_ERR, "fail to suspend vpss handler, err=%d\n", ret);
+		return -1;
+	}
+
+	return 0;
+}
+
+int vpss_core_resume(struct vpss_cores *cores)
+{
+	int i, ret;
+	unsigned long flags;
+
+	/*step 2 register reset*/
+	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+		vpss_ip_init(i, true);
+		vpss_ip_reset(i, true, true);
+	}
+
+	/*step 3 resume envent_handlers*/
+	ret = vpss_handler_resume(&cores->ctx);
+	if (ret) {
+		TRACE_VPSS(DBG_ERR, "fail to resume vpss handler, err=%d\n", ret);
+		return -1;
+	}
+
+	/*step 4 set suspend=0*/
+	osal_spin_lock_irqsave(&cores->hal_ctx.task_lock, &flags);
+	cores->hal_ctx.is_suspend = 0;
+	osal_spin_unlock_irqrestore(&cores->hal_ctx.task_lock, &flags);
+
+	return 0;
 }
 

@@ -159,6 +159,10 @@ static int tde_init_resources(struct platform_device *pdev)
 	if (dev->core.clk == NULL) {
 		dev_err(&pdev->dev, "Cannot get source clk for 2de\n");
 	}
+	dev->core.isp_top_clk = osal_clk_get(&pdev->dev, "reg_clk_isp_top_vip_en");
+	if (dev->core.isp_top_clk == NULL) {
+		dev_err(&pdev->dev, "Cannot get source clk for isp top\n");
+	}
 
 	return 0;
 }
@@ -207,6 +211,12 @@ static int tde_probe(struct platform_device *pdev)
 
 	tde_core_init(&dev_data->core);
 	osal_atomic_set(&dev_data->open_count, 0);
+
+	rc = tde_reg_cb(&dev_data->core);
+	if (rc) {
+		TRACE_TDE(DBG_ERR, "Failed to register tde cb\n");
+		goto err2;
+	}
 	TRACE_TDE(DBG_WARN, "tde probe done\n");
 
 	return rc;
@@ -242,12 +252,15 @@ static int tde_remove(struct platform_device *pdev)
 
 	tde_core_deinit(&dev_data->core);
 	osal_clk_put(&pdev->dev, dev_data->core.clk);
+	osal_clk_put(&pdev->dev, dev_data->core.isp_top_clk);
 
 	devm_free_irq(&pdev->dev, dev_data->irq_num, dev_data);
 
 	tde_proc_remove(&dev_data->core);
 	misc_deregister(&dev_data->miscdev);
 	dev_set_drvdata(&pdev->dev, NULL);
+
+	tde_rm_cb();
 
 	TRACE_TDE(DBG_WARN, "tde remove done\n");
 
@@ -256,14 +269,44 @@ static int tde_remove(struct platform_device *pdev)
 
 int tde_suspend(struct device *dev)
 {
-	TRACE_TDE(DBG_WARN, "tde suspended\n");
+	struct tde_dev_data *dev_data;
+
+	if (!dev) {
+		TRACE_TDE(DBG_ERR, "invalid param\n");
+		return -EINVAL;
+	}
+
+	dev_data = dev_get_drvdata(dev);
+	if (!dev_data) {
+		TRACE_TDE(DBG_ERR, "Can not get tde drvdata\n");
+		return -EINVAL;
+	}
+
+	TRACE_TDE(DBG_WARN, "tde suspended + \n");
+	tde_core_suspend(&dev_data->core);
+	TRACE_TDE(DBG_WARN, "tde suspended - \n");
 
 	return 0;
 }
 
 int tde_resume(struct device *dev)
 {
-	TRACE_TDE(DBG_WARN, "tde resumed\n");
+	struct tde_dev_data *dev_data;
+
+	if (!dev) {
+		TRACE_TDE(DBG_ERR, "invalid param\n");
+		return -EINVAL;
+	}
+
+	dev_data = dev_get_drvdata(dev);
+	if (!dev_data) {
+		TRACE_TDE(DBG_ERR, "Can not get tde drvdata\n");
+		return -EINVAL;
+	}
+
+	TRACE_TDE(DBG_WARN, "tde resumed + \n");
+	tde_core_resume(&dev_data->core);
+	TRACE_TDE(DBG_WARN, "tde resumed - \n");
 
 	return 0;
 }

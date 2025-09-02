@@ -13,6 +13,7 @@
 #include "vbq.h"
 #include "ion.h"
 #include "vi_dma_setup.h"
+#include "vi_tun_ip_ctrl.h"
 
 /****************************************************************************
  * Global parameters
@@ -470,12 +471,6 @@ static void vi_configure_csi(struct sop_vi_dev *vdev, uint8_t raw_num, vi_dev_at
 		ctx->isp_csi_cfg[raw_num].mux_mode = dev_attr->work_mode;
 		ctx->isp_csi_cfg[raw_num].data_seq = dev_attr->data_seq;
 		ctx->isp_csi_cfg[raw_num].yuv_scene_mode = (enum isp_yuv_scene_e)dev_attr->yuv_scene_mode;
-		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ONLINE) {
-			if (ctx->isp_pipe_cfg[raw_num].is_offline_scaler) {
-				vi_pr(VI_ERR, "ISP_YUV_SCENE_ONLINE nust scaler online\n");
-			}
-			ctx->isp_csi_cfg[raw_num].yuv_scene_mode = ISP_YUV_SCENE_ISP;
-		}
 		ctx->isp_csi_cfg[raw_num].chn_num = dev_attr->work_mode + 1;
 	} else {
 		ctx->isp_csi_cfg[raw_num].is_hdr_on = (dev_attr->wdr_attr.wdr_mode != WDR_MODE_NONE);
@@ -711,6 +706,8 @@ int vi_destroy_pipe(struct sop_vi_dev *vdev, int pipe)
 		return ret;
 	}
 
+	vi_tuning_buf_release(&vdev->ctx, pipe);
+
 	vi_ctx->is_pipe_created[pipe] = false;
 	vi_ctx->bypass_frm[pipe] = 0;
 
@@ -753,6 +750,7 @@ int vi_start_pipe(struct sop_vi_dev *vdev, int pipe)
 	raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
 	ret = vi_csi_start_streaming(vdev, raw_num);
 	if (ret != 0) {
+		osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
 		vi_pr(VI_ERR, "Failed to vi start streaming\n");
 		goto fail_to_start_csi;
 	}
@@ -761,15 +759,23 @@ int vi_start_pipe(struct sop_vi_dev *vdev, int pipe)
 
 	ret = vi_get_isp_ion_buf(vdev, pipe);
 	if (ret != 0) {
+		osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
 		vi_pr(VI_ERR, "VI getIonBuf is failed\n");
 		goto fail_to_get_ion_buf;
 	}
 
+	vi_tuning_buf_setup(ctx, pipe);
+
+	osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
+
 	vi_pr(VI_INFO, "pipe_%d start_pipe\n", pipe);
 
+	return ret;
+
 fail_to_get_ion_buf:
+	vi_csi_stop_streaming(vdev, raw_num);
+	ctx->isp_pipe_cfg[pipe].is_enable = false;
 fail_to_start_csi:
-	osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
 
 	return ret;
 }
@@ -2104,13 +2110,56 @@ int vi_detach_vb_pool(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn)
 	return 0;
 }
 
+int vi_set_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t frame_count)
+{
+	int ret = 0;
+	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	enum sop_isp_raw raw_num = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	ret = check_vi_dev_valid(dev);
+	if (ret != 0)
+		return ret;
+
+	osal_mutex_lock(&vi_ctx->dev_lock[dev]);
+
+	//stop the device first
+	raw_num = ctx->bind_raw[dev];
+	ctx->isp_csi_cfg[raw_num].rx_ref_frm_num =
+		vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0] - frame_count;
+	ctx->isp_csi_cfg[raw_num].rx_frm_cnt = frame_count;
+
+	osal_mutex_unlock(&vi_ctx->dev_lock[dev]);
+
+	return 0;
+}
+
+int vi_get_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t *frame_count)
+{
+	int ret = 0;
+	enum sop_isp_raw raw_num = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	ret = check_vi_dev_valid(dev);
+	if (ret != 0)
+		return ret;
+
+	raw_num = ctx->bind_raw[dev];
+	*frame_count = ctx->isp_csi_cfg[raw_num].rx_frm_cnt;
+
+	return 0;
+}
+
 void vi_sdk_release(struct sop_vi_dev *vdev)
 {
+	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
 	uint8_t dev = 0, pipe = 0, chn = 0;
 
 	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
 		for (chn = 0; chn < VI_MAX_CHN_NUM; chn++) {
 			vi_disable_chn(vdev, pipe, chn);
+			vi_ctx->is_chn_enable[pipe][chn] = 0;
+			vi_ctx->blk_size[pipe][chn] = 0;
 		}
 		vi_destroy_pipe(vdev, pipe);
 	}
@@ -2119,7 +2168,8 @@ void vi_sdk_release(struct sop_vi_dev *vdev)
 		vi_disable_dev(vdev, dev);
 	}
 
-	clean_misc_resources(vdev);
+	vi_sw_deinit(vdev);
+
 }
 
 /*****************************************************************************
@@ -2620,13 +2670,17 @@ long vi_sdk_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
 		ip_info = (struct ip_info *)ctrl->ptr;
 		json_vir = osal_phys_to_virt(ip_info->phy_addr);
 
-		vi_set_tuning_dis(ctrl->pipe, 1, 1);
+		//only update pipe tuning
+		vi_set_tuning_dis(ctrl->pipe, 0, 0);
 
-		osal_usleep_range(500 * 1000, 1000 * 1000);
+		osal_usleep_range(200 * 1000, 500 * 1000);
 
-		osal_atomic_set(&vdev->is_drop, 1);
+		//stop recivice csi
+		osal_atomic_set(&vdev->is_drop, 0);
 
-		rc = vi_dump_register(vdev, json_vir, &size);
+		osal_usleep_range(200 * 1000, 500 * 1000);
+
+		rc = vi_dump_register(vdev, ctrl->pipe, json_vir, &size);
 		if (size > ip_info->size) {
 			rc = -1;
 			vi_pr(VI_ERR, "size is too small.expect size(%d) but(%d\n", size, ip_info->size);
@@ -2642,6 +2696,28 @@ err_sdk_dump_register:
 		vi_set_tuning_dis(0, 0, 0);
 
 		osal_atomic_set(&vdev->is_drop, 0);
+		break;
+	}
+
+	case VI_SDK_SET_DEV_RX_FRAME_COUNT:
+	{
+		u32 *p_frame_count;
+
+		CHK_STRUCT_SIZE(ctrl->size, sizeof(u32));
+
+		p_frame_count = (u32 *)ctrl->ptr;
+		rc = vi_set_dev_rx_frame_count(vdev, ctrl->dev, *p_frame_count);
+		break;
+	}
+
+	case VI_SDK_GET_DEV_RX_FRAME_COUNT:
+	{
+		u32 *p_frame_count;
+
+		CHK_STRUCT_SIZE(ctrl->size, sizeof(u32));
+
+		p_frame_count = (u32 *)ctrl->ptr;
+		rc = vi_get_dev_rx_frame_count(vdev, ctrl->dev, p_frame_count);
 		break;
 	}
 	default:

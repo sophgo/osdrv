@@ -16,6 +16,10 @@ ifeq ($(CONFIG_DUAL_OS), y)
 ccflags-y += -DCONFIG_DUAL_OS
 endif
 
+ifeq ($(CONFIG_SUSPEND), y)
+CFLAGS += -DCONFIG_SUSPEND
+endif
+
 ifeq ($(ARCH), arm)
 ccflags-y +=-Wframe-larger-than=2048
 endif

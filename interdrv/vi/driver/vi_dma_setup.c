@@ -96,10 +96,9 @@ void _vi_pre_fe_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	raw_le = csibdg_dma_find_hwid(phy_raw, ISP_FE_CH0);
 	raw_se = csibdg_dma_find_hwid(phy_raw, ISP_FE_CH1);
 
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) //Online mode to scaler
-			_vi_yuv_get_dma_size(ctx, raw_num);
-
+	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
+		ctx->isp_csi_cfg[raw_num].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) { //YUV sensor
+		_vi_yuv_get_dma_size(ctx, raw_num);
 		return;
 	}
 
@@ -361,7 +360,7 @@ static void _isp_preraw_fe_dma_dump(struct isp_ctx *ctx, enum sop_isp_raw raw_nu
 	}
 
 	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
-		ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+		ctx->isp_csi_cfg[raw_num].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) {
 		for (i = 0; i < ISP_FE_CHN_MAX; i++) {
 			vi_pr(VI_INFO, "yuyv_yuv(0x%llx), yuyv_yuv(0x%llx)\n",
 				csi_pool->yuv_yuyv[i][0], csi_pool->yuv_yuyv[i][1]);
@@ -431,10 +430,9 @@ void _isp_pre_fe_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
 	struct _mempool *mempool = &ctx->csi_mempool[raw_num];
 	struct _membuf *bufpool = &ctx->csi_bufpool[raw_num];
 
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { //YUV sensor
-		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) //yuv fe->dram->post
-			_vi_yuv_dma_setup(vdev, raw_num);
-
+	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
+		ctx->isp_csi_cfg[raw_num].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) { //YUV sensor
+		_vi_yuv_dma_setup(vdev, raw_num);
 		goto EXIT;
 	}
 
@@ -803,7 +801,8 @@ void _vi_dma_setup(struct sop_vi_dev *vdev, uint8_t pipe)
 
 	if (!ctx->isp_pipe_cfg[pipe].is_enable)
 		return;
-	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor && ctx->isp_pipe_cfg[pipe].yuv_scene_mode != ISP_YUV_SCENE_ISP)
+	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
+		ctx->isp_pipe_cfg[pipe].yuv_scene_mode != ISP_YUV_SCENE_ISP)
 		return;
 
 	_isp_rawtop_dma_setup(ctx, pipe);

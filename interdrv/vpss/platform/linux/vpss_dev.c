@@ -261,18 +261,50 @@ static int vpss_remove(struct platform_device *pdev)
 	return 0;
 }
 
-int vpss_suspend(struct device *dev)
+int vpss_dev_suspend(struct device *dev)
 {
-	TRACE_VPSS(DBG_WARN, "vpss suspended\n");
+	int ret = 0;
+	struct vpss_dev_data *dev_data;
 
-	return 0;
+	if (!dev) {
+		TRACE_VPSS(DBG_ERR, "invalid param\n");
+		return -EINVAL;
+	}
+
+	dev_data = dev_get_drvdata(dev);
+	if (!dev_data) {
+		TRACE_VPSS(DBG_ERR, "Can not get vpss drvdata\n");
+		return -EINVAL;
+	}
+
+	TRACE_VPSS(DBG_WARN, "vpss suspended + \n");
+	ret = vpss_core_suspend(&dev_data->cores);
+	TRACE_VPSS(DBG_WARN, "vpss suspended - \n");
+
+	return ret;
 }
 
-int vpss_resume(struct device *dev)
+int vpss_dev_resume(struct device *dev)
 {
-	TRACE_VPSS(DBG_WARN, "vpss resumed\n");
+	int ret = 0;
+	struct vpss_dev_data *dev_data;
 
-	return 0;
+	if (!dev) {
+		TRACE_VPSS(DBG_ERR, "invalid param\n");
+		return -EINVAL;
+	}
+
+	dev_data = dev_get_drvdata(dev);
+	if (!dev_data) {
+		TRACE_VPSS(DBG_ERR, "Can not get vpss drvdata\n");
+		return -EINVAL;
+	}
+
+	TRACE_VPSS(DBG_WARN, "vpss resumed + \n");
+	ret = vpss_core_resume(&dev_data->cores);
+	TRACE_VPSS(DBG_WARN, "vpss resumed - \n");
+
+	return ret;
 }
 
 static const struct of_device_id vpss_dt_match[] = {
@@ -280,8 +312,10 @@ static const struct of_device_id vpss_dt_match[] = {
 	{}
 };
 
-static SIMPLE_DEV_PM_OPS(vpss_pm_ops, vpss_suspend,
-				vpss_resume);
+static const struct dev_pm_ops vpss_pm_ops = {
+	.suspend = vpss_dev_suspend,
+	.resume = vpss_dev_resume,
+};
 
 static struct platform_driver vpss_pdrv = {
 	.probe      = vpss_probe,

@@ -8,6 +8,7 @@
 #include "gfbg_disp.h"
 #include "gfbg_callback.h"
 #include "ion.h"
+#include "tde_cb.h"
 
 #define VXRES_SIZE(xres, bpp) ALIGN((xres), GFBG_ALIGN / (bpp / 8))
 #define FB_LINE_SIZE(vxres, bpp) (((vxres) * ((bpp) >> 3) + GFBG_ALIGNMENT) & (~GFBG_ALIGNMENT))
@@ -310,7 +311,13 @@ int gfbg_drv_set_layer_stride(vo_layer layer_id, unsigned int stride)
 {
 	vo_dev dev_id = 0;
 	vo_layer hal_layer_id = 0;
+	struct fb_info *info = NULL;
 
+	if (g_layer[layer_id].rot) {
+		// For rotated layers, the stride is set to the width of the display
+		info = g_layer[layer_id].info;
+		stride = gfbg_get_yres(info) * 4;
+	}
 	gfbg_hal_set_layer_stride(dev_id, hal_layer_id, stride);
 
 	return 0;
@@ -330,7 +337,7 @@ int gfbg_drv_set_layer_zoom(vo_layer layer_id, const fb_rect *input_rect, const 
 	display_info = &par->display_info;
 
 	if (!enable) {
-		gfbg_hal_set_layer_zoom(dev_id, hal_layer_id, false, false, display_info);
+		gfbg_hal_set_layer_zoom(dev_id, hal_layer_id, false, false, display_info, g_layer[layer_id].rot);
 		return -1;
 	}
 
@@ -341,7 +348,7 @@ int gfbg_drv_set_layer_zoom(vo_layer layer_id, const fb_rect *input_rect, const 
 	w_need_zoom = (input_rect->width != output_rect->width);
 	h_need_zoom = (input_rect->height != output_rect->height);
 
-	gfbg_hal_set_layer_zoom(dev_id, hal_layer_id, w_need_zoom, h_need_zoom, display_info);
+	gfbg_hal_set_layer_zoom(dev_id, hal_layer_id, w_need_zoom, h_need_zoom, display_info, g_layer[layer_id].rot);
 
 	return 0;
 }
@@ -783,6 +790,10 @@ static void gfbg_open_init_display(struct fb_info *info, struct disp_timing *tim
 
 	info->var.xres = timing->hfde_end - timing->hfde_start + 1;
 	info->var.yres = timing->vfde_end - timing->vfde_start + 1;
+	if (g_layer[par->layer_id].rot) {
+		info->var.xres = timing->vfde_end - timing->vfde_start + 1;
+		info->var.yres = timing->hfde_end - timing->hfde_start + 1;
+	}
 	info->var.xres_virtual = VXRES_SIZE(info->var.xres, info->var.bits_per_pixel);
 	info->var.yres_virtual = info->var.yres;
 	info->var.xoffset = 0;
@@ -795,6 +806,15 @@ static void gfbg_open_init_display(struct fb_info *info, struct disp_timing *tim
 	info->var.lower_margin = timing->vtotal - timing->vfde_end;
 	info->var.hsync_len = timing->hsync_end - timing->hsync_start;
 	info->var.vsync_len = timing->vsync_end - timing->vsync_start;
+	if (g_layer[par->layer_id].rot) {
+		// Flip horizontal and vertical timing assignments for rotation
+		info->var.left_margin = timing->vfde_start - timing->vsync_end;
+		info->var.right_margin = timing->vtotal - timing->vfde_end;
+		info->var.upper_margin = timing->hfde_start - timing->hsync_end;
+		info->var.lower_margin = timing->htotal - timing->hfde_end;
+		info->var.hsync_len = timing->vsync_end - timing->vsync_start;
+		info->var.vsync_len = timing->hsync_end - timing->hsync_start;
+	}
 	info->var.sync &= ~(FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT);
 	info->var.vmode = FB_VMODE_NONINTERLACED;
 	info->var.activate &= ~FB_ACTIVATE_TEST;
@@ -1006,6 +1026,13 @@ static int gfbg_release(struct fb_info *info, int user)
 			g_layer[par->layer_id].compre_info[i].compre_vaddr = NULL;
 			g_layer[par->layer_id].compre_info[i].oenc_cfg.bso_adr = 0;
 		}
+	}
+
+	if (g_layer[par->layer_id].tde_info.tde_paddr != 0) {
+		base_ion_free(g_layer[par->layer_id].tde_info.tde_paddr);
+		g_layer[par->layer_id].tde_info.tde_paddr = 0;
+		g_layer[par->layer_id].tde_info.tde_vaddr = NULL;
+		g_layer[par->layer_id].tde_info.tde_size = 0;
 	}
 
 #if defined(CONFIG_DUAL_OS)
@@ -1586,6 +1613,32 @@ static int gfbg_refresh_0buf(vo_layer layer_id, const fb_buf *canvas_buf)
 	return 0;
 }
 
+static s32 _tde_do_op_cb(enum tde_usage_e usage
+			, const void *usage_param, unsigned int width, unsigned int height
+			, unsigned long long src_addr, unsigned long long dst_addr, unsigned char sync_io
+			, unsigned char block, enum tde_cb_task_mode_e task_mode)
+{
+	struct tde_inter_cfg cfg;
+	struct base_exe_m_cb exe_cb;
+
+	osal_memset(&cfg, 0, sizeof(cfg));
+	cfg.usage = usage;
+	cfg.usage_param = usage_param;
+	cfg.width = width;
+	cfg.height = height;
+	cfg.src_addr = src_addr;
+	cfg.dst_addr = dst_addr;
+	cfg.sync_io = sync_io;
+	cfg.block = block;
+	cfg.task_mode = task_mode;
+
+	exe_cb.callee = E_MODULE_TDE;
+	exe_cb.caller = E_MODULE_GFBG;
+	exe_cb.cmd_id = TDE_CB_OP;
+	exe_cb.data   = &cfg;
+	return base_exe_module_cb(&exe_cb);
+}
+
 static int gfbg_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	gfbg_par *par = (gfbg_par *)info->par;
@@ -1594,14 +1647,51 @@ static int gfbg_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	unsigned int stride;
 	fb_buf canvas_buf;
 	int ret = 0;
+	unsigned int len = 0;
+	char name[16];
+	unsigned long long paddr_tde = 0;
+	void *ion_v_tde = NULL;
+	enum tde_cb_task_mode_e task_mode;
+	int tde_w, tde_h;
 
 	/* set the stride and display start address */
 	stride = gfbg_get_line_length(info);
 
 	/* 3 is 8 bits */
+	tde_w = ALIGN(var->xres, 16); /* 16 for align */
+	tde_h = ALIGN(var->yres, 16); /* 16 for align */
+	len = tde_w * tde_h * (gfbg_get_bits_per_pixel(info) >> 3);
 	display_addr = (gfbg_get_smem_start(info) + (unsigned long long)stride *
 			var->yoffset + (unsigned long long)var->xoffset *
 			(gfbg_get_bits_per_pixel(info) >> 3)) & 0xfffffffffffffff0; /* 3 is 8 bits */
+
+	if ((!g_layer[par->layer_id].tde_info.tde_paddr) &&
+	    g_layer[par->layer_id].rot) {
+		if (snprintf(name, 10, "gfbg_tde") < 0) { /* 12:for char length */
+			TRACE_GFBG(DBG_ERR, "%s:%d:snprintf_s failure\n", __func__, __LINE__);
+			return -1;
+		}
+
+		ret = base_ion_alloc(&paddr_tde, &ion_v_tde, name, len, true);
+		base_ion_cache_invalidate(paddr_tde, ion_v_tde, len);
+		if (ret != 0) {
+			TRACE_GFBG(DBG_ERR, "%s:failed to malloc the video memory, size: %u KBtyes!\n", name, len);
+			return -1;
+		}
+		g_layer[par->layer_id].tde_info.tde_paddr = paddr_tde;
+		g_layer[par->layer_id].tde_info.tde_vaddr = ion_v_tde;
+		g_layer[par->layer_id].tde_info.tde_size = len;
+	}
+
+	if (g_layer[par->layer_id].rot == 1 || g_layer[par->layer_id].rot == 2) {
+		task_mode = (g_layer[par->layer_id].rot == 1) ? TDE_CB_TASK_ROTATE_90 : TDE_CB_TASK_ROTATE_270;
+		_tde_do_op_cb(TDE_USAGE_ROTATION, NULL, var->xres, var->yres
+			, display_addr, g_layer[par->layer_id].tde_info.tde_paddr, 1, 1, task_mode);
+		base_ion_cache_invalidate(g_layer[par->layer_id].tde_info.tde_paddr
+			, g_layer[par->layer_id].tde_info.tde_vaddr, g_layer[par->layer_id].tde_info.tde_size);
+
+		display_addr = g_layer[par->layer_id].tde_info.tde_paddr;
+	}
 
 	canvas_buf.canvas.format = par->color_format;
 	canvas_buf.canvas.phys_addr = display_addr;

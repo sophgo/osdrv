@@ -14,7 +14,7 @@ struct vo_core_dev {
 	struct class *vo_class;
 	struct cdev cdev;
 	dev_t cdev_id;
-	struct clk *clk_vo[2];
+	// osal_clk *clk_vo[3];
 	//disp, dsi_mac, dsi_phy, vo_mac
 	void __iomem *reg_base[4];
 };
