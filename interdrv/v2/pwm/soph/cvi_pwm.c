@@ -260,17 +260,23 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 			break;
 	}
 
-	// Read cycle count
-	cycle_cnt = readl(our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_FREQDATA) + 1;
-	pr_debug("pwm_cv_capture: cycle_cnt = %llu\n", cycle_cnt);
+	// Handle timeout
+	if (value == 0) {
+		result->period = 0;
+		result->duty_cycle = 0;
+	} else {
+		// Read cycle count
+		cycle_cnt = readl(our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_FREQDATA) + 1;
+		pr_debug("%s: cycle_cnt = %llu\n", __func__, cycle_cnt);
 
-	// Convert from cycle count to period ns
-	cycles = clk_get_rate(our_chip->base_clk);
-	cycle_cnt *= NSEC_PER_SEC;
-	do_div(cycle_cnt, cycles);
+		// Convert from cycle count to period ns
+		cycles = clk_get_rate(our_chip->base_clk);
+		cycle_cnt *= NSEC_PER_SEC;
+		do_div(cycle_cnt, cycles);
 
-	result->period = cycle_cnt;
-	result->duty_cycle = 0;
+		result->period = cycle_cnt;
+		result->duty_cycle = 0;
+	}
 
 	// Disable capture
 	value = readl(our_chip->base + REG_FREQEN) & (~(1 << (pwm_dev->hwpwm)));

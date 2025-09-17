@@ -401,7 +401,7 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 							"grp_id", "ChnID", "Enable", "Width", "Height");
 	for (i = 0; i < DPU_MAX_GRP_NUM; ++i) {
 		if (p_dpu_ctx[i] && p_dpu_ctx[i]->iscreated) {
-			for (j = 0; j < p_dpu_ctx[i]->chn_num; ++j) {
+			for (j = 0; j < DPU_MAX_CHN_NUM; ++j) {
 				char *is_enabled ="Y";
 				// seq_printf(m, "%20s%20s%20s%20s%20s\n",
 				// 			"grp_id", "ChnID", "Enable", "Width", "Height");

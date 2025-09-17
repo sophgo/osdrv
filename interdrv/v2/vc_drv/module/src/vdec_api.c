@@ -314,7 +314,7 @@ static int alloc_framebuffer(void *pHandle)
             }
         }
         else {
-            blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_STATIC_POOLID, 1);
+            blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_EXTERNAL_POOLID, 1);
         }
 
         if (blk == VB_INVALID_HANDLE)
@@ -371,7 +371,7 @@ static int alloc_framebuffer(void *pHandle)
                 }
             }
             else {
-                blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_STATIC_POOLID, 1);
+                blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_EXTERNAL_POOLID, 1);
             }
 
             if (blk == VB_INVALID_HANDLE)

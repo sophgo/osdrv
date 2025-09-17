@@ -169,7 +169,6 @@ struct dpu_ctx_s {
 	unsigned char dpu_dev_id;
 	unsigned char is_dma_cfg;
 	unsigned int stride_arry[2];
-	unsigned int chn_num;
 	pixel_format_e pixel_format;
 	struct dpu_job_queue_status_s input_job_status;
 	struct dpu_job_queue_status_s working_job_status;
@@ -319,10 +318,10 @@ struct dpu_handler_ctx_s *dpu_get_handler_ctx(void);
 		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.dst_frame_rate >=		\
 		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.src_frame_rate)
 
-// #define IS_FRAME_OFFSET_INVALID(f) 
-// 	((f).offset_left < 0 || (f).offset_right < 0 || 
-// 	 (f).offset_top < 0 || (f).offset_bottom < 0 || 
-// 	 ((unsigned int)((f).offset_left + (f).offset_right) > (f).width) || 
+// #define IS_FRAME_OFFSET_INVALID(f)
+// 	((f).offset_left < 0 || (f).offset_right < 0 ||
+// 	 (f).offset_top < 0 || (f).offset_bottom < 0 ||
+// 	 ((unsigned int)((f).offset_left + (f).offset_right) > (f).width) ||
 // 	 ((unsigned int)((f).offset_top + (f).offset_bottom) > (f).height))
 
 static inline int MOD_CHECK_NULL_PTR(mod_id_e mod, const void *ptr)

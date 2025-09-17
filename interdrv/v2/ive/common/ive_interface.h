@@ -18,7 +18,10 @@
 #include "ive_core_res.h"
 
 
+
+
 #define IVE_DEV_MAX 2
+#define IVE_DEV_USE_MAX 1
 #define IVE_SYNC_IO_WAIT_TIMEOUT_MS (1000*10)
 #define IVE_IDLE_WAIT_TIMEOUT_MS    (1000*5)
 #define IVE_EOF_WAIT_TIMEOUT_MS     (1000*1)

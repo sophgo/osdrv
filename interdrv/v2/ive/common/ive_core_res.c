@@ -8,6 +8,7 @@
 #include "ive_core_res.h"
 #include "ive_interface.h"
 
+extern atomic_t dev_state[IVE_DEV_MAX];
 
 typedef struct ive_drv_core_list_t {
     int id;
@@ -15,16 +16,15 @@ typedef struct ive_drv_core_list_t {
     struct list_head list;
 } ive_drv_core_list_t;
 
-static unsigned int s_max_num_core = 2;
-//static spinlock_t jpeg_spinlock;
+static unsigned int s_max_num_core = 1;
 
-static DEFINE_SPINLOCK(jpeg_spinlock);
+static DEFINE_SPINLOCK(ive_spinlock);
 
 static DEFINE_MUTEX(ive_drv_core_list_lock);
 
 static DECLARE_WAIT_QUEUE_HEAD(ive_drv_core_wait_queue);
 static LIST_HEAD(ive_drv_core_resource_list_head);
-static int next_id = IVE_DEV_MAX - 1;
+static int next_id = 1;
 static bool isCoreIdle = false;
 int ive_core_request_resource(int timeout) {
     ive_drv_core_list_t *res;
@@ -37,16 +37,17 @@ int ive_core_request_resource(int timeout) {
     elapse = ts.tv_sec * 1000 + ts.tv_nsec/1000000;
 
     while (id == -1) {
-        spin_lock_irqsave(&jpeg_spinlock, flags);
+        spin_lock_irqsave(&ive_spinlock, flags);
         list_for_each_entry(res, &ive_drv_core_resource_list_head, list) {
             if (!res->is_used) {
                 res->is_used = true;
                 id = res->id;
+                atomic_set(&dev_state[id], IVE_DEV_STATE_RUNNING);
                 break;
             }
         }
         isCoreIdle = false;
-        spin_unlock_irqrestore(&jpeg_spinlock, flags);
+        spin_unlock_irqrestore(&ive_spinlock, flags);
 
         if (id == -1) {
             if (timeout > 0 )
@@ -71,17 +72,18 @@ int ive_core_release_resource(int id) {
     unsigned long        flags;
     int ret = -1;
 
-    spin_lock_irqsave(&jpeg_spinlock, flags);
+    spin_lock_irqsave(&ive_spinlock, flags);
     list_for_each_entry(res, &ive_drv_core_resource_list_head, list) {
         if (res->id == id) {
             res->is_used = false;
             ret = 0;
             isCoreIdle = true;
+            atomic_set(&dev_state[id], IVE_DEV_STATE_END);
             wake_up(&ive_drv_core_wait_queue);
             break;
         }
     }
-    spin_unlock_irqrestore(&jpeg_spinlock, flags);
+    spin_unlock_irqrestore(&ive_spinlock, flags);
 
     return ret;
 }
