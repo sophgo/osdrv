@@ -1248,7 +1248,7 @@ void _postraw_outbuf_enq(struct sop_vi_dev *vdev,
 					const u8 chn_num);
 static void _vi_record_debug_info(struct isp_ctx *ctx);
 static inline void vi_err_wake_up_th(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num);
-static int isp_post_tasklet(void *data);
+static void isp_post_tasklet(unsigned long data);
 static int _vi_preraw_thread(void *arg);
 static int _vi_vblank_handler_thread(void *arg);
 static int _vi_err_handler_thread(void *arg);

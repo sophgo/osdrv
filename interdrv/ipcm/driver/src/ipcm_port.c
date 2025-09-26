@@ -481,7 +481,7 @@ s32 ipcm_get_rtos_boot_status(u32 *stat)
 
     *stat = ipcmpa_ioread32(rtos_stat_base);
     ipcm_debug("rtos status = 0x%x\n", *stat);
-
+	ipcmpa_iounmap(rtos_stat_base);
     return 0;
 }
 

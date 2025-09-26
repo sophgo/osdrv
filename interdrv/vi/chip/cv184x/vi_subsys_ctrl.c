@@ -32,7 +32,8 @@ void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 	uintptr_t vi_sel = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_VI_SEL];
 	union reg_pre_raw_vi_sel_1 vi_sel_1;
 	int pipe = ctx->cfg_info.pipe;
-	// union reg_pre_raw_vi_sel_11 vi_reg_11;
+	union reg_pre_raw_vi_sel_11 vi_reg_11;
+
 	vi_sel_1.raw = 0;
 	vi_sel_1.bits.frame_widthm1 = ctx->cfg_info.img_width - 1;
 	vi_sel_1.bits.frame_heightm1 = ctx->cfg_info.img_height - 1;
@@ -56,11 +57,13 @@ void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 		}
 	}
 
-	// vi_reg_11.raw = ISP_RD_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_11);
-	// vi_reg_11.bits.in_format_le = 3;
-	// vi_reg_11.bits.in_format_se = 3;
-	// vi_reg_11.bits.bayer_type = 1;
-	// ISP_WR_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_11, vi_reg_11.raw);
+	vi_reg_11.raw = ISP_RD_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_11);
+	vi_reg_11.bits.ai_isp_transform_en = ctx->cfg_info.ai_cfg.is_raw_planar;
+	vi_reg_11.bits.in_format_le = ctx->cfg_info.ai_cfg.fmt;
+	vi_reg_11.bits.in_format_se = ctx->cfg_info.ai_cfg.fmt;
+	vi_reg_11.bits.round_mode_le = ctx->cfg_info.ai_cfg.round;
+	vi_reg_11.bits.round_mode_se = ctx->cfg_info.ai_cfg.round;
+	ISP_WR_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_11, vi_reg_11.raw);
 }
 
 void ispblk_rawtop_config(struct isp_ctx *ctx)
@@ -73,8 +76,10 @@ void ispblk_rawtop_config(struct isp_ctx *ctx)
 	union reg_raw_top1_raw_2 rawtop1_raw_2;
 	union reg_raw_top1_raw_4 rawtop1_raw_4;
 	union reg_raw_top1_chk_sum_en chk_sum_en;
+	union reg_raw_top0_raw_bayer_type_topleft raw0_bayer_type;
 	union reg_raw_top1_raw_bayer_type raw_bayer_type_topleft;
 	int pipe = ctx->cfg_info.pipe;
+	u8 bayer_fmt = ctx->cfg_info.ai_cfg.is_raw_planar ? ISP_BAYER_TYPE_BG : ctx->isp_pipe_cfg[pipe].rgb_color_mode;
 
 	rawtop0_raw_2.raw = 0;
 	rawtop0_raw_2.bits.img_widthm_1_2x = ctx->cfg_info.img_width - 1;
@@ -85,6 +90,11 @@ void ispblk_rawtop_config(struct isp_ctx *ctx)
 	rawtop0_raw_3.bits.img_widthm_0 = ctx->cfg_info.img_width - 1;
 	rawtop0_raw_3.bits.img_heightm_0 = ctx->cfg_info.img_height - 1;
 	ISP_WR_REG(rawtop0, reg_raw_top0_t, raw_3, rawtop0_raw_3.raw);
+
+	raw0_bayer_type.raw = 0;
+	raw0_bayer_type.bits.bayer_type_2x = bayer_fmt;
+	raw0_bayer_type.bits.bayer_type_precrop = bayer_fmt;
+	ISP_WR_REG(rawtop0, reg_raw_top0_t, raw_bayer_type_topleft, raw0_bayer_type.raw);
 
 	rawtop1_raw_4.raw = ISP_RD_REG(rawtop1, reg_raw_top1_t, raw_4);
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
@@ -125,7 +135,7 @@ void ispblk_rawtop_config(struct isp_ctx *ctx)
 	ISP_WR_REG(rawtop1, reg_raw_top1_t, raw_2, rawtop1_raw_2.raw);
 
 	raw_bayer_type_topleft.raw = 0;
-	raw_bayer_type_topleft.bits.bayer_type_1x = ctx->isp_pipe_cfg[pipe].rgb_color_mode;
+	raw_bayer_type_topleft.bits.bayer_type_1x = bayer_fmt;
 	ISP_WR_REG(rawtop1, reg_raw_top1_t, raw_bayer_type, raw_bayer_type_topleft.raw);
 }
 
@@ -323,6 +333,7 @@ void ispblk_isptop_config(struct isp_ctx *ctx)
 	// to verify ip, turn off hw lut of rgbgamma, ynr, and cnr.
 	scene_ctrl.bits.hw_auto_enable		= 0;
 	scene_ctrl.bits.multi_sensor_enable	= ctx->is_multi_sensor;
+	scene_ctrl.bits.ai_isp_enable		= ctx->is_ai_isp;
 
 	scene_ctrl.bits.be_src_sel		= raw_num;
 	scene_ctrl.bits.yuv_edge_en		= 1;

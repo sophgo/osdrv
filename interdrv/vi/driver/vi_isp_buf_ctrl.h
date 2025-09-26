@@ -21,14 +21,17 @@ enum isp_buf_source {
 struct isp_buffer {
 	struct osal_list_head	list;
 	uint8_t			is_ext;
+	uint8_t			is_ai_type;
 	uint8_t			pipe;
 	enum sop_isp_raw	raw_num;
 	enum sop_isp_fe_chn_num chn_num;
 	enum isp_buf_source	source;
 	struct vi_rect		crop;
+	struct _ai_cfg		ai_cfg;
 
 	u64			vb_blk;
 	u64			addr;
+	u32			size;
 	u32			byr_size;
 	u32			frm_num;
 	u32			ir_idx;
@@ -40,6 +43,7 @@ struct isp_queue {
 	osal_spinlock		lock;
 	u32			num_rdy;
 	enum sop_isp_raw	raw_num;
+	u8			depth;
 };
 
 void isp_buf_init(struct isp_queue *q);
@@ -49,6 +53,7 @@ struct isp_buffer *isp_buf_last(struct isp_queue *q);
 void isp_buf_queue(struct isp_queue *q, struct isp_buffer *b);
 struct isp_buffer *isp_buf_remove(struct isp_queue *q);
 int isp_buf_empty(struct isp_queue *q);
+int isp_buf_overflow(struct isp_queue *q);
 
 #ifdef __cplusplus
 }

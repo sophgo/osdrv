@@ -214,7 +214,13 @@ enum isp_blk_id_t {
 	ISP_BLK_ID_PRE_RAW_FE0,
 	ISP_BLK_ID_CSIBDG0,
 	ISP_BLK_ID_DMA_CTL_CSI0_BDG0,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GB,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GR,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG0_R,
 	ISP_BLK_ID_DMA_CTL_CSI0_BDG1,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG1_GB,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG1_GR,
+	ISP_BLK_ID_DMA_CTL_CSI0_BDG1_R,
 	ISP_BLK_ID_DMA_CTL_CSI0_BDG2,
 	ISP_BLK_ID_DMA_CTL_CSI0_BDG3,
 	ISP_BLK_ID_PRE_RAW_FE0_LSC0,
@@ -328,8 +334,14 @@ enum isp_blk_id_t {
 	ISP_BLK_ID_DMA_CTL_BT0_LITE2,
 	ISP_BLK_ID_DMA_CTL_BT0_LITE3,
 	ISP_BLK_ID_PRE_RAW_VI_SEL,
-	ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE,
-	ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_GB,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_GR,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_R,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_GB,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_GR,
+	ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_R,
 	ISP_BLK_ID_PRE_RAW_VI_SEL_CROP_LE,
 	ISP_BLK_ID_PRE_RAW_VI_SEL_CROP_SE,
 	ISP_BLK_ID_CMDQ,
@@ -358,6 +370,31 @@ struct _csi_switch_info {
 	struct csi_snr_array snr_arr[VI_MAX_DEV_SWITCH_NUM];
 };
 
+enum ai_fmt {
+	FMT_INT8,
+	FMT_FP16,
+	FMT_FP32,
+	FMT_BF16,
+};
+
+enum ai_round {
+	ROUND_IEEE_NEAREST_EVEN = 0,     // IEEE round to nearest (even)
+	ROUND_IEEE_TO_ZERO = 1,          // IEEE round to zero
+	ROUND_IEEE_POS_INF = 2,          // IEEE round to positive infinity
+	ROUND_IEEE_NEG_INF = 3,          // IEEE round to negative infinity
+	ROUND_NEAREST_UP = 4,            // round to nearest up
+	ROUND_AWAY_FROM_ZERO = 5,        // round away from zero
+	ROUND_RESERVED_6 = 6,            // reserved
+	ROUND_RESERVED_7 = 7,            // reserved
+	ROUND_MAX
+};
+
+struct _ai_cfg {
+	bool is_raw_planar;
+	enum ai_fmt fmt;
+	enum ai_round round;
+};
+
 struct _csi_cfg {
 	u32			csibdg_width;
 	u32			csibdg_height;
@@ -380,6 +417,7 @@ struct _csi_cfg {
 	enum _vi_intf_mode_e	inf_mode;
 	enum _vi_work_mode_e	mux_mode;
 	enum _vi_yuv_data_seq_e data_seq;
+	struct _ai_cfg		ai_cfg;
 
 	osal_atomic		clsc_en[ISP_FE_CHN_MAX];
 
@@ -399,6 +437,7 @@ struct _csi_cfg {
 	u32			is_enable		: 1;
 	u32			is_drop_next_frame	: 1;
 	u32			is_bind			: 1;
+	u32			is_ai_isp		: 1;
 };
 
 struct _isp_cfg {
@@ -415,6 +454,7 @@ struct _isp_cfg {
 	u32			cnr_cur_scale_shift;
 	u32			cnr_scale_shift;
 
+	u32			bypass_num;
 	u32			isp_reset_frm;
 	u32			first_frm_cnt;
 
@@ -483,11 +523,13 @@ struct _membuf {
 struct _isp_cfg_info {
 	enum sop_isp_raw	raw_num;
 	enum sop_isp_fe_chn_num	chn_num;
+	struct _ai_cfg		ai_cfg;
 
 	u8			pipe;
 	u32			img_width;
 	u32			img_height;
 
+	u32			is_ai_isp	: 1;
 	u32			is_hdr_on	: 1;
 	u32			is_yuv		: 1;
 

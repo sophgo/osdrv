@@ -18,6 +18,9 @@
 #include "tde_core.h"
 #include "tde_proc.h"
 #include "tde_reg.h"
+#include "base_cb.h"
+#include "tde_cb.h"
+#include "tde_inter_cb.h"
 
 #define TDE_DEV_NAME "soph-tde"
 #define TDE_REG_NAME "tde"
@@ -25,6 +28,51 @@
 
 u32 tde_log_lv = DBG_WARN;
 module_param(tde_log_lv, int, 0644);
+
+static int tde_exec_cb(void *dev, cb_modules_id caller, unsigned int cmd, void *arg)
+{
+	struct tde_dev_data *dev_data = (struct tde_dev_data *)dev;
+	struct tde_inter_cfg *cfg;
+	int rc = -1;
+
+	switch (cmd) {
+		case TDE_CB_OP: {
+			cfg = (struct tde_inter_cfg *)arg;
+
+			if (osal_atomic_inc_return(&dev_data->open_count) == 1)
+				tde_core_open(&dev_data->core);
+			rc = tde_do_op(&dev_data->core, cfg->usage, cfg->usage_param
+				, cfg->width, cfg->height, cfg->src_addr
+				, cfg->dst_addr, cfg->sync_io, cfg->block
+				, (enum tde_task_mode_e)cfg->task_mode);
+			if (osal_atomic_dec_return(&dev_data->open_count) == 0)
+				tde_core_release(&dev_data->core);
+			break;
+		}
+		default: {
+			TRACE_TDE(DBG_WARN, "invalid cb CMD\n");
+			break;
+		}
+	}
+
+	return rc;
+}
+
+static int tde_rm_cb(void)
+{
+	return base_rm_module_cb(E_MODULE_TDE);
+}
+
+static int tde_reg_cb(struct tde_dev_data *dev_data)
+{
+	struct base_m_cb_info reg_cb;
+
+	reg_cb.module_id	= E_MODULE_TDE;
+	reg_cb.dev		= (void *)dev_data;
+	reg_cb.cb		= tde_exec_cb;
+
+	return base_reg_module_cb(&reg_cb);
+}
 
 static irqreturn_t tde_isr(int irq, void *data)
 {
@@ -159,10 +207,6 @@ static int tde_init_resources(struct platform_device *pdev)
 	if (dev->core.clk == NULL) {
 		dev_err(&pdev->dev, "Cannot get source clk for 2de\n");
 	}
-	dev->core.isp_top_clk = osal_clk_get(&pdev->dev, "reg_clk_isp_top_vip_en");
-	if (dev->core.isp_top_clk == NULL) {
-		dev_err(&pdev->dev, "Cannot get source clk for isp top\n");
-	}
 
 	return 0;
 }
@@ -209,18 +253,27 @@ static int tde_probe(struct platform_device *pdev)
 		goto err2;
 	}
 
-	tde_core_init(&dev_data->core);
+	rc = tde_core_init(&dev_data->core);
+	if (rc) {
+		TRACE_TDE(DBG_ERR, "Failed to init tde core\n");
+		goto err3;
+	}
+	rc = tde_reg_cb(dev_data);
+	if (rc) {
+		TRACE_TDE(DBG_ERR, "Failed to register callback\n");
+		goto err4;
+	}
+
 	osal_atomic_set(&dev_data->open_count, 0);
 
-	rc = tde_reg_cb(&dev_data->core);
-	if (rc) {
-		TRACE_TDE(DBG_ERR, "Failed to register tde cb\n");
-		goto err2;
-	}
 	TRACE_TDE(DBG_WARN, "tde probe done\n");
 
 	return rc;
 
+err4:
+	tde_core_deinit(&dev_data->core);
+err3:
+	devm_free_irq(&pdev->dev, dev_data->irq_num, dev_data);
 err2:
 	tde_proc_remove(&dev_data->core);
 err1:
@@ -250,17 +303,15 @@ static int tde_remove(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	tde_rm_cb();
 	tde_core_deinit(&dev_data->core);
-	osal_clk_put(&pdev->dev, dev_data->core.clk);
-	osal_clk_put(&pdev->dev, dev_data->core.isp_top_clk);
 
 	devm_free_irq(&pdev->dev, dev_data->irq_num, dev_data);
 
 	tde_proc_remove(&dev_data->core);
 	misc_deregister(&dev_data->miscdev);
+	osal_clk_put(&pdev->dev, dev_data->core.clk);
 	dev_set_drvdata(&pdev->dev, NULL);
-
-	tde_rm_cb();
 
 	TRACE_TDE(DBG_WARN, "tde remove done\n");
 

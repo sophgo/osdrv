@@ -149,9 +149,16 @@ uintptr_t *isp_get_phys_reg_bases(void)
 		[ISP_BLK_ID_PRE_RAW_FE0]		= (ISP_BLK_BA_PRE_RAW_FE0),
 		[ISP_BLK_ID_CSIBDG0]			= (ISP_BLK_BA_CSIBDG0),
 		[ISP_BLK_ID_DMA_CTL_CSI0_BDG0]		= (ISP_BLK_BA_DMA_CTL_CSI0_BDG0),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GB]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG0_GB),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GR]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG0_GR),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG0_R]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG0_R),
 		[ISP_BLK_ID_DMA_CTL_CSI0_BDG1]		= (ISP_BLK_BA_DMA_CTL_CSI0_BDG1),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG1_GB]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG1_GB),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG1_GR]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG1_GR),
+		[ISP_BLK_ID_DMA_CTL_CSI0_BDG1_R]	= (ISP_BLK_BA_DMA_CTL_CSI0_BDG1_R),
 		[ISP_BLK_ID_DMA_CTL_CSI0_BDG2]		= (ISP_BLK_BA_DMA_CTL_CSI0_BDG2),
 		[ISP_BLK_ID_DMA_CTL_CSI0_BDG3]		= (ISP_BLK_BA_DMA_CTL_CSI0_BDG3),
+
 		[ISP_BLK_ID_PRE_RAW_FE0_LSC0]		= (ISP_BLK_BA_PRE_RAW_FE0_LSC0),
 		[ISP_BLK_ID_PRE_RAW_FE0_LSC1]		= (ISP_BLK_BA_PRE_RAW_FE0_LSC1),
 		[ISP_BLK_ID_DMA_CTL_FE0_CLSC_LE]	= (ISP_BLK_BA_DMA_CTL_FE0_CLSC_LE),
@@ -263,8 +270,14 @@ uintptr_t *isp_get_phys_reg_bases(void)
 		[ISP_BLK_ID_DMA_CTL_BT0_LITE2]		= (ISP_BLK_BA_DMA_CTL_BT0_LITE2),
 		[ISP_BLK_ID_DMA_CTL_BT0_LITE3]		= (ISP_BLK_BA_DMA_CTL_BT0_LITE3),
 		[ISP_BLK_ID_PRE_RAW_VI_SEL]		= (ISP_BLK_BA_PRE_RAW_VI_SEL),
-		[ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE]	= (ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_LE),
-		[ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE]	= (ISP_BLK_BA_DMA_CTL_PRE_RAW_VI_SEL_SE),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_LE),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_GB]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_LE_GB),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_GR]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_LE_GR),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE_R]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_LE_R),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_SE),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_GB]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_SE_GB),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_GR]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_SE_GR),
+		[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE_R]	= (ISP_BLK_BA_DMA_CTL_PRE_VI_SEL_SE_R),
 		[ISP_BLK_ID_PRE_RAW_VI_SEL_CROP_LE]	= (ISP_BLK_BA_PRE_RAW_VI_SEL_CROP_LE),
 		[ISP_BLK_ID_PRE_RAW_VI_SEL_CROP_SE]	= (ISP_BLK_BA_PRE_RAW_VI_SEL_CROP_SE),
 		[ISP_BLK_ID_CMDQ]			= (ISP_BLK_BA_CMDQ),
@@ -606,6 +619,7 @@ u64 ispblk_dma_getaddr(struct isp_ctx *ctx, u32 dmaid)
 int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 {
 	u32 len = 0, num = 0, w;
+	u32 byte = 1;
 
 	switch (dmaid) {
 	case ISP_BLK_ID_DMA_CTL_CSI0_BDG0:
@@ -624,12 +638,19 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 				: slc_b_cfg.main_path.se_buf_size;
 			num = 1;
 		} else {
-			w = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w;
-			if (ctx->is_dpcm_on)
-				w >>= 1;
+			if (ctx->isp_csi_cfg[pipe].is_ai_isp && ctx->isp_csi_cfg[pipe].ai_cfg.is_raw_planar) {
+				w = (ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w);
+				num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h;
+				byte = (ctx->isp_csi_cfg[pipe].ai_cfg.fmt == FMT_FP32) ? 4 : 2;
+				len = w * byte;
+			} else {
+				w = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w;
+				if (ctx->is_dpcm_on)
+					w >>= 1;
 
-			num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h;
-			len = 3 * UPPER(w, 1);
+				num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h;
+				len = 3 * UPPER(w, 1);
+			}
 		}
 
 		break;
@@ -865,6 +886,7 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 {
 	uintptr_t dmab = ctx->phys_regs[dmaid];
 	u32 w = 0, len = 0, stride = 0, num = 0, cnr_shift = 1;
+	bool is_raw_planar = false;
 
 	switch (dmaid) {
 	case ISP_BLK_ID_DMA_CTL_CSI0_BDG0:
@@ -883,15 +905,34 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 			num = 1;
 			stride = len;
 		} else {
-			/* csibdg */
-			w = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w;
-			num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h;
-			if (ctx->is_dpcm_on)
-				w >>= 1;
+			if (ctx->isp_csi_cfg[pipe].is_ai_isp && ctx->isp_csi_cfg[pipe].ai_cfg.is_raw_planar) {
+				w = (ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w) >> 1;
+				num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h >> 1;
+				len = (ctx->isp_csi_cfg[pipe].ai_cfg.fmt == FMT_FP32) ? 4 * w : 2 * w;
+				stride = len;
+				is_raw_planar = true;
+			} else {
+				/* csibdg */
+				w = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w;
+				num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h;
+				if (ctx->is_dpcm_on)
+					w >>= 1;
 
-			len = 3 * UPPER(w, 1);
-			stride = len;
+				len = 3 * UPPER(w, 1);
+				stride = len;
+			}
 		}
+		break;
+	}
+	case ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GB:
+	case ISP_BLK_ID_DMA_CTL_CSI0_BDG0_GR:
+	case ISP_BLK_ID_DMA_CTL_CSI0_BDG0_R:
+	{
+		w = (ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].w) >> 1;
+		num = ctx->isp_csi_cfg[pipe].crop[ISP_FE_CH0].h >> 1;
+		len = (ctx->isp_csi_cfg[pipe].ai_cfg.fmt == FMT_FP32) ? 4 * w : 2 * w;
+		stride = len;
+		is_raw_planar = true;
 		break;
 	}
 	case ISP_BLK_ID_DMA_CTL_FE0_CLSC_LE:
@@ -925,8 +966,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 
 		break;
 	}
-	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE:
-	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE:
+	case ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE:
+	case ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE:
 	{
 		// preraw be read/write dma
 		u32 dpcm_on = (ctx->is_dpcm_on) ? 2 : 1;
@@ -1142,6 +1183,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_stride, stride);
 		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, dma_segnum, num);
 	}
+
+	stride = is_raw_planar ? stride * 4 : stride;
 
 	if (buf_addr) {
 		ISP_WR_REG(dmab, reg_isp_dma_ctl_t, base_addr, (buf_addr & 0xFFFFFFFF));
@@ -1772,8 +1815,8 @@ u32 ispblk_dma_yuv_bypass_config(struct isp_ctx *ctx, u32 dmaid, u64 buf_addr,
 	case ISP_BLK_ID_DMA_CTL_BT0_LITE2:
 	case ISP_BLK_ID_DMA_CTL_BT0_LITE3:
 	/* preraw_vi_sel */
-	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE:
-	case ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE:
+	case ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE:
+	case ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE:
 	{
 		/* csibdg */
 		num = ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0].h;
@@ -1923,11 +1966,11 @@ void ispblk_slice_buf_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num
 		ISP_WR_REG(rdma_com_1, reg_rdma_core_t, ring_buffer_size4, slc_b_cfg.main_path.se_buf_size);
 
 		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_CSI0_BDG0, true);
-		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE, true);
+		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE, true);
 
 		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
 			_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_CSI0_BDG1, true);
-			_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE, true);
+			_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE, true);
 		}
 	} else {
 		w_ring_buf_en_1.raw = ISP_RD_REG(wdma_com_1, reg_wdma_core_t, ring_buffer_en);
@@ -1946,9 +1989,9 @@ void ispblk_slice_buf_config(struct isp_ctx *ctx, const enum sop_isp_raw raw_num
 		ISP_WR_REG(rdma_com_1, reg_rdma_core_t, ring_buffer_en, r_ring_buf_en_1.raw);
 
 		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_CSI0_BDG0, false);
-		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE, false);
+		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE, false);
 		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_CSI0_BDG1, false);
-		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE, false);
+		_ispblk_dma_slice_config(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE, false);
 	}
 }
 
@@ -2102,7 +2145,7 @@ void ispblk_overflow_record_reg_info(struct isp_ctx *ctx, void *reg_info)
 	uintptr_t yuvtop = ctx->phys_regs[ISP_BLK_ID_YUVTOP];
 	uintptr_t rgbtop = ctx->phys_regs[ISP_BLK_ID_RGBTOP];
 	uintptr_t rawtop1 = ctx->phys_regs[ISP_BLK_ID_RAWTOP1];
-	uintptr_t rdma28 = ctx->phys_regs[ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE];
+	uintptr_t rdma28 = ctx->phys_regs[ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE];
 	struct vi_overflow_reg_info *vi_info = (struct vi_overflow_reg_info *)reg_info;
 
 	//isp_top

@@ -151,6 +151,20 @@ int32_t _rgn_exit(void)
 	return 0;
 }
 
+int _rgn_release_all_region(void)
+{
+	osal_mutex_lock(&g_rgnhashlock);
+	if (!osal_hash_size(rgn_hash)) {
+		TRACE_RGN(RGN_INFO, "no region to release.\n");
+		osal_mutex_unlock(&g_rgnhashlock);
+		return 0;
+	}
+	osal_hash_for_each_safe(rgn_hash, _hash_cb_rgn_destory, NULL);
+	osal_mutex_unlock(&g_rgnhashlock);
+
+	return 0;
+}
+
 unsigned int _rgn_proc_get_idx(rgn_handle hhandle)
 {
 	unsigned int i, idx = 0;

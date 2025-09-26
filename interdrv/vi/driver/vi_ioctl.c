@@ -27,6 +27,10 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, struct vi_ai_isp_cfg *cfg
 	case AI_ISP_CFG_INIT:
 	{
 		ctx->is_ai_isp = true;
+		ctx->isp_csi_cfg[raw_num].is_ai_isp = true;
+		ctx->isp_csi_cfg[raw_num].ai_cfg.is_raw_planar = cfg->reserved[0] ? true : false;
+		ctx->isp_csi_cfg[raw_num].ai_cfg.fmt = cfg->reserved[0];
+		ctx->isp_csi_cfg[raw_num].ai_cfg.round = cfg->reserved[1];
 		break;
 	}
 	case AI_ISP_CFG_ENABLE:
@@ -47,7 +51,8 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, struct vi_ai_isp_cfg *cfg
 		break;
 	}
 
-	vi_pr(VI_DBG, "AI_ISP_CFG: vi_pipe %d, raw_num %d, type %d\n", pipe, raw_num, cfg->vi_ai_isp_type);
+	vi_pr(VI_DBG, "AI_ISP_CFG: vi_pipe %d, raw_num %d, type %d, reserved[0] %lld, reserved[1] %lld\n",
+			pipe, raw_num, cfg->vi_ai_isp_type, cfg->reserved[0], cfg->reserved[1]);
 
 	return 0;
 }

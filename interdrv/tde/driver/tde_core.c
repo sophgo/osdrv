@@ -1,10 +1,7 @@
 #include "tde_debug.h"
 #include "tde_core.h"
-#include "tde_inter_cb.h"
 #include "tde_ip_ctrl.h"
 #include "base_ctx.h"
-#include "base_cb.h"
-#include "tde_cb.h"
 
 static void _tde_remove_task(struct tde_job *job)
 {
@@ -178,7 +175,6 @@ int tde_core_open(struct tde_core *core)
 	osal_clk_prepare_enable(core->clk);
 	tde_ip_init();
 	osal_clk_disable(core->clk);
-	osal_clk_prepare_enable(core->isp_top_clk);
 	return 0;
 }
 
@@ -190,7 +186,6 @@ int tde_core_release(struct tde_core *core)
 
 	tde_ip_deinit();
 	osal_clk_unprepare(core->clk);
-	osal_clk_disable_unprepare(core->isp_top_clk);
 
 	return 0;
 }
@@ -226,45 +221,4 @@ int tde_core_isr(struct tde_core *core)
 	}
 
 	return 0;
-}
-
-int tde_exec_cb(void *dev, cb_modules_id caller, unsigned int cmd, void *arg)
-{
-	struct tde_core *core = (struct tde_core *)dev;
-	struct tde_inter_cfg *cfg;
-	int rc = -1;
-
-	switch (cmd) {
-		case TDE_CB_OP: {
-			cfg = (struct tde_inter_cfg *)arg;
-
-			rc = tde_do_op(core, cfg->usage, cfg->usage_param
-				, cfg->width, cfg->height, cfg->src_addr
-				, cfg->dst_addr, cfg->sync_io, cfg->block
-				, (enum tde_task_mode_e)cfg->task_mode);
-			break;
-		}
-		default: {
-			TRACE_TDE(DBG_WARN, "invalid cb CMD\n");
-			break;
-		}
-	}
-
-	return rc;
-}
-
-int tde_rm_cb(void)
-{
-	return base_rm_module_cb(E_MODULE_TDE);
-}
-
-int tde_reg_cb(struct tde_core *core)
-{
-	struct base_m_cb_info reg_cb;
-
-	reg_cb.module_id	= E_MODULE_TDE;
-	reg_cb.dev		= (void *)core;
-	reg_cb.cb		= tde_exec_cb;
-
-	return base_reg_module_cb(&reg_cb);
 }

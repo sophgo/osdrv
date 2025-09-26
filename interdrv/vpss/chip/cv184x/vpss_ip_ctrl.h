@@ -177,5 +177,5 @@ void vpss_get_csc_mtrx(enum vpss_csc csc, struct vpss_csc_matrix *csc_matrix);
 int vpss_stitch_run(u8 dev_idx, struct vpss_cmdq_buf *cmdq_buf, struct vpss_stitch_cfg *cfg);
 
 void vpss_get_gop_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr);
-
+void vpss_get_sbm_pos(u8 inst, int *y_pos, int *uv_pos);
 #endif

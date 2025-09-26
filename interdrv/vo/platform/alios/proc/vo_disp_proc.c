@@ -1,3 +1,4 @@
+#if ((CONFIG_VO_SUPPORT_PROC) && (CONFIG_SUPPORT_VO))
 #include <aos/cli.h>
 #include <string.h>
 #include <stdio.h>
@@ -56,3 +57,4 @@ static void vo_disp_proc_show(int32_t argc, char **argv)
 }
 
 ALIOS_CLI_CMD_REGISTER(vo_disp_proc_show, proc_vo_disp, vo_disp info);
+#endif

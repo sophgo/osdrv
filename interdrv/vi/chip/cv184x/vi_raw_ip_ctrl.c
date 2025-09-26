@@ -144,6 +144,7 @@ void ispblk_lscr_config(struct isp_ctx *ctx, bool enable, u16 *data, u32 size)
 	int pipe = ctx->cfg_info.pipe;
 	int img_width = ctx->cfg_info.img_width;
 	int img_height = ctx->cfg_info.img_height;
+	u8 bayer_fmt = ctx->cfg_info.ai_cfg.is_raw_planar ? ISP_BAYER_TYPE_BG : ctx->isp_pipe_cfg[pipe].rgb_color_mode;
 
 	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, hw_auto_cg_en, 1);
 	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, bypass, !enable);
@@ -152,7 +153,7 @@ void ispblk_lscr_config(struct isp_ctx *ctx, bool enable, u16 *data, u32 size)
 	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_width, img_width - 1);
 	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_2, img_height, img_height - 1);
 
-	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, lsc_bayer_starting, ctx->isp_pipe_cfg[pipe].rgb_color_mode);
+	ISP_WR_BITS(lscr, reg_isp_lscr_t, sc_wrap_0, lsc_bayer_starting, bayer_fmt);
 
 	addr = lscr + _OFST(reg_isp_lscr_t, sc_wrap_6);
 
@@ -171,6 +172,7 @@ void ispblk_drc_config(struct isp_ctx *ctx, bool enable)
 	int subimg_ratio_vert = img_height * 64 / sub_img_height;
 	unsigned int subimg_ratio_hori_div = sub_img_width * 65536 / img_width;
 	unsigned int subimg_ratio_vert_div = sub_img_height * 65536 / img_height;
+	u8 bayer_fmt = ctx->cfg_info.ai_cfg.is_raw_planar ? ISP_BAYER_TYPE_BG : ctx->isp_pipe_cfg[pipe].rgb_color_mode;
 
 	ISP_WR_BITS(drc, reg_isp_drc_t, pipectrl_cg, hw_auto_cg_en, 1);
 	ISP_WR_BITS(drc, reg_isp_drc_t, drc_enable, drc_enable, enable);
@@ -188,7 +190,7 @@ void ispblk_drc_config(struct isp_ctx *ctx, bool enable)
 	ISP_WR_BITS(drc, reg_isp_drc_t, drc_img_size, img_width_m1, img_width - 1);
 	ISP_WR_BITS(drc, reg_isp_drc_t, drc_img_size, img_height_m1, img_height - 1);
 
-	ISP_WR_BITS(drc, reg_isp_drc_t, drc_bayerid, pre_img_bayerid, ctx->isp_pipe_cfg[pipe].rgb_color_mode);
+	ISP_WR_BITS(drc, reg_isp_drc_t, drc_bayerid, pre_img_bayerid, bayer_fmt);
 }
 
 void ispblk_cfa_config(struct isp_ctx *ctx, enum isp_blk_id_t blk_id)

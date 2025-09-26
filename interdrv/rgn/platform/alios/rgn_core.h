@@ -25,6 +25,7 @@ long _rgn_s_ctrl(struct rgn_dev *rdev, struct rgn_ext_control *p);
 long _rgn_g_ctrl(struct rgn_dev *rdev, struct rgn_ext_control *p);
 int _rgn_sw_init(struct rgn_dev *rdev);
 int _rgn_release_op(struct rgn_dev *rdev);
+int _rgn_release_all_region(void);
 
 #ifdef __cplusplus
 }

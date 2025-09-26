@@ -83,3 +83,17 @@ int isp_buf_empty(struct isp_queue *q)
 
 	return empty;
 }
+
+int isp_buf_overflow(struct isp_queue *q)
+{
+	unsigned long flags;
+	int overflow = 0;
+
+	osal_spin_lock_irqsave(&q->lock, &flags);
+	if (q->num_rdy > q->depth) {
+		overflow = 1;
+	}
+	osal_spin_unlock_irqrestore(&q->lock, &flags);
+
+	return overflow;
+}

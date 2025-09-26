@@ -581,7 +581,9 @@ void vpss_core_init(struct vpss_cores *cores)
 		core->vpss_type = i;
 		osal_atomic_set(&core->state, VPSS_IDLE);
 		osal_spin_lock_init(&core->core_lock);
+		osal_clk_prepare_enable(cores->core[i].clk);
 		vpss_ip_init(i, false);
+		osal_clk_disable(cores->core[i].clk);
 		TRACE_VPSS(DBG_INFO, "vpss-%d init done\n", i);
 	}
 
@@ -609,6 +611,7 @@ void vpss_core_deinit(struct vpss_cores *cores)
 	}
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		osal_spin_lock_destroy(&cores->core[i].core_lock);
+		osal_clk_unprepare(cores->core[i].clk);
 	}
 	osal_spin_lock_destroy(&cores->lock);
 
@@ -629,7 +632,7 @@ void vpss_core_open(struct vpss_cores *cores)
 	osal_timer_start(&cores->timer);
 
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
-		osal_clk_prepare_enable(cores->core[i].clk);
+		osal_clk_enable(cores->core[i].clk);
 		vpss_ip_reset(i, true, true);
 	}
 }
@@ -641,7 +644,7 @@ void vpss_core_release(struct vpss_cores *cores)
 	osal_timer_stop(&cores->timer);
 	vpss_release_all_grp(&cores->ctx);
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
-		osal_clk_disable_unprepare(cores->core[i].clk);
+		osal_clk_disable(cores->core[i].clk);
 	}
 }
 

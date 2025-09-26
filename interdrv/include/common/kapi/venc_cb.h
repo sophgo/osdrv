@@ -14,6 +14,7 @@ enum VENC_CB_CMD {
 	VENC_CB_SKIP_FRM,
 	VENC_CB_SNAP_JPG_FRM,
 	VENC_CB_OVERFLOW_CHECK,
+	VENC_CB_GET_VPSS_SBM_POS,
 	VENC_CB_MAX
 };
 
@@ -30,6 +31,11 @@ struct venc_switch_chn {
 	s32 venc_chn;
 	u8 snr_num;
 	u64 frm_num;
+};
+
+struct venc_vpss_sbm_pos {
+	s32 y_pos;
+	s32 uv_pos;
 };
 
 struct venc_snap_frm_info {

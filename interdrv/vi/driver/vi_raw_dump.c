@@ -46,12 +46,12 @@ void _isp_fe_raw_dump_cfg(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_nu
 
 static int isp_dump_raw_wait_cond_func(const void *param)
 {
-	u32 *flag = (u32 *)param;
+	osal_atomic *flag = (osal_atomic *)param;
 
-	return *flag != 0;
+	return osal_atomic_read(flag) == RAWDUMP_DONE;
 }
 
-int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
+int isp_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b;
@@ -91,7 +91,7 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 		&vdev->isp_int_wait_q[raw_num], isp_dump_raw_wait_cond_func, &vdev->isp_int_flag[raw_num],
 		dump[0].time_out);
 
-	vdev->isp_int_flag[raw_num] = 0;
+	osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_IDLE);
 	if (!ret) {
 		vi_pr(VI_ERR, "vi get raw timeout(%d)\n", dump[0].time_out);
 		dump[0].is_timeout = true;
@@ -113,6 +113,8 @@ int isp_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
 		dump[chn].crop_x	= vdev->raw_dump[raw_num].isp_byr[chn]->crop.x;
 		dump[chn].crop_y	= vdev->raw_dump[raw_num].isp_byr[chn]->crop.y;
 		dump[chn].frm_num	= vdev->raw_dump[raw_num].isp_byr[chn]->frm_num;
+		dump[chn].pts		= vdev->raw_dump[raw_num].isp_byr[chn]->tv.tv_sec * 1000000
+						 + vdev->raw_dump[raw_num].isp_byr[chn]->tv.tv_usec;
 	}
 
 	return 0;
@@ -240,24 +242,31 @@ int isp_stop_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_
 	return 0;
 }
 
-int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
+int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
 	int ret = 0;
 	u8 raw_num = dump[0].raw_dump.raw_num;
-	u8 chn, chn_max;
+	u8 chn = 0, chn_max;
 
-	ret = osal_wait_timeout_interruptible(
-		&vdev->isp_int_wait_q[raw_num], isp_dump_raw_wait_cond_func, &vdev->isp_int_flag[raw_num],
-		dump->time_out);
+	vi_pr(VI_DBG, "get smooth raw dump\n");
 
-	vdev->isp_int_flag[raw_num] = 0;
-	if (!ret) {
-		vi_pr(VI_ERR, "vi get raw timeout(%d)\n", dump[0].time_out);
-		dump[0].is_timeout = true;
-		ret = ERR_VI_CFG_TIMEOUT;
-		return ret;
+	if (isp_buf_empty(&vdev->raw_dump[raw_num].buf_dq[chn])) {
+		osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_START);
+		ret = osal_wait_timeout_interruptible(
+			&vdev->isp_int_wait_q[raw_num], isp_dump_raw_wait_cond_func, &vdev->isp_int_flag[raw_num],
+			dump->time_out);
+
+		osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_IDLE);
+		if (!ret) {
+			vi_pr(VI_ERR, "vi get raw timeout(%d)\n", dump[0].time_out);
+			dump[0].is_timeout = true;
+			ret = ERR_VI_CFG_TIMEOUT;
+			return ret;
+		}
+	} else {
+		vi_pr(VI_DBG, "no need to wait, buf_dq not empty\n");
 	}
 
 	chn_max = ctx->isp_csi_cfg[raw_num].is_hdr_on + 1;
@@ -271,7 +280,7 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk 
 			return ret;
 		}
 
-		osal_memset(&dump[chn], 0, sizeof(struct sop_vip_isp_raw_blk));
+		osal_memset(&dump[chn], 0, sizeof(struct raw_dump_info));
 		vi_pr(VI_DBG, "raw_le phy_addr=0x%llx byr_size=%d frm_num=%d\n",
 			b->addr, b->byr_size, b->frm_num);
 
@@ -282,13 +291,14 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk 
 		dump[chn].frm_num           = b->frm_num;
 		dump[chn].raw_dump.size     = b->byr_size;
 		dump[chn].raw_dump.phy_addr = b->addr;
+		dump[chn].pts               = b->tv.tv_sec * 1000000 + b->tv.tv_usec;
 		osal_vfree(b);
 	}
 
 	return 0;
 }
 
-int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk *dump)
+int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -318,6 +328,29 @@ int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_raw_blk 
 	return 0;
 }
 
+static void smooth_rawdump_buffer_check(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct isp_buffer *b = NULL;
+	u8 chn = 0;
+	u8 chn_max = ctx->isp_csi_cfg[raw_num].is_hdr_on + 1;
+	struct isp_queue *raw_buf_dq = NULL, *raw_buf_q = NULL;
+
+	for (chn = 0; chn < chn_max; chn++) {
+		raw_buf_dq = &vdev->raw_dump[raw_num].buf_dq[chn];
+		raw_buf_q = &vdev->raw_dump[raw_num].buf_q[chn];
+
+		if (isp_buf_empty(raw_buf_q) || isp_buf_overflow(raw_buf_dq)) {
+			b = isp_buf_remove(raw_buf_dq);
+			if (b == NULL) {
+				continue;
+			}
+
+			isp_buf_queue(raw_buf_q, b);
+		}
+	}
+}
+
 void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u32 frm_num)
 {
 	switch (osal_atomic_read(&vdev->raw_dump[raw_num].isp_smooth_raw_dump_en)) {
@@ -326,7 +359,7 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 	{
 		vi_pr(VI_DBG, "wake up wait_q\n");
 
-		vdev->isp_int_flag[raw_num] = 1;
+		osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_DONE);
 		osal_wait_wakeup_interruptible(&vdev->isp_int_wait_q[raw_num]);
 
 		osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH0], RAWDUMP_IDLE);
@@ -338,8 +371,11 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 	{
 		vi_pr(VI_DBG, "wake up wait_q smooth frm=%d\n", frm_num);
 
-		vdev->isp_int_flag[raw_num] = 1;
-		osal_wait_wakeup_interruptible(&vdev->isp_int_wait_q[raw_num]);
+		smooth_rawdump_buffer_check(vdev, raw_num);
+		if (osal_atomic_read(&vdev->isp_int_flag[raw_num]) == RAWDUMP_START) {
+			osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_DONE);
+			osal_wait_wakeup_interruptible(&vdev->isp_int_wait_q[raw_num]);
+		}
 		return;
 	}
 	case SMOOTH_RAWDUMP_STOP:

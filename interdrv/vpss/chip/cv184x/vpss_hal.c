@@ -26,6 +26,22 @@ static int job_cheack_hw_ready(struct vpss_device *device)
 	return 0;
 }
 
+static int vpss_cb_vc_get_sbm_pos(int y_pos, int uv_pos)
+{
+	struct venc_vpss_sbm_pos info;
+	struct base_exe_m_cb exe_cb;
+
+	info.y_pos = y_pos;
+	info.uv_pos = uv_pos;
+	exe_cb.callee = E_MODULE_VCODEC;
+	exe_cb.caller = E_MODULE_VPSS;
+	exe_cb.cmd_id = VENC_CB_GET_VPSS_SBM_POS;
+	exe_cb.data = &info;
+
+	return base_exe_module_cb(&exe_cb);
+
+}
+
 static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 {
 	int ret;
@@ -58,6 +74,13 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 		if (core->reset_sbm) {
 			vpss_ip_reset(core->vpss_type, core->reset_sbm, false);
 			core->reset_sbm = 0;
+		}
+
+		if (core->is_sbm) {
+			int y_pos = 0, uv_pos = 0;
+
+			vpss_get_sbm_pos(0, &y_pos, &uv_pos);
+			vpss_cb_vc_get_sbm_pos(y_pos, uv_pos);
 		}
 
 		if (i == 0)

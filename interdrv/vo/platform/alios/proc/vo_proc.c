@@ -1,3 +1,4 @@
+#if ((CONFIG_VO_SUPPORT_PROC) && (CONFIG_SUPPORT_VO))
 #include <aos/cli.h>
 #include <string.h>
 #include <stdio.h>
@@ -452,3 +453,4 @@ static void vo_proc_show(int32_t argc, char **argv)
 	vo_show_status();
 }
 ALIOS_CLI_CMD_REGISTER(vo_proc_show, proc_vo, vo info);
+#endif

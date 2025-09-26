@@ -29,7 +29,8 @@ typedef struct {
 	unsigned long layer_size;       /* layer_size = fb.smem_len, For display buf, KB */
 	gfbg_compre_info compre_info[2];
 	int index; /* index for compress buffer */
-	gfbg_tde_info tde_info;
+	gfbg_tde_info tde_info[2];
+	int tde_index; /* index for tde buffer */
 	int rot;
 } gfbg_layer;
 

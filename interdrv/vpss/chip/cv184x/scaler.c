@@ -3226,3 +3226,9 @@ void sclr_dump_register(u8 inst)
 	}
 }
 
+void sclr_get_sb_write_pos(u8 inst, int *y_pos, int *uv_pos)
+{
+	*uv_pos = (_reg_read(reg_base + REG_SCL_ODMA_SB_C_STAT(inst)) & 0x1f);
+	*y_pos = (_reg_read(reg_base + REG_SCL_ODMA_SB_Y_STAT(inst)) & 0x1f);
+	TRACE_VPSS(DBG_DEBUG, "sb write pos: y_pos=%d uv_pos=%d\n", *y_pos, *uv_pos);
+}

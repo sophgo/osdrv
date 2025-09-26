@@ -47,6 +47,7 @@ struct vi_thread_attr {
 	osal_wait		wq;
 	osal_atomic		flag;
 	osal_atomic		exit_flag;
+	osal_tasklet 	tasklet;
 	int			(*th_handler)(void *arg);
 };
 
@@ -101,7 +102,7 @@ struct sop_vi_dev {
 	void				*reg_base;
 
 	int				irq_num;
-	osal_clk			*clk_isp[2];
+	osal_clk			*clk_isp[1];
 	osal_clk			*clk_mac[3];
 	void				*shared_mem;
 
@@ -122,7 +123,7 @@ struct sop_vi_dev {
 	struct raw_dump_work		raw_dump_work;
 
 	osal_atomic			isp_err_times[ISP_PRERAW_MAX];
-	u32				isp_int_flag[ISP_PRERAW_MAX];
+	osal_atomic			isp_int_flag[ISP_PRERAW_MAX];
 	osal_atomic			isp_ai_int_flag[ISP_PRERAW_MAX];
 	osal_wait			isp_int_wait_q[ISP_PRERAW_MAX];
 	osal_wait			isp_ai_wait_q[ISP_PRERAW_MAX];

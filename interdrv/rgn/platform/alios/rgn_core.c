@@ -131,6 +131,13 @@ err_destroy_instance:
 	return ret;
 }
 
+void driver_rgn_release(void)
+{
+	TRACE_RGN(RGN_WARN, " +\n");
+	_rgn_release_all_region();
+	TRACE_RGN(RGN_WARN, " -\n");
+}
+
 long driver_rgn_ioctl(unsigned int cmd, unsigned long arg)
 {
 	int ret = -EINVAL;

@@ -222,8 +222,8 @@ void vi_init_dump_register(struct sop_vi_dev *vdev)
 	BLK_INFO(m_block, DMA_CTL_BT0_LITE2, reg_isp_dma_ctl_t);
 	BLK_INFO(m_block, DMA_CTL_BT0_LITE3, reg_isp_dma_ctl_t);
 	BLK_INFO(m_block, PRE_RAW_VI_SEL, reg_pre_raw_vi_sel_t);
-	BLK_INFO(m_block, DMA_CTL_PRE_RAW_VI_SEL_LE, reg_isp_dma_ctl_t);
-	BLK_INFO(m_block, DMA_CTL_PRE_RAW_VI_SEL_SE, reg_isp_dma_ctl_t);
+	BLK_INFO(m_block, DMA_CTL_PRE_VI_SEL_LE, reg_isp_dma_ctl_t);
+	BLK_INFO(m_block, DMA_CTL_PRE_VI_SEL_SE, reg_isp_dma_ctl_t);
 	BLK_INFO(m_block, PRE_RAW_VI_SEL_CROP_LE, reg_crop_t);
 	BLK_INFO(m_block, PRE_RAW_VI_SEL_CROP_SE, reg_crop_t);
 }

@@ -1,3 +1,4 @@
+#if ((CONFIG_MIPI_TX_SUPPORT_PROC) && (CONFIG_SUPPORT_VO))
 #include <aos/cli.h>
 #include <string.h>
 #include <stdio.h>
@@ -127,3 +128,4 @@ static void mipi_tx_proc_show(int32_t argc, char **argv)
 }
 
 ALIOS_CLI_CMD_REGISTER(mipi_tx_proc_show, proc_mipi_tx, mipi_tx info);
+#endif

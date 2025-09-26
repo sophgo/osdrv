@@ -867,5 +867,5 @@ void sclr_dump_img_in_register(int img_inst);
 void sclr_dump_core_register(int inst);
 void sclr_dump_odma_register(u8 inst);
 void sclr_dump_register(u8 inst);
-
+void sclr_get_sb_write_pos(u8 inst, int *y_pos, int *uv_pos);
 #endif  //_SCL_H_

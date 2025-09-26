@@ -532,3 +532,11 @@ void ispblk_ycur_enable(struct isp_ctx *ctx, bool enable, u8 sel)
 	ISP_WR_BITS(ycur, reg_isp_ycurv_t, ycur_ctrl, ycur_enable, enable);
 	ISP_WR_BITS(ycur, reg_isp_ycurv_t, ycur_prog_ctrl, ycur_rsel, sel);
 }
+
+void ispblk_yuvtop_out_config(struct isp_ctx *ctx, bool online2sc)
+{
+	uintptr_t yuvtop = ctx->phys_regs[ISP_BLK_ID_YUVTOP];
+
+	//bypass_v = 1 -> 422P online to scaler
+	ISP_WR_BITS(yuvtop, reg_yuv_top_t, yuv_ctrl_mars3, bypass_v_1, online2sc);
+}

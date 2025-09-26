@@ -21,4 +21,6 @@ void ispblk_ca_config(struct isp_ctx *ctx, bool en, u8 mode);
 void ispblk_ca_lite_config(struct isp_ctx *ctx, bool en);
 void ispblk_ycur_config(struct isp_ctx *ctx, bool en, u8 sel, u16 *data);
 void ispblk_ycur_enable(struct isp_ctx *ctx, bool enable, u8 sel);
+void ispblk_yuvtop_out_config(struct isp_ctx *ctx, bool online2sc);
+
 #endif

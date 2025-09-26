@@ -253,12 +253,16 @@ int vi_set_bypass_frm(struct sop_vi_dev *vdev, int pipe, u8 bypass_num)
 {
 	int ret = 0;
 	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct isp_ctx *ctx = &vdev->ctx;
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
 		return ret;
 
 	vi_ctx->bypass_frm[pipe] = bypass_num;
+	ctx->isp_pipe_cfg[pipe].bypass_num = bypass_num;
+
+	vi_pr(VI_INFO, "set pipe(%d) bypass_frm=%d\n", pipe, bypass_num);
 
 	return 0;
 }
@@ -998,8 +1002,8 @@ int vi_send_pipe_raw(struct sop_vi_dev *vdev, int pipe, const video_frame_info_s
 	osal_mutex_lock(&vi_ctx->pipe_lock[pipe]);
 
 	if (vi_ctx->source[pipe] == VI_PIPE_FRAME_SOURCE_USER_BE) {
-		dmaid_le = ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE;
-		dmaid_se = ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE;
+		dmaid_le = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE;
+		dmaid_se = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE;
 	}
 
 	if (pvideo_frame->video_frame.dynamic_range == DYNAMIC_RANGE_HDR10) {
@@ -1569,7 +1573,7 @@ int vi_get_pipe_dump_attr(struct sop_vi_dev *vdev, int vi_pipe, vi_dump_attr_s *
 int vi_get_pipe_frame(struct sop_vi_dev *vdev, int pipe, video_frame_info_s *frame_info, int millisec)
 {
 	int ret;
-	struct sop_vip_isp_raw_blk dump[2];
+	struct raw_dump_info dump[2];
 	u32 dev_frm_w, dev_frm_h, frm_w, frm_h, raw_num;
 	u64 phyaddr = 0, addr = 0x00;
 	vb_blk  tmp_vb = VB_INVALID_HANDLE;
@@ -1771,6 +1775,7 @@ int vi_get_pipe_frame(struct sop_vi_dev *vdev, int pipe, video_frame_info_s *fra
 		frame_info[i].video_frame.offset_left  = dump[i].crop_x;
 		frame_info[i].video_frame.offset_top   = dump[i].crop_y;
 		frame_info[i].video_frame.time_ref     = dump[i].frm_num;
+		frame_info[i].video_frame.pts          = dump[i].pts;
 	}
 
 	return 0;
@@ -1804,7 +1809,7 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 {
 	int ret;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vip_isp_raw_blk dump[2];
+	struct raw_dump_info dump[2];
 	int dev_id = 0, frm_num = 1, i = 0;
 	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
 
@@ -1847,6 +1852,9 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 	for (; i < frm_num; i++) {
 		frame_info[i].video_frame.phyaddr[0]  = dump[i].raw_dump.phy_addr;
 		frame_info[i].video_frame.length[0]   = dump[i].raw_dump.size;
+		frame_info[i].video_frame.stride[0]   = (ctx->is_dpcm_on)
+							? 3 * UPPER(dump[i].src_w, 2)
+							: 3 * UPPER(dump[i].src_w, 1);
 		frame_info[i].video_frame.bayer_format  = vi_ctx->dev_attr[dev_id].bayer_format;
 		frame_info[i].video_frame.compress_mode = vi_ctx->pipe_attr[0].compress_mode;
 		frame_info[i].video_frame.width       = dump[i].src_w;
@@ -1854,10 +1862,13 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 		frame_info[i].video_frame.offset_left  = dump[i].crop_x;
 		frame_info[i].video_frame.offset_top   = dump[i].crop_y;
 		frame_info[i].video_frame.time_ref     = dump[i].frm_num;
-		vi_pr(VI_DBG, "Get paddr(0x%llx) size(%d) frm_num(%d)\n",
+		frame_info[i].video_frame.pts          = dump[i].pts;
+
+		vi_pr(VI_DBG, "Get paddr(0x%llx) size(%d) frm_num(%d) pts(%lld)\n",
 			frame_info[i].video_frame.phyaddr[0],
 			frame_info[i].video_frame.length[0],
-			frame_info[i].video_frame.time_ref);
+			frame_info[i].video_frame.time_ref,
+			frame_info[i].video_frame.pts);
 	}
 
 	return 0;
@@ -1867,7 +1878,7 @@ int vi_put_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 {
 	int ret;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vip_isp_raw_blk dump[2];
+	struct raw_dump_info dump[2];
 	vb_blk vb;
 	int frm_num, i, pipe;
 	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);

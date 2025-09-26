@@ -1026,13 +1026,12 @@ static int gfbg_release(struct fb_info *info, int user)
 			g_layer[par->layer_id].compre_info[i].compre_vaddr = NULL;
 			g_layer[par->layer_id].compre_info[i].oenc_cfg.bso_adr = 0;
 		}
-	}
-
-	if (g_layer[par->layer_id].tde_info.tde_paddr != 0) {
-		base_ion_free(g_layer[par->layer_id].tde_info.tde_paddr);
-		g_layer[par->layer_id].tde_info.tde_paddr = 0;
-		g_layer[par->layer_id].tde_info.tde_vaddr = NULL;
-		g_layer[par->layer_id].tde_info.tde_size = 0;
+		if (g_layer[par->layer_id].tde_info[1].tde_paddr != 0) {
+			base_ion_free(g_layer[par->layer_id].tde_info[i].tde_paddr);
+			g_layer[par->layer_id].tde_info[i].tde_paddr = 0;
+			g_layer[par->layer_id].tde_info[i].tde_vaddr = NULL;
+			g_layer[par->layer_id].tde_info[i].tde_size = 0;
+		}
 	}
 
 #if defined(CONFIG_DUAL_OS)
@@ -1653,6 +1652,7 @@ static int gfbg_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	void *ion_v_tde = NULL;
 	enum tde_cb_task_mode_e task_mode;
 	int tde_w, tde_h;
+	int tde_index;
 
 	/* set the stride and display start address */
 	stride = gfbg_get_line_length(info);
@@ -1665,32 +1665,44 @@ static int gfbg_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 			var->yoffset + (unsigned long long)var->xoffset *
 			(gfbg_get_bits_per_pixel(info) >> 3)) & 0xfffffffffffffff0; /* 3 is 8 bits */
 
-	if ((!g_layer[par->layer_id].tde_info.tde_paddr) &&
-	    g_layer[par->layer_id].rot) {
-		if (snprintf(name, 10, "gfbg_tde") < 0) { /* 12:for char length */
-			TRACE_GFBG(DBG_ERR, "%s:%d:snprintf_s failure\n", __func__, __LINE__);
-			return -1;
+	// Handle rotation and TDE buffer allocation
+	if (g_layer[par->layer_id].rot) {
+		// Toggle tde_index for double buffering
+		g_layer[par->layer_id].tde_index = 1 - g_layer[par->layer_id].tde_index;
+		tde_index = g_layer[par->layer_id].tde_index;
+
+		// Allocate TDE buffer if not already allocated
+		if (!g_layer[par->layer_id].tde_info[tde_index].tde_paddr) {
+			if (snprintf(name, sizeof(name), "gfbg_tde_%d", tde_index) < 0) {
+				TRACE_GFBG(DBG_ERR, "%s:%d:snprintf failure\n", __func__, __LINE__);
+				return -1;
+			}
+
+			ret = base_ion_alloc(&paddr_tde, &ion_v_tde, name, len, true);
+			if (ret != 0) {
+				TRACE_GFBG(DBG_ERR, "%s:failed to malloc video memory, size: %u KB!\n", name, len);
+				return -1;
+			}
+			base_ion_cache_invalidate(paddr_tde, ion_v_tde, len);
+
+			g_layer[par->layer_id].tde_info[tde_index].tde_paddr = paddr_tde;
+			g_layer[par->layer_id].tde_info[tde_index].tde_vaddr = ion_v_tde;
+			g_layer[par->layer_id].tde_info[tde_index].tde_size = len;
 		}
 
-		ret = base_ion_alloc(&paddr_tde, &ion_v_tde, name, len, true);
-		base_ion_cache_invalidate(paddr_tde, ion_v_tde, len);
-		if (ret != 0) {
-			TRACE_GFBG(DBG_ERR, "%s:failed to malloc the video memory, size: %u KBtyes!\n", name, len);
-			return -1;
+		// Perform rotation if needed
+		if (g_layer[par->layer_id].rot == 1 || g_layer[par->layer_id].rot == 2) {
+			task_mode = (g_layer[par->layer_id].rot == 1) ? TDE_CB_TASK_ROTATE_90 : TDE_CB_TASK_ROTATE_270;
+			_tde_do_op_cb(TDE_USAGE_ROTATION, NULL, var->xres, var->yres,
+				display_addr, g_layer[par->layer_id].tde_info[tde_index].tde_paddr, 1, 1, task_mode);
+
+			base_ion_cache_invalidate(
+				g_layer[par->layer_id].tde_info[tde_index].tde_paddr,
+				g_layer[par->layer_id].tde_info[tde_index].tde_vaddr,
+				g_layer[par->layer_id].tde_info[tde_index].tde_size);
+
+			display_addr = g_layer[par->layer_id].tde_info[tde_index].tde_paddr;
 		}
-		g_layer[par->layer_id].tde_info.tde_paddr = paddr_tde;
-		g_layer[par->layer_id].tde_info.tde_vaddr = ion_v_tde;
-		g_layer[par->layer_id].tde_info.tde_size = len;
-	}
-
-	if (g_layer[par->layer_id].rot == 1 || g_layer[par->layer_id].rot == 2) {
-		task_mode = (g_layer[par->layer_id].rot == 1) ? TDE_CB_TASK_ROTATE_90 : TDE_CB_TASK_ROTATE_270;
-		_tde_do_op_cb(TDE_USAGE_ROTATION, NULL, var->xres, var->yres
-			, display_addr, g_layer[par->layer_id].tde_info.tde_paddr, 1, 1, task_mode);
-		base_ion_cache_invalidate(g_layer[par->layer_id].tde_info.tde_paddr
-			, g_layer[par->layer_id].tde_info.tde_vaddr, g_layer[par->layer_id].tde_info.tde_size);
-
-		display_addr = g_layer[par->layer_id].tde_info.tde_paddr;
 	}
 
 	canvas_buf.canvas.format = par->color_format;

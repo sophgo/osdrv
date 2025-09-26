@@ -143,7 +143,7 @@ void _vi_pre_ai_isp_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 					    ? ISP_FE_CH1 : ISP_FE_CH0;
 	struct _mempool *mempool = &ctx->csi_mempool[raw_num];
 
-	if (!ctx->is_ai_isp)
+	if (!ctx->isp_csi_cfg[raw_num].is_ai_isp)
 		return;
 
 	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor)
@@ -397,7 +397,11 @@ static void _vi_rgb_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
 	for (; fe_chn <= fe_max; fe_chn++) {
 		fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
 		for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
-			CACL_AND_DMA_SETUP(mempool, raw_num, fe_dma_id);
+
+			bufaddr = _mempool_get_addr(mempool);
+			bufsize = ispblk_dma_buf_get_size(ctx, raw_num, fe_dma_id);
+			_mempool_pop(mempool, bufsize);
+
 			b = osal_vzalloc(sizeof(*b));
 			if (b == NULL) {
 				vi_pr(VI_ERR, "raw_le isp_buf_%d vmalloc size(%zu) fail\n", i, sizeof(*b));
@@ -409,11 +413,20 @@ static void _vi_rgb_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
 			b->ir_idx = i;
 			b->is_ext = INTERNAL_BUFFER;
 			b->source = PRE_FE;
+			b->size = bufsize;
 			pool->pre_fe[fe_chn][i] = b->addr;
 			isp_buf_queue(&vdev->pre_fe_out_q[raw_num][fe_chn], b);
 
 			//default use idx 0 buffer
-			if (i == 0) {
+			if (i != 0)
+				continue;
+			if (ctx->isp_csi_cfg[raw_num].is_ai_isp) {
+				//dmaid is bggr, but tpu need rggb, so swap br
+				ispblk_dma_config(ctx, raw_num, fe_dma_id + 3, bufaddr);
+				ispblk_dma_config(ctx, raw_num, fe_dma_id + 2, bufaddr + bufsize / 4);
+				ispblk_dma_config(ctx, raw_num, fe_dma_id + 0, bufaddr + bufsize / 2);
+				ispblk_dma_config(ctx, raw_num, fe_dma_id + 1, bufaddr + 3 * bufsize / 4);
+			} else {
 				ispblk_dma_config(ctx, raw_num, fe_dma_id, bufaddr);
 			}
 		}
@@ -445,11 +458,11 @@ void _isp_pre_fe_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
 
 		CACL_AND_DMA_SETUP(mempool, raw_num, raw_le);
 		bufpool->pre_fe[ISP_FE_CH0][BUF_IDX0] = bufaddr;
-		ispblk_dma_setaddr(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_LE, bufaddr);
+		ispblk_dma_setaddr(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE, bufaddr);
 		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
 			CACL_AND_DMA_SETUP(mempool, raw_num, raw_se);
 			bufpool->pre_fe[ISP_FE_CH1][BUF_IDX0] = bufaddr;
-			ispblk_dma_setaddr(ctx, ISP_BLK_ID_DMA_CTL_PRE_RAW_VI_SEL_SE, bufaddr);
+			ispblk_dma_setaddr(ctx, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE, bufaddr);
 		}
 	}
 
@@ -513,7 +526,7 @@ void _isp_pre_ai_isp_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num
 	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
 	enum sop_isp_fe_chn_num fe_max = ctx->isp_csi_cfg[raw_num].is_hdr_on
 					    ? ISP_FE_CH1 : ISP_FE_CH0;
-	if (!ctx->is_ai_isp)
+	if (!ctx->isp_csi_cfg[raw_num].is_ai_isp)
 		return;
 
 	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor)
@@ -529,6 +542,7 @@ void _isp_pre_ai_isp_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num
 				return;
 			}
 			b->addr = bufaddr;
+			b->size = bufsize;
 			b->raw_num = raw_num;
 			b->chn_num = fe_chn;
 			b->ir_idx = i;

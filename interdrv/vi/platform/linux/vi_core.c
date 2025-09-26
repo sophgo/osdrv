@@ -45,7 +45,7 @@ osal_module_param(patgen_vblanking, int, 0644);
 
 /*csi_be->clk_sys_3, clk_raw->clk_sys_1, clk_isp_top->clk_sys_1*/
 const char * const clk_isp_name[] = {
-	"reg_clk_csi_be_vip_en", "reg_clk_isp_top_vip_en"
+	"reg_clk_csi_be_vip_en"
 };
 
 /*clk_csi_mac0->clk_sys_3, clk_csi_mac1->clk_sys_2, clk_csi_mac2->clk_sys_0*/

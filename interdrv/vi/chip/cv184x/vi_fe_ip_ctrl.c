@@ -342,6 +342,8 @@ int ispblk_csibdg_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	u8 csi_mode = 0;
 	union reg_isp_csi_bdg_top_ctrl top_ctrl;
 	union reg_isp_csi_bdg_interrupt_ctrl int_ctrl;
+	union reg_isp_csi_bdg_ch0_ai_isp_transform ch0_ai_isp_transform;
+	union reg_isp_csi_bdg_ch1_ai_isp_transform ch1_ai_isp_transform;
 
 	top_ctrl.raw = ISP_RD_REG(csibdg, reg_isp_csi_bdg_t, csi_bdg_top_ctrl);
 	top_ctrl.bits.reset_mode	= 0;
@@ -422,6 +424,21 @@ int ispblk_csibdg_config(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 	ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_pat_gen_ctrl, bayer_id,
 						ctx->isp_csi_cfg[raw_num].rgb_color_mode_pre_crop);
+
+	//ai isp cfg
+	ch0_ai_isp_transform.raw = ISP_RD_REG(csibdg, reg_isp_csi_bdg_t, ch0_ai_isp_transform);
+	ch0_ai_isp_transform.bits.ai_isp_transform_en_ch0 = ctx->isp_csi_cfg[raw_num].ai_cfg.is_raw_planar;
+	ch0_ai_isp_transform.bits.out_format_ch0 = ctx->isp_csi_cfg[raw_num].ai_cfg.fmt; //12bit
+	ch0_ai_isp_transform.bits.round_mode_ch0 = ctx->isp_csi_cfg[raw_num].ai_cfg.round;
+	ISP_WR_REG(csibdg, reg_isp_csi_bdg_t, ch0_ai_isp_transform, ch0_ai_isp_transform.raw);
+
+	if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
+		ch1_ai_isp_transform.raw = ISP_RD_REG(csibdg, reg_isp_csi_bdg_t, ch1_ai_isp_transform);
+		ch1_ai_isp_transform.bits.ai_isp_transform_en_ch1 = ctx->isp_csi_cfg[raw_num].ai_cfg.is_raw_planar;
+		ch1_ai_isp_transform.bits.out_format_ch1 = ctx->isp_csi_cfg[raw_num].ai_cfg.fmt; //12bit
+		ch1_ai_isp_transform.bits.round_mode_ch1 = ctx->isp_csi_cfg[raw_num].ai_cfg.round;
+		ISP_WR_REG(csibdg, reg_isp_csi_bdg_t, ch1_ai_isp_transform, ch1_ai_isp_transform.raw);
+	}
 
 	ISP_WR_REG(csibdg, reg_isp_csi_bdg_t, bayer_type, ctx->isp_csi_cfg[raw_num].rgb_color_mode);
 	ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, bayer_type_clk_gate_yuv_swap, bayer_type_post_crop_multich,

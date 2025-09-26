@@ -355,7 +355,9 @@ void vpss_chn_cancel_block(struct vpss_grp_ctx *grp_ctx, vpss_chn chn_id)
 		pool_id = find_vb_pool(grp_ctx->chn_ctxs[chn_id].blk_size);
 	else
 		pool_id = grp_ctx->chn_ctxs[chn_id].vb_pool;
-	vb_cancel_block(chn, pool_id);
+
+	if (pool_id != VB_INVALID_POOLID)
+		vb_cancel_block(chn, pool_id);
 }
 
 void release_buffers(struct vpss_grp_ctx *grp_ctx)
