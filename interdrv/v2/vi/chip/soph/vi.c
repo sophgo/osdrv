@@ -11,6 +11,7 @@
 #include <vpss_cb.h>
 #include <vi_cb.h>
 #include <ldc_cb.h>
+#include <vo_cb.h>
 #include <vb.h>
 #include <vip/vi_perf_chk.h>
 #include <vi_raw_dump.h>
@@ -42,6 +43,11 @@
 #define VI_MAX_LIST_NUM		(0x80)
 #define VI_CMDQ_BUF_SIZE	(0x20000)
 #define VI_DDR_RETRAIN_REG	(0x281000f4)
+#define VI_GP_RETRAIN_REG	(0x281000f8)
+#define DDR_RETRAIN_GP_TRIGGER_BIT   BIT(16)
+#define DDR_RETRAIN_REG_MODE_MASK    (0xFU)
+#define DDR_RETRAIN_SAFETY_MARGIN_US (150)
+
 /* In practical application, it is necessary to drop the frame of AE convergence process.
  * But in vi-vpss online & vpss-vc sbm scenario, there is no way to drop the frame.
  * Use cover with black to avoid this problem.
@@ -138,11 +144,48 @@ static int64_t _mempool_pop(u32 size)
 	return addr;
 }
 
+static int _vi_call_cb(u32 m_id, u32 cmd_id, void *data)
+{
+	struct base_exe_m_cb exe_cb;
+
+	exe_cb.callee = m_id;
+	exe_cb.caller = E_MODULE_VI;
+	exe_cb.cmd_id = cmd_id;
+	exe_cb.data   = (void *)data;
+
+	return base_exe_module_cb(&exe_cb);
+}
+
+static void update_record_info(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num, bool is_sof)
+{
+	struct record_info *record_info = &vdev->retrain.record_info[raw_num];
+	struct timespec64 cur_ts64 = ktime_to_timespec64(ktime_get());
+	u64 ts = timespec64_to_ns(&cur_ts64) / 1000;
+
+	if (is_sof) {
+		record_info->period_ts = ts - record_info->last_sof_ts;
+		record_info->last_sof_ts = ts;
+		record_info->next_sof_ts = ts + record_info->period_ts;
+		return;
+	}
+
+	//means eof
+	record_info->last_eof_ts = ts;
+	vdev->retrain.max_cur_eof = ts;
+
+	vi_pr(VI_DBG, "raw_num(%d), last_sof(%lld), last_eof_ts(%lld), unblanking(%lld) next_sof(%lld), blanking(%lld)",
+			raw_num, record_info->last_sof_ts, record_info->last_eof_ts,
+			record_info->last_eof_ts - record_info->last_sof_ts, record_info->next_sof_ts,
+			record_info->next_sof_ts - record_info->last_eof_ts);
+}
+
 static bool ddr_need_retrain(struct sop_vi_dev *vdev)
 {
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	struct ddr_retrain *retrain = &vdev->retrain;
+
 	if(!vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_fe && !vdev->ctx.isp_pipe_cfg[raw_num].is_raw_replay_be) {
-		if (ioread32(vdev->ddr_retrain_reg) & BIT(8)) {
+		if (ioread32(retrain->ddr_reg) & 0xF) {
 			return true;
 		}
 	}
@@ -150,6 +193,54 @@ static bool ddr_need_retrain(struct sop_vi_dev *vdev)
 	return false;
 }
 
+static void ddr_try_retrain(struct sop_vi_dev *vdev)
+{
+	enum sop_isp_raw raw_num;
+	struct record_info *rec = NULL;
+	struct ddr_retrain *retrain = &vdev->retrain;
+	struct vo_retrain_info vo_info = {0};
+	struct timespec64 cur_ts64 = ktime_to_timespec64(ktime_get());
+	u64 cur_ts = timespec64_to_ns(&cur_ts64) / NSEC_PER_USEC;
+	u64 min_sof_ts = __UINT64_MAX__;
+	int rc = 0;
+	bool is_blanking = false;
+
+	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
+		if (!vdev->ctx.isp_pipe_enable[raw_num])
+			continue;
+
+		rec = &retrain->record_info[raw_num];
+		//means not in blanking
+		if (rec->last_eof_ts < rec->last_sof_ts)
+			return;
+
+		min_sof_ts = min(min_sof_ts, rec->next_sof_ts);
+	}
+
+	retrain->min_next_sof = min_sof_ts;
+
+	rc = _vi_call_cb(E_MODULE_VO, VO_CB_GET_RETRAIN_INFO, &vo_info);
+	if (rc) {
+		vi_pr(VI_INFO, "fail to cb VO_CB_GET_RETRAIN_INFO, rc(%d)", rc);
+	}
+
+	if (vo_info.is_vo_en && (cur_ts >= vo_info.frame_end + vo_info.margin)) {
+		vi_pr(VI_DBG, "cur_ts(%lld), frame_end(%lld), margin(%lld)",
+				cur_ts, vo_info.frame_end, vo_info.margin);
+		return;
+	}
+
+	is_blanking = cur_ts > retrain->max_cur_eof &&
+			cur_ts < (min_sof_ts - DDR_RETRAIN_SAFETY_MARGIN_US);
+	if (is_blanking) {
+		iowrite32(ioread32(retrain->gp_reg) | DDR_RETRAIN_GP_TRIGGER_BIT, retrain->gp_reg);
+		iowrite32(ioread32(retrain->ddr_reg) & ~DDR_RETRAIN_REG_MODE_MASK, retrain->ddr_reg);
+		vi_pr(VI_INFO, "ddr_retrain cur_ts(%lld), max_cur_eof(%lld), min_nex_sof(%lld)",
+				cur_ts, retrain->max_cur_eof, retrain->min_next_sof);
+	}
+}
+
+#if 0
 static bool _isp_yuv_bypass_check_stop_input(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num,
 		enum sop_isp_fe_chn_num chn_num)
 {
@@ -182,7 +273,7 @@ static void trig_8051_if_pre_idle(struct sop_vi_dev *vdev)
 	enum sop_isp_fe_chn_num fe_chn;
 	enum sop_isp_raw raw_num;
 	enum isp_splt_num_e splt_num;
-	u32 ddr_retrain = 0;
+	u32 val = 0;
 
 	for (splt_num = ISP_SPLT0; splt_num < ISP_SPLT_MAX; splt_num++) {
 		if ((atomic_read(&vdev->splt_state[splt_num][ISP_SPLT_CHN0]) != ISP_STATE_IDLE) ||
@@ -207,11 +298,12 @@ static void trig_8051_if_pre_idle(struct sop_vi_dev *vdev)
 	}
 
 	/*if fe and splt idle trig 8051 retrain*/
-	ddr_retrain = ioread32(vdev->ddr_retrain_reg);
-	iowrite32(ddr_retrain | BIT(9), vdev->ddr_retrain_reg);
+	val = ioread32(vdev->retrain.ddr_reg);
+	iowrite32(val | BIT(9), vdev->retrain.ddr_reg);
 
-	vi_pr(VI_WARN, "call ddr retrain now 0x%x\n", ioread32(vdev->ddr_retrain_reg));
+	vi_pr(VI_WARN, "call ddr retrain now 0x%x\n", ioread32(vdev->retrain.ddr_reg));
 }
+#endif
 
 /**
  * try to trigger preraw and linespliter after postraw done or drop frame done
@@ -2264,7 +2356,7 @@ static u32 _is_drop_next_frame(
 		if ((start_drop_num != 0) && (frm_num >= start_drop_num) && (frm_num < end_drop_num))
 			return 1;
 
-		if (ddr_need_retrain(vdev))
+		if (ddr_need_retrain(vdev) && ctx->isp_pipe_cfg[raw_num].is_tile)
 			return 1;
 	}
 
@@ -2744,18 +2836,6 @@ int vi_dqbuf(struct _vi_buffer *b)
 	return ret;
 }
 
-static int _vi_call_cb(u32 m_id, u32 cmd_id, void *data)
-{
-	struct base_exe_m_cb exe_cb;
-
-	exe_cb.callee = m_id;
-	exe_cb.caller = E_MODULE_VI;
-	exe_cb.cmd_id = cmd_id;
-	exe_cb.data   = (void *)data;
-
-	return base_exe_module_cb(&exe_cb);
-}
-
 static void vi_init(void)
 {
 	int i, j;
@@ -2823,12 +2903,6 @@ static void _isp_yuv_bypass_trigger(struct sop_vi_dev *vdev, const enum sop_isp_
 
 	if (!ctx->isp_pipe_enable[raw_num]) {
 		vi_pr(VI_DBG, "YUV_%d is not enable\n", raw_num);
-		return;
-	}
-
-	if (ddr_need_retrain(vdev)) {
-		ctx->isp_pipe_cfg[raw_num].is_drop_next_frame = true;
-		trig_8051_if_pre_idle(vdev);
 		return;
 	}
 
@@ -4788,9 +4862,7 @@ s8 _pre_hw_enque(
 	}
 
 	if (ddr_need_retrain(vdev)) {
-		ctx->isp_pipe_cfg[raw_num].is_drop_next_frame = true;
-		trig_8051_if_pre_idle(vdev);
-		return -ISP_DROP_FRM;
+		ddr_try_retrain(vdev);
 	}
 
 #ifdef PORTING_TEST //test only
@@ -5919,9 +5991,6 @@ static void _splt_hw_enque(struct sop_vi_dev *vdev, const enum sop_isp_raw hw_ra
 	u32 splt_fe1_w;
 	enum sop_isp_fe_chn_num chn_num, chn_max;
 	enum sop_isp_raw raw_num = hw_raw_num;
-	enum isp_blk_id_t blk_id = (raw_num == ISP_PRERAW0)
-					? ISP_BLK_ID_SPLT_FE0_WDMA
-					: ISP_BLK_ID_SPLT_FE1_WDMA;
 
 	if (atomic_read(&vdev->isp_streamoff) == 1) {
 		vi_pr(VI_DBG, "stop streaming\n");
@@ -5935,11 +6004,7 @@ static void _splt_hw_enque(struct sop_vi_dev *vdev, const enum sop_isp_raw hw_ra
 
 	/*disable wdma whnen ai isp ddr retrain */
 	if (ddr_need_retrain(vdev)) {
-		ctx->isp_pipe_cfg[raw_num].is_drop_next_frame = true;
-		if (ctx->isp_pipe_cfg[raw_num].raw_ai_isp_ap == RAW_AI_ISP_SPLT)
-			ispblk_splt_wdma_ctrl_config(ctx, blk_id, false);
-		trig_8051_if_pre_idle(vdev);
-		vi_pr(VI_DBG, "ddr need retrain\n");
+		ddr_try_retrain(vdev);
 	}
 
 	if (_is_right_tile(ctx, raw_num))
@@ -8039,6 +8104,16 @@ int vi_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 		rc = 0;
 		break;
 	}
+	case VI_CB_GET_RETRAIN_INFO:
+	{
+		struct vi_retrain_info *retrain_info = arg;
+
+		retrain_info->is_vi_en = (atomic_read(&vdev->isp_streamoff) == 0);
+		retrain_info->max_cur_eof = vdev->retrain.max_cur_eof;
+		retrain_info->min_next_sof = vdev->retrain.min_next_sof;
+		rc = 0;
+		break;
+	}
 	default:
 		break;
 	}
@@ -9207,6 +9282,8 @@ static void _isp_sof_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw
 	if (atomic_read(&vdev->isp_streamoff) == 1)
 		return;
 
+	update_record_info(vdev, raw_num, true);
+
 	if (_is_right_tile(ctx, raw_num))
 		return;
 
@@ -9340,6 +9417,8 @@ static inline void _isp_pre_fe_done_handler(
 	if (unlikely(atomic_read(&vdev->isp_err_times[raw_num]))) {
 		atomic_set(&vdev->isp_err_times[raw_num], 0);
 	}
+
+	update_record_info(vdev, raw_num, false);
 
 	if (ctx->isp_pipe_cfg[raw_num].is_yuv_sensor) {
 		if (ctx->isp_pipe_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS) {
@@ -10004,14 +10083,23 @@ static void _isp_pre_fe_frame_start_chk(
 		}
 	}
 
-	if (frame_start & BIT(1))
+	if (frame_start & BIT(1)) {
+		vi_pr(VI_DBG, "pre_fe_%d sof chn_num=%d frm_num=%d\n",
+			raw_num, ISP_FE_CH1, vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH1]);
 		++vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH1];
+	}
 
-	if (frame_start & BIT(2))
+	if (frame_start & BIT(2)) {
+		vi_pr(VI_DBG, "pre_fe_%d sof chn_num=%d frm_num=%d\n",
+			raw_num, ISP_FE_CH2, vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH2]);
 		++vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH2];
+	}
 
-	if (frame_start & BIT(3))
+	if (frame_start & BIT(3)) {
+		vi_pr(VI_DBG, "pre_fe_%d sof chn_num=%d frm_num=%d\n",
+			raw_num, ISP_FE_CH3, vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH3]);
 		++vdev->pre_fe_sof_cnt[raw_num][ISP_FE_CH3];
+	}
 }
 
 static void _isp_pre_fe_frame_done_chk(
@@ -10163,6 +10251,7 @@ int vi_create_instance(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct sop_vi_dev *vdev;
+	enum sop_isp_raw raw_num;
 
 	vdev = dev_get_drvdata(&pdev->dev);
 	if (!vdev) {
@@ -10204,11 +10293,20 @@ int vi_create_instance(struct platform_device *pdev)
 		goto err;
 	}
 
-	vdev->ddr_retrain_reg = ioremap(VI_DDR_RETRAIN_REG, 0x4);
-	if (!vdev->ddr_retrain_reg) {
+	vdev->retrain.gp_reg = ioremap(VI_GP_RETRAIN_REG, 0x4);
+	if (!vdev->retrain.gp_reg) {
+		vi_pr(VI_ERR, "Failed to ioremap gp_retrain_reg\n");
+		goto err;
+	}
+
+	vdev->retrain.ddr_reg = ioremap(VI_DDR_RETRAIN_REG, 0x4);
+	if (!vdev->retrain.ddr_reg) {
 		vi_pr(VI_ERR, "Failed to ioremap ddr_retrain_reg\n");
 		goto err;
 	}
+
+	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++)
+		isp_streaming(&vdev->ctx, false, raw_num);
 
 	g_vi_ctx = (struct sop_vi_ctx *)vdev->shared_mem;
 
@@ -10240,7 +10338,8 @@ int vi_destroy_instance(struct platform_device *pdev)
 
 	tasklet_kill(&vdev->job_work);
 
-	iounmap(vdev->ddr_retrain_reg);
+	iounmap(vdev->retrain.gp_reg);
+	iounmap(vdev->retrain.ddr_reg);
 
 	return ret;
 }

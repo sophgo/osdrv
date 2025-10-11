@@ -874,7 +874,7 @@ static int mipi_tx_suspend(struct platform_device *pdev, pm_message_t state)
 static int mipi_tx_resume(struct platform_device *pdev)
 {
 	//display on
-	u8 cmd = 0x29;
+	// u8 cmd = 0x29;
 	int i = 0;
 
 	dev_warn(&pdev->dev, "mipi_tx_resume\n");
@@ -893,9 +893,9 @@ static int mipi_tx_resume(struct platform_device *pdev)
 			    (!__clk_is_enabled(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1])))
 				clk_prepare_enable(mipi_tx_dev_ctx.clk_dsi[i * 2 + 1]);
 
-			mipi_tx_disable(i);
-			dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
-			mipi_tx_enable(i);
+			// mipi_tx_disable(i);
+			// dsi_dcs_write_buffer(i, 0x05, &cmd, 1, debug & 0x01);
+			// mipi_tx_enable(i);
 		}
 	}
 

@@ -30,6 +30,16 @@ struct vo_core {
 	atomic_t disp_streamon;
 };
 
+struct ddr_retrain {
+	bool is_active;
+	u64 win_start_ts;
+	u64 win_expire_ts;
+
+	//for vi
+	u64 frame_end;
+	u64 margin;
+};
+
 struct vo_core_dev {
 	// private data
 	struct device *dev;
@@ -41,6 +51,7 @@ struct vo_core_dev {
 	//vo_mac, disp, dsi_mac, dsi_phy, oenc
 	void __iomem *reg_base[10];
 	struct vo_core vo_core[VO_MAX_DEV_NUM];
+	struct ddr_retrain retrain;
 };
 
 #ifdef __cplusplus

@@ -2247,11 +2247,11 @@ void disp_ctrl_init(bool is_resume)
 			//display osd burst length set to 256 bytes for short latency
 			for (j = 0; j < DISP_MAX_GOP_INST; ++j)
 				g_disp_cfg[i].gop_cfg[j].gop_ctrl.b.burst = DISP_DEFAULT_BURST;
-			_reg_write(REG_DSI_MAC_EN(i), 0x00);
 		}
 	}
 
 	for (i = 0; i < DISP_MAX_INST; ++i) {
+		_reg_write(REG_DSI_MAC_EN(i), 0x00);
 		// get current hw-timings
 		disp_timing_setup_from_reg(i);
 		online_odma_mask.b.disp_online_frame_end = false; //true means disable
@@ -2282,10 +2282,14 @@ int ctrl_set_disp_src(u8 inst, bool disp_from_sc)
 
 bool ddr_need_retrain(void)
 {
-	if (retrain_reg)
+	struct ddr_retrain *retrain = &g_core_dev->retrain;
+
+	if (retrain_reg) {
 		return ioread32(retrain_reg) & 0xF;
-	else
+	} else {
+		retrain->is_active = false;
 		return false;
+	}
 }
 
 void trigger_8051(void)
@@ -2294,4 +2298,6 @@ void trigger_8051(void)
 		iowrite32(ioread32(gp_reg) | 0x10000, gp_reg);
 		iowrite32(ioread32(retrain_reg) & ~0xF, retrain_reg);
 	}
+
+	TRACE_VO(DBG_NOTICE, "retrain reg: %#x\n", ioread32(retrain_reg));
 }

@@ -54,7 +54,7 @@ void dphy_set_base_addr(u8 inst, void *base)
  */
 void dphy_dsi_lane_en(u8 inst, bool clk_en, bool *data_en, bool preamble_en)
 {
-	u8 val = 0, i = 0;
+	u8 val = 0, i = 0, sel = 0;
 
 	val |= clk_en;
 
@@ -65,6 +65,10 @@ void dphy_dsi_lane_en(u8 inst, bool clk_en, bool *data_en, bool preamble_en)
 		val |= 0x20;
 
 	_reg_write_mask(REG_DSI_PHY_EN(inst), 0x3f, val);
+
+	sel = val & 0x1f;
+	sel = (sel == 0x00) ? 0x7f : (sel == 0x03) ? 0x1c : (sel == 0x07) ? 0x18 : (sel == 0x1f) ? 0x00 : 0x7f;
+	_reg_write_mask(REG_DSI_PHY_POWER_DOWN_CFG(inst), 0x7f000000,  sel << 24);
 }
 EXPORT_SYMBOL_GPL(dphy_dsi_lane_en);
 

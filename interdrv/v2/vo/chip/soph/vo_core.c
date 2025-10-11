@@ -211,7 +211,7 @@ static int _init_resources(struct platform_device *pdev)
 			dev_err(&pdev->dev, "No IRQ resource for %s\n",  disp_irq_name[i]);
 			return -ENOENT;
 		}
-		dev_info(&pdev->dev, "irq(%d) for %s get from platform driver.\n",
+		dev_info(&pdev->dev, "irq(%d) for %s get from platformaa driver.\n",
 				dev->vo_core[i].irq_num,  disp_irq_name[i]);
 	}
 
@@ -361,30 +361,32 @@ int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 
 	g_vo_ctx->suspend = true;
 
-	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer) {
 		if (g_vo_ctx->layer_ctx[layer].is_layer_enable) {
 			ret = vo_destroy_thread(layer);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to vo destory thread\n");
 			}
 		}
+	}
 
-	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev)
+	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev) {
 		if (g_vo_ctx->wbc_ctx[wbc_dev].is_wbc_enable) {
 			ret = vo_wbc_destroy_thread(wbc_dev);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to wbc destory thread\n");
 			}
 		}
+	}
 
-	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev) {
 		if (g_vo_ctx->dev_ctx[dev].is_dev_enable) {
 			ret = vo_stop_streaming(dev);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to vo stop streaming\n");
 			}
 		}
-
+	}
 
 	TRACE_VO(DBG_WARN, "vo suspended\n");
 
@@ -397,31 +399,51 @@ int vo_core_resume(struct platform_device *pdev)
 	vo_wbc wbc_dev;
 	vo_layer layer;
 	vo_dev dev = 0;
+	struct disp_cfg *cfg;
+	u16 rgb[3];
 
-	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer)
+	disp_ctrl_init(true);
+
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev) {
+		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
+			rgb[2] = g_vo_ctx->dev_ctx[dev].pub_attr.bgcolor & 0x3ff;
+			rgb[1] = (g_vo_ctx->dev_ctx[dev].pub_attr.bgcolor >> 10) & 0x3ff;
+			rgb[0] = (g_vo_ctx->dev_ctx[dev].pub_attr.bgcolor >> 20) & 0x3ff;
+			disp_set_frame_bgcolor(dev, rgb[0], rgb[1], rgb[2]);
+			disp_set_window_bgcolor(dev, 0, 0, 0);
+			disp_reg_shadow_sel(dev, false);
+			cfg = disp_get_cfg(dev);
+			disp_set_bw_cfg(dev, cfg->fmt);
+			disp_set_cfg(dev, cfg);
+		}
+	}
+
+	for (layer = 0; layer < VO_MAX_VIDEO_LAYER_NUM; ++layer) {
 		if (g_vo_ctx->layer_ctx[layer].is_layer_enable && g_vo_ctx->suspend) {
 			ret = vo_create_thread(layer);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to vo create thread\n");
 			}
 		}
+	}
 
-	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev)
+	for (wbc_dev = 0; wbc_dev < VO_MAX_WBC_NUM; ++wbc_dev) {
 		if (g_vo_ctx->wbc_ctx[wbc_dev].is_wbc_enable && g_vo_ctx->suspend) {
 			ret = vo_wbc_create_thread(wbc_dev);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to wbc create thread\n");
 			}
 		}
+	}
 
-
-	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev)
+	for (dev = 0; dev < VO_MAX_DEV_NUM; ++dev) {
 		if (g_vo_ctx->dev_ctx[dev].is_dev_enable && g_vo_ctx->suspend) {
 			ret = vo_start_streaming(dev);
 			if (ret) {
 				TRACE_VO(DBG_ERR, "Failed to vo start streaming\n");
 			}
 		}
+	}
 
 	g_vo_ctx->suspend = false;
 	TRACE_VO(DBG_WARN, "vo resumed\n");

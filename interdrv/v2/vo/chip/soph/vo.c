@@ -21,6 +21,7 @@
 #include "vo_cb.h"
 #include "ldc_cb.h"
 #include "rgn_cb.h"
+#include "vi_cb.h"
 #include "vo_rgn_ctrl.h"
 #include "reg.h"
 
@@ -293,6 +294,18 @@ static int _vo_stitch_call_vpss(struct vpss_stitch_cfg *stitch_cfg)
 	exe_cb.caller = E_MODULE_VO;
 	exe_cb.cmd_id = VPSS_CB_STITCH;
 	exe_cb.data   = (void *)stitch_cfg;
+
+	return base_exe_module_cb(&exe_cb);
+}
+
+static int _vo_call_cb(u32 m_id, u32 cmd_id, void *data)
+{
+	struct base_exe_m_cb exe_cb;
+
+	exe_cb.callee = m_id;
+	exe_cb.caller = E_MODULE_VO;
+	exe_cb.cmd_id = cmd_id;
+	exe_cb.data   = (void *)data;
 
 	return base_exe_module_cb(&exe_cb);
 }
@@ -2246,6 +2259,17 @@ int vo_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 		break;
 	}
 
+	case VO_CB_GET_RETRAIN_INFO:
+	{
+		struct vo_retrain_info *info = (struct vo_retrain_info *)arg;
+
+		info->is_vo_en = (disp_check_tgen_enable(0) || disp_check_tgen_enable(1));
+		info->frame_end = vdev->retrain.frame_end;
+		info->margin = vdev->retrain.margin;
+
+		rc = 0;
+		break;
+	}
 	default:
 		break;
 	}
@@ -2258,18 +2282,56 @@ u64 timespec64_to_us(struct timespec64 *time_spec)
 	return time_spec->tv_sec * 1000000L + time_spec->tv_nsec / 1000L;
 }
 
+static void ddr_try_retrain(struct vo_core_dev *vdev, u64 cur_ts_us)
+{
+	int rc = 0;
+	struct vi_retrain_info info;
+	struct ddr_retrain *retrain = &vdev->retrain;
+	bool is_blanking = false, is_time_out = false;
+	u64 remain_ts = 150, max_duration_ts = 100000000;
+
+	rc = _vo_call_cb(E_MODULE_VI, VI_CB_GET_RETRAIN_INFO, &info);
+	if (rc) {
+		TRACE_VO(DBG_INFO, "fail to cb VI_CB_GET_RETRAIN_INFO");
+	}
+
+	if (!info.is_vi_en) {
+		trigger_8051();
+		retrain->is_active = false;
+		return;
+	}
+
+	if (!retrain->is_active) {
+		retrain->is_active = true;
+		retrain->win_start_ts = cur_ts_us;
+		retrain->win_expire_ts = cur_ts_us + max_duration_ts;
+	}
+
+	is_time_out = retrain->is_active && (cur_ts_us > retrain->win_expire_ts);
+	is_blanking = (info.min_next_sof > info.max_cur_eof) &&
+				    (cur_ts_us > info.max_cur_eof) &&
+				    (cur_ts_us < info.min_next_sof - remain_ts);
+
+	if (is_blanking || is_time_out) {
+		retrain->is_active = false;
+		trigger_8051();
+		return;
+	}
+}
+
 void ddr_retrain(vo_dev dev, union disp_intr intr_status)
 {
 	#define DISP_FPS_CNT 10
 	#define DISP_FPS_TABLE_CNT 6
 
+	struct vo_core_dev *vdev = g_core_dev;
 	static struct timespec64 disp_frame_need_time[DISP_MAX_INST], last_overlap_time;
 	static const u8 fps_table[DISP_FPS_TABLE_CNT] = {24, 25, 30, 48, 50, 60};
 	static const u16 margin_table[DISP_FPS_TABLE_CNT] = {489, 460, 345, 129, 115, 57};
 	static u8 disp_fps[DISP_MAX_INST], disp_fps_cnt[DISP_MAX_INST];
 	static struct timespec64 disp_fps_time[DISP_MAX_INST];
 	static u16 margin[DISP_MAX_INST];
-	u64 disp_frame_need_time_us[DISP_MAX_INST], frame_gap_ms[DISP_MAX_INST];
+	u64 disp_frame_need_time_us[DISP_MAX_INST], frame_gap_ms[DISP_MAX_INST], disp_sub_time;
 	struct timespec64 cur_overlap_time;
 	u8 i = 0;
 
@@ -2302,10 +2364,18 @@ void ddr_retrain(vo_dev dev, union disp_intr intr_status)
 					}
 				}
 			}
-			if ((disp_frame_need_time_us[dev] - disp_frame_need_time_us[!dev]
-				< margin[dev]) || !disp_check_tgen_enable(!dev)) {
-				if (ddr_need_retrain())
-					trigger_8051();
+
+			disp_sub_time = disp_frame_need_time_us[dev] - disp_frame_need_time_us[!dev];
+			if ((disp_sub_time < margin[dev]) || !disp_check_tgen_enable(!dev)) {
+				if (ddr_need_retrain()) {
+					vdev->retrain.frame_end = disp_frame_need_time_us[dev];
+					vdev->retrain.margin = !disp_check_tgen_enable(!dev)
+								? margin[dev]
+								: margin[dev] - disp_sub_time;
+					ddr_try_retrain(vdev, disp_frame_need_time_us[dev]);
+					TRACE_VO(DBG_NOTICE, "VO us(%lld), margin(%d)\n",
+								disp_frame_need_time_us[dev], margin[dev]);
+				}
 				if (timespec64_to_us(&cur_overlap_time)
 					- timespec64_to_us(&last_overlap_time) > 900000L)
 					pr_info("disp%d ahead disp%d, vblanking overlap. "
@@ -2594,6 +2664,7 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk)
 				, ID_VO
 				, chn_ctx->rotation) != 0) {
 				mutex_unlock(&chn_ctx->gdc_lock);
+				vb_release_block(blk);
 				TRACE_VO(DBG_ERR, "gdc rotation failed.\n");
 				return -1;
 			}
