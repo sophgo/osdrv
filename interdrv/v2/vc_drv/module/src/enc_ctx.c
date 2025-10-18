@@ -340,8 +340,10 @@ static int jpege_enc_one_pic(void *ctx,
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
         status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-        if (status == ENC_TIMEOUT)
+        if (status == ENC_TIMEOUT) {
+            DRV_VENC_ERR("Failed to retry jpeg_enc_send_frame.\n");
             return DRV_ERR_VENC_BUSY;
+        }
     }
 
     if (status != 0) {

@@ -1550,7 +1550,7 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
             JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return JPG_RET_FAILURE;
+            return DEC_TIMEOUT;
         }
 
         if (int_reason == -2) {

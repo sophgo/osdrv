@@ -41,6 +41,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/proc_fs.h>
+#include <linux/atomic.h>
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5,4,0)
 #include <linux/sched/signal.h>
@@ -191,9 +192,9 @@ static jpu_power_ctrl jpu_pwm_ctrl = {0};
 #ifdef PLATFORM_SOC
 static struct device *jpu_dev;
 #endif
-static int s_interrupt_flag[MAX_NUM_JPU_CORE*MAX_JPEG_NUM_INSTANCE];
-static wait_queue_head_t s_interrupt_wait_q[MAX_NUM_JPU_CORE*MAX_JPEG_NUM_INSTANCE];
-
+static atomic_t *s_interrupt_flag;
+static spinlock_t *s_interrupt_lock;
+static wait_queue_head_t *s_interrupt_wait_q;
 
 // static spinlock_t s_jpu_lock = __SPIN_LOCK_UNLOCKED(s_jpu_lock);
 static DEFINE_MUTEX(s_jpu_lock);
@@ -369,6 +370,7 @@ irqreturn_t jpu_irq_handler(int param, void *dev_id)
     int i;
     u32 flag;
     int core;
+    unsigned long flags;
 
     DPRINTK("[JPUDRV][+]%s, irq:%d\n", __func__, irq);
 
@@ -398,8 +400,10 @@ irqreturn_t jpu_irq_handler(int param, void *dev_id)
         pr_err("%s,%d,invalid inst idx : %d\n", __func__,__LINE__, i);
     }
 
+    spin_lock_irqsave(&s_interrupt_lock[core*MAX_JPEG_NUM_INSTANCE + i], flags);
     s_jpu_drv_context.interrupt_reason[core][i] = flag;
-    s_interrupt_flag[core*MAX_JPEG_NUM_INSTANCE + i] = 1;
+    spin_unlock_irqrestore(&s_interrupt_lock[core*MAX_JPEG_NUM_INSTANCE + i], flags);
+    atomic_set(&s_interrupt_flag[core*MAX_JPEG_NUM_INSTANCE + i], 1);
     DPRINTK("[JPUDRV][%d] core:%d INTERRUPT FLAG: %08x, %08x\n", i, core, s_jpu_drv_context.interrupt_reason[core][i], MJPEG_PIC_STATUS_REG(i));
 
     if (s_jpu_drv_context.async_queue)
@@ -443,23 +447,32 @@ int jpu_wait_interrupt(jpudrv_intr_info_t *arg)
     int ret;
     u32 instance_no;
     u32 core_idx;
+    unsigned long flags;
 
     instance_no = p_info->inst_idx;
     core_idx = p_info->core_idx;
     atomic_inc(&s_jpu_usage_info.jpu_busy_status[core_idx]);
 
-    DPRINTK("[JPUDRV] 2 INSTANCE NO: %u, core_idx:%u s_interrupt_flag:%d\n", instance_no, core_idx, s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no]);
-    ret = wait_event_timeout(s_interrupt_wait_q[core_idx * MAX_JPEG_NUM_INSTANCE + instance_no], s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no] != 0, msecs_to_jiffies(p_info->timeout));
+    DPRINTK("[JPUDRV] 2 INSTANCE NO: %u, core_idx:%u s_interrupt_flag:%d\n",
+        instance_no, core_idx, atomic_read(&s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no]));
+    ret = wait_event_timeout(s_interrupt_wait_q[core_idx * MAX_JPEG_NUM_INSTANCE + instance_no],
+                            atomic_read(&s_interrupt_flag[core_idx * MAX_JPEG_NUM_INSTANCE + instance_no]) != 0,
+                            msecs_to_jiffies(p_info->timeout));
     if (!ret) {
         DPRINTK("[JPUDRV] INSTANCE NO: %d ETIME\n", instance_no);
         atomic_dec(&s_jpu_usage_info.jpu_busy_status[core_idx]);
         return -ETIME;
     }
 
-    DPRINTK("[JPUDRV] INST(%u) s_interrupt_flag(%d), reason(0x%08x)\n", instance_no, s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no],
+    DPRINTK("[JPUDRV] INST(%u) s_interrupt_flag(%d), reason(0x%08x)\n", instance_no,
+        atomic_read(&s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no]),
         s_jpu_drv_context.interrupt_reason[core_idx][instance_no]);
+
+    spin_lock_irqsave(&s_interrupt_lock[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no], flags);
     p_info->intr_reason = s_jpu_drv_context.interrupt_reason[core_idx][instance_no];
-    s_interrupt_flag[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no] = 0;
+    spin_unlock_irqrestore(&s_interrupt_lock[core_idx* MAX_JPEG_NUM_INSTANCE + instance_no], flags);
+
+    atomic_set(&s_interrupt_flag[core_idx*MAX_JPEG_NUM_INSTANCE + instance_no], 0);
     s_jpu_drv_context.interrupt_reason[core_idx][instance_no] = 0;
     atomic_dec(&s_jpu_usage_info.jpu_busy_status[core_idx]);
     return 0;
@@ -815,9 +828,14 @@ int jpeg_platform_init(struct platform_device *pdev)
 
     DPRINTK("[JPUDRV] begin jpeg_platform_init\n");
 
+    s_interrupt_wait_q = vzalloc(MAX_NUM_JPU_CORE*MAX_JPEG_NUM_INSTANCE*sizeof(wait_queue_head_t));
+    s_interrupt_lock =  vzalloc(MAX_NUM_JPU_CORE*MAX_JPEG_NUM_INSTANCE*sizeof(spinlock_t));
+    s_interrupt_flag = vzalloc(MAX_NUM_JPU_CORE*MAX_JPEG_NUM_INSTANCE*sizeof(int));
+
     for (i=0; i<MAX_NUM_JPU_CORE * MAX_JPEG_NUM_INSTANCE; i++) {
         init_waitqueue_head(&s_interrupt_wait_q[i]);
-        s_interrupt_flag[i] = 0;
+        spin_lock_init(&s_interrupt_lock[i]);
+        atomic_set(&s_interrupt_flag[i], 0);
     }
 
     jpu_core_init_resources(MAX_NUM_JPU_CORE);
@@ -930,7 +948,9 @@ void jpeg_platform_exit(void)
     }
 
     jpu_core_cleanup_resources();
-
+    vfree(s_interrupt_wait_q);
+    vfree(s_interrupt_lock);
+    vfree(s_interrupt_flag);
     DPRINTK("[JPUDRV] [-]jpeg_exit\n");
 
     return;
