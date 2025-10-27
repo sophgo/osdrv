@@ -10,6 +10,7 @@ VC_DRV_HEADER := -I$(PWD)									\
 COMMON_DRV_HEADER := -I$(PWD)/../include/common/uapi 			\
 					-I$(PWD)/../include/chip/$(CVIARCH_L)/uapi/ \
 					-I$(PWD)/../include/common/kapi/ 			\
+					-I$(PWD)/../include/chip/soph/kapi 			\
 					-I$(PWD)/../base/
 
 JPU_INC := -I$(PWD)/cnm_driver/jpeg/jpuapi \
@@ -53,7 +54,8 @@ MODULE_SOURCES = vc_drv.c 	\
 		common/rcKernel/float_point/soft_float.c \
 		common/drv_file.c \
 		common/vc_getopt.c \
-		common/datastructure.c
+		common/datastructure.c \
+		common/platform.c
 
 
 VPU_SOURCES = cnm_driver/vpu/vdi/linux/vdi.c \
@@ -94,6 +96,7 @@ KBUILD_EXTRA_SYMBOLS += $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 
 ccflags-y += $(VC_DRV_HEADER) -DUSE_KERNEL_MODE -DKERNEL_MODE -DENABLE_DEC -DMJPEG_INTERFACE_API -DCNM_WAVE_SERIES
+ccflags-y += -DPLATFORM_SOC -DVC_SUPPORT_CLOCK_CONTROL
 
 ccflags-y += -DRV_TEST
 ifeq ($(CONFIG_TOOLCHAIN_GLIBC_ARM64_V1131), y)

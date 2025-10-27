@@ -19,7 +19,7 @@
 #include "vputypes.h"
 #include "../vdi/vdi.h"
 #include "../vdi/vdi_osal.h"
-
+#include "../vdi/vdi_debug.h"
 
 #define MAX_GDI_IDX      31
 #define MAX_REG_FRAME    MAX_GDI_IDX*2 // 2 for WTL

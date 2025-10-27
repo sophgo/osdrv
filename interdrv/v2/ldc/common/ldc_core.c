@@ -368,15 +368,18 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		// }
 		case LDC_ATTACH_VB_POOL: {
 			struct ldc_vb_pool_cfg *cfg = (struct ldc_vb_pool_cfg *)kdata;
-			vb_pool pool = (vb_pool)cfg->vb_pool;
 
 			CHECK_IOCTL_CMD(cmd, struct ldc_vb_pool_cfg);
 
-			ret = ldc_attach_vb_pool(pool);
+			ret = ldc_attach_vb_pool(cfg);
 			break;
 		}
 		case LDC_DETACH_VB_POOL: {
-			ret = ldc_detach_vb_pool();
+			struct ldc_vb_pool_cfg *cfg = (struct ldc_vb_pool_cfg *)kdata;
+
+			CHECK_IOCTL_CMD(cmd, struct ldc_vb_pool_cfg);
+
+			ret = ldc_detach_vb_pool(cfg);
 			break;
 		}
 		case LDC_SUSPEND: {

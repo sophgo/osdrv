@@ -19,6 +19,7 @@ struct vo_wbc_ctx {
 	vo_wbc_attr_s wbc_attr;
 	vo_wbc_mode_e wbc_mode;
 	u32 depth;
+	vb_pool vb_pool_id;
 
 	struct vb_jobs_t wbc_jobs;
 	struct mutex wbc_lock;
@@ -83,6 +84,7 @@ struct vo_layer_ctx {
 	u32 display_buflen;
 	int proc_amp[PROC_AMP_MAX];
 	int bind_dev_id;
+	vb_pool vb_pool_id;
 	struct vo_chn_ctx chn_ctx[VO_MAX_CHN_NUM];
 	struct mutex layer_lock;
 	struct task_struct *thread;

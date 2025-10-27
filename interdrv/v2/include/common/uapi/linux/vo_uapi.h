@@ -2,6 +2,7 @@
 #define __U_VO_UAPI_H__
 
 #include <linux/comm_vo.h>
+#include <linux/comm_vb.h>
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -84,6 +85,8 @@ enum vo_sdk_ctrl {
 	VO_SDK_GET_LAYERPRRIORITY,
 	VO_SDK_BIND_LAYER,
 	VO_SDK_UNBIND_LAYER,
+	VO_SDK_ATTACH_LAYER_VBPOOL,
+	VO_SDK_DETACH_LAYER_VBPOOL,
 	//CHN CTRL
 	VO_SDK_SET_CHNATTR,
 	VO_SDK_GET_CHNATTR,
@@ -128,6 +131,8 @@ enum vo_sdk_ctrl {
 	VO_SDK_GET_WBCDEPTH,
 	VO_SDK_GET_WBCFRAME,
 	VO_SDK_RELEASE_WBCFRAME,
+	VO_SDK_ATTACH_WBC_VBPOOL,
+	VO_SDK_DETACH_WBC_VBPOOL,
 	VO_SDK_SET_BTPARAM,
 	VO_SDK_GET_BTPARAM,
 };
@@ -378,6 +383,15 @@ struct vo_wbc_frame_cfg {
 	s32 millisec;
 };
 
+struct vo_layer_vb_pool_cfg {
+	u8 layer;
+	vb_pool vb_pool_id;
+};
+
+struct vo_wbc_vb_pool_cfg {
+	u8 wbc_dev;
+	vb_pool vb_pool_id;
+};
 #ifdef __cplusplus
 	}
 #endif

@@ -340,8 +340,10 @@ static int jpege_enc_one_pic(void *ctx,
         //jpeg_enc_one_pic TimeOut..dont close
         //otherwise parallel / multiple jpg encode will failure
         status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-        if (status == ENC_TIMEOUT)
+        if (status == ENC_TIMEOUT) {
+            DRV_VENC_ERR("Failed to retry jpeg_enc_send_frame.\n");
             return DRV_ERR_VENC_BUSY;
+        }
     }
 
     if (status != 0) {
@@ -646,7 +648,9 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
         H264E_NALU_SEI,
     };
     int naluType;
-
+#ifndef PLATFORM_SOC
+    unsigned char tmp[8] = {0};
+#endif
     if (!ppack) {
         DRV_VENC_ERR("ppack is NULL\n");
         return -1;
@@ -657,7 +661,12 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
         return -1;
     }
 
+#ifdef PLATFORM_SOC
     naluType = ppack->pu8Addr[4] & 0x1f;
+#else
+	VpuReadMem(0, ppack->u64PhyAddr, tmp, 8, VDI_128BIT_LITTLE_ENDIAN);
+    naluType = tmp[4] & 0x1f;
+#endif
 
     if (NalType < NAL_I || NalType >= NAL_MAX) {
         DRV_VENC_ERR("NalType = %d\n", NalType);
@@ -790,7 +799,9 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
         H265E_NALU_VPS,
     };
     int naluType;
-
+#ifndef PLATFORM_SOC
+    unsigned char tmp[8] = {0};
+#endif
     if (!ppack) {
         DRV_VENC_ERR("ppack is NULL\n");
         return -1;
@@ -801,7 +812,12 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
         return -1;
     }
 
+#ifdef PLATFORM_SOC
     naluType = (ppack->pu8Addr[4] & 0x7f) >> 1;
+#else
+	VpuReadMem(0, ppack->u64PhyAddr, tmp, 8, VDI_128BIT_LITTLE_ENDIAN);
+    naluType = (tmp[4] & 0x7f) >> 1;
+#endif
 
     if (NalType < NAL_I || NalType >= NAL_MAX) {
         DRV_VENC_ERR("NalType = %d\n", NalType);
@@ -861,6 +877,7 @@ static int vid_enc_enc_one_pic(void *ctx,
     pPicCfg->src_end = pstFrame->video_frame.srcend;
     pPicCfg->src_idx = pstFrame->video_frame.frame_idx;
     pPicCfg->stride = psi->strideY;
+    pPicCfg->height = psi->height;
     switch (pstFrame->video_frame.pixel_format) {
     case PIXEL_FORMAT_NV12:
         pPicCfg->cbcrInterleave = 1;
@@ -991,9 +1008,10 @@ static int vid_enc_release_stream(void *ctx, venc_stream_s *pstStream)
 {
     int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    stPack vencPack[MAX_NUM_PACKS] = {0};
+    stPack *vencPack;
     int idx = 0;
 
+    vencPack = vzalloc(sizeof(stPack)*MAX_NUM_PACKS);
     for (idx = 0; (idx < pstStream->u32PackCount) && (idx < MAX_NUM_PACKS); idx++) {
         vencPack[idx].u64PhyAddr = pstStream->pstPack[idx].u64PhyAddr;
         vencPack[idx].addr = pstStream->pstPack[idx].pu8Addr;
@@ -1011,9 +1029,11 @@ static int vid_enc_release_stream(void *ctx, venc_stream_s *pstStream)
     status = internal_venc_release_stream(pEncCtx->ext.vid.pHandle, vencPack, pstStream->u32PackCount);
     if (status != 0) {
         DRV_VENC_ERR("internal_venc_release_stream, status = %d\n", status);
+        vfree(vencPack);
         return status;
     }
 
+    vfree(vencPack);
     return status;
 }
 

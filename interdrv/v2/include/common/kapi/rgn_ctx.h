@@ -28,8 +28,6 @@ struct rgn_ctx {
 	unsigned char odec_data_valid;
 	unsigned char canvas_updated;
 	struct hlist_node node;
-	struct rgn_canvas_q rgn_canvas_waitq;
-	struct rgn_canvas_q rgn_canvas_doneq;
 	struct mutex rgn_canvas_q_lock;
 };
 

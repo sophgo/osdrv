@@ -8,6 +8,7 @@
 #include "ldc_proc.h"
 #include "ldc_debug.h"
 #include "base_common.h"
+#include "ldc_sdk.h"
 
 #define GENERATE_STRING(STRING)	(#STRING),
 #define LDC_PROC_NAME "soph/ldc"
@@ -109,8 +110,9 @@ static int ldc_proc_show_tsk(struct seq_file *m, struct ldc_proc_ctx *pldcCtx, i
 static int ldc_proc_show(struct seq_file *m, void *v)
 {
 	struct ldc_proc_ctx *pldcCtx = ldc_get_proc_ctx();
+	struct ldc_vdev *wdev = ldc_get_dev();
 	unsigned long flags;
-	int i, j, idx, total_handletime, total_hwTime, total_busyTime;
+	int i, j, k, idx, total_handletime, total_hwTime, total_busyTime;
 	char c[32];
 	int idxs[LDC_PROC_JOB_INFO_NUM] = {0};
 	char * dev_name[] = {"ldc0", "ldc1", "dwa0", "dwa1"};
@@ -281,6 +283,28 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 			i,
 			dev_name[i],
 			pldcCtx->gdc_core_status[i].duty_ratio);
+	}
+
+	// LDC attach vb_pool status
+	seq_puts(m, "\n-------------------------------LDC ATTACH VB_POOL STATUS-----------------\n");
+	seq_printf(m, "%15s%15s%15s%15s\n", "Module", "Device", "Channel", "PoolId");
+
+	for (i = 0; i < MAX_CB_MOD_NUM; ++i) {
+		for (j = 0; j < MAX_CB_DEV_NUM; ++j) {
+			for (k = 0; k < MAX_CB_CHN_NUM; ++k) {
+				if (wdev->vb_pool[i][j][k] != VB_INVALID_POOLID) {
+					char dev_str[16], chn_str[16];
+					snprintf(dev_str, sizeof(dev_str), "%s%d",
+						(i == 0) ? "Pipe" : (i == 1) ? "Grp" : "Layer", j);
+					snprintf(chn_str, sizeof(chn_str), "Chn%d", k);
+					seq_printf(m, "%15s%15s%15s%15d\n",
+						MOD_STRING[(i == 0) ? ID_VI : (i == 1) ? ID_VPSS : ID_VO],
+						dev_str,
+						chn_str,
+						wdev->vb_pool[i][j][k]);
+				}
+			}
+		}
 	}
 
 	return 0;

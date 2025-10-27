@@ -343,7 +343,7 @@ static void __exit base_exit(void)
 	class_destroy(pbase_class);
 }
 
-
+__attribute__((used)) const char* const DRIVER_VERSION = "version: "GIT_OSDRV_COMMIT_HASH;
 MODULE_DESCRIPTION("Cvitek base driver");
 MODULE_LICENSE("GPL");
 module_init(base_init);

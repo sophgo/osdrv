@@ -485,6 +485,17 @@ static int jpeg_decode(vdec_chn_context *pChnHandle, const vdec_stream_s *pstStr
 
     /* send jpeg data for decode or encode operator */
     ret = jpeg_dec_send_stream(pChnHandle->pHandle, pstStream->pu8Addr, pstStream->u32Len, s32MilliSec);
+
+    if (ret == DEC_TIMEOUT) {
+        //jpeg_decode TimeOut..don't close
+        //otherwise parallel / multiple jpg decode will failure
+        ret = jpeg_dec_send_stream(pChnHandle->pHandle, pstStream->pu8Addr, pstStream->u32Len, s32MilliSec);
+        if (ret == DEC_TIMEOUT){
+            DRV_VDEC_ERR("Failed to retry jpeg_dec_send_stream.\n");
+            return DRV_ERR_VDEC_BUSY;
+        }
+    }
+
     if (ret != 0) {
         if ((ret == VDEC_RET_TIMEOUT) && (s32MilliSec >= 0)) {
             DRV_VDEC_TRACE("jpeg_dec_send_stream ret timeout\n");
@@ -627,6 +638,7 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
         pInitDecCfg->chnNum = VdChn;
         pInitDecCfg->bsBufferSize = pChnHandle->ChnAttr.u32StreamBufSize;
         pInitDecCfg->frameBufferCount = pChnHandle->ChnAttr.u32FrameBufCnt;
+        pInitDecCfg->async_getframe = pChnHandle->ChnAttr.u8AsyncGetframe;
 
         if (pstAttr->enMode == VIDEO_MODE_STREAM)
             pInitDecCfg->BsMode = BS_MODE_INTERRUPT;
@@ -1056,7 +1068,7 @@ int drv_vdec_get_frame(vdec_chn VdChn, video_frame_info_s *pstFrameInfo,
         }
     }else {
         DispFrameCfg dfc = {0};
-        s32Ret = vdec_get_frame(pChnHandle->pHandle, &dfc);
+        s32Ret = vdec_get_frame(pChnHandle->pHandle, &dfc, s32MilliSec);
         if (s32Ret >= 0) {
             pChnHandle->u32GetFrameCnt++;
             set_video_frame_info(pstFrameInfo, &dfc);

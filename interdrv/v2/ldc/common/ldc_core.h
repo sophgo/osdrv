@@ -9,6 +9,10 @@
 #include <linux/ldc_uapi.h>
 #include <ldc_common.h>
 
+#define MAX_CB_MOD_NUM 3
+#define MAX_CB_DEV_NUM MAX(VO_MAX_LAYER_NUM, MAX(VPSS_MAX_GRP_NUM, VI_MAX_PIPE_NUM))
+#define MAX_CB_CHN_NUM MAX(VO_MAX_CHN_NUM, MAX(VPSS_MAX_CHN_NUM, VI_MAX_CHN_NUM))
+
 enum ldc_core_state {
 	LDC_CORE_STATE_IDLE,
 	LDC_CORE_STATE_RUNNING,
@@ -70,7 +74,7 @@ struct ldc_vdev {
 	spinlock_t wdev_lock;
 	//struct workqueue_struct *workqueue;
 	struct ldc_vb_doneq vb_doneq;
-	vb_pool vb_pool;
+	vb_pool vb_pool[MAX_CB_MOD_NUM][MAX_CB_DEV_NUM][MAX_CB_CHN_NUM];
 	struct semaphore sem;
 };
 

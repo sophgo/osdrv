@@ -143,7 +143,7 @@ static int32_t _base_ion_alloc(uint64_t *addr_p, void **addr_v, uint32_t len,
 	mem_info.vir_addr = vmap_addr;
 	mem_info.phy_addr = ionbuf->paddr;
 	mem_info.size = len;
-	mem_info.fd_pid = current->pid;
+	mem_info.fd_pid = current->tgid;
 	if (mem_put(&mem_info)) {
 		TRACE_BASE(DBG_ERR, "allocate mm put failed\n");
 		return -ENOMEM;
@@ -184,7 +184,30 @@ static int32_t _base_ion_free(uint64_t addr_p, int32_t *size)
 
 	dma_buf_end_cpu_access(dmabuf, DMA_TO_DEVICE);
 	dma_buf_put(dmabuf);
-	bm_ion_free(mem_info.dmabuf_fd);
+	/*
+	 * DMA buffer ownership check and cleanup logic:
+	 *
+	 * When allocating DMA buffer, we store the creator thread's TGID (mem_info.fd_pid)
+	 * and associated file descriptor (mem_info.dmabuf_fd) for later cleanup.
+	 *
+	 * This conditional handles two scenarios:
+	 * 1. Same-process cleanup (owner):
+	 *    - Directly close the fd using ksys_close() when current TGID matches creator TGID
+	 *
+	 * 2. Foreign-process cleanup (non-owner):
+	 *    - Decrement DMA-buf reference count via dma_buf_put()
+	 *    - NOTE: This approach requires special attention:
+	 *      a) dma_buf_put() only decreases refcount but DOES NOT close the fd
+	 *      b) Accessing fd after dma_buf_put() may cause use-after-free errors
+	 *      c) File descriptor slot remains occupied in process table until
+	 *         process termination (automatic cleanup by kernel)
+	 */
+	if (mem_info.fd_pid != current->tgid)
+		/* Non-owner release: Decrement refcount without closing fd */
+		dma_buf_put(dmabuf);
+	else
+		/* Owner release: Properly close associated fd */
+		bm_ion_free(mem_info.dmabuf_fd);
 
 	if (size)
 		*size = mem_info.size;

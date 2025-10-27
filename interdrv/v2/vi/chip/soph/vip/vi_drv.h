@@ -540,6 +540,7 @@ struct _isp_cfg {
 	u32			first_frm_cnt;
 	u32			raw_ai_isp_frm_cnt;
 	u32			raw_ai_isp_ap;
+	u64			rgbmap_addr;
 	struct vi_rect		crop;
 	struct vi_rect		crop_se;
 	struct vi_rect		rawdump_crop;

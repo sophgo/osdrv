@@ -20,10 +20,23 @@ extern "C" {
 #define SYNC_CODE_NUM	4
 #define BT_DEMUX_NUM	4
 #define MIPI_DEMUX_NUM	4
+#define MAC0_MAX_CLK 900
+#define MAC1_MAX_CLK 300
+#define MAC2_MAX_CLK 150
+#define MAC3_MAX_CLK 600
+#define MAC4_MAX_CLK MAC1_MAX_CLK
+#define MAC5_MAX_CLK MAC2_MAX_CLK
+
 
 struct img_size_s {
 	unsigned int	width;
 	unsigned int	height;
+	unsigned int	start_x;
+	unsigned int	start_y;
+	unsigned int	active_w;
+	unsigned int	active_h;
+	unsigned int	max_width;
+	unsigned int	max_height;
 };
 
 enum rx_mac_clk_e {

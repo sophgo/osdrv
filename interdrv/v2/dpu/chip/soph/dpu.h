@@ -160,6 +160,7 @@ struct dpu_chn_cfg_s {
 struct dpu_ctx_s {
 	unsigned char iscreated;
 	unsigned char isstarted;
+	unsigned char bm_scene;
 	dpu_grp_attr_s grp_attr;
 	struct dpu_chn_cfg_s chn_cfgs[DPU_MAX_CHN_NUM];
 	struct mutex lock;
@@ -168,7 +169,6 @@ struct dpu_ctx_s {
 	unsigned char dpu_dev_id;
 	unsigned char is_dma_cfg;
 	unsigned int stride_arry[2];
-	unsigned int chn_num;
 	pixel_format_e pixel_format;
 	struct dpu_job_queue_status_s input_job_status;
 	struct dpu_job_queue_status_s working_job_status;
@@ -177,7 +177,8 @@ struct dpu_ctx_s {
 	int frame_num;
 	int cost_time_for_sec;
 	unsigned long long phyaddr_chfh;
-	void *   viraddr_chfh;
+	void* viraddr_chfh;
+	void* data;
 };
 
 struct dpu_handle_info_s {
@@ -261,6 +262,8 @@ int dpu_release_frame(dpu_grp dpu_grp_id,\
 							dpu_chn dpu_chn_id,\
                             const video_frame_info_s *vdeo_frame_info);
 
+int dpu_edge_send_frame(struct bm_dpu_cfg *cfg);
+
 void dpu_check_reg_write(void);
 
 void dpu_check_reg_read(void);
@@ -315,10 +318,10 @@ struct dpu_handler_ctx_s *dpu_get_handler_ctx(void);
 		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.dst_frame_rate >=		\
 		ctx->chn_cfgs[dpu_chn_id].chn_attr.frame_rate.src_frame_rate)
 
-// #define IS_FRAME_OFFSET_INVALID(f) 
-// 	((f).offset_left < 0 || (f).offset_right < 0 || 
-// 	 (f).offset_top < 0 || (f).offset_bottom < 0 || 
-// 	 ((unsigned int)((f).offset_left + (f).offset_right) > (f).width) || 
+// #define IS_FRAME_OFFSET_INVALID(f)
+// 	((f).offset_left < 0 || (f).offset_right < 0 ||
+// 	 (f).offset_top < 0 || (f).offset_bottom < 0 ||
+// 	 ((unsigned int)((f).offset_left + (f).offset_right) > (f).width) ||
 // 	 ((unsigned int)((f).offset_top + (f).offset_bottom) > (f).height))
 
 static inline int MOD_CHECK_NULL_PTR(mod_id_e mod, const void *ptr)

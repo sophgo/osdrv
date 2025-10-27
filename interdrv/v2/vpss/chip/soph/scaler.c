@@ -1910,6 +1910,35 @@ void sclr_gop_ow_set_cfg(u8 inst, u8 layer, u8 ow_inst, struct sclr_gop_ow_cfg *
 }
 
 /**
+ * sclr_gop_ow_get_addr - get gop's osd-window DRAM addr.
+ *
+ * @param inst: (0~3), the instance of gop which want to be configured.
+ *		0~3 is on scl.
+ * @param layer: (0~1) 0 is layer 0(gop0). 1 is layer 1(gop1).
+ * @param ow_inst: (0~7), the instance of ow which want to be configured.
+ * @param addr: ow's DRAM address.
+ */
+void sclr_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
+{
+	if (ow_inst >= SCL_MAX_GOP_OW_INST)
+		return;
+
+	if (inst < SCL_MAX_INST) {
+		if (layer == 0) {
+			*addr = _reg_read(reg_base + REG_SCL_GOP0_ADDR_L(inst, ow_inst)) |
+				((u64)_reg_read(reg_base + REG_SCL_GOP0_ADDR_H(inst, ow_inst)) << 32);
+		} else if (layer == 1) {
+			*addr = _reg_read(reg_base + REG_SCL_GOP1_ADDR_L(inst, ow_inst)) |
+				((u64)_reg_read(reg_base + REG_SCL_GOP1_ADDR_H(inst, ow_inst)) << 32);
+		} else {
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+				inst, layer);
+			return;
+		}
+	}
+}
+
+/**
  * sclr_gop_fb_set_cfg - setup fontbox
  *
  * @param inst: (0~3), the instance of gop which want to be configured.

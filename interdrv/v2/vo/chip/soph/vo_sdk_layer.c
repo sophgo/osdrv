@@ -984,7 +984,7 @@ static int vo_enablevideolayer(vo_layer layer)
 	base_mod_jobs_init(&layer_ctx->layer_jobs, 0, 0, layer_ctx->layer_attr.depth);
 
 	for (i = 0; i < layer_ctx->display_buflen; i++) {
-		blk = vb_get_block_with_id(VB_INVALID_POOLID, vb_cal_config.vb_size, ID_VO);
+		blk = vb_get_block_with_id(layer_ctx->vb_pool_id, vb_cal_config.vb_size, ID_VO);
 		if (blk == VB_INVALID_HANDLE) {
 			TRACE_VO(DBG_ERR, "get vb block fail.\n");
 			ret = ERR_VO_NO_MEM;
@@ -2667,7 +2667,7 @@ int vo_wbc_qbuf(struct vo_wbc_ctx *wbc_ctx)
 	common_getpicbufferconfig(stSize.width, stSize.height, pixformat
 			, DATA_BITWIDTH_8, COMPRESS_MODE_NONE, DISP_ALIGNMENT, &vb_cal_config);
 	// get vb for odma write
-	blk = vb_get_block_with_id(VB_INVALID_POOLID, vb_cal_config.vb_size, ID_VO);
+	blk = vb_get_block_with_id(wbc_ctx->vb_pool_id, vb_cal_config.vb_size, ID_VO);
 	if (blk == VB_INVALID_HANDLE) {
 		TRACE_VO(DBG_ERR, "Can't acquire vb block for wbc, size(%d)\n", vb_cal_config.vb_size);
 		return ERR_VO_NO_MEM;
@@ -3231,6 +3231,66 @@ static int vo_release_wbc_frame(vo_wbc wbc_dev, video_frame_info_s *video_frame,
 
 	TRACE_VO(DBG_DEBUG, "release wbc frame, addr(0x%llx)\n",
 		 video_frame->video_frame.phyaddr[0]);
+
+	return 0;
+}
+
+static int vo_attach_layer_vb_pool(vo_layer layer, s32 vb_pool_id)
+{
+	int ret = -1;
+
+	ret = check_video_layer_valid(layer);
+	if (ret != 0)
+		return ret;
+
+	mutex_lock(&g_vo_ctx->layer_ctx[layer].layer_lock);
+	g_vo_ctx->layer_ctx[layer].vb_pool_id = vb_pool_id;
+	mutex_unlock(&g_vo_ctx->layer_ctx[layer].layer_lock);
+
+	return 0;
+}
+
+static int vo_detach_layer_vb_pool(vo_layer layer)
+{
+	int ret = -1;
+
+	ret = check_video_layer_valid(layer);
+	if (ret != 0)
+		return ret;
+
+	mutex_lock(&g_vo_ctx->layer_ctx[layer].layer_lock);
+	g_vo_ctx->layer_ctx[layer].vb_pool_id = -1;
+	mutex_unlock(&g_vo_ctx->layer_ctx[layer].layer_lock);
+
+	return 0;
+}
+
+static int vo_attach_wbc_vb_pool(vo_wbc wbc_dev, s32 vb_pool_id)
+{
+	int ret = -1;
+
+	ret = check_vo_wbc_valid(wbc_dev);
+	if (ret != 0)
+		return ret;
+
+	mutex_lock(&g_vo_ctx->wbc_ctx[wbc_dev].wbc_lock);
+	g_vo_ctx->wbc_ctx[wbc_dev].vb_pool_id = vb_pool_id;
+	mutex_unlock(&g_vo_ctx->wbc_ctx[wbc_dev].wbc_lock);
+
+	return 0;
+}
+
+static int vo_detach_wbc_vb_pool(vo_wbc wbc_dev)
+{
+	int ret = -1;
+
+	ret = check_vo_wbc_valid(wbc_dev);
+	if (ret != 0)
+		return ret;
+
+	mutex_lock(&g_vo_ctx->wbc_ctx[wbc_dev].wbc_lock);
+	g_vo_ctx->wbc_ctx[wbc_dev].vb_pool_id = -1;
+	mutex_unlock(&g_vo_ctx->wbc_ctx[wbc_dev].wbc_lock);
 
 	return 0;
 }
@@ -4517,6 +4577,63 @@ long vo_sdk_ctrl(struct vo_core_dev *vdev, struct vo_ext_control *p)
 		}
 	}
 	break;
+
+	case VO_SDK_ATTACH_LAYER_VBPOOL: {
+		struct vo_layer_vb_pool_cfg cfg;
+
+		CHECK_STRUCT_SIZE(p->size, struct vo_layer_vb_pool_cfg);
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_layer_vb_pool_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_ATTACH_LAYER_VBPOOL copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_attach_layer_vb_pool(cfg.layer, cfg.vb_pool_id);
+	}
+	break;
+
+	case VO_SDK_DETACH_LAYER_VBPOOL: {
+		struct vo_layer_vb_pool_cfg cfg;
+
+		CHECK_STRUCT_SIZE(p->size, struct vo_layer_vb_pool_cfg);
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_layer_vb_pool_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_DETACH_LAYER_VBPOOL copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_detach_layer_vb_pool(cfg.layer);
+	}
+	break;
+
+	case VO_SDK_ATTACH_WBC_VBPOOL: {
+		struct vo_wbc_vb_pool_cfg cfg;
+
+		CHECK_STRUCT_SIZE(p->size, struct vo_wbc_vb_pool_cfg);
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_wbc_vb_pool_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_ATTACH_WBC_VBPOOL copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_attach_wbc_vb_pool(cfg.wbc_dev, cfg.vb_pool_id);
+	}
+	break;
+
+	case VO_SDK_DETACH_WBC_VBPOOL: {
+		struct vo_wbc_vb_pool_cfg cfg;
+
+		CHECK_STRUCT_SIZE(p->size, struct vo_wbc_vb_pool_cfg);
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_wbc_vb_pool_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_DETACH_WBC_VBPOOL copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_detach_wbc_vb_pool(cfg.wbc_dev);
+	}
+	break;
+
 
 	default:
 		break;

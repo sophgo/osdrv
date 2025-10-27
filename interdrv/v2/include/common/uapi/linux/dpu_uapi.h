@@ -69,6 +69,13 @@ struct dpu_snap_cfg {
 	unsigned int frame_cnt;
 };
 
+struct  bm_dpu_cfg{
+	unsigned long long fgs_store_addr;
+	struct dpu_grp_attr grp_attr;
+	struct dpu_chn_attr chn_attr;
+	struct dpu_set_frame_cfg frame_set_cfg;
+	struct dpu_get_frame_cfg frame_get_cfg;
+};
 
 /* Public */
 #define DPU_CREATE_GROUP _IOW('U', 0x00, struct dpu_grp_attr)
@@ -92,6 +99,8 @@ struct dpu_snap_cfg {
 #define DPU_CHECK_REG_READ _IO('U', 0x0e)
 #define DPU_CHECK_REG_WRITE _IO('U', 0x0f)
 #define DPU_SEND_CHN_FRAME _IOW('U', 0x10, struct dpu_get_frame_cfg)
+
+#define DPU_EDGE_SEND_FRAME _IOW('U', 0x20, struct bm_dpu_cfg)
 
 #define DPU_GET_SGBM_STATUS _IO('U', 0xa0)
 #define DPU_GET_FGS_STATUS _IO('U', 0xa1)

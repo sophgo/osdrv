@@ -15,6 +15,7 @@ enum vo_cb_cmd {
 	VO_CB_GET_CHN_SIZE,
 	VO_CB_QBUF_TRIGGER,
 	VO_CB_QBUF_VO_GET_CHN_ROTATION,
+	VO_CB_GET_RETRAIN_INFO,
 	VO_CB_GDC_OP_DONE = LDC_CB_GDC_OP_DONE,
 	VO_CB_MAX
 };
@@ -23,6 +24,12 @@ struct vo_get_chnrotation_cfg {
 	u8 layer;
 	u8 chn;
 	u8 rotation;
+};
+
+struct vo_retrain_info {
+	bool is_vo_en;
+	u64 frame_end;
+	u64 margin;
 };
 
 #ifdef __cplusplus

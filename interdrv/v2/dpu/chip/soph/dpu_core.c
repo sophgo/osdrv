@@ -434,21 +434,33 @@ static struct platform_device dpu_pdev = {
 static int dpu_suspend(struct device *dev)
 {
 	struct dpu_dev_s *wdev = dev_get_drvdata(dev);
+	unsigned long timeout = msecs_to_jiffies(100); // 100ms timeout
+	int ret = 0;
 	if (!wdev)
         return -ENODEV;
 
 	while(wdev->bbusy || wdev->hw_busy){
-		udelay(5000);
+		if (time_after(jiffies, timeout)) {
+            TRACE_DPU(DBG_ERR, "DPU suspend timeout! Busy state: %d/%d\n",
+                    wdev->bbusy, wdev->hw_busy);
+            ret = -ETIMEDOUT;
+            goto suspend_failed;
+        }
+        usleep_range(1000, 2000);
 	}
 	mutex_lock(&wdev->suspend_lock);
 	wdev->bsuspend =TRUE;
 	mutex_unlock(&wdev->suspend_lock);
+
 	if(wdev->clk_sys[1] && __clk_is_enabled(wdev->clk_sys[1]))
 		clk_disable_unprepare(wdev->clk_sys[1]);
 
-
 	TRACE_DPU(DBG_WARN, "dpu suspended\n");
 	return 0;
+
+suspend_failed:
+	TRACE_DPU(DBG_ERR, "DPU suspend failed\n");
+    return ret;
 }
 
 static int dpu_resume(struct device *dev)

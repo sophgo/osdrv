@@ -2163,7 +2163,7 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
     return err;
 }
 
-static int vc_drv_plat_probe(struct platform_device *pdev)
+int vc_drv_plat_probe(struct platform_device *pdev)
 {
     int ret = 0;
     ret = jpeg_platform_init(pdev);
@@ -2183,7 +2183,7 @@ static int vc_drv_plat_probe(struct platform_device *pdev)
     return ret;
 }
 
-static int vc_drv_plat_remove(struct platform_device *pdev)
+int vc_drv_plat_remove(struct platform_device *pdev)
 {
     int ret = 0;
     jpeg_platform_exit();
@@ -2220,8 +2220,7 @@ int _vc_drv_resume(struct platform_device *pdev)
 }
 #endif
 
-
-
+#ifdef PLATFORM_SOC
 static const struct of_device_id vc_drv_match_table[] = {
     {.compatible = "sophgo,vc_drv"},
     {},
@@ -2239,11 +2238,13 @@ static struct platform_driver vc_plat_driver = {
     .resume     = _vc_drv_resume,
     #endif
 };
-
-static int __init _vc_drv_init(void)
+#endif
+int vc_drv_init(void)
 {
     int ret = 0;
+#ifdef VC_SUPPORT_CLOCK_CONTROL
     int core;
+#endif
     struct vc_drv_device *vdev;
 
     vdev = vzalloc( sizeof(*vdev));
@@ -2261,22 +2262,26 @@ static int __init _vc_drv_init(void)
     }
 
     pVcDrvDevice = vdev;
-
+#ifdef PLATFORM_SOC
     ret = platform_driver_register(&vc_plat_driver);
+#endif
+#ifdef VC_SUPPORT_CLOCK_CONTROL
     for (core = 0; core < MAX_NUM_VPU_CORE; core++) {
         vpu_clk_enable(core);
         vpu_clk_disable(core);
     }
+
     for (core = 0; core < MAX_NUM_JPU_CORE; core++) {
         jpu_clk_enable(core);
         jpu_clk_disable(core);
     }
+#endif
     pr_info("_vc_drv_init result = 0x%x\n", ret);
 
     return ret;
 }
 
-static void __exit _vc_drv_exit(void)
+void vc_drv_exit(void)
 {
     struct vc_drv_device *vdev = pVcDrvDevice;
 
@@ -2307,12 +2312,16 @@ static void __exit _vc_drv_exit(void)
     vfree(vdev);
     pVcDrvDevice = NULL;
 
+#ifdef PLATFORM_SOC
     platform_driver_unregister(&vc_plat_driver);
+#endif
 }
 
+#ifdef PLATFORM_SOC
 MODULE_AUTHOR("vc sdk driver.");
 MODULE_DESCRIPTION("vc sdk driver");
 MODULE_LICENSE("GPL");
 
-module_init(_vc_drv_init);
-module_exit(_vc_drv_exit);
+module_init(vc_drv_init);
+module_exit(vc_drv_exit);
+#endif

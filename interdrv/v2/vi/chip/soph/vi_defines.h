@@ -37,6 +37,21 @@ struct vi_thread_attr {
 	int (*th_handler)(void *arg);
 };
 
+struct record_info {
+	u64 last_sof_ts;
+	u64 last_eof_ts;
+	u64 next_sof_ts;
+	u64 period_ts;
+};
+
+struct ddr_retrain {
+	void __iomem	*gp_reg;
+	void __iomem	*ddr_reg;
+	struct record_info record_info[ISP_PRERAW_MAX];
+	u64 max_cur_eof;
+	u64 min_next_sof;
+};
+
 /**
  * struct sop_vi - VI IP abstraction
  */
@@ -46,7 +61,6 @@ struct sop_vi_dev {
 	struct cdev			cdev;
 	dev_t				cdev_id;
 	void __iomem			*reg_base;
-	void __iomem			*ddr_retrain_reg;
 	int				irq_num;
 	struct clk			*clk_sys[6];
 	struct clk			*clk_isp[3];
@@ -55,6 +69,7 @@ struct sop_vi_dev {
 	struct isp_ctx			ctx;
 	struct sop_isp_mbus_framefmt	usr_fmt;
 	struct sop_isp_rect		usr_crop;
+	struct ddr_retrain		retrain;
 	struct list_head		rdy_queue[ISP_PRERAW_MAX];
 	spinlock_t			rdy_lock;
 	u8				num_rdy[ISP_PRERAW_MAX];
@@ -105,9 +120,8 @@ struct sop_vi_dev {
 	struct completion		tpu_done[ISP_PRERAW_MAX];
 	wait_queue_head_t		ai_isp_wait_q[ISP_PRERAW_MAX];
 	struct vi_thread_attr		vi_th[E_VI_TH_MAX];
-	atomic_t			is_suspend;
-	atomic_t			is_suspend_pre_trig_done;
-	atomic_t			is_suspend_post_trig_done;
+	atomic_t			state;
+	atomic_t			isp_error_type[ISP_PRERAW_MAX];
 };
 
 #ifdef __cplusplus

@@ -58,8 +58,8 @@ int ldc_add_dwa_rot_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 	, video_frame_info_s *pstvideo_frame, int s32milli_sec);
 
-int ldc_attach_vb_pool(vb_pool vb_pool);
-int ldc_detach_vb_pool(void);
+int ldc_attach_vb_pool(struct ldc_vb_pool_cfg *cfg);
+int ldc_detach_vb_pool(struct ldc_vb_pool_cfg *cfg);
 
 
 /* set meshsize for rotation only

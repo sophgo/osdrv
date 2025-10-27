@@ -1130,10 +1130,6 @@ BOOL AllocateFrameBuffer(Uint32 instIdx, FrameFormat subsample, CbCrInterLeave c
             return FALSE;
         }
 
-        if (jdi_invalidate_cache(&fb->vb_base) < 0) {
-            JLOG(ERR, "Fail to allocate frame buffer size=%ld\n", fb->vb_base.size);
-            return FALSE;
-        }
         fb->last_addr = fb->vb_base.phys_addr;
         fb->last_virt = fb->vb_base.virt_addr;
     }

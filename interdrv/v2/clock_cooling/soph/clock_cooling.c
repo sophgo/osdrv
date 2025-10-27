@@ -4,7 +4,7 @@
 #include <linux/platform_device.h>
 #include <linux/thermal.h>
 #include <linux/clk.h>
-
+#include <linux/reboot.h>
 struct dev_freq {
 	unsigned long cpu_freq;
 	unsigned long tpu_freq;
@@ -99,7 +99,7 @@ static int cv186x_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 
 	mutex_lock(&cvcdev->lock);
 
-	if (state <= cvcdev->max_clk_state && state != cvcdev->clk_state) {
+	if (state < cvcdev->max_clk_state && state != cvcdev->clk_state) {
 		dev_dbg(&cdev->device, "dev_freq[%ld].cpu_freq=%ld\n", state, cvcdev->dev_freqs[state].cpu_freq);
 		dev_dbg(&cdev->device, "dev_freq[%ld].tpu_freq=%ld\n", state, cvcdev->dev_freqs[state].tpu_freq);
 
@@ -114,6 +114,12 @@ static int cv186x_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 		}
 
 		cvcdev->clk_state = state;
+	}
+
+	if (state == cvcdev->max_clk_state) {
+		dev_err(&cdev->device, "[OverHeat]: reboot\n");
+		cvcdev->clk_state = state;
+		kernel_restart(NULL);
 	}
 
 	mutex_unlock(&cvcdev->lock);

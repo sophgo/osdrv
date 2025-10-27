@@ -289,9 +289,10 @@ err_destroy_instance:
 static int vi_core_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct sop_vi_dev *vdev = dev_get_drvdata(&pdev->dev);
-	dev_info(&pdev->dev, "vi suspend start\n");
+
 	vi_suspend(vdev);
-	dev_info(&pdev->dev, "vi suspend end\n");
+
+	vi_pr(VI_INFO, "%s -\n", __func__);
 
 	return 0;
 }
@@ -299,9 +300,10 @@ static int vi_core_suspend(struct platform_device *pdev, pm_message_t state)
 static int vi_core_resume(struct platform_device *pdev)
 {
 	struct sop_vi_dev *vdev = dev_get_drvdata(&pdev->dev);
-	dev_info(&pdev->dev, "vi resume start\n");
+
 	vi_resume(vdev);
-	dev_info(&pdev->dev, "vi resume end\n");
+
+	vi_pr(VI_INFO, "%s -\n", __func__);
 
 	return 0;
 }
