@@ -96,12 +96,9 @@ typedef struct _stTestEncoder_ {
 	Uint8 bDrop; // Drop bitstream
 	int originBitrate; // srore rc origin bitrate
 #endif
-	struct task_struct *tPthreadId;
-	struct completion semSendEncCmd;
 	struct completion semGetStreamCmd;
-	struct completion semEncDoneCmd;
 
-	Uint8 tPthreadRunFlag;
+	Uint8 bSbmSkipFrm; // Skip frame in SBM mode, need to drop frame
 	cviVEncStreamInfo tStreamInfo;
 	Uint64 u64Pts;
 	cviVencSbSetting SbSetting;

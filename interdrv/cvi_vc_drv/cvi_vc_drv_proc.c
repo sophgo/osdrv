@@ -514,9 +514,9 @@ static int venc_proc_show(struct seq_file *m, void *v)
 					"-----VENC CHN PERFORMANCE------------------------------------------------\n");
 				seq_printf(
 					m,
-					"ID: %d\t No.SendFramePerSec: %u\t No.EncFramePerSec: %u\t HwEncTime: %llu us\t EncodedFrame: %llu\n\n",
+					"ID: %d\t No.SendFramePerSec: %u\t No.EncFramePerSec: %u\t HwEncTime: %llu us\t MaxHwEncTime: %llu us\t EncodedFrame: %llu\n\n",
 					idx, pstFPS->u32InFPS,
-					pstFPS->u32OutFPS, pstFPS->u64HwTime, pstFPS->u64DoneFrame);
+					pstFPS->u32OutFPS, pstFPS->u64HwTime, pstFPS->u64MaxHwTime, pstFPS->u64DoneFrame);
 			}
 		}
 	}

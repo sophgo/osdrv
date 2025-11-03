@@ -232,6 +232,8 @@ BOOL cviEnc_Avbr_PicCtrl(stRcInfo *pRcInfo, EncOpenParam *pEncOP, int frameIdx)
 {
 	BOOL changeBrEn = FALSE;
 	int winSize, coring_offset, coring_in, coring_out, coring_gain;
+	int i = 0;
+	BOOL isMotionState = TRUE;
 
 	if (pRcInfo->rcMode != RC_MODE_AVBR) {
 		return FALSE;
@@ -241,6 +243,25 @@ BOOL cviEnc_Avbr_PicCtrl(stRcInfo *pRcInfo, EncOpenParam *pEncOP, int frameIdx)
 	coring_in = pEncOP->picMotionLevel;
 	coring_out = CLIP3(0, 255, (coring_in - coring_offset));
 	CVI_VC_INFO("pic mot in = %d, mot lv = %d\n", coring_in, coring_out);
+
+	// Shift historical motion levels
+	for (i = 0; i < MAX_MOTION_CHECK_WIN - 1; i++) {
+		pRcInfo->lastMotionLevels[i] = pRcInfo->lastMotionLevels[i + 1];
+	}
+	pRcInfo->lastMotionLevels[MAX_MOTION_CHECK_WIN-1] = coring_out;
+
+	// Check for continuous increasing motion trend
+	if (coring_out == 0) {
+		isMotionState = FALSE;
+	} else {
+		for (i = 0; i < MAX_MOTION_CHECK_WIN - 1; i++) {
+			if (pRcInfo->lastMotionLevels[i] >= pRcInfo->lastMotionLevels[i + 1] ||
+				pRcInfo->lastMotionLevels[i] == 0) {
+				isMotionState = FALSE;
+				break;
+			}
+		}
+	}
 
 	pEncOP->picMotionLevel = coring_out;
 	pRcInfo->picMotionLvWindow[frameIdx % winSize] = pEncOP->picMotionLevel;
@@ -259,6 +280,14 @@ BOOL cviEnc_Avbr_PicCtrl(stRcInfo *pRcInfo, EncOpenParam *pEncOP, int frameIdx)
 			      (pRcInfo->avbrChangeValidCnt - 1) :
 			      0;
 	CVI_VC_INFO("avbrChangeValidCnt = %d\n", pRcInfo->avbrChangeValidCnt);
+
+	if (isMotionState == TRUE) {
+		pRcInfo->periodMotionLvRaw = pEncOP->picMotionLevel;
+		pRcInfo->periodMotionLv =
+			CLIP3(0, 255, (pRcInfo->periodMotionLvRaw * coring_gain) / 10);
+		pRcInfo->avbrChangeValidCnt = 0;
+	}
+
 	if (pRcInfo->avbrChangeValidCnt == 0) {
 		int MotionLvLower;
 		// quantize motion diff to avoid too frequently bitrate change
@@ -282,7 +311,7 @@ BOOL cviEnc_Avbr_PicCtrl(stRcInfo *pRcInfo, EncOpenParam *pEncOP, int frameIdx)
 		pRcInfo->periodMotionLv =
 			MAX(MotionLvLower, pRcInfo->periodMotionLv);
 
-		if (changeBrEn) {
+		if (changeBrEn || isMotionState) {
 			pRcInfo->lastPeriodMotionLv = pRcInfo->periodMotionLv;
 			pRcInfo->avbrChangeBrEn = TRUE;
 			pRcInfo->avbrChangeValidCnt = MAX(
@@ -290,7 +319,7 @@ BOOL cviEnc_Avbr_PicCtrl(stRcInfo *pRcInfo, EncOpenParam *pEncOP, int frameIdx)
 		}
 		//CVI_VC_INFO("avbr bitrate = %d\n",  pRcInfo->targetBitrate);
 	}
-	return (changeBrEn) ? TRUE : FALSE;
+	return (changeBrEn || isMotionState) ? TRUE : FALSE;
 }
 
 int cviEncRc_Avbr_GetQpDelta(stRcInfo *pRcInfo, EncOpenParam *pEncOP)
@@ -351,6 +380,8 @@ BOOL cviEncRc_Avbr_CheckFrameSkip(stRcInfo *pRcInfo, EncOpenParam *pEncOP,
 
 void cviEncRc_Open(stRcInfo *pRcInfo, EncOpenParam *pEncOP)
 {
+	int i = 0;
+
 	pRcInfo->rcEnable = pEncOP->rcEnable;
 	pRcInfo->cviRcEn = pEncOP->cviRcEn;
 	pRcInfo->svcEnable = pEncOP->svc_enable;
@@ -364,10 +395,15 @@ void cviEncRc_Open(stRcInfo *pRcInfo, EncOpenParam *pEncOP)
 	pRcInfo->rcMode = pEncOP->rcMode;
 	pRcInfo->numOfPixel = pEncOP->picWidth * pEncOP->picHeight;
 	// frame skipping
+	// Initialize motion detection arrays
+	for (i = 0; i < MAX_MOTION_CHECK_WIN; i++) {
+		pRcInfo->lastMotionLevels[i] = 0;
+	}
 	pRcInfo->contiSkipNum = (!pEncOP->frmLostOpen)	  ? 0 :
 				(pEncOP->encFrmGaps == 0) ? 65535 :
 								  pEncOP->encFrmGaps;
 	pRcInfo->frameSkipBufThr = pEncOP->frmLostBpsThr;
+	pRcInfo->resetCtuLevelRC = 0;
 
 	// avbr setting
 	if (pRcInfo->rcMode == RC_MODE_AVBR) {
@@ -514,6 +550,9 @@ void cviEncRc_RcKernelEstimatePic(stRcInfo *pRcInfo, EncParam *pEncParam, int fr
 	if (pEncParam->is_idr_frame && pEncParam->reset_rc_model) {
 		cviRcKernel_resetRcModel(pRcKerInfo);
 		pEncParam->reset_rc_model = FALSE;
+		if (pRcKerInfo->bitError > 0) {
+			pRcInfo->resetCtuLevelRC = 1;
+		}
 	}
 
 	cviRcKernel_estimatePic(pRcKerInfo, pRcPicOut, pEncParam->is_idr_frame, frameIdx);
@@ -538,10 +577,12 @@ void cviEncRc_RcKernelEstimatePic(stRcInfo *pRcInfo, EncParam *pEncParam, int fr
 						     pRcInfo->picIMaxQp + pRcInfo->qDelta,
 						     pRcPicOut->qp);
 		}
+
+		// final check for qDelta offset
+		pEncParam->u32FrameQp = CLIP3(0, 51, pEncParam->u32FrameQp);
 	} else {
 		pEncParam->u32FrameQp = CLIP3(minQp, maxQp, pRcPicOut->qp);
 	}
-
 }
 
 void cviEncRc_UpdatePicInfo(stRcInfo *pRcInfo, EncOutputInfo *pEncOutInfo)

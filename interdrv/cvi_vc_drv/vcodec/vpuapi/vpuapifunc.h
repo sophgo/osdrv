@@ -387,6 +387,7 @@ typedef struct {
 	bool addrRemapEn;
 	AddrRemap addrRemap;
 	bool bSbmEn;
+	bool bAsyncEn;
 } EncInfo;
 
 typedef struct _CVI_CODEC_ {

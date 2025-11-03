@@ -311,6 +311,7 @@ int vo_core_resume(struct platform_device *pdev)
 	struct cvi_vo_dev *dev;
 	struct cvi_vo_ctx *voctx = NULL;
 	MMF_CHN_S chn = {.enModId = CVI_ID_VO, .s32DevId = 0, .s32ChnId = 0};
+	u16 rgb[3], i;
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
@@ -324,6 +325,18 @@ int vo_core_resume(struct platform_device *pdev)
 	}
 
 	voctx = (struct cvi_vo_ctx *)(dev->shared_mem);
+
+	for (i = 0; i < VO_MAX_DEV_NUM; i++) {
+		if (gVoCtx->is_dev_enable[i]) {
+			rgb[2] = gVoCtx->stPubAttr.u32BgColor & 0x3ff;
+			rgb[1] = (gVoCtx->stPubAttr.u32BgColor >> 10) & 0x3ff;
+			rgb[0] = (gVoCtx->stPubAttr.u32BgColor >> 20) & 0x3ff;
+			sclr_disp_set_frame_bgcolor(rgb[0], rgb[1], rgb[2]);
+			sclr_disp_set_window_bgcolor(0, 0, 0);
+			sclr_disp_reg_shadow_sel(false);
+			sclr_disp_set_cfg(sclr_disp_get_cfg());
+		}
+	}
 
 	base_mod_jobs_init(chn, CHN_TYPE_OUT, voctx->u32DisBufLen - 1, 2, 0);
 

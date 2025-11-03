@@ -5,6 +5,10 @@ ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
 ifneq ($(KERNELRELEASE),)
 include $(PWD)/chip/$(CVIARCH_L)/chip.mk
 
+ifeq ($(CONFIG_SUSPEND), y)
+CFLAGS += -DCONFIG_SUSPEND
+endif
+
 $(CVIARCH_L)_rgn-objs += common/rgn_core.o
 
 obj-m += $(CVIARCH_L)_rgn.o

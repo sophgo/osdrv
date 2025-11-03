@@ -1162,7 +1162,7 @@ RetCode Coda9VpuDecode(CodecInst *instance, DecParam *param)
 		VpuWriteReg(pCodecInst->coreIdx, CMD_DEC_PIC_SVC_INFO,
 			    pDecInfo->targetSubLayerId);
 	}
-
+	CVI_VC_FLOW("PIC_RUN\n");
 	pCodecInst->u64StartTime = cviGetCurrentTime();
 
 	Coda9BitIssueCommand(pCodecInst->coreIdx, pCodecInst, PIC_RUN);

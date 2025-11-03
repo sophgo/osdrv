@@ -1334,13 +1334,10 @@ static unsigned int cvi_vc_drv_poll(struct file *filp,
 	CVI_VENC_GetChnAttr(minor, &stChnAttr);
 
 	if ((stChnAttr.stVencAttr.enType == PT_JPEG ||
-	     stChnAttr.stVencAttr.enType == PT_MJPEG)
+	     stChnAttr.stVencAttr.enType == PT_MJPEG ||
+	     stChnAttr.stVencAttr.enType == PT_H265 ||
+	     stChnAttr.stVencAttr.enType == PT_H264)
 		 && (cviGetLeftStreamFrames(minor) > 0)) {
-		mask |= POLLIN | POLLRDNORM;
-	}
-	if (((stChnAttr.stVencAttr.enType == PT_H265 ||
-	     stChnAttr.stVencAttr.enType == PT_H264))
-	     && (cviGetLeftStreamFrames(minor) > 0)) {
 		mask |= POLLIN | POLLRDNORM;
 	}
 

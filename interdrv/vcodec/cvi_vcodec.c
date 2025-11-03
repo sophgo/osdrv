@@ -443,7 +443,7 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 			//wake_up(&tWaitQueue[chnIdxMapping[coreIdx]]);
 		}
 	}
-	wake_up(&pvctx->s_interrupt_wait_q);
+	wake_up_interruptible(&pvctx->s_interrupt_wait_q);
 	VCODEC_DBG_INTR("[-]%s\n", __func__);
 
 	return IRQ_HANDLED;
@@ -538,7 +538,7 @@ int vpu_wait_interrupt(vpudrv_intr_info_t *p_intr_info)
 	VCODEC_DBG_TRACE("coreIdx = %d, s_interrupt_flag = 0x%X\n",
 			info.coreIdx, pvctx->s_interrupt_flag);
 
-	ret = wait_event_timeout(
+	ret = wait_event_interruptible_timeout(
 		pvctx->s_interrupt_wait_q, pvctx->s_interrupt_flag != 0,
 		msecs_to_jiffies(info.timeout));
 	if (!ret) {

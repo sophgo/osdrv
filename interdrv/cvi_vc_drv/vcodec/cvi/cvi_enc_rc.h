@@ -12,6 +12,7 @@ extern "C" {
 #define AVBR_MAX_BITRATE_WIN 20
 #define MOT_LV_DEFAULT 32
 #define MOT_LOWER_THR 64
+#define MAX_MOTION_CHECK_WIN 5
 
 typedef enum { STEADY = 0, UNSTABLE = 1, RECOVERY = 2 } eRcState;
 
@@ -82,6 +83,9 @@ typedef struct _stRcInfo_ {
 	stRcKernelPicOut rcPicOut;
 	bool cviRcEn;
 	bool svcEnable;
+
+	int lastMotionLevels[MAX_MOTION_CHECK_WIN];
+	int resetCtuLevelRC;
 } stRcInfo;
 
 #ifdef __cplusplus

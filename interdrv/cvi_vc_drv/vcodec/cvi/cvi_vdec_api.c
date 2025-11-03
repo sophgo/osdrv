@@ -426,9 +426,9 @@ int cviVDecGetFrame(void *pHandle, cviDispFrameCfg *pdfc)
 	pdfc->cbcrInterleave = fb->cbcrInterleave;
 	pdfc->nv21 = fb->nv21;
 	pdfc->indexFrameDisplay = pdoi->indexFrameDisplay;
-	CVI_VC_DISP("width = %d, height = %d\n", fb->width, fb->height);
 	pdfc->decHwTime = pdoi->decHwTime;
 
+	CVI_VC_DISP("width = %d, height = %d, HwDecTime = %llu us\n", fb->width, fb->height, pdoi->decHwTime);
 	return 0;
 }
 

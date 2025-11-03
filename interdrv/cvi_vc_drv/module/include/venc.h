@@ -107,6 +107,7 @@ typedef struct _venc_chn_context {
 	venc_chn_vars *pChnVars;
 	struct cvi_venc_vb_ctx *pVbCtx;
 	struct mutex chnMutex;
+	struct mutex chnStatusMutex;
 	struct mutex chnShmMutex;
 	CVI_BOOL bSbSkipFrm;
 	VENC_SBM_STATE sbm_state;
@@ -123,7 +124,7 @@ typedef struct _venc_chn_context {
 typedef struct _venc_sbm_context {
 	CVI_U32 SbmNum;
 	VENC_CHN CurrSbmChn;
-	struct mutex SbmMutex;
+	// struct mutex SbmMutex;
 	struct task_struct *pSBMSendFrameThread;
 } venc_sbm_context;
 

@@ -11,6 +11,7 @@
 #include "module_common.h"
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/delay.h>
 
 #include "cvi_vcodec_version.h"
 #include "main_helper.h"
@@ -166,11 +167,11 @@ static int cviVEncSbGetSkipFrmStatus(stTestEncoder *pTestEnc, void *arg);
 #if CFG_MEM
 static int checkDramCfg(DRAM_CFG *pDramCfg);
 #endif
-static int pfnWaitEncodeDone(void *param);
 static CVI_S32 cviSetSbSetting(cviVencSbSetting *pstSbSetting);
 
 extern void cvi_VENC_SBM_IrqEnable(void);
 
+extern wait_queue_head_t tWaitQueue[];
 
 void cviVcodecGetVersion(void)
 {
@@ -1022,22 +1023,8 @@ static int initEncOneFrame(stTestEncoder *pTestEnc, TestEncConfig *pEncConfig)
 				  NULL, 0, 0);
 	pTestEnc->bIsEncoderInited = TRUE;
 
-	if (pEncCfg->bIsoSendFrmEn && !pTestEnc->tPthreadId) {
-		struct sched_param param = {
-			.sched_priority = 95,
-		};
-
-		init_completion(&pTestEnc->semSendEncCmd);
+	if (pEncCfg->bIsoSendFrmEn) {
 		init_completion(&pTestEnc->semGetStreamCmd);
-		init_completion(&pTestEnc->semEncDoneCmd);
-		pTestEnc->tPthreadId = kthread_run(pfnWaitEncodeDone,
-						 (CVI_VOID *)pTestEnc,
-						 "cvitask_vc_wt%d", pEncCfg->s32ChnNum);
-		if (IS_ERR(pTestEnc->tPthreadId)) {
-			CVI_VC_ERR("WaitEncodeDone task error!\n");
-			return RETCODE_FAILURE;
-		}
-		sched_setscheduler(pTestEnc->tPthreadId, SCHED_FIFO, &param);
 	}
 
 	return INIT_TEST_ENCODER_OK;
@@ -1169,7 +1156,6 @@ static int cviEncodeOneFrame(stTestEncoder *pTestEnc)
 	feederYuvaddr *pYuvAddr;
 	CodecInst *pCodecInst;
 
-
 	CVI_VC_FLOW("frameIdx = %d\n", pTestEnc->frameIdx);
 
 #if 0
@@ -1229,6 +1215,11 @@ RETRY:
 		CVI_VENC_BS("restore originBitrate:%d\n", pEncOP->bitRate);
 	}
 #endif
+
+	if (pTestEnc->bSbmSkipFrm == TRUE) {
+		pEncParam->idr_request = TRUE;
+		pTestEnc->bSbmSkipFrm = FALSE;
+	}
 
 	cviPicParamChangeCtrl(pTestEnc->handle, &pTestEnc->encConfig, pEncOP,
 			      pEncParam, pTestEnc->frameIdx);
@@ -1602,6 +1593,48 @@ static BOOL cviCheckIdrValid(EncOpenParam *pEncOP, Uint32 frameIdx)
 			     FALSE;
 }
 
+static void cviSbmForcePopFrame(EncOpenParam *pEncOP, Uint32 frameIdx)
+{
+	int reg = 0;
+	int line_cnt = 0;
+	int origin_slice_cnt = 0, push_slice_cnt = 0, pop_slice_cnt = 0;
+
+	// get original slice count
+	reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x00);
+	line_cnt = (reg & 0x20000) ? 128 : 64;
+	origin_slice_cnt = (pEncOP->picHeight / line_cnt) + ((pEncOP->picHeight % line_cnt) ? 1 : 0);
+
+	reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x14);
+	reg |= 0x10;  // reg_pri_pop_ow enable
+	cvi_vc_drv_write_vc_reg(REG_SBM, 0x14, reg);
+
+	do {
+		reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x94);
+		push_slice_cnt = (reg & 0x3F);
+		pop_slice_cnt  = (reg >> 16) & 0x3F;
+
+		// Push slice cnt will automatically flip to 0, pop slice cnt will not automatically flip
+		if ((pop_slice_cnt != origin_slice_cnt) &&
+				(pop_slice_cnt < push_slice_cnt || (push_slice_cnt == 0 && pop_slice_cnt != 0))) {
+			reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x14);
+			reg |= 0x40;  // reg_pri_push_ow bit6
+			cvi_vc_drv_write_vc_reg(REG_SBM, 0x14, reg);
+			continue;
+		}
+
+		usleep_range(500, 1000);
+	} while (pop_slice_cnt != origin_slice_cnt);
+
+	reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x14);
+	reg &= ~(0x10);  // reg_pri_pop_ow disable
+	cvi_vc_drv_write_vc_reg(REG_SBM, 0x14, reg);
+
+	CVI_VC_INFO("skip frame idx:%d, pop_slice_cnt:%d, reg_94:0x%x, reg_90:0x%x, reg_80:0x%x, reg_88:0x%x\n"
+		, frameIdx, pop_slice_cnt, cvi_vc_drv_read_vc_reg(REG_SBM, 0x94), cvi_vc_drv_read_vc_reg(REG_SBM, 0x90)
+		, cvi_vc_drv_read_vc_reg(REG_SBM, 0x80), cvi_vc_drv_read_vc_reg(REG_SBM, 0x88));
+
+}
+
 static void cviForcePicTypeCtrl(EncOpenParam *pEncOP, EncParam *encParam,
 				EncInfo *pEncInfo, BOOL force_skip_frame, Uint32 frameIdx)
 {
@@ -1646,6 +1679,18 @@ static void cviForcePicTypeCtrl(EncOpenParam *pEncOP, EncParam *encParam,
 		encParam->skipPicture = 1;
 		CVI_VC_TRACE("force skip ack\n");
 	}
+
+	// for h264 skip frame when sbm is enabled
+	if (pEncInfo->bSbmEn && encParam->skipPicture && (pEncOP->bitstreamFormat == STD_AVC)) {
+		// sanity check
+		if (pEncOP->addrRemapEn == 1) {
+			CVI_VC_WARN("addrRemapEn confict with sbm avc skip\n");
+			encParam->skipPicture = 0;
+			return;
+		}
+
+		cviSbmForcePopFrame(pEncOP, frameIdx);
+	}
 }
 
 static void cviPicParamChangeCtrl(EncHandle handle, TestEncConfig *pEncConfig,
@@ -1659,7 +1704,7 @@ static void cviPicParamChangeCtrl(EncHandle handle, TestEncConfig *pEncConfig,
 		     frameIdx);
 	if (pRcInfo->rcMode == RC_MODE_AVBR) {
 		// avbr bitrate change period check
-		if (cviEnc_Avbr_PicCtrl(pRcInfo, pEncOP, frameIdx)) {
+		if (cviEnc_Avbr_PicCtrl(pRcInfo, pEncOP, frameIdx) || pRcInfo->resetCtuLevelRC == 1) {
 			cviEncRc_SetParam(&handle->rcInfo, pEncOP, E_BITRATE);
 			rateChangeCmd = TRUE;
 		}
@@ -1747,6 +1792,7 @@ static void cviPicParamChangeCtrl(EncHandle handle, TestEncConfig *pEncConfig,
 	} while (0);
 
 	encParam->idr_request = 0;
+	pRcInfo->resetCtuLevelRC = 0;
 
 	CVI_VC_TRACE("skipPicture = %d\n", encParam->skipPicture);
 
@@ -2965,9 +3011,6 @@ int cviVEncEncOnePic(void *handle, cviEncOnePicCfg *pPicCfg, int s32MilliSec)
 		CVI_VC_INFO("cviEncodeOneFrame, ret = %d\n", ret);
 		cviVPU_ChangeState(pTestEnc->handle);
 		LeaveVcodecLock(pTestEnc->coreIdx);
-	} else if (ret == RETCODE_SUCCESS && pTestEnc->encConfig.bIsoSendFrmEn &&
-		!pTestEnc->handle->rcInfo.isReEncodeIdr) {
-		complete(&pTestEnc->semSendEncCmd);
 	}
 
 	return ret;
@@ -2977,11 +3020,17 @@ int cviVEncGetStream(void *handle, cviVEncStreamInfo *pStreamInfo,
 		     int s32MilliSec)
 {
 	stTestEncoder *pTestEnc = (stTestEncoder *)handle;
+	CodecInst *pCodecInst;
 	int ret = RETCODE_SUCCESS;
 
 	CVI_VC_IF("\n");
 
-	if (pTestEnc->encConfig.bIsoSendFrmEn) {
+	pCodecInst = pTestEnc->handle;
+	if (pCodecInst == NULL || pCodecInst->CodecInfo == NULL)
+		return -1;
+
+	if (pCodecInst->CodecInfo->encInfo.bAsyncEn
+		|| pCodecInst->CodecInfo->encInfo.bSbmEn) {
 wait:
 		ret = wait_for_completion_timeout(&pTestEnc->semGetStreamCmd,
 				usecs_to_jiffies(s32MilliSec * 1000));
@@ -2991,6 +3040,7 @@ wait:
 		}
 		if (0 == pTestEnc->streamPack.totalPacks)
 			goto wait;
+
 		memcpy(pStreamInfo, &pTestEnc->tStreamInfo, sizeof(cviVEncStreamInfo));
 		return RETCODE_SUCCESS;
 	}
@@ -3061,7 +3111,7 @@ static int cviGetOneStream(void *handle, cviVEncStreamInfo *pStreamInfo,
 	pStreamInfo->u32MeanQp = pOutputInfo->u32MeanQp;
 
 #ifdef DROP_FRAME
-	if (pTestEnc->bDrop) {
+	if (pTestEnc->bDrop || pTestEnc->bSbmSkipFrm) {
 		CVI_VENC_BS("Drop isIdr:%d\n", pTestEnc->encParam.is_idr_frame);
 
 		// if drop IDR, need clear vps sps pps header
@@ -3123,7 +3173,6 @@ ERR_CVI_VENC_GET_STREAM:
 	if (pCodecInst->CodecInfo->encInfo.bSbmEn == CVI_TRUE) {
 		cvi_VENC_SBM_IrqEnable();
 	}
-
 	return ret;
 }
 
@@ -3981,6 +4030,22 @@ static CVI_S32 cviSetSbSetting(cviVencSbSetting *pstSbSetting)
 	cvi_vc_drv_write_vc_reg(REG_SBM, 0x00, reg);
 	CVI_VC_INFO("VC_REG_BANK_SBM 0x00 = 0x%x\n", reg);
 
+	if (pstSbSetting->sb_mode == 3) { // SW mode
+		// Set Register 0x0c, get next frame wptr from sbm reg 0x80
+		int wptr = 0;
+		reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x80);
+		if (pstSbSetting->codec & 0x1)
+			wptr = (reg >> 0) & 0x1F;
+		else if (pstSbSetting->codec & 0x2)
+			wptr = (reg >> 16) & 0x1F;
+
+		reg = cvi_vc_drv_read_vc_reg(REG_SBM, 0x0C);
+		reg = (reg & 0xFFFFFFE0) | wptr;
+
+		cvi_vc_drv_write_vc_reg(REG_SBM, 0x0C, reg);
+		CVI_VENC_INFO("VC_REG_BANK_SBM 0x0C = 0x%x\n", reg);
+	}
+
 	// pri interface
 	if ((pstSbSetting->sb_ybase != 0) && (pstSbSetting->sb_uvbase != 0)) {
 		// pri address setting /////////////////////////////////////////////
@@ -4611,14 +4676,25 @@ static int cviVEncSbGetSkipFrmStatus(stTestEncoder *pTestEnc, void *arg)
 
 static int cviVEncWaitEncodeDone(stTestEncoder *pTestEnc, void *arg)
 {
-
+	CodecInst *pCodecInst = pTestEnc->handle;
 	int ret = RETCODE_SUCCESS;
 
-	ret = wait_for_completion_timeout(&pTestEnc->semEncDoneCmd,
-				usecs_to_jiffies(2000 * 1000));
-	if (ret == 0) {
-		CVI_VC_WARN("get stream timeout!\n");
-		return RET_VCODEC_TIMEOUT;
+	UNUSED(arg);
+	pTestEnc->encConfig.cviEc.originPicType = PIC_TYPE_MAX;
+	CVI_VENC_DEBUG("get s chn:%d %llu\n", pCodecInst->s32ChnNum, pCodecInst->yuvCnt);
+	ret = cviGetOneStream(pTestEnc, &pTestEnc->tStreamInfo, TIME_BLOCK_MODE);
+	CVI_VENC_DEBUG("get s done chn:%d HwTime:%llu cnt:%llu ret:%d\n", pCodecInst->s32ChnNum,
+			pTestEnc->tStreamInfo.encHwTime, pCodecInst->yuvCnt++, ret);
+	if (ret == TE_ERR_ENC_IS_SUPER_FRAME) {
+		ret = cviProcessSuperFrame(pTestEnc, &pTestEnc->tStreamInfo, TIME_BLOCK_MODE);
+		complete(&pTestEnc->semGetStreamCmd);
+		wake_up(&tWaitQueue[pCodecInst->s32ChnNum]);
+	} else if (ret == RETCODE_SUCCESS) {
+		complete(&pTestEnc->semGetStreamCmd);
+		wake_up(&tWaitQueue[pCodecInst->s32ChnNum]);
+	} else {
+		CVI_VC_ERR("cviGetOneStream, ret = %d\n", ret);
+		return 0;
 	}
 
 	return 0;
@@ -5321,7 +5397,7 @@ static int cviVEncSetH265Dblk(stTestEncoder *pTestEnc, void *arg)
 
 int cviVEncDropFrame(stTestEncoder *pTestEnc, void *arg)
 {
-	pTestEnc->bDrop = TRUE;
+	pTestEnc->bSbmSkipFrm = TRUE;
 
 	return 0;
 }
@@ -5400,6 +5476,21 @@ int cviVEncShowRcRealInfo(stTestEncoder *pTestEnc, void *arg)
 	return 0;
 }
 
+static int cviVEncSetAsyncEnable(stTestEncoder *pTestEnc, void *arg)
+{
+	CodecInst *pCodecInst;
+
+	if (!pTestEnc)
+		return -1;
+
+	pCodecInst = pTestEnc->handle;
+	if (pCodecInst == NULL || pCodecInst->CodecInfo == NULL)
+		return -1;
+
+	pCodecInst->CodecInfo->encInfo.bAsyncEn = *(bool *)arg;
+
+	return 0;
+}
 typedef struct _CVI_VENC_IOCTL_OP_ {
 	int opNum;
 	int (*ioctlFunc)(stTestEncoder *pTestEnc, void *arg);
@@ -5456,6 +5547,7 @@ CVI_VENC_IOCTL_OP cviIoctlOp[] = {
 	{ CVI_H26X_OP_SET_ENABLE_SVC, cviVEncSvcEnable},
 	{ CVI_H26X_OP_SET_SVC_PARAM, cviVEncSetSvcParam},
 	{ CVI_H26X_OP_GET_RC_REAL_INFO, cviVEncShowRcRealInfo},
+	{ CVI_H26X_OP_SET_ASYNC_ENABLE, cviVEncSetAsyncEnable},
 };
 
 int cviVEncIoctl(void *handle, int op, void *arg)
@@ -5542,44 +5634,6 @@ static int initMcuEnv(TestEncConfig *pEncConfig)
 #endif
 
 	return INIT_TEST_ENCODER_OK;
-}
-
-extern wait_queue_head_t tWaitQueue[];
-
-static int pfnWaitEncodeDone(void *param)
-{
-	int ret;
-	stTestEncoder *pTestEnc = (stTestEncoder *)param;
-	CodecInst *pCodecInst = pTestEnc->handle;
-	pTestEnc->tPthreadRunFlag = CVI_TRUE;
-
-	while (!kthread_should_stop()) {
-		// wait for enc cmd trigger
-		wait_for_completion(&pTestEnc->semSendEncCmd);
-
-		if (!pTestEnc->tPthreadRunFlag || kthread_should_stop())
-			break;
-		pTestEnc->encConfig.cviEc.originPicType = PIC_TYPE_MAX;
-		CVI_VENC_DEBUG("get s chn:%d %llu\n", pCodecInst->s32ChnNum, pCodecInst->yuvCnt);
-		ret = cviGetOneStream(pTestEnc, &pTestEnc->tStreamInfo, TIME_BLOCK_MODE);
-		CVI_VENC_DEBUG("get s done chn:%d HwTime:%llu cnt:%llu ret:%d\n", pCodecInst->s32ChnNum,
-				pTestEnc->tStreamInfo.encHwTime, pCodecInst->yuvCnt, ret);
-		if (ret == TE_ERR_ENC_IS_SUPER_FRAME) {
-			ret = cviProcessSuperFrame(pTestEnc, &pTestEnc->tStreamInfo, TIME_BLOCK_MODE);
-			complete(&pTestEnc->semGetStreamCmd);
-		} else if (ret == RETCODE_SUCCESS) {
-			complete(&pTestEnc->semEncDoneCmd);
-			complete(&pTestEnc->semGetStreamCmd);
-			wake_up(&tWaitQueue[pCodecInst->s32ChnNum]);
-		} else {
-			CVI_VC_ERR("cviGetOneStream, ret = %d\n", ret);
-			return 0;
-		}
-		set_current_state(TASK_INTERRUPTIBLE);
-		cond_resched();
-	}
-
-	return 0;
 }
 
 void *cviVEncOpen(cviInitEncConfig *pInitEncCfg)
@@ -5672,13 +5726,6 @@ int cviVEncClose(void *handle)
 		}
 	}
 	pTestEnc->encConfig.userDataBufSize = 0;
-
-	if (pTestEnc->tPthreadId) {
-		pTestEnc->tPthreadRunFlag = CVI_FALSE;
-		complete(&pTestEnc->semSendEncCmd);
-		kthread_stop(pTestEnc->tPthreadId);
-		pTestEnc->tPthreadId = NULL;
-	}
 
 	LeaveVcodecLock(pTestEnc->coreIdx);
 

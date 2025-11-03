@@ -21,14 +21,17 @@ extern "C" {
                         || ((x) == E_CHIPID_CV1825A) || ((x) == E_CHIPID_CV1826A) \
                         || ((x) == E_CHIPID_CV1810C) || ((x) == E_CHIPID_CV1811C) \
                         || ((x) == E_CHIPID_CV1812C) || ((x) == E_CHIPID_CV1811H) \
-                        || ((x) == E_CHIPID_CV1812H) || ((x) == E_CHIPID_CV1813H))
+                        || ((x) == E_CHIPID_CV1812H) || ((x) == E_CHIPID_CV1813H) \
+                        || ((x) == E_CHIPID_CV1810H))
 
 #define IS_CHIP_CV180X(x) (((x) == E_CHIPID_CV1800B) || ((x) == E_CHIPID_CV1801B) \
                             || ((x) == E_CHIPID_CV1800C) || ((x) == E_CHIPID_CV1801C))
 
 #define IS_CHIP_PKG_TYPE_QFN(x) (((x) == E_CHIPID_CV1820A) || ((x) == E_CHIPID_CV1821A) \
                         || ((x) == E_CHIPID_CV1822A) || ((x) == E_CHIPID_CV1810C) \
-                        || ((x) == E_CHIPID_CV1811C) || ((x) == E_CHIPID_CV1812C))
+                        || ((x) == E_CHIPID_CV1811C) || ((x) == E_CHIPID_CV1812C) \
+                        || ((x) == E_CHIPID_CV1800B) || ((x) == E_CHIPID_CV1801B) \
+                        || ((x) == E_CHIPID_CV1800C) || ((x) == E_CHIPID_CV1801C))
 
 #if defined(__CV181X__)
 #include "cvi_cv181x_defines.h"

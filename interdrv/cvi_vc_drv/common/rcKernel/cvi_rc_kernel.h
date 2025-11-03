@@ -197,7 +197,7 @@ typedef struct _stRcKernelInfo_ {
 	int gopPicLeft;
 	int picTargetBit;
 	int bitError;
-	int bitreset_cnt;
+	int bitCompensationP;
 	int lastIPicBit;
 	int maxQp;
 	int minQp;
@@ -209,7 +209,6 @@ typedef struct _stRcKernelInfo_ {
 	int isLastPicI;
 	RC_Float pPicQpAccum;
 	int pPicCnt;
-	RC_Float avgGopLambda;
 	int predictPicAvgBit;
 	int bitrateChange;
 	int rcGopPicWeight;
@@ -218,6 +217,7 @@ typedef struct _stRcKernelInfo_ {
 	int rcGop2ndQp;
 	int rcGop1stBitrate;
 	int rcGop2ndBitrate;
+	int lastPredictIQp;
 	int lastPredictPQp;
 	int pPredictPicQpAccum;
 	int deltaPreditQp;
@@ -227,6 +227,8 @@ typedef struct _stRcKernelInfo_ {
 	int lastGopBitError;
 	int lastRcGopBit;
 	int lastRcGopSize;
+	int requestIdr;
+	int bitCompensationIdr;
 } stRcKernelInfo;
 
 void cviRcKernel_init(stRcKernelInfo *info, stRcKernelCfg *cfg);

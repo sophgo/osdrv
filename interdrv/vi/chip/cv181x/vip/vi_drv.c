@@ -1488,7 +1488,7 @@ void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 	} else if (_is_be_post_online(ctx)) {
 		if (ctx->isp_pipe_cfg[raw_num].is_yuv_bypass_path) { //YUV sensor
 			scene_ctrl.bits.RAW2YUV_422_ENABLE = 1;
-			scene_ctrl.bits.DCI_RGB0YUV1 = 1;
+			//scene_ctrl.bits.DCI_RGB0YUV1 = 1;
 			scene_ctrl.bits.HDR_ENABLE = 0;
 
 			scene_ctrl.bits.BE2RAW_L_ENABLE = 0;
@@ -1497,7 +1497,7 @@ void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 			scene_ctrl.bits.BE_RDMA_S_ENABLE = 0;
 		} else { //RGB sensor
 			scene_ctrl.bits.RAW2YUV_422_ENABLE = 0;
-			scene_ctrl.bits.DCI_RGB0YUV1 = 0;
+			//scene_ctrl.bits.DCI_RGB0YUV1 = 0;
 			scene_ctrl.bits.HDR_ENABLE = ctx->isp_pipe_cfg[raw_num].is_hdr_on;
 
 			scene_ctrl.bits.BE2RAW_L_ENABLE = 1;
@@ -1547,6 +1547,7 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 	uintptr_t lsc = ctx->phys_regs[ISP_BLK_ID_LSC];
 	uintptr_t hist_v = ctx->phys_regs[ISP_BLK_ID_HIST_V];
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_HDRLTM];
+	uintptr_t fusion = ctx->phys_regs[ISP_BLK_ID_HDRFUSION];
 #if (defined(__CV181X__) && !defined(PORTING_TEST))
 	union REG_RAW_TOP_PATGEN1 patgen1;
 #endif
@@ -1559,8 +1560,13 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 		ISP_WR_BITS(hist_v, REG_ISP_HIST_EDGE_V_T, DMI_ENABLE, DMI_ENABLE, 0);
 
 		//Disable ltm dma
+		ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_ENABLE, 0);
 		ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_DARK_ENH_ENABLE, 0);
 		ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_BRIT_ENH_ENABLE, 0);
+		ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, FORCE_DMA_DISABLE, 3);
+		//fusion
+		ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_ENABLE, 0);
+		ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_MC_ENABLE, 0);
 
 		ISP_WR_BITS(rawtop, REG_RAW_TOP_T, RDMI_ENABLE, CH_NUM, 0);
 		ISP_WR_BITS(rawtop, REG_RAW_TOP_T, RDMI_ENABLE, RDMI_EN, 1);
@@ -1600,6 +1606,16 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_n
 				ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_MODE, 0);
 				ISP_WR_BITS(rawtop, REG_RAW_TOP_T, DPCM_MODE, DPCM_XSTR, 0);
 			}
+		}
+
+		if (ctx->isp_pipe_cfg[raw_num].is_hdr_on) {
+			ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_ENABLE, 1);
+			ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_DARK_ENH_ENABLE, 1);
+			ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, LTM_BRIT_ENH_ENABLE, 1);
+			ISP_WR_BITS(ltm, REG_LTM_T, REG_H00, FORCE_DMA_DISABLE, 0);
+			ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_ENABLE, 1);
+			ISP_WR_BITS(fusion, REG_FUSION_T, FS_CTRL_0, FS_MC_ENABLE, 1);
+			ISP_WR_BITS(fusion, REG_FUSION_T, FS_SE_GAIN, FS_OUT_SEL, ISP_FS_OUT_FS);
 		}
 
 		ISP_WO_BITS(rawtop, REG_RAW_TOP_T, CTRL, LS_CROP_DST_SEL, 0);
@@ -1757,6 +1773,115 @@ void _ispblk_lsc_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
 	ISP_WR_REG(lsc, REG_ISP_LSC_T, LSC_INITY0, reg_lsc_imgy0);
 }
 
+void _ispblk_ldci_cfg_update(struct isp_ctx *ctx)
+{
+	uintptr_t ldci = ctx->phys_regs[ISP_BLK_ID_LDCI];
+	union REG_ISP_LDCI_BLK_SIZE_X          blk_size_x;
+	union REG_ISP_LDCI_BLK_SIZE_X1         blk_size_x1;
+	union REG_ISP_LDCI_SUBBLK_SIZE_X       subblk_size_x;
+	union REG_ISP_LDCI_SUBBLK_SIZE_X1      subblk_size_x1;
+	union REG_ISP_LDCI_INTERP_NORM_LR      interp_norm_lr;
+	union REG_ISP_LDCI_INTERP_NORM_LR1     interp_norm_lr1;
+	union REG_ISP_LDCI_SUB_INTERP_NORM_LR  sub_interp_norm_lr;
+	union REG_ISP_LDCI_SUB_INTERP_NORM_LR1 sub_interp_norm_lr1;
+	union REG_ISP_LDCI_MEAN_NORM_X         mean_norm_x;
+	union REG_ISP_LDCI_VAR_NORM_Y          var_norm_y;
+
+	uint16_t BlockSizeX, BlockSizeY, SubBlockSizeX, SubBlockSizeY;
+	uint16_t BlockSizeX1, BlockSizeY1, SubBlockSizeX1, SubBlockSizeY1;
+	uint16_t line_mean_num, line_var_num;
+	uint16_t dW, dH;
+
+	uint16_t width = ctx->img_width;
+	uint16_t height = ctx->img_height;
+
+	if ((width % 16 == 0) && (height % 12 == 0))
+		ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE, LDCI_IMAGE_SIZE_DIV_BY_16X12, 1);
+	else
+		ISP_WR_BITS(ldci, REG_ISP_LDCI_T, LDCI_ENABLE, LDCI_IMAGE_SIZE_DIV_BY_16X12, 0);
+
+	BlockSizeX = (width % 16 == 0) ? (width / 16) : (width / 16) + 1; // Width of one block
+	BlockSizeY = (height % 12 == 0) ? (height / 12) : (height / 12) + 1; // Height of one block
+	SubBlockSizeX = (BlockSizeX >> 1);
+	SubBlockSizeY = (BlockSizeY >> 1);
+	line_mean_num = (BlockSizeY / 2) + (BlockSizeY % 2);
+	line_var_num  = (BlockSizeY / 2);
+
+	if (width % 16 == 0) {
+		BlockSizeX1 = BlockSizeX;
+		SubBlockSizeX1 = width - BlockSizeX * (16 - 1) - SubBlockSizeX;
+	} else {
+		dW = BlockSizeX * 16 - width;
+		BlockSizeX1 = 2 * BlockSizeX - SubBlockSizeX - dW;
+		SubBlockSizeX1 = 0;
+	}
+
+	if (height % 12 == 0) {
+		BlockSizeY1 = BlockSizeY;
+		SubBlockSizeY1 = height - BlockSizeY * (12 - 1) - SubBlockSizeY;
+	} else {
+		dH = BlockSizeY * 12 - height;
+		BlockSizeY1 = 2 * BlockSizeY - SubBlockSizeY - dH;
+		SubBlockSizeY1 = 0;
+	}
+
+	blk_size_x.raw = 0;
+	blk_size_x.bits.LDCI_BLK_SIZE_X = BlockSizeX;
+	blk_size_x.bits.LDCI_BLK_SIZE_Y = BlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X, blk_size_x.raw);
+
+	BlockSizeX1 = BlockSizeX;
+	BlockSizeY1 = BlockSizeY;
+
+	blk_size_x1.raw = 0;
+	blk_size_x1.bits.LDCI_BLK_SIZE_X1 = BlockSizeX1;
+	blk_size_x1.bits.LDCI_BLK_SIZE_Y1 = BlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_BLK_SIZE_X1, blk_size_x1.raw);
+
+	subblk_size_x.raw = 0;
+	subblk_size_x.bits.LDCI_SUBBLK_SIZE_X = SubBlockSizeX;
+	subblk_size_x.bits.LDCI_SUBBLK_SIZE_Y = SubBlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X, subblk_size_x.raw);
+
+	SubBlockSizeX1 = SubBlockSizeX;
+	SubBlockSizeY1 = SubBlockSizeY;
+
+	subblk_size_x1.raw = 0;
+	subblk_size_x1.bits.LDCI_SUBBLK_SIZE_X1 = SubBlockSizeX1;
+	subblk_size_x1.bits.LDCI_SUBBLK_SIZE_Y1 = SubBlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUBBLK_SIZE_X1, subblk_size_x1.raw);
+
+	interp_norm_lr.raw = 0;
+	interp_norm_lr.bits.LDCI_INTERP_NORM_LR = (BlockSizeX == 0) ? 0 : (1 << 16) / BlockSizeX;
+	interp_norm_lr.bits.LDCI_INTERP_NORM_UD = (BlockSizeY == 0) ? 0 : (1 << 16) / BlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR, interp_norm_lr.raw);
+
+	interp_norm_lr1.raw = 0;
+	interp_norm_lr1.bits.LDCI_INTERP_NORM_LR1 = (BlockSizeX1 == 0) ? 0 : (1 << 16) / BlockSizeX1;
+	interp_norm_lr1.bits.LDCI_INTERP_NORM_UD1 = (BlockSizeY1 == 0) ? 0 : (1 << 16) / BlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_INTERP_NORM_LR1, interp_norm_lr1.raw);
+
+	sub_interp_norm_lr.raw = 0;
+	sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_LR = (SubBlockSizeX == 0) ? 0 : (1 << 16) / SubBlockSizeX;
+	sub_interp_norm_lr.bits.LDCI_SUB_INTERP_NORM_UD = (SubBlockSizeY == 0) ? 0 : (1 << 16) / SubBlockSizeY;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR, sub_interp_norm_lr.raw);
+
+	sub_interp_norm_lr1.raw = 0;
+	sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_LR1 = (SubBlockSizeX1 == 0) ? 0 : (1 << 16) / SubBlockSizeX1;
+	sub_interp_norm_lr1.bits.LDCI_SUB_INTERP_NORM_UD1 = (SubBlockSizeY1 == 0) ? 0 : (1 << 16) / SubBlockSizeY1;
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_SUB_INTERP_NORM_LR1, sub_interp_norm_lr1.raw);
+
+	mean_norm_x.raw = 0;
+	mean_norm_x.bits.LDCI_MEAN_NORM_X = (1 << 14) / MAX(BlockSizeX, 1);
+	mean_norm_x.bits.LDCI_MEAN_NORM_Y = (1 << 13) / MAX(line_mean_num, 1);
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_MEAN_NORM_X, mean_norm_x.raw);
+
+	var_norm_y.raw = 0;
+	var_norm_y.bits.LDCI_VAR_NORM_Y = (1 << 13) / MAX(line_var_num, 1);
+	ISP_WR_REG(ldci, REG_ISP_LDCI_T, LDCI_VAR_NORM_Y, var_norm_y.raw);
+
+}
+
 void ispblk_post_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
 {
 	ispblk_raw_rdma_ctrl_config(ctx, raw_num);
@@ -1764,6 +1889,7 @@ void ispblk_post_cfg_update(struct isp_ctx *ctx, const enum cvi_isp_raw raw_num)
 	ispblk_rgbtop_config(ctx, raw_num);
 	ispblk_yuvtop_config(ctx, raw_num);
 
+	_ispblk_ldci_cfg_update(ctx);
 	_ispblk_lsc_cfg_update(ctx, raw_num);
 
 	//LTM grid_size update

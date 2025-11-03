@@ -2263,7 +2263,8 @@ static void setHevcEncDefaultParam(EncOpenParam *pEncOP,
 
 	pHevcParam->transRate =
 		((pEncOP->rcMode != RC_MODE_CBR &&
-		  pEncOP->rcMode != RC_MODE_UBR) ||
+		  pEncOP->rcMode != RC_MODE_UBR &&
+		  pEncOP->rcMode != RC_MODE_AVBR) ||
 		 (pEncOP->statTime <= 0)) ?
 			      MAX_TRANSRATE :
 			      pEncOP->bitRate * pEncOP->statTime * 1000;

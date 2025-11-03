@@ -98,7 +98,8 @@ ccflags-y += -DUSE_KERNEL_MODE -DCVI_H26X_USE_ION_MEM -DCVI_JPG_USE_ION_MEM -DBI
 ccflags-y += -DENABLE_DEC
 ccflags-y += -Werror
 
-ccflags-y += -DVC_DEBUG_BASIC_LEVEL
+ccflags-y += -DLOG_WITH_FUNC_NAME
+# ccflags-y += -DVC_DEBUG_BASIC_LEVEL
 
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../sys/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../base/Module.symvers

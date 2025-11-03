@@ -1869,7 +1869,7 @@ CVI_S32 rgn_update_canvas(RGN_HANDLE Handle)
 {
 	struct cvi_rgn_ctx *ctx = NULL;
 	CVI_S32 ret = -EINVAL;
-	CVI_S32 s32Ret, i, j;
+	CVI_S32 s32Ret;
 	CVI_U32 proc_idx;
 
 	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
@@ -1888,6 +1888,9 @@ CVI_S32 rgn_update_canvas(RGN_HANDLE Handle)
 	}
 
 	if (ctx->stCanvasInfo[0].bCompressed) {
+#if !defined(CONFIG_SUSPEND)
+		CVI_S32 i, j;
+
 		if (ctx->stCanvasInfo[0].enOSDCompressMode == OSD_COMPRESS_MODE_HW) {
 			RGN_CANVAS_INFO_S *pstCanvasInfo = NULL;
 			RGN_CANVAS_CMPR_ATTR_S *pstCanvasCmprAttr = NULL, stCanvasCmprAttrTmp;
@@ -2012,6 +2015,7 @@ retry:
 					(((stCanvasCmprAttrTmp.u32Height - 1) << 15) & 0x7FFF8000);
 			}
 		}
+#endif
 		ctx->odec_data_valid = true;
 	}
 
@@ -2336,6 +2340,25 @@ static long _rgn_s_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 		}
 		break;
 
+		case RGN_SDK_SET_CMPR_SIZE: {
+			int cmpr_sz;
+			struct cvi_rgn_ctx *ctx = NULL;
+
+			if (!_rgn_hash_find(Handle, &ctx, false)) {
+				CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) is non-existent.\n", Handle);
+				return CVI_ERR_RGN_UNEXIST;
+			}
+			if ((copy_from_user(&cmpr_sz, p->ptr1, sizeof(CVI_U32)) != 0)) {
+				CVI_TRACE_RGN(RGN_ERR, "Region set compress size, copy_from_user failed.\n");
+				ret = -1;
+				break;
+			}
+
+			ctx->stCanvasInfo[ctx->canvas_idx].u32CompressedSize = cmpr_sz;
+			ret = 0;
+		}
+		break;
+
 		default:
 			break;
 		} //switch (sdk_id)
@@ -2391,6 +2414,18 @@ static long _rgn_g_ctrl(struct cvi_rgn_dev *rdev, struct rgn_ext_control *p)
 
 			if (copy_to_user(p->ptr1, &stCanvasInfo, sizeof(RGN_CANVAS_INFO_S)) != 0)
 				break;
+		}
+		break;
+
+		case RGN_SDK_GET_ION_LEN: {
+			struct cvi_rgn_ctx *ctx = NULL;
+
+			ret = CHECK_RGN_HANDLE(&ctx, Handle);
+			if (ret != 0)
+				break;
+			if (copy_to_user(p->ptr1, &ctx->ion_len, sizeof(CVI_U32)) != 0) {
+				break;
+			}
 		}
 		break;
 

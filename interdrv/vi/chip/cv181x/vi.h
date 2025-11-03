@@ -103,7 +103,6 @@ struct _membuf {
 
 struct isp_queue pre_out_queue[ISP_PRERAW_VIRT_MAX], pre_out_se_queue[ISP_PRERAW_VIRT_MAX],
 	bnr_ai_isp_in_q[ISP_PRERAW_VIRT_MAX][ISP_FE_CHN_MAX],
-	bnr_ai_isp_out_q[ISP_PRERAW_VIRT_MAX][ISP_FE_CHN_MAX],
 	post_in_queue, post_in_se_queue,
 	pre_be_in_q, pre_be_in_se_q[ISP_PRERAW_VIRT_MAX],
 	pre_be_out_q, pre_be_out_se_q;

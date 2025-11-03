@@ -840,7 +840,7 @@ static int cvi_mipi_tx_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#if defined(CONFIG_PM)
+#if 0
 static int vo_mipi_tx_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	//display off
@@ -882,10 +882,10 @@ static struct platform_driver cvi_mipi_tx_pdrv = {
 		.owner = THIS_MODULE,
 		.of_match_table = cvi_mipi_tx_dt_match,
 	},
-#if defined(CONFIG_PM)
-	.suspend = vo_mipi_tx_suspend,
-	.resume = vo_mipi_tx_resume,
-#endif
+// #if defined(CONFIG_PM)
+// 	.suspend = vo_mipi_tx_suspend,
+// 	.resume = vo_mipi_tx_resume,
+// #endif
 };
 
 static int __init mipi_tx_init(void)

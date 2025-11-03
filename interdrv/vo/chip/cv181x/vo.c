@@ -2357,6 +2357,9 @@ void vo_irq_handler(struct cvi_vo_dev *vdev, union sclr_intr intr_status)
 
 		++vdev->frame_number;
 
+		if (!gVoCtx->is_layer_enable[0])
+			return;
+
 		if (status.b.bw_fail)
 			CVI_TRACE_VO(CVI_DBG_ERR, " disp bw failed at frame#%d\n", vdev->frame_number);
 		if (status.b.osd_bw_fail)

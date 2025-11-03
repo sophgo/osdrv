@@ -109,15 +109,26 @@ void rcGopBitAlloc(stRcKernelInfo *info, int picIdx)
 	int picTargetBit = MAX(info->minPicBit, info->predictPicAvgBit + (info->bitError / smoothWinSize));
 	int gopSize;
 
-	// bitError reset
-	if (info->bitError >= 3 * info->targetBitrate / 2) {
-		CVI_VCOM_CVRC("reset bitError errBit:%d, targetBit:%d\n"
-				, info->bitError, info->targetBitrate);
-		info->bitError = 0;
-		info->bitreset_cnt++;
-		picTargetBit = MAX(info->minPicBit, info->predictPicAvgBit);
+	/**
+	 * bitError self-correction for P frame
+	 * If absolute bit error exceeds statBitrate:
+	 * - Reduces bit error by 10%
+	 * - Updates bit compensation counter for P frame
+	 * - Adjusts picture target bits with error smoothing
+	 * Otherwise resets bit compensation counter
+	 */
+	if (abs(info->bitError) >= info->statBitrate) {
+		CVI_VCOM_CVRC("reset bitError errBit:%d, statBitrate:%d\n"
+				, info->bitError, info->statBitrate);
+		info->bitError = info->bitError * 9 / 10 ;
+		if (info->bitError > 0)
+			info->bitCompensationP++;
+		else
+			info->bitCompensationP--;
+
+		picTargetBit = MAX(info->minPicBit, info->predictPicAvgBit + (info->bitError / smoothWinSize));
 	} else {
-		info->bitreset_cnt = 0;
+		info->bitCompensationP = 0;
 	}
 
 	// bitError sanity check
@@ -147,9 +158,10 @@ void rcGopBitAlloc(stRcKernelInfo *info, int picIdx)
 
 	info->bitrateChange = 0;
 
-	if (info->lastRcGopSize > 0 && (info->lastRcGopBit/info->lastRcGopSize >= 3*info->predictPicAvgBit)) {
-		info->sceneChange = 2;
-	}
+	// if (info->lastRcGopSize > 0 && (info->lastRcGopBit/info->lastRcGopSize >= 3*info->predictPicAvgBit)) {
+	// 	info->sceneChange = 2;
+	// }
+
 	info->lastRcGopSize = gopSize;
 	info->lastRcGopBit = 0;
 }
@@ -161,10 +173,10 @@ void rcGopBitReAlloc(stRcKernelInfo *info, int picIdx)
 	int picTargetBit = MAX(info->minPicBit, info->predictPicAvgBit + (info->bitError / smoothWinSize));
 
 	// bitError reset
-	if (info->bitError >= info->targetBitrate || info->bitError <= -info->targetBitrate) {
-		CVI_VCOM_CVRC("reset bitError errBit:%d, targetBit:%d\n"
-				, info->bitError, info->targetBitrate);
-		info->bitError = info->bitError/2;
+	if (abs(info->bitError) >= info->statBitrate) {
+		CVI_VCOM_CVRC("reset bitError errBit:%d, statBitrate:%d\n"
+				, info->bitError, info->statBitrate);
+		info->bitError = info->bitError * 9 / 10 ;
 		picTargetBit = MAX(info->minPicBit, info->predictPicAvgBit + (info->bitError / smoothWinSize));
 	}
 
@@ -182,8 +194,9 @@ int getAvgPFrameQp(stRcKernelInfo *info)
 {
 	if (info->pPicCnt > 0) {
 		return (((CVI_FLOAT_TO_INT(info->pPicQpAccum) + (info->pPicCnt>>1)) /  info->pPicCnt)) +
-			info->ipQpDelta;
+			info->ipQpDelta - info->bitCompensationIdr;
 	} else {
+		CVI_VCOM_CVRC("pPicCnt %d is not enough, lastPredictIQp:%d\n", info->pPicCnt, info->lastPredictIQp);
 		return info->lastLevelQp[0];
 	}
 }
@@ -372,10 +385,12 @@ int estPicQP(stRcKernelInfo *info, RC_Float lambda, int isIPic, int picIdx)
 
 void cviRcKernel_resetRcModel(stRcKernelInfo *info)
 {
-    info->bitError = 0;
 
+	// when requestIdr, only update I frame model parameters
 	cviRcKernel_setRCModelParam(info, g_rcALPHA_I, g_rcBETA_I, 0);
-	cviRcKernel_setRCModelParam(info, g_rcALPHA_P, g_rcBETA_P, 1);
+
+	info->requestIdr = 1;
+	CVI_VCOM_CVRC("cviRcKernel_resetRcModel, maxIPicBit:%d, biterr:%d, requestidr:%d\n", info->maxIPicBit, info->bitError, info->requestIdr);
 }
 
 
@@ -467,14 +482,13 @@ void cviRcKernel_setBitrateAndFrameRate(stRcKernelInfo *info, int targetBitrate,
 	}
 
 	if (updateRCModel) {
-		info->avgGopLambda = FLOAT_VAL_0;
 		info->rcGop1stQp = 0;
 		info->rcGop2ndQp = 0;
 		info->rcGop1stBitrate = 0;
 		info->rcGop2ndBitrate = 0;
-		info->bitrateChange = 1;
 		info->gopPicAvgBit = 0;
 	}
+	info->bitrateChange = 1;
 	info->bitError = 0;
 
 	CVI_VCOM_CVRC("targetBitrate = %d, framerate = %d, statFrameNum = %d\n",
@@ -572,7 +586,6 @@ void cviRcKernel_init(stRcKernelInfo *info, stRcKernelCfg *cfg)
 	info->lastPicLambda = FLOAT_VAL_minus_1;
 	info->lastLevelQp[0] = info->lastLevelQp[1] = -1;
 	info->lastPicQp = -1;
-	info->avgGopLambda = FLOAT_VAL_0;
 	info->predictPicAvgBit = 0;
 	info->bitrateChange = 0;
 	info->rcGopPicWeight = cfg->rcGopPicWeight;
@@ -586,6 +599,9 @@ void cviRcKernel_init(stRcKernelInfo *info, stRcKernelCfg *cfg)
 	info->lastGopBitError = 0;
 	info->lastRcGopBit = 0;
 	info->lastRcGopSize = 0;
+	info->lastPredictIQp = 0;
+	info->requestIdr = 0;
+	info->bitCompensationIdr = 0;
 
 	cviRcKernel_setMinMaxQp(info, cfg->minIQp, cfg->maxIQp, 1);
 	cviRcKernel_setMinMaxQp(info, cfg->minQp, cfg->maxQp, 0);
@@ -618,8 +634,8 @@ void cviRcKernel_init(stRcKernelInfo *info, stRcKernelCfg *cfg)
 
 void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int isIPic, int picIdx)
 {
-	int qp = info->firstFrmstartQp;
-	int avgGopQp = qp;	// for I frame, Refer to the qp average of the previous P frames
+	int qp;
+	int avgGopQp;	// for I frame, Refer to the qp average of the previous P frames
 	int picTargetBit;
 	RC_Float lambda;
 	int targetBitByModel;
@@ -627,9 +643,19 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 	RC_Float rcGop1stLambda = FLOAT_VAL_0;
 	RC_Float rcGop2ndLambda = FLOAT_VAL_0;
 
+	// sanity check
+	if (info == NULL || out == NULL) {
+		CVI_VCOM_ERR("null param\n");
+		return;
+	}
+
 	CVI_VCOM_TRACE("isIPic = %d, intraPeriod = %d, isLastPicI = %d, rcGopSize = %d\n",
 			isIPic, info->intraPeriod, info->isLastPicI, info->rcGopSize);
+
 	info->isCurPicI = isIPic;
+
+	qp = info->firstFrmstartQp;
+	avgGopQp = qp;
 
 	if (isIPic)
 		info->rcGopidx = 0;
@@ -639,6 +665,18 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 	if ((isIPic && info->intraPeriod != 1) || info->isFirstPic == 1) {
 		if (info->isFirstPic == 0) {
 			avgGopQp = getAvgPFrameQp(info);
+
+			// when requestIdr, use lastPredictIQp and related parameters
+			if (info->requestIdr == 1) {
+				out->qp = info->lastPredictIQp;
+				out->lambda = QpToLambda(INT_TO_CVI_FLOAT(out->qp));
+				out->targetBit = estPicBitByModel(info, out->lambda, isIPic);
+				out->targetBit = CLIP(info->minIPicBit, info->maxIPicBit, out->targetBit);
+				out->targetBit = MAX(info->minPicBit, out->targetBit + (info->bitError / info->statTime));
+
+				CVI_VCOM_CVRC("request I frame: %d, qp = %d, targetBit = %d\n", picIdx, out->qp, out->targetBit);
+				return ;
+			}
 		}
 		picTargetBit = rcIPicBitAlloc(info, avgGopQp);
 	} else {
@@ -689,11 +727,11 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 		}
 	}
 
-	if (info->bitreset_cnt) {
+	if (!isIPic && info->bitCompensationP) {
 		int maxQp = (info->isCurPicI) ? info->maxIQp : info->maxQp;
 		int minQp = (info->isCurPicI) ? info->minIQp : info->minQp;
 
-		qp -= info->bitreset_cnt;
+		qp -= info->bitCompensationP;
 		qp = CLIP(minQp, maxQp, qp);
 	}
 
@@ -715,14 +753,6 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 		info->sceneChange = 0;
 	}
 
-	// if (isIPic == 0 && CVI_FLOAT_GT(info->avgGopLambda, FLOAT_VAL_0)) {
-	// 	lambda = CVI_FLOAT_DIV(CVI_FLOAT_ADD(info->avgGopLambda, lambda), FLOAT_VAL_2);
-	// }
-
-	// if ((info->isLastPicI == 1) && (info->rcGopSize > 1)) {
-	// 	info->avgGopLambda = lambda;
-	// }
-
 	if (vcom_mask & CVI_VCOM_MASK_DBG) {
 		CVI_VCOM_FLOAT("picTargetBit = %d, lambda = %f, qp = %d\n",
 				picTargetBit, getFloat(lambda), qp);
@@ -731,11 +761,6 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 	// re-allocate picture target bitrate
 	targetBitByModel = estPicBitByModel(info, lambda, isIPic);
 	info->picTargetBit = (picTargetBit + targetBitByModel) / 2;
-
-	// clip I frame size
-	if (isIPic) {
-		info->picTargetBit = CLIP(info->minIPicBit, info->maxIPicBit, picTargetBit);
-	}
 
 	// smooth
 	if (isIPic == 0) {
@@ -769,7 +794,18 @@ void cviRcKernel_estimatePic(stRcKernelInfo *info, stRcKernelPicOut *out, int is
 	qp = isIPic ? MIN(qp, info->maxIQp): MIN(qp, info->maxQp);
 	qp = isIPic ? MAX(qp, info->minIQp): MAX(qp, info->minQp);
 
-	info->lastPredictPQp = qp;
+	if (isIPic) {
+		// clip I frame size
+		info->picTargetBit = CLIP(info->minIPicBit, info->maxIPicBit, info->picTargetBit);
+		info->picTargetBit += info->bitCompensationIdr * info->picTargetBit / 10;
+
+		// for requestIdr
+		info->lastPredictIQp = qp;
+		CVI_VCOM_CVRC("I frame: %d, qp = %d, targetBit = %d\n", picIdx, qp, info->picTargetBit);
+	} else {
+		info->lastPredictPQp = qp;
+	}
+
 	// output parameters
 	out->targetBit = info->picTargetBit;
 	out->qp = qp;
@@ -786,6 +822,12 @@ void cviRcKernel_updatePic(stRcKernelInfo *info, stRcKernelPicIn *stats, int isI
 	int skipUpdateCoeff = 0;
 	RC_Float alpha, beta;
 	RC_Float tmp;
+
+	// sanity check
+	if (info == NULL || stats == NULL) {
+		CVI_VCOM_ERR("null param\n");
+		return;
+	}
 
 	if (CVI_FLOAT_LE(stats->encodedLambda, FLOAT_VAL_0)) {
 		info->lastPicLambda = QpToLambda(stats->encodedQp);
@@ -812,7 +854,6 @@ void cviRcKernel_updatePic(stRcKernelInfo *info, stRcKernelPicIn *stats, int isI
 	//	  cahce labmda for first P frame in current GOP
 	picLv = isIPic == 0;
 	if (isIPic == 1 && info->intraPeriod != 1) {
-		info->avgGopLambda = FLOAT_VAL_0;
 		info->rcGop1stQp = 0;
 		info->rcGop2ndQp = 0;
         if (info->statBitrate > stats->encodedBit) {
@@ -831,13 +872,23 @@ void cviRcKernel_updatePic(stRcKernelInfo *info, stRcKernelPicIn *stats, int isI
             info->predictPicAvgBit = info->minPicBit;
         }
 
-		// bitError self-correction
-		if (info->bitError >= (info->statBitrate - stats->encodedBit)) {
-			if (info->rcGopPicWeight <= 1) {
-				info->bitError = info->bitError / 2;
+		/**
+		 * bitError self-correction for IDR frame
+		 * If absolute bit error >= statistical bit rate:
+		 *   - Reduces bit error by 10%
+		 *   - Sets compensation flag to 1 for positive error (increase next IDR bitrate)
+		 *   - Sets compensation flag to -1 for negative error (decrease next IDR bitrate)
+		 * Otherwise sets compensation flag to 0 (no adjustment needed)
+		 */
+		if (abs(info->bitError) >= info->statBitrate) {
+			info->bitError = info->bitError * 9 / 10;
+			if (info->bitError > 0) {
+				info->bitCompensationIdr = 1;
 			} else {
-				info->bitError = info->statBitrate - stats->encodedBit;
+				info->bitCompensationIdr = -1;
 			}
+		} else {
+			info->bitCompensationIdr = 0;
 		}
 
 		if (info->lastGopBitError <= -(info->statBitrate - info->lastIPicBit)) {
@@ -871,7 +922,13 @@ void cviRcKernel_updatePic(stRcKernelInfo *info, stRcKernelPicIn *stats, int isI
 	beta = info->rqModel[picLv].beta;
 
 	if (isIPic == 1) {
-		updateAlphaBetaIntra(&alpha, &beta, info->picTextCplx, info->picTargetBit, stats->encodedBit);
+		CVI_VCOM_CVRC("update pic encodeQp:%d, encodedBit:%d, biterr:%d, requestidr:%d\n"
+			, CVI_FLOAT_TO_INT(CVI_FLOAT_MUL((stats->encodedQp), INT_TO_CVI_FLOAT(1000))), stats->encodedBit, info->bitError, info->requestIdr);
+
+		if (!info->requestIdr) {
+			updateAlphaBetaIntra(&alpha, &beta, info->picTextCplx, info->picTargetBit, stats->encodedBit);
+		}
+
 	} else if (info->rcMdlUpdatType == 0 && skipUpdateCoeff == 0) {
 		RC_Float calLambda;
 		RC_Float inputLambda;
@@ -944,14 +1001,16 @@ void cviRcKernel_updatePic(stRcKernelInfo *info, stRcKernelPicIn *stats, int isI
 		beta = CVI_FLOAT_CLIP(g_rcBetaMinValue, g_rcBetaMaxValue, beta);
 	}
 
-	info->rqModel[picLv].alpha = alpha;
-	info->rqModel[picLv].beta = beta;
-	info->lastLevelLambda[picLv] = info->lastPicLambda;
-	info->lastLevelQp[picLv] = info->lastPicQp;
-	if (isIPic == 0) {
-		info->pPicQpAccum = CVI_FLOAT_ADD(info->pPicQpAccum, stats->encodedQp);
-		info->pPicCnt += 1;
-		info->pPredictPicQpAccum += (info->lastPredictPQp - info->lastPicQp);
+	if (!info->requestIdr) {
+		info->rqModel[picLv].alpha = alpha;
+		info->rqModel[picLv].beta = beta;
+		info->lastLevelLambda[picLv] = info->lastPicLambda;
+		info->lastLevelQp[picLv] = info->lastPicQp;
+		if (isIPic == 0) {
+			info->pPicQpAccum = CVI_FLOAT_ADD(info->pPicQpAccum, stats->encodedQp);
+			info->pPicCnt += 1;
+			info->pPredictPicQpAccum += (info->lastPredictPQp - info->lastPicQp);
+		}
 	}
 
 MDL_PARAM_UPDATE_END:
@@ -968,6 +1027,10 @@ MDL_PARAM_UPDATE_END:
 
 	info->isLastPicI = info->isCurPicI;
 	info->isFirstPic = 0;
+
 	// texture complexity for I frame model
-	cviRcKernel_setTextCplx(info, stats->madi);
+	if (!info->requestIdr)
+		cviRcKernel_setTextCplx(info, stats->madi);
+
+	info->requestIdr = 0;
 }

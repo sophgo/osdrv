@@ -3433,6 +3433,8 @@ EXPORT_SYMBOL_GPL(sclr_disp_set_out_csc);
 void sclr_disp_set_pattern(enum sclr_disp_pat_type type,
 			   enum sclr_disp_pat_color color, const u16 *rgb)
 {
+	sclr_disp_enable_window_bgcolor(0);
+
 	switch (type) {
 	case SCL_PAT_TYPE_OFF:
 		_reg_write_mask(reg_base + REG_SCL_DISP_PAT_CFG, 0x16, 0);

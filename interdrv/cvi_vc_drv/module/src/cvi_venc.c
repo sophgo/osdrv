@@ -690,7 +690,8 @@ static int h26x_event_handler(CVI_VOID *data)
 		}
 		VENC_STATUS_RUN_ADDSELF(1);
 		VENC_SET_HANDLER_STATE(4);
-// get venc input buf.
+
+		// get venc input buf.
 		blk = base_mod_jobs_waitq_pop(chn, CHN_TYPE_IN);
 		if (blk == VB_INVALID_HANDLE) {
 			CVI_VENC_TRACE("No more vb for dequeue.\n");
@@ -829,9 +830,9 @@ static int venc_sbm_send_frame_thread(CVI_VOID *data)
 		CVI_VENC_DEBUG("send start chn:%d,0x94=0x%x 0x90=0x%x\n", pSbmHandle->CurrSbmChn,
 			cvi_vc_drv_read_vc_reg(REG_SBM, 0x94), cvi_vc_drv_read_vc_reg(REG_SBM, 0x90));
 
-		MUTEX_LOCK(&pSbmHandle->SbmMutex);
+		// MUTEX_LOCK(&pSbmHandle->SbmMutex);
 		s32Ret = CVI_VENC_SendFrame(pChnHandle->VeChn, &pChnHandle->stVideoFrameInfo, -1);
-		MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
+		// MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
 
 		CVI_VENC_DEBUG("send end s32Ret=%d,0x94=0x%x 0x90=0x%x\n", s32Ret,
 			cvi_vc_drv_read_vc_reg(REG_SBM, 0x94), cvi_vc_drv_read_vc_reg(REG_SBM, 0x90));
@@ -839,6 +840,10 @@ static int venc_sbm_send_frame_thread(CVI_VOID *data)
 			CVI_VENC_ERR("CVI_VENC_SendFrame(%d) fail, s32Ret=%d\n", pChnHandle->VeChn, s32Ret);
 			break;
 		}
+
+		cviWaitEncodeDone(pChnHandle);
+
+		cond_resched();
 	}
 
 	return s32Ret;
@@ -1095,7 +1100,8 @@ static CVI_S32 cviInitChnCtx(VENC_CHN VeChn, const VENC_CHN_ATTR_S *pstAttr)
 	pChnHandle->VeChn = VeChn;
 
 	MUTEX_INIT(&pChnHandle->chnMutex, 0);
-	MUTEX_INIT(&pSbmhandle->SbmMutex, 0);
+	MUTEX_INIT(&pChnHandle->chnStatusMutex, 0);
+	// MUTEX_INIT(&pSbmhandle->SbmMutex, 0);
 	MUTEX_INIT(&pChnHandle->chnShmMutex, &ma);
 
 	pChnHandle->pChnAttr = MEM_MALLOC(sizeof(VENC_CHN_ATTR_S));
@@ -2506,14 +2512,14 @@ CVI_S32 CVI_VENC_SendFrame(VENC_CHN VeChn, const VIDEO_FRAME_INFO_S *pstFrame,
 		cviCheckFrcOverflow(pChnHandle);
 	}
 
-	if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
-		CVI_VENC_ERR("can not lock chnMutex\n");
+	if (MUTEX_LOCK(&pChnHandle->chnStatusMutex) != 0) {
+		CVI_VENC_ERR("can not lock chnStatusMutex\n");
 		return CVI_FAILURE;
 	}
 	pChnStat->u32LeftStreamFrames++;
 	pChnVars->currPTS = pstFrame->stVFrame.u64PTS;
 	pEncCtx->base.u64PTS = pChnVars->currPTS;
-	MUTEX_UNLOCK(&pChnHandle->chnMutex);
+	MUTEX_UNLOCK(&pChnHandle->chnStatusMutex);
 
 	CVI_VENC_PERF("currPTS = %lld\n", pChnVars->currPTS);
 
@@ -3014,6 +3020,7 @@ CVI_S32 CVI_VENC_StartRecvFrame(VENC_CHN VeChn,
 	venc_chn_vars *pChnVars = NULL;
 	struct cvi_venc_vb_ctx *pVbCtx = NULL;
 	VENC_ATTR_S *pVencAttr = NULL;
+	CVI_BOOL bAsyncEn = CVI_TRUE;
 
 	CVI_VENC_API("VeChn = %d, s32RecvPicNum = %d\n", VeChn,
 		     pstRecvParam->s32RecvPicNum);
@@ -3088,6 +3095,13 @@ CVI_S32 CVI_VENC_StartRecvFrame(VENC_CHN VeChn,
 				pVbCtx->thread = kthread_run(h26x_event_handler,
 						     (CVI_VOID *)pChnHandle,
 						     "cvitask_vc_bh%d", VeChn);
+
+				s32Ret = pEncCtx->base.ioctl(pEncCtx, CVI_H26X_OP_SET_ASYNC_ENABLE,
+					(CVI_VOID *)&bAsyncEn);
+				if (s32Ret != CVI_SUCCESS) {
+					CVI_VENC_ERR("CVI_H26X_OP_SET_ASYNC_ENABLE, %d\n", s32Ret);
+					return -1;
+				}
 			} else {
 				pVbCtx->thread = kthread_run(venc_event_handler,
 						     (CVI_VOID *)pChnHandle,
@@ -3403,8 +3417,8 @@ static CVI_S32 cviCheckLeftStreamFrames(venc_chn_context *pChnHandle)
 	VENC_CHN_STATUS_S *pChnStat = &pChnVars->chnStatus;
 	CVI_S32 s32Ret = CVI_SUCCESS;
 
-	if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
-		CVI_VENC_ERR("can not lock chnMutex\n");
+	if (MUTEX_LOCK(&pChnHandle->chnStatusMutex) != 0) {
+		CVI_VENC_ERR("can not lock chnStatusMutex\n");
 		return CVI_FAILURE;
 	}
 	if (pChnStat->u32LeftStreamFrames <= 0) {
@@ -3412,7 +3426,7 @@ static CVI_S32 cviCheckLeftStreamFrames(venc_chn_context *pChnHandle)
 			"u32LeftStreamFrames <= 0, no stream data to get\n");
 		s32Ret = CVI_ERR_VENC_EMPTY_STREAM_FRAME;
 	}
-	MUTEX_UNLOCK(&pChnHandle->chnMutex);
+	MUTEX_UNLOCK(&pChnHandle->chnStatusMutex);
 
 	return s32Ret;
 }
@@ -3423,11 +3437,22 @@ CVI_S32 cviGetLeftStreamFrames(CVI_S32 VeChn)
 	venc_chn_context *pChnHandle = NULL;
 	venc_chn_vars *pChnVars = NULL;
 	VENC_CHN_STATUS_S *pChnStat = NULL;
+	CVI_S32 s32LeftFrames = 0;
+
 	pChnHandle = handle->chn_handle[VeChn];
 	pChnVars = pChnHandle->pChnVars;
 	pChnStat = &pChnVars->chnStatus;
 
-	return pChnStat->u32LeftStreamFrames;
+	if (MUTEX_LOCK(&pChnHandle->chnStatusMutex) != 0) {
+		CVI_VENC_ERR("can not lock chnStatusMutex\n");
+		return CVI_FAILURE;
+	}
+
+	s32LeftFrames = pChnStat->u32LeftStreamFrames;
+
+	MUTEX_UNLOCK(&pChnHandle->chnStatusMutex);
+
+	return s32LeftFrames;
 }
 
 static CVI_S32 cviProcessResult(venc_chn_context *pChnHandle,
@@ -3478,8 +3503,8 @@ static CVI_VOID cviUpdateChnStatus(venc_chn_context *pChnHandle)
 	VENC_CHN_STATUS_S *pChnStat = &pChnVars->chnStatus;
 	venc_enc_ctx *pEncCtx = &pChnHandle->encCtx;
 
-	if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
-		CVI_VENC_ERR("can not lock chnMutex\n");
+	if (MUTEX_LOCK(&pChnHandle->chnStatusMutex) != 0) {
+		CVI_VENC_ERR("can not lock chnStatusMutex\n");
 		return;
 	}
 
@@ -3491,7 +3516,7 @@ static CVI_VOID cviUpdateChnStatus(venc_chn_context *pChnHandle)
 		       pChnStat->u32LeftStreamFrames,
 		       pChnStat->stVencStrmInfo.u32MeanQp);
 
-	MUTEX_UNLOCK(&pChnHandle->chnMutex);
+	MUTEX_UNLOCK(&pChnHandle->chnStatusMutex);
 }
 
 static CVI_S32 cviOpenDumpBs(CVI_VOID)
@@ -3639,6 +3664,7 @@ static CVI_S32 cviSetVencPerfAttrToProc(venc_chn_context *pChnHandle)
 		pChnVars->u64LastGetStreamTimeStamp = u64CurTime;
 		pChnVars->u32GetStreamCnt = 0;
 	}
+	pChnVars->stFPS.u64MaxHwTime = MAX(pChnVars->stFPS.u64MaxHwTime, pEncCtx->base.u64EncHwTime);
 	pChnVars->stFPS.u64HwTime = pEncCtx->base.u64EncHwTime;
 	pChnVars->stFPS.u64DoneFrame++;
 	MUTEX_UNLOCK(&pChnHandle->chnShmMutex);
@@ -3801,6 +3827,7 @@ CVI_S32 CVI_VENC_DestroyChn(VENC_CHN VeChn)
 	}
 
 	MUTEX_DESTROY(&pChnHandle->chnMutex);
+	MUTEX_DESTROY(&pChnHandle->chnStatusMutex);
 	MUTEX_DESTROY(&pChnHandle->chnShmMutex);
 
 	if (handle->chn_handle[VeChn]) {
@@ -3825,7 +3852,7 @@ CVI_S32 CVI_VENC_DestroyChn(VENC_CHN VeChn)
 			if (pSbmHandle->pSBMSendFrameThread) {
 				wake_sbm_waitinng();
 				kthread_stop(pSbmHandle->pSBMSendFrameThread);
-				MUTEX_DESTROY(&pSbmHandle->SbmMutex);
+				// MUTEX_DESTROY(&pSbmHandle->SbmMutex);
 				pSbmHandle->pSBMSendFrameThread = NULL;
 			}
 
@@ -6699,35 +6726,28 @@ static CVI_S32 cviWaitEncodeDone(venc_chn_context *pChnHandle)
 {
 	CVI_S32 ret = CVI_SUCCESS;
 	venc_enc_ctx *pEncCtx = &pChnHandle->encCtx;
+	venc_chn_vars *pChnVars = pChnHandle->pChnVars;
 
-	if (MUTEX_LOCK(&pChnHandle->chnMutex) != 0) {
-		CVI_VENC_ERR("can not lock chnMutex\n");
-		return CVI_FAILURE;
+	if (!pEncCtx->base.ioctl)
+		return CVI_SUCCESS;
+
+	if (pChnVars->chnState != VENC_CHN_STATE_START_ENC) {
+		CVI_VENC_SYNC("chnState = %d\n", pChnVars->chnState);
+		return CVI_ERR_VENC_INIT;
 	}
 
-	if (pEncCtx->base.ioctl) {
-		if (pChnHandle->pChnAttr->stVencAttr.enType == PT_H265 ||
-			pChnHandle->pChnAttr->stVencAttr.enType == PT_H264) {
-			ret = pEncCtx->base.ioctl(pEncCtx,
-				CVI_H26X_OP_WAIT_FRAME_DONE, NULL);
-			if (ret != CVI_SUCCESS) {
-				MUTEX_UNLOCK(&pChnHandle->chnMutex);
-				CVI_VENC_ERR("CVI_H26X_OP_WAIT_FRAME_DONE, %d\n", ret);
-				return -1;
-			}
-		} else {
-			ret = pEncCtx->base.ioctl(pEncCtx,
-				CVI_JPEG_OP_WAIT_FRAME_DONE, NULL); //CVI_JPEG_OP_SET_SBM_ENABLE
-			if (ret != CVI_SUCCESS) {
-				CVI_VENC_ERR("CVI_JPEG_OP_SET_SBM_ENABLE, %d\n", ret);
-				MUTEX_UNLOCK(&pChnHandle->chnMutex);
-				return -1;
-			}
+	if (pChnHandle->pChnAttr->stVencAttr.enType == PT_H265 ||
+		pChnHandle->pChnAttr->stVencAttr.enType == PT_H264) {
+		ret = pEncCtx->base.ioctl(pEncCtx, CVI_H26X_OP_WAIT_FRAME_DONE, NULL);
+		if (ret != CVI_SUCCESS) {
+			CVI_VENC_ERR("CVI_H26X_OP_WAIT_FRAME_DONE, %d\n", ret);
+		}
+	} else {
+		ret = pEncCtx->base.ioctl(pEncCtx, CVI_JPEG_OP_WAIT_FRAME_DONE, NULL);
+		if (ret != CVI_SUCCESS) {
+			CVI_VENC_ERR("CVI_JPEG_OP_WAIT_FRAME_DONE, %d\n", ret);
 		}
 	}
-	MUTEX_UNLOCK(&pChnHandle->chnMutex);
-	if (ret != CVI_SUCCESS)
-		CVI_VENC_ERR("failed to wait done %d", ret);
 
 	return ret;
 }
@@ -6844,7 +6864,7 @@ CVI_S32 cvi_VENC_CB_SendFrame(CVI_S32 VpssGrp, CVI_S32 VpssChn, CVI_S32 VpssChn1
 		}
 	}
 
-	stSbSetting.sb_mode = 2;
+	stSbSetting.sb_mode = 3;	// sw mode
 	stSbSetting.sb_nb = sb_nb;
 	stSbSetting.sb_size = 0; //64 line
 
@@ -6869,7 +6889,7 @@ CVI_S32 cvi_VENC_CB_SendFrame(CVI_S32 VpssGrp, CVI_S32 VpssChn, CVI_S32 VpssChn1
 	stSbSetting.VpssGrp = VpssGrp;
 	stSbSetting.VpssChn = VpssChn;
 
-	MUTEX_LOCK(&pSbmHandle->SbmMutex);
+	// MUTEX_LOCK(&pSbmHandle->SbmMutex);
 
 	cviResetSb(NULL);
 
@@ -6958,12 +6978,12 @@ CVI_S32 cvi_VENC_CB_SendFrame(CVI_S32 VpssGrp, CVI_S32 VpssChn, CVI_S32 VpssChn1
 		cviSetSBMEnable(pChnHandle, CVI_TRUE);
 	}
 
-	MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
+	// MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
 
 	return CVI_SUCCESS;
 SBM_CB_FAILURE:
 
-	MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
+	// MUTEX_UNLOCK(&pSbmHandle->SbmMutex);
 
 	return CVI_FAILURE;
 }

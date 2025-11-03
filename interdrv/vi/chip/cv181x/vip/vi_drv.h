@@ -730,6 +730,9 @@ void vi_tuning_gamma_ips_update(
 void vi_tuning_dci_update(
 	struct isp_ctx *ctx,
 	enum cvi_isp_raw raw_num);
+void vi_tuning_cacp_update(
+	struct isp_ctx *ctx,
+	enum cvi_isp_raw raw_num);
 void vi_tuning_drc_update(
 	struct isp_ctx *ctx,
 	enum cvi_isp_raw raw_num);

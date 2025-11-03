@@ -109,6 +109,39 @@ void vi_tuning_dci_update(
 	ispblk_dci_tun_cfg(ctx, dci_cfg, raw_num);
 }
 
+void vi_tuning_cacp_update(
+	struct isp_ctx *ctx,
+	enum cvi_isp_raw raw_num)
+{
+	u8 tun_idx = 0;
+	static int stop_update_cacp = -1;
+	struct cvi_vip_isp_post_cfg     *post_cfg;
+	struct cvi_vip_isp_post_tun_cfg *post_tun;
+	struct cvi_vip_isp_cacp_config   *cacp_cfg;
+
+	post_cfg = (struct cvi_vip_isp_post_cfg *)tuning_buf_addr.post_vir[raw_num];
+	tun_idx  = post_cfg->tun_idx;
+
+	if ((tun_idx >= TUNING_NODE_NUM) || (post_cfg->tun_update[tun_idx] == 0))
+		return;
+
+	post_tun = &post_cfg->tun_cfg[tun_idx];
+
+	if (tuning_dis[3]) {
+		if (stop_update_cacp > 0)
+			return;
+		else if (tuning_dis[0] == 0) {
+			stop_update_cacp = 1;
+			return;
+		} else if ((tuning_dis[0] - 1) == raw_num)
+			stop_update_cacp = 1; // stop on next
+	} else
+		stop_update_cacp = 0;
+
+	cacp_cfg = &post_cfg->tun_cfg[tun_idx].cacp_cfg;
+	ispblk_cacp_tun_cfg(ctx, cacp_cfg, raw_num);
+}
+
 void vi_tuning_drc_update(
 	struct isp_ctx *ctx,
 	enum cvi_isp_raw raw_num)
@@ -564,6 +597,7 @@ void postraw_tuning_update(
 			POST_RUNTIME_TUN(gamma);
 			POST_RUNTIME_TUN(dci);
 			POST_RUNTIME_TUN(ycur);
+			POST_RUNTIME_TUN(cacp);
 
 			clut_cfg = &post_cfg->tun_cfg[0].clut_cfg;
 			ret = ispblk_clut_tun_cfg(ctx, clut_cfg, raw_num);
@@ -588,7 +622,6 @@ void postraw_tuning_update(
 	POST_RUNTIME_TUN(cac);
 	POST_RUNTIME_TUN(ynr);
 	POST_RUNTIME_TUN(ee);
-	POST_RUNTIME_TUN(cacp);
 	POST_RUNTIME_TUN(ca2);
 	//HW limit
 	//Need to update gamma ips in postraw done
