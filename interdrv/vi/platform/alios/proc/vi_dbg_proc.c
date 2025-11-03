@@ -5,7 +5,7 @@
 
 #define VI_DBG_PROC_NAME	"soph/vi_dbg"
 
-static struct sop_vi_dev *m_vdev;
+static struct vi_dev *m_vdev;
 
 /*************************************************************************
  *	Proc functions
@@ -13,7 +13,7 @@ static struct sop_vi_dev *m_vdev;
 
 static inline void _vi_dbg_proc_show(void)
 {
-	struct sop_vi_dev *vdev = m_vdev;
+	struct vi_dev *vdev = m_vdev;
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	enum sop_isp_fe_chn_num chn_num = ISP_FE_CH0;
@@ -162,7 +162,7 @@ static inline void _vi_dbg_proc_show(void)
 			for (chn_num = ISP_FE_CH0; chn_num < chn_max; chn_num++) {
 				pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
 				pos += sprintf(buf + pos, "VIYuvCh%dOutBufEmpty\t:%4d\n", chn_num,
-					       vdev->qbuf_num[pipe][chn_num]);
+					       sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][chn_num]));
 			}
 		} else {
 			if (_is_fe_post_offline(ctx)) { // fe->dram->post
@@ -182,7 +182,7 @@ static inline void _vi_dbg_proc_show(void)
 
 			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
 			pos += sprintf(buf + pos, "VIPostOutBufEmpty\t:%4d\n",
-				       vdev->qbuf_num[pipe][ISP_FE_CH0]);
+				       sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][ISP_FE_CH0]));
 		}
 	}
 
@@ -198,7 +198,7 @@ static void vi_dbg_proc_show(int32_t argc, char **argv)
 
 ALIOS_CLI_CMD_REGISTER(vi_dbg_proc_show, proc_vi_dbg, "vi_dbg_proc");
 
-int vi_dbg_proc_init(struct sop_vi_dev *_vdev)
+int vi_dbg_proc_init(struct vi_dev *_vdev)
 {
 	m_vdev = _vdev;
 

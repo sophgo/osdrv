@@ -3,7 +3,7 @@
 #include "comm_errno.h"
 #include "vb.h"
 
-void _isp_fe_raw_dump_cfg(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 chn_num)
+void _isp_fe_raw_dump_cfg(struct vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 chn_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -51,7 +51,7 @@ static int isp_dump_raw_wait_cond_func(const void *param)
 	return osal_atomic_read(flag) == RAWDUMP_DONE;
 }
 
-int isp_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
+int isp_raw_dump(struct vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b;
@@ -129,7 +129,7 @@ raw_dump_fail:
 	return ret;
 }
 
-void free_isp_byr(struct sop_vi_dev *vdev, u8 pipe)
+void free_isp_byr(struct vi_dev *vdev, u8 pipe)
 {
 	u8 chn = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
@@ -143,7 +143,7 @@ void free_isp_byr(struct sop_vi_dev *vdev, u8 pipe)
 	}
 }
 
-int isp_start_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
+int isp_start_smooth_raw_dump(struct vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -213,7 +213,7 @@ static int isp_stop_dump_raw_wait_cond_func(const void *param)
 	return osal_atomic_read(isp_smooth_raw_dump_en) == SMOOTH_RAWDUMP_IDLE;
 }
 
-int isp_stop_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
+int isp_stop_smooth_raw_dump(struct vi_dev *vdev, struct sop_vip_isp_smooth_raw_param *pstSmoothRawParam)
 {
 	int ret = 0;
 	enum sop_isp_raw raw_num;
@@ -242,7 +242,7 @@ int isp_stop_smooth_raw_dump(struct sop_vi_dev *vdev, struct sop_vip_isp_smooth_
 	return 0;
 }
 
-int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
+int isp_get_smooth_raw_dump(struct vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -250,7 +250,7 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 	u8 raw_num = dump[0].raw_dump.raw_num;
 	u8 chn = 0, chn_max;
 
-	vi_pr(VI_DBG, "get smooth raw dump\n");
+	vi_pr(VI_DBG, "raw_num(%d) get smooth raw dump\n", raw_num);
 
 	if (isp_buf_empty(&vdev->raw_dump[raw_num].buf_dq[chn])) {
 		osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_START);
@@ -273,7 +273,7 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 	for (chn = 0; chn < chn_max; chn++) {
 		b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_dq[chn]);
 		if (b == NULL) {
-			vi_pr(VI_ERR, "Get raw_le dump buffer time_out(%d)\n", dump[chn].time_out);
+			vi_pr(VI_ERR, "Get raw_ch%d dump buffer fail(%d)\n", chn, dump[chn].time_out);
 			osal_vfree(b);
 			dump[chn].is_timeout = true;
 			ret = ERR_VI_CFG_TIMEOUT;
@@ -281,8 +281,8 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 		}
 
 		osal_memset(&dump[chn], 0, sizeof(struct raw_dump_info));
-		vi_pr(VI_DBG, "raw_le phy_addr=0x%llx byr_size=%d frm_num=%d\n",
-			b->addr, b->byr_size, b->frm_num);
+		vi_pr(VI_DBG, "raw_ch%d phy_addr=0x%llx byr_size=%d frm_num=%d\n",
+			chn, b->addr, b->byr_size, b->frm_num);
 
 		dump[chn].src_w             = b->crop.w;
 		dump[chn].src_h             = b->crop.h;
@@ -298,7 +298,7 @@ int isp_get_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 	return 0;
 }
 
-int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
+int isp_put_smooth_raw_dump(struct vi_dev *vdev, struct raw_dump_info *dump)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -328,7 +328,7 @@ int isp_put_smooth_raw_dump(struct sop_vi_dev *vdev, struct raw_dump_info *dump)
 	return 0;
 }
 
-static void smooth_rawdump_buffer_check(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+static void smooth_rawdump_buffer_check(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -347,17 +347,19 @@ static void smooth_rawdump_buffer_check(struct sop_vi_dev *vdev, const enum sop_
 			}
 
 			isp_buf_queue(raw_buf_q, b);
+
+			vi_pr(VI_DBG, "raw_%d dq is_empty %d\n", raw_num, isp_buf_empty(raw_buf_dq));
 		}
 	}
 }
 
-void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u32 frm_num)
+void _isp_raw_dump_chk(struct vi_dev *vdev, const enum sop_isp_raw raw_num, const u32 frm_num)
 {
 	switch (osal_atomic_read(&vdev->raw_dump[raw_num].isp_smooth_raw_dump_en)) {
 	default:
 	case SMOOTH_RAWDUMP_IDLE:
 	{
-		vi_pr(VI_DBG, "wake up wait_q\n");
+		vi_pr(VI_DBG, "raw(%d) wake up wait_q\n", raw_num);
 
 		osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_DONE);
 		osal_wait_wakeup_interruptible(&vdev->isp_int_wait_q[raw_num]);
@@ -369,7 +371,7 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 	}
 	case SMOOTH_RAWDUMP_START:
 	{
-		vi_pr(VI_DBG, "wake up wait_q smooth frm=%d\n", frm_num);
+		vi_pr(VI_DBG, "raw(%d) wake up wait_q smooth frm=%d\n", raw_num, frm_num);
 
 		smooth_rawdump_buffer_check(vdev, raw_num);
 		if (osal_atomic_read(&vdev->isp_int_flag[raw_num]) == RAWDUMP_START) {
@@ -382,7 +384,7 @@ void _isp_raw_dump_chk(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, 
 	{
 		struct isp_buffer *b = NULL;
 
-		vi_pr(VI_DBG, "stop dump smooth\n");
+		vi_pr(VI_DBG, "raw(%d) stop dump smooth\n", raw_num);
 
 		while ((b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_dq[ISP_FE_CH0])) != NULL)
 			osal_vfree(b);
@@ -429,7 +431,7 @@ static void raw_dump_wq_handler(osal_workqueue *worker)
 	} while (buf);
 }
 
-void isp_raw_dump_vb_queue(struct sop_vi_dev *vdev, struct isp_buffer *buf, bool try2sched)
+void isp_raw_dump_vb_queue(struct vi_dev *vdev, struct isp_buffer *buf, bool try2sched)
 {
 	isp_buf_queue(&vdev->raw_dump_work.raw_dump_vb_q, buf);
 
@@ -437,7 +439,7 @@ void isp_raw_dump_vb_queue(struct sop_vi_dev *vdev, struct isp_buffer *buf, bool
 		osal_workqueue_schedule(&vdev->raw_dump_work.worker);
 }
 
-void isp_raw_dump_init(struct sop_vi_dev *vdev)
+void isp_raw_dump_init(struct vi_dev *vdev)
 {
 	isp_buf_init(&vdev->raw_dump_work.raw_dump_vb_q);
 	OSAL_INIT_LIST_HEAD(&vdev->raw_dump_work.raw_dump_vb_q.rdy_queue);
@@ -446,7 +448,7 @@ void isp_raw_dump_init(struct sop_vi_dev *vdev)
 	osal_workqueue_init(&vdev->raw_dump_work.worker, raw_dump_wq_handler);
 }
 
-void isp_raw_dump_deinit(struct sop_vi_dev *vdev)
+void isp_raw_dump_deinit(struct vi_dev *vdev)
 {
 	raw_dump_wq_handler(&vdev->raw_dump_work.worker);
 	osal_workqueue_destroy(&vdev->raw_dump_work.worker);

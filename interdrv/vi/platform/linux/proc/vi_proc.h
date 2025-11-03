@@ -10,9 +10,9 @@
 
 #include "vi_defines.h"
 
-int vi_create_proc(struct sop_vi_dev *vdev);
-void vi_destroy_proc(struct sop_vi_dev *vdev);
-int vi_proc_init(struct sop_vi_dev *_vdev, void *shm);
+int vi_create_proc(struct vi_dev *vdev);
+void vi_destroy_proc(struct vi_dev *vdev);
+int vi_proc_init(struct vi_dev *_vdev, void *shm);
 int vi_proc_remove(void);
 
 #ifdef __cplusplus

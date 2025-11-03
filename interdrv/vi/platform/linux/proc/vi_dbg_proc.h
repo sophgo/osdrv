@@ -11,7 +11,7 @@
 
 #include "vi_defines.h"
 
-int vi_dbg_proc_init(struct sop_vi_dev *_vdev);
+int vi_dbg_proc_init(struct vi_dev *_vdev);
 int vi_dbg_proc_remove(void);
 
 #ifdef __cplusplus

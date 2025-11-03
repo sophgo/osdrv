@@ -15,11 +15,11 @@ void _vi_cmdq_get_dma_size(struct isp_ctx *ctx, int pipe);
 void _vi_get_raw_dma_buf_size(struct isp_ctx *ctx);
 void _vi_get_pipe_dma_buf_size(struct isp_ctx *ctx, const uint8_t pipe);
 void _vi_get_dma_buf_size(struct isp_ctx *ctx);
-int vi_get_isp_ion_buf(struct sop_vi_dev *vdev, const uint8_t pipe);
-int vi_get_csi_ion_buf(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num);
-int vi_free_ion_buf(struct sop_vi_dev *vdev, struct _mempool *mempool);
-void _isp_pre_fe_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num);
-void _isp_pre_ai_isp_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num);
-void _vi_dma_setup(struct sop_vi_dev *vdev, uint8_t pipe);
+int vi_get_isp_ion_buf(struct vi_dev *vdev, const uint8_t pipe);
+int vi_get_csi_ion_buf(struct vi_dev *vdev, enum sop_isp_raw raw_num);
+int vi_free_ion_buf(struct vi_dev *vdev, struct _mempool *mempool);
+void _isp_pre_fe_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num);
+void _isp_pre_ai_isp_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num);
+void _vi_dma_setup(struct vi_dev *vdev, uint8_t pipe);
 
 #endif // VI_DMA_SETUP_H

@@ -305,7 +305,7 @@ void _vi_get_pipe_dma_buf_size(struct isp_ctx *ctx, const uint8_t pipe)
 	_vi_cmdq_get_dma_size(ctx, pipe);
 }
 
-void _vi_yuv_dma_setup(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+void _vi_yuv_dma_setup(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct _mempool *mempool = &ctx->csi_mempool[raw_num];
@@ -380,7 +380,7 @@ static void _isp_preraw_fe_dma_dump(struct isp_ctx *ctx, enum sop_isp_raw raw_nu
 	vi_pr(VI_INFO, "*************************************************\n");
 }
 
-static void _vi_rgb_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+static void _vi_rgb_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	u64 bufaddr = 0;
 	u32 bufsize = 0;
@@ -433,7 +433,7 @@ static void _vi_rgb_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
 	}
 }
 
-void _isp_pre_fe_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+void _isp_pre_fe_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	u64 bufaddr = 0;
 	u32 bufsize = 0;
@@ -513,7 +513,7 @@ static void _isp_pre_ai_isp_dma_dump(struct isp_ctx *ctx, enum sop_isp_raw raw_n
 	vi_pr(VI_INFO, "************************************************\n");
 }
 
-void _isp_pre_ai_isp_dma_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+void _isp_pre_ai_isp_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	u8 i = 0;
 	u32 fe_dma_id;
@@ -809,7 +809,7 @@ void _isp_cmdq_dma_setup(struct isp_ctx *ctx, const u8 pipe)
 	_mempool_pop(mempool, VI_CMDQ_BUF_SIZE);
 }
 
-void _vi_dma_setup(struct sop_vi_dev *vdev, uint8_t pipe)
+void _vi_dma_setup(struct vi_dev *vdev, uint8_t pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -825,7 +825,7 @@ void _vi_dma_setup(struct sop_vi_dev *vdev, uint8_t pipe)
 	_isp_cmdq_dma_setup(ctx, pipe);
 }
 
-static int vi_get_ion_buf(struct sop_vi_dev *vdev, bool is_csi,
+static int vi_get_ion_buf(struct vi_dev *vdev, bool is_csi,
 			uint8_t idx, struct _mempool *mempool)
 {
 	int ret = 0;
@@ -872,17 +872,17 @@ static int vi_get_ion_buf(struct sop_vi_dev *vdev, bool is_csi,
 	return 0;
 }
 
-int vi_get_csi_ion_buf(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+int vi_get_csi_ion_buf(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	return vi_get_ion_buf(vdev, true, raw_num, &vdev->ctx.csi_mempool[raw_num]);
 }
 
-int vi_get_isp_ion_buf(struct sop_vi_dev *vdev, const uint8_t pipe)
+int vi_get_isp_ion_buf(struct vi_dev *vdev, const uint8_t pipe)
 {
 	return vi_get_ion_buf(vdev, false, pipe, &vdev->ctx.isp_mempool[pipe]);
 }
 
-int vi_free_ion_buf(struct sop_vi_dev *vdev, struct _mempool *mempool)
+int vi_free_ion_buf(struct vi_dev *vdev, struct _mempool *mempool)
 {
 	int ret = 0;
 

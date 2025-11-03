@@ -33,6 +33,7 @@ void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 	union reg_pre_raw_vi_sel_1 vi_sel_1;
 	int pipe = ctx->cfg_info.pipe;
 	union reg_pre_raw_vi_sel_11 vi_reg_11;
+	u8 bayer_fmt = ctx->isp_pipe_cfg[pipe].rgb_color_mode;
 
 	vi_sel_1.raw = 0;
 	vi_sel_1.bits.frame_widthm1 = ctx->cfg_info.img_width - 1;
@@ -59,6 +60,7 @@ void ispblk_preraw_vi_sel_config(struct isp_ctx *ctx)
 
 	vi_reg_11.raw = ISP_RD_REG(vi_sel, reg_pre_raw_vi_sel_t, reg_11);
 	vi_reg_11.bits.ai_isp_transform_en = ctx->cfg_info.ai_cfg.is_raw_planar;
+	vi_reg_11.bits.bayer_type = bayer_fmt;
 	vi_reg_11.bits.in_format_le = ctx->cfg_info.ai_cfg.fmt;
 	vi_reg_11.bits.in_format_se = ctx->cfg_info.ai_cfg.fmt;
 	vi_reg_11.bits.round_mode_le = ctx->cfg_info.ai_cfg.round;
@@ -79,7 +81,7 @@ void ispblk_rawtop_config(struct isp_ctx *ctx)
 	union reg_raw_top0_raw_bayer_type_topleft raw0_bayer_type;
 	union reg_raw_top1_raw_bayer_type raw_bayer_type_topleft;
 	int pipe = ctx->cfg_info.pipe;
-	u8 bayer_fmt = ctx->cfg_info.ai_cfg.is_raw_planar ? ISP_BAYER_TYPE_BG : ctx->isp_pipe_cfg[pipe].rgb_color_mode;
+	u8 bayer_fmt = ctx->isp_pipe_cfg[pipe].rgb_color_mode;
 
 	rawtop0_raw_2.raw = 0;
 	rawtop0_raw_2.bits.img_widthm_1_2x = ctx->cfg_info.img_width - 1;

@@ -12,15 +12,15 @@ static void *vi_shared_mem;
 
 static int _vi_proc_show(struct seq_file *m, void *v)
 {
-	struct sop_vi_dev *vdev = m->private;
+	struct vi_dev *vdev = m->private;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_proc_ctx = NULL;
+	struct vi_ctx *vi_proc_ctx = NULL;
 	u8 i = 0, pipe = 0, chn = 0;
 	char o[8], p[8];
 	u8 is_rgb = 0;
 	u8 raw_num = 0;
 
-	vi_proc_ctx = (struct sop_vi_ctx *)(vi_shared_mem);
+	vi_proc_ctx = (struct vi_ctx *)(vi_shared_mem);
 
 	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------------\n");
 	seq_puts(m, "\tDetectErrFrame\tDropErrFrame\n");
@@ -346,7 +346,7 @@ static const struct file_operations _vi_proc_fops = {
 };
 #endif
 
-int vi_proc_init(struct sop_vi_dev *_vdev, void *shm)
+int vi_proc_init(struct vi_dev *_vdev, void *shm)
 {
 	int rc = 0;
 
@@ -367,7 +367,7 @@ int vi_proc_remove(void)
 	return 0;
 }
 
-int vi_create_proc(struct sop_vi_dev *vdev)
+int vi_create_proc(struct vi_dev *vdev)
 {
 	int ret = 0;
 
@@ -384,7 +384,7 @@ int vi_create_proc(struct sop_vi_dev *vdev)
 	return ret;
 }
 
-void vi_destroy_proc(struct sop_vi_dev *vdev)
+void vi_destroy_proc(struct vi_dev *vdev)
 {
 	vi_proc_remove();
 	vi_dbg_proc_remove();

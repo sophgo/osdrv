@@ -104,7 +104,7 @@ static struct isp_dump_info m_block[ISP_BLK_ID_MAX] = {0};
 		pos += sprintf(addr + pos, "\t\t]\n\t},\n");				\
 	} while (0)
 
-void vi_init_dump_register(struct sop_vi_dev *vdev)
+void vi_init_dump_register(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -286,7 +286,7 @@ static void _dump_gamma_table(void *addr, struct gamma_tbl *tbl, int *offset)
 	*offset = pos;
 }
 
-static void _dump_clut_table(struct sop_vi_dev *vdev, int pipe, void *addr, int *offset)
+static void _dump_clut_table(struct vi_dev *vdev, int pipe, void *addr, int *offset)
 {
 	uint32_t length = 17 * 17 * 17;
 	uint32_t *data_clut_r = NULL;
@@ -334,7 +334,7 @@ static void _dump_clut_table(struct sop_vi_dev *vdev, int pipe, void *addr, int 
 	*offset = pos;
 }
 
-int vi_dump_register(struct sop_vi_dev *vdev, int pipe, void *addr, int *size)
+int vi_dump_register(struct vi_dev *vdev, int pipe, void *addr, int *size)
 {
 	uint32_t i = 0, j = 0;
 	int ret = 0;

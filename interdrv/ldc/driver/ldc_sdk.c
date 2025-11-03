@@ -280,10 +280,9 @@ static void ldc_work_handle_job_done(struct ldc_ctx *dev, struct ldc_job *job)
 
 	ldc_proc_record_job_done(job);
 
-	osal_spin_lock_irqsave(&job->lock, &flags);
+	osal_spin_lock_irqsave(&dev->ctx_lock, &flags);
 	osal_list_del(&job->node);
-	job->job_done_evt = true;
-	osal_spin_unlock_irqrestore(&job->lock, &flags);
+	osal_spin_unlock_irqrestore(&dev->ctx_lock, &flags);
 
 	TRACE_LDC(DBG_INFO, "job [%px] done\n", job);
 
@@ -291,8 +290,9 @@ static void ldc_work_handle_job_done(struct ldc_ctx *dev, struct ldc_job *job)
 
 	if (job->identity.sync_io) {
 		TRACE_LDC(DBG_INFO, "job[%px] wake endjob\n", job);
-		osal_wait_wakeup(&job->job_done_wq);
+		osal_sem_up(&job->job_done_sem);
 	} else {
+		osal_sem_destroy(&job->job_done_sem);
 		osal_spin_lock_destroy(&job->lock);
 		osal_kfree(job);
 	}
@@ -980,17 +980,19 @@ static int ldc_event_handler_th(void *data)
 			goto continue_th;
 		}
 
-		if (!ldc_have_idle_core(ctx, job->devs_type)) {
-			TRACE_LDC(DBG_INFO, "core busy, not have idle core\n");
-			goto continue_th;
-		}
-
 		if (ctx->suspend == true) {
 			goto continue_th;
 		}
 
 		osal_spin_lock_irqsave(&ctx->ctx_lock, &flags);
 		job = osal_list_first_entry(&ctx->job_list, struct ldc_job, node);
+
+		if (!ldc_have_idle_core(ctx, job->devs_type)) {
+			TRACE_LDC(DBG_INFO, "core busy, not have idle core\n");
+			osal_spin_unlock_irqrestore(&ctx->ctx_lock, &flags);
+			goto continue_th;
+		}
+
 		osal_list_del(&job->node);
 		osal_spin_unlock_irqrestore(&ctx->ctx_lock, &flags);
 
@@ -1179,19 +1181,13 @@ int ldc_begin_job(struct ldc_ctx *ctx, struct gdc_handle_data *data)
 	osal_atomic_set(&job->task_num, 0);
 	job->identity.sync_io = true;
 	job->devs_type = DEVS_MAX;
+	osal_sem_init(&job->job_done_sem, 0);
 
 	data->handle = (u64)(uintptr_t)job;
 
 	TRACE_LDC(DBG_DEBUG, "job[%px]++\n", job);
 
 	return ret;
-}
-
-static int ldc_job_done_evt_func(const void *param)
-{
-	struct ldc_job *job = (struct ldc_job *)param;
-
-	return job->job_done_evt;
 }
 
 int ldc_end_job(struct ldc_ctx *ctx, unsigned long long handle)
@@ -1215,6 +1211,7 @@ int ldc_end_job(struct ldc_ctx *ctx, unsigned long long handle)
 
 	if (ctx->job_cnt >= END_JOB_MAX_LEN) {
 		TRACE_LDC(DBG_ERR, "job_cnt is full.\n");
+		osal_sem_destroy(&job->job_done_sem);
 		osal_spin_lock_destroy(&job->lock);
 		osal_kfree(job);
 		return ERR_GDC_BUF_FULL;
@@ -1246,18 +1243,12 @@ int ldc_end_job(struct ldc_ctx *ctx, unsigned long long handle)
 	TRACE_LDC(DBG_INFO, "job[%px] name[%s] sync_io=%d\n", job, job->identity.name, job->identity.sync_io);
 
 	if (job->identity.sync_io) {
-		osal_spin_lock_irqsave(&job->lock, &flags);
-		osal_wait_init(&job->job_done_wq);
-		job->job_done_evt = false;
-		osal_spin_unlock_irqrestore(&job->lock, &flags);
-
-		sync_io_ret = osal_wait_timeout_uninterruptible(&job->job_done_wq, ldc_job_done_evt_func,
-			job, timeout);
-		if (sync_io_ret == 0) {
+		sync_io_ret = osal_sem_down_timeout(&job->job_done_sem, timeout);
+		if (sync_io_ret) {
 			TRACE_LDC(DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
-			return -1;
+			return sync_io_ret;
 		}
-		osal_wait_destroy(&job->job_done_wq);
+		osal_sem_destroy(&job->job_done_sem);
 		osal_spin_lock_destroy(&job->lock);
 		osal_kfree(job);
 	}
@@ -1287,7 +1278,7 @@ static int ldc_cancel_wait_job(struct ldc_ctx *ctx, struct ldc_job *job_handle)
 		ctx->job_cnt--;
 		osal_spin_unlock_irqrestore(&ctx->ctx_lock, &flags);
 
-		osal_wait_destroy(&job->job_done_wq);
+		osal_sem_destroy(&job->job_done_sem);
 		osal_spin_lock_destroy(&job->lock);
 
 		osal_list_for_each_entry_safe(tsk, tmp_tsk, &job->task_list, node) {
@@ -1347,7 +1338,7 @@ static int ldc_cancel_work_job(struct ldc_ctx *ctx, struct ldc_job *job_handle)
 			osal_list_del(&job_handle->node);
 			osal_spin_unlock_irqrestore(&core->core_lock, &flags);
 
-			osal_wait_destroy(&job->job_done_wq);
+			osal_sem_destroy(&job->job_done_sem);
 			osal_spin_lock_destroy(&job->lock);
 
 			osal_list_for_each_entry_safe(tsk, tmp_tsk, &job->task_list, node) {

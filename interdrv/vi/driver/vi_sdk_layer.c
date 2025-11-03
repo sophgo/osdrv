@@ -1,6 +1,6 @@
 #include "osal_def.h"
 #include "vi_sdk_layer.h"
-#include "vi_interfaces.h"
+#include "vi.h"
 #include "vi_dump_register.h"
 #include "base_ctx.h"
 #include "comm_buffer.h"
@@ -14,6 +14,7 @@
 #include "ion.h"
 #include "vi_dma_setup.h"
 #include "vi_tun_ip_ctrl.h"
+#include "vi_isp_buf_ctrl.h"
 
 /****************************************************************************
  * Global parameters
@@ -40,7 +41,7 @@ static inline int check_vi_chn_valid(int chn)
 	return 0;
 }
 
-static inline int check_vi_chn_enable(struct sop_vi_ctx *vi_ctx, int chn)
+static inline int check_vi_chn_enable(struct vi_ctx *vi_ctx, int chn)
 {
 	if (!vi_ctx->is_chn_enable[chn]) {
 		vi_pr(VI_ERR, "chn %d, not created Caller is %p\n",
@@ -62,7 +63,7 @@ static inline int check_vi_pipe_valid(int pipe)
 	return 0;
 }
 
-static inline int check_vi_pipe_created(struct sop_vi_ctx *vi_ctx, int pipe)
+static inline int check_vi_pipe_created(struct vi_ctx *vi_ctx, int pipe)
 {
 	if (!vi_ctx->is_pipe_created[pipe]) {
 		vi_pr(VI_ERR, "pipe %d not created Caller is %p\n",
@@ -87,7 +88,7 @@ static inline int check_vi_size_valid(int w, int h)
 /****************************************************************************
  * SDK layer APIs
  ****************************************************************************/
-static int _vi_sdk_drv_qbuf(struct sop_vi_dev *vdev, struct video_buffer *buf, int pipe, int chn_id)
+static int _vi_sdk_drv_qbuf(struct vi_dev *vdev, struct video_buffer *buf, int pipe, int chn_id)
 {
 	struct sop_isp_buf *qbuf;
 	u8 i = 0;
@@ -126,12 +127,14 @@ static int _vi_sdk_drv_qbuf(struct sop_vi_dev *vdev, struct video_buffer *buf, i
 		qbuf->buf.planes[i].addr = buf->phy_addr[i];
 	}
 
-	sop_isp_rdy_buf_queue(vdev, qbuf);
+	sop_isp_rdy_buf_queue(&vdev->qbuf_q[pipe][chn_id], qbuf);
+
+	vi_preraw_trigger(vdev, pipe, chn_id);
 
 	return 0;
 }
 
-static bool is_valid_yuv_bt_mode(struct sop_vi_ctx *vi_ctx, int dev)
+static bool is_valid_yuv_bt_mode(struct vi_ctx *vi_ctx, int dev)
 {
 	const vi_dev_attr_s *attr = &vi_ctx->dev_attr[dev];
 	bool is_yuv = (attr->input_data_type == VI_DATA_TYPE_YUV ||
@@ -149,10 +152,10 @@ static bool is_valid_raw_num(int raw_num, bool is_yuv_bt)
 			(raw_num >= ISP_PRERAW0 && raw_num <= ISP_PRERAW2);
 }
 
-static int vi_set_dev_bind_info(struct sop_vi_dev *vdev, int dev, vi_dev_bind_pipe_s *attr)
+static int vi_set_dev_bind_info(struct vi_dev *vdev, int dev, vi_dev_bind_pipe_s *attr)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	int phy_raw = attr->mipi_dev, cur_raw = attr->mipi_dev;
 	bool is_yuv_bt = false;
 	int pipe = 0, i = 0;
@@ -191,8 +194,8 @@ static int vi_set_dev_bind_info(struct sop_vi_dev *vdev, int dev, vi_dev_bind_pi
 
 int vi_sdk_qbuf(mmf_chn_s mmf_chn, void *data)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)data;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_dev *vdev = (struct vi_dev *)data;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	int pipe = mmf_chn.dev_id;
 	int chn = mmf_chn.chn_id;
 	vb_blk blk = VB_INVALID_HANDLE;
@@ -249,10 +252,10 @@ int vi_sdk_qbuf(mmf_chn_s mmf_chn, void *data)
 	return rc;
 }
 
-int vi_set_bypass_frm(struct sop_vi_dev *vdev, int pipe, u8 bypass_num)
+int vi_set_bypass_frm(struct vi_dev *vdev, int pipe, u8 bypass_num)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	struct isp_ctx *ctx = &vdev->ctx;
 
 	ret = check_vi_pipe_valid(pipe);
@@ -267,11 +270,11 @@ int vi_set_bypass_frm(struct sop_vi_dev *vdev, int pipe, u8 bypass_num)
 	return 0;
 }
 
-int vi_set_dev_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_attr_s *dev_attr)
+int vi_set_dev_attr(struct vi_dev *vdev, int dev, const vi_dev_attr_s *dev_attr)
 {
 	int ret = 0;
 	u32 chn_num = 1;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -320,10 +323,10 @@ int vi_set_dev_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_attr_s *dev_a
 	return ret;
 }
 
-int vi_get_dev_attr(struct sop_vi_dev *vdev, int vi_dev, vi_dev_attr_s *dev_attr)
+int vi_get_dev_attr(struct vi_dev *vdev, int vi_dev, vi_dev_attr_s *dev_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(vi_dev);
 	if (ret != 0)
@@ -334,10 +337,10 @@ int vi_get_dev_attr(struct sop_vi_dev *vdev, int vi_dev, vi_dev_attr_s *dev_attr
 	return ret;
 }
 
-int vi_set_dev_attr_ex(struct sop_vi_dev *vdev, int dev, const vi_dev_attr_ex_s *dev_attr_ex)
+int vi_set_dev_attr_ex(struct vi_dev *vdev, int dev, const vi_dev_attr_ex_s *dev_attr_ex)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -363,10 +366,10 @@ int vi_set_dev_attr_ex(struct sop_vi_dev *vdev, int dev, const vi_dev_attr_ex_s 
 	return ret;
 }
 
-int vi_get_dev_attr_ex(struct sop_vi_dev *vdev, int vi_dev, vi_dev_attr_ex_s *dev_attr_ex)
+int vi_get_dev_attr_ex(struct vi_dev *vdev, int vi_dev, vi_dev_attr_ex_s *dev_attr_ex)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(vi_dev);
 	if (ret != 0)
@@ -377,10 +380,10 @@ int vi_get_dev_attr_ex(struct sop_vi_dev *vdev, int vi_dev, vi_dev_attr_ex_s *de
 	return ret;
 }
 
-int vi_set_dev_bind_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_bind_pipe_s *dev_bind_attr)
+int vi_set_dev_bind_attr(struct vi_dev *vdev, int dev, const vi_dev_bind_pipe_s *dev_bind_attr)
 {
 	int ret = 0, i = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -418,10 +421,10 @@ int vi_set_dev_bind_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_bind_pip
 	return ret;
 }
 
-int vi_get_dev_bind_attr(struct sop_vi_dev *vdev, int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
+int vi_get_dev_bind_attr(struct vi_dev *vdev, int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(vi_dev);
 	if (ret != 0)
@@ -432,12 +435,12 @@ int vi_get_dev_bind_attr(struct sop_vi_dev *vdev, int vi_dev, vi_dev_bind_pipe_s
 	return ret;
 }
 
-int vi_set_dev_unbind_attr(struct sop_vi_dev *vdev, int dev)
+int vi_set_dev_unbind_attr(struct vi_dev *vdev, int dev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	int raw_num = 0;
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -458,15 +461,10 @@ int vi_set_dev_unbind_attr(struct sop_vi_dev *vdev, int dev)
 	return ret;
 }
 
-static void vi_configure_csi(struct sop_vi_dev *vdev, uint8_t raw_num, vi_dev_attr_s *dev_attr)
+static void vi_configure_csi(struct vi_dev *vdev, uint8_t raw_num, vi_dev_attr_s *dev_attr)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	uint8_t fe_chn = 0;
-
-	if (dev_attr->intf_mode == VI_MODE_LVDS) {
-		ctx->is_sublvds_path = true;
-		vi_pr(VI_WARN, "SUBLVDS_PATH_ON(%d)\n", ctx->is_sublvds_path);
-	}
 
 	if (dev_attr->input_data_type == VI_DATA_TYPE_YUV ||
 		dev_attr->input_data_type == VI_DATA_TYPE_YUV_EARLY) {
@@ -499,16 +497,17 @@ static void vi_configure_csi(struct sop_vi_dev *vdev, uint8_t raw_num, vi_dev_at
 	ctx->isp_csi_cfg[raw_num].rgb_color_mode = bayer_type_mapping((enum isp_bayer_type_e)dev_attr->bayer_format);
 	ctx->isp_csi_cfg[raw_num].rgb_color_mode_pre_crop = ctx->isp_csi_cfg[raw_num].rgb_color_mode;
 
+	ctx->is_sublvds_path = (dev_attr->intf_mode == VI_MODE_SLVS) ? true : false;
 	ctx->is_hdr_on |= ctx->isp_csi_cfg[raw_num].is_hdr_on;
 
 	ctx->isp_csi_cfg[raw_num].is_enable = true;
 }
 
-static void vi_configure_mux_dev(struct sop_vi_dev *vdev, int dev)
+static void vi_configure_mux_dev(struct vi_dev *vdev, int dev)
 {
 	int i = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	enum sop_isp_raw cur_raw = ctx->bind_raw[dev];
 	int phy_dev = vi_ctx->dev_attr_ex[dev].phy_dev;
 	enum sop_isp_raw phy_raw = ctx->bind_raw[phy_dev];
@@ -545,7 +544,7 @@ static void vi_configure_mux_dev(struct sop_vi_dev *vdev, int dev)
 	vi_ctx->is_dev_enable[dev] = true;
 }
 
-int vi_enable_patgen(struct sop_vi_dev *vdev, int dev)
+int vi_enable_patgen(struct vi_dev *vdev, int dev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -561,12 +560,12 @@ int vi_enable_patgen(struct sop_vi_dev *vdev, int dev)
 	return 0;
 }
 
-int vi_enable_dev(struct sop_vi_dev *vdev, int dev)
+int vi_enable_dev(struct vi_dev *vdev, int dev)
 {
 	int ret = 0;
 	int raw_num = ISP_PRERAW0;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -596,9 +595,9 @@ int vi_enable_dev(struct sop_vi_dev *vdev, int dev)
 	raw_num = ctx->bind_raw[dev];
 	vi_configure_csi(vdev, raw_num, &vi_ctx->dev_attr[dev]);
 
-	_vi_csi_ctrl_init(vdev, raw_num);
+	vi_csi_ctrl_init(vdev, raw_num);
 
-	_vi_scene_ctrl(vdev);
+	vi_scene_ctrl(vdev);
 
 	vi_pr(VI_DBG, "dev_%d, raw_num(%d) enable=%d, total_dev_num=%d\n",
 		dev, raw_num, vi_ctx->is_dev_enable[dev], vi_ctx->total_dev_num);
@@ -608,12 +607,12 @@ int vi_enable_dev(struct sop_vi_dev *vdev, int dev)
 	return 0;
 }
 
-int vi_disable_dev(struct sop_vi_dev *vdev, int dev)
+int vi_disable_dev(struct vi_dev *vdev, int dev)
 {
 	int ret = 0;
 	u8 raw_num;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -634,6 +633,8 @@ int vi_disable_dev(struct sop_vi_dev *vdev, int dev)
 		return -1;
 	}
 
+	osal_memset(&ctx->isp_csi_cfg[raw_num], 0, sizeof(struct _csi_cfg));
+
 	vi_ctx->total_dev_num--;
 	vi_ctx->is_dev_enable[dev] = false;
 	osal_memset(&vi_ctx->dev_attr[dev], 0, sizeof(vi_dev_attr_s));
@@ -645,10 +646,10 @@ int vi_disable_dev(struct sop_vi_dev *vdev, int dev)
 	return ret;
 }
 
-int vi_create_pipe(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
+int vi_create_pipe(struct vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -682,10 +683,10 @@ int vi_create_pipe(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
 	return 0;
 }
 
-int vi_destroy_pipe(struct sop_vi_dev *vdev, int pipe)
+int vi_destroy_pipe(struct vi_dev *vdev, int pipe)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	struct isp_ctx *ctx = &vdev->ctx;
 
 	ret = check_vi_pipe_valid(pipe);
@@ -715,7 +716,8 @@ int vi_destroy_pipe(struct sop_vi_dev *vdev, int pipe)
 	vi_ctx->is_pipe_created[pipe] = false;
 	vi_ctx->bypass_frm[pipe] = 0;
 
-	ctx->isp_pipe_cfg[pipe].is_enable = false;
+	osal_memset(&ctx->isp_pipe_cfg[pipe], 0, sizeof(struct _isp_cfg));
+	ctx->isp_pipe_cfg[pipe].is_offline_scaler = true;
 
 	vi_pr(VI_INFO, "pipe_%d destroy\n", pipe);
 
@@ -724,11 +726,11 @@ int vi_destroy_pipe(struct sop_vi_dev *vdev, int pipe)
 	return 0;
 }
 
-int vi_start_pipe(struct sop_vi_dev *vdev, int pipe)
+int vi_start_pipe(struct vi_dev *vdev, int pipe)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 
 	ret = check_vi_pipe_valid(pipe);
@@ -759,7 +761,7 @@ int vi_start_pipe(struct sop_vi_dev *vdev, int pipe)
 		goto fail_to_start_csi;
 	}
 
-	_vi_isp_ctrl_init(vdev, pipe);
+	vi_isp_ctrl_init(vdev, pipe);
 
 	ret = vi_get_isp_ion_buf(vdev, pipe);
 	if (ret != 0) {
@@ -784,12 +786,12 @@ fail_to_start_csi:
 	return ret;
 }
 
-int vi_set_chn_attr(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *chn_attr)
+int vi_set_chn_attr(struct vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *chn_attr)
 {
 	int ret = 0;
 	vb_cal_config_s vb_cal_config;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -823,10 +825,10 @@ int vi_set_chn_attr(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *c
 	return ret;
 }
 
-int vi_get_chn_attr(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *chn_attr)
+int vi_get_chn_attr(struct vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *chn_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -841,10 +843,10 @@ int vi_get_chn_attr(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_attr_s *c
 	return ret;
 }
 
-int vi_set_dev_timing_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_timing_attr_s *timing_attr)
+int vi_set_dev_timing_attr(struct vi_dev *vdev, int dev, const vi_dev_timing_attr_s *timing_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -868,10 +870,10 @@ int vi_set_dev_timing_attr(struct sop_vi_dev *vdev, int dev, const vi_dev_timing
 	return ret;
 }
 
-int vi_get_dev_timing_attr(struct sop_vi_dev *vdev, int dev, vi_dev_timing_attr_s *timing_attr)
+int vi_get_dev_timing_attr(struct vi_dev *vdev, int dev, vi_dev_timing_attr_s *timing_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_dev_valid(dev);
 	if (ret != 0)
@@ -886,10 +888,10 @@ int vi_get_dev_timing_attr(struct sop_vi_dev *vdev, int dev, vi_dev_timing_attr_
 	return ret;
 }
 
-int vi_get_pipe_status(struct sop_vi_dev *vdev, int pipe, vi_pipe_status_s *pipe_status)
+int vi_get_pipe_status(struct vi_dev *vdev, int pipe, vi_pipe_status_s *pipe_status)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -906,10 +908,10 @@ int vi_get_pipe_status(struct sop_vi_dev *vdev, int pipe, vi_pipe_status_s *pipe
 	return ret;
 }
 
-int vi_get_chn_status(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_status_s *chn_status)
+int vi_get_chn_status(struct vi_dev *vdev, int pipe, int chn, vi_chn_status_s *chn_status)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -931,10 +933,10 @@ int vi_get_chn_status(struct sop_vi_dev *vdev, int pipe, int chn, vi_chn_status_
 	return ret;
 }
 
-int vi_set_pipe_frame_source(struct sop_vi_dev *vdev, int pipe, const vi_pipe_frame_source_e source)
+int vi_set_pipe_frame_source(struct vi_dev *vdev, int pipe, const vi_pipe_frame_source_e source)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -955,10 +957,10 @@ int vi_set_pipe_frame_source(struct sop_vi_dev *vdev, int pipe, const vi_pipe_fr
 	return ret;
 }
 
-int vi_get_pipe_frame_source(struct sop_vi_dev *vdev, int pipe, vi_pipe_frame_source_e *psource)
+int vi_get_pipe_frame_source(struct vi_dev *vdev, int pipe, vi_pipe_frame_source_e *psource)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -969,11 +971,11 @@ int vi_get_pipe_frame_source(struct sop_vi_dev *vdev, int pipe, vi_pipe_frame_so
 	return ret;
 }
 
-int vi_send_pipe_raw(struct sop_vi_dev *vdev, int pipe, const video_frame_info_s *pvideo_frame)
+int vi_send_pipe_raw(struct vi_dev *vdev, int pipe, const video_frame_info_s *pvideo_frame)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	u64 phy_addr;
 	u32 dmaid_le, dmaid_se;
 
@@ -1042,6 +1044,7 @@ int vi_send_pipe_raw(struct sop_vi_dev *vdev, int pipe, const video_frame_info_s
 	}
 
 	if (vdev->usr_pic_delay) {
+		usr_pic_timer_init(vdev);
 		usr_pic_timer_start(vdev);
 	} else {
 		user_pic_trig(vdev, (pvideo_frame->video_frame.time_ref == 1));
@@ -1052,11 +1055,11 @@ int vi_send_pipe_raw(struct sop_vi_dev *vdev, int pipe, const video_frame_info_s
 	return ret;
 }
 
-int vi_enable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
+int vi_enable_chn(struct vi_dev *vdev, int pipe, int chn)
 {
 	int rc = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	u8 num_buffers = 0;
 	u8 create_thread = false;
 	mmf_chn_s mmf_chn = {.mod_id = ID_VI, .dev_id = pipe, .chn_id = chn};
@@ -1096,6 +1099,7 @@ int vi_enable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
 	}
 
 	if (create_thread) {
+		vdev->vi_qbuf = vi_sdk_qbuf;
 		rc = vi_create_thread(vdev, E_VI_TH_EVENT_HANDLER);
 		if (rc) {
 			vi_pr(VI_ERR, "Failed to create VI_EVENT_HANDLER thread\n");
@@ -1120,11 +1124,11 @@ ERR_QBUF:
 	return rc;
 }
 
-int vi_disable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
+int vi_disable_chn(struct vi_dev *vdev, int pipe, int chn)
 {
 	int rc = 0;
 	int i = 0, j = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	bool is_streaming = false;
 
 	if (vi_isp_stop_streaming(vdev, pipe, chn)) {
@@ -1141,7 +1145,8 @@ int vi_disable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
 
 	if (!is_streaming) {
 		vi_destroy_thread(vdev, E_VI_TH_EVENT_HANDLER);
-		vi_destory_dbg_thread(vdev);
+		vi_destroy_dbg_thread(vdev);
+		vdev->vi_qbuf = NULL;
 	}
 
 	if (vdev->vi_jobs[pipe][chn].inited) {
@@ -1154,10 +1159,10 @@ int vi_disable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
 	return rc;
 }
 
-static int vi_sdk_enable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
+static int vi_sdk_enable_chn(struct vi_dev *vdev, int pipe, int chn)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1188,10 +1193,10 @@ static int vi_sdk_enable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
 	return 0;
 }
 
-static int vi_sdk_disable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
+static int vi_sdk_disable_chn(struct vi_dev *vdev, int pipe, int chn)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1228,13 +1233,13 @@ static int vi_sdk_disable_chn(struct sop_vi_dev *vdev, int pipe, int chn)
 	return 0;
 }
 
-static int vi_get_chn_frame(struct sop_vi_dev *vdev, int pipe, int chn, video_frame_info_s *frame_info, int millisec)
+static int vi_get_chn_frame(struct vi_dev *vdev, int pipe, int chn, video_frame_info_s *frame_info, int millisec)
 {
 	vb_blk blk;
 	struct vb_s *vb;
 	int ret;
 	mmf_chn_s mmf_chn = {.mod_id = ID_VI, .dev_id = pipe, .chn_id = chn};
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	int i = 0;
 
 	ret = check_vi_pipe_valid(pipe);
@@ -1295,11 +1300,11 @@ static int vi_get_chn_frame(struct sop_vi_dev *vdev, int pipe, int chn, video_fr
 	return ret;
 }
 
-int vi_release_chn_frame(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, video_frame_info_s *frame_info)
+int vi_release_chn_frame(struct vi_dev *vdev, int vi_pipe, int vi_chn, video_frame_info_s *frame_info)
 {
 	vb_blk blk;
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1333,11 +1338,11 @@ int vi_release_chn_frame(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, video
 	return 0;
 }
 
-int vi_set_chn_crop(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
+int vi_set_chn_crop(struct vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1387,10 +1392,10 @@ int vi_set_chn_crop(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_in
 	return 0;
 }
 
-int vi_get_chn_crop(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
+int vi_get_chn_crop(struct vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1410,12 +1415,12 @@ int vi_get_chn_crop(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vi_crop_in
 }
 
 //TODO need refactor
-int vi_set_pipe_crop(struct sop_vi_dev *vdev, int vi_pipe, crop_info_s *crop_info)
+int vi_set_pipe_crop(struct vi_dev *vdev, int vi_pipe, crop_info_s *crop_info)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct vi_rect crop;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1466,10 +1471,10 @@ int vi_set_pipe_crop(struct sop_vi_dev *vdev, int vi_pipe, crop_info_s *crop_inf
 	return 0;
 }
 
-int vi_get_pipe_crop(struct sop_vi_dev *vdev, int pipe, crop_info_s *crop_info)
+int vi_get_pipe_crop(struct vi_dev *vdev, int pipe, crop_info_s *crop_info)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1484,10 +1489,10 @@ int vi_get_pipe_crop(struct sop_vi_dev *vdev, int pipe, crop_info_s *crop_info)
 	return 0;
 }
 
-int vi_set_pipe_attr(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
+int vi_set_pipe_attr(struct vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1506,10 +1511,10 @@ int vi_set_pipe_attr(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_att
 	return 0;
 }
 
-int vi_get_pipe_attr(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
+int vi_get_pipe_attr(struct vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1530,10 +1535,10 @@ int vi_get_pipe_attr(struct sop_vi_dev *vdev, int pipe, vi_pipe_attr_s *pipe_att
 	return 0;
 }
 
-int vi_set_pipe_dump_attr(struct sop_vi_dev *vdev, int vi_pipe, vi_dump_attr_s *dump_attr)
+int vi_set_pipe_dump_attr(struct vi_dev *vdev, int vi_pipe, vi_dump_attr_s *dump_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1552,10 +1557,10 @@ int vi_set_pipe_dump_attr(struct sop_vi_dev *vdev, int vi_pipe, vi_dump_attr_s *
 	return 0;
 }
 
-int vi_get_pipe_dump_attr(struct sop_vi_dev *vdev, int vi_pipe, vi_dump_attr_s *dump_attr)
+int vi_get_pipe_dump_attr(struct vi_dev *vdev, int vi_pipe, vi_dump_attr_s *dump_attr)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1570,7 +1575,7 @@ int vi_get_pipe_dump_attr(struct sop_vi_dev *vdev, int vi_pipe, vi_dump_attr_s *
 	return 0;
 }
 
-int vi_get_pipe_frame(struct sop_vi_dev *vdev, int pipe, video_frame_info_s *frame_info, int millisec)
+int vi_get_pipe_frame(struct vi_dev *vdev, int pipe, video_frame_info_s *frame_info, int millisec)
 {
 	int ret;
 	struct raw_dump_info dump[2];
@@ -1581,7 +1586,7 @@ int vi_get_pipe_frame(struct sop_vi_dev *vdev, int pipe, video_frame_info_s *fra
 	int dev_id = 0, frm_num = 1, i = 0;
 	struct vi_rect rawdump_crop;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1781,10 +1786,10 @@ int vi_get_pipe_frame(struct sop_vi_dev *vdev, int pipe, video_frame_info_s *fra
 	return 0;
 }
 
-int vi_release_pipe_frame(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info_s *frame_info)
+int vi_release_pipe_frame(struct vi_dev *vdev, int vi_pipe, video_frame_info_s *frame_info)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1805,20 +1810,22 @@ int vi_release_pipe_frame(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 	return 0;
 }
 
-int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info_s *frame_info, int millisec)
+int vi_get_smooth_rawdump(struct vi_dev *vdev, int pipe, video_frame_info_s *frame_info, int millisec)
 {
 	int ret;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct raw_dump_info dump[2];
-	int dev_id = 0, frm_num = 1, i = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	int frm_num = 1, i = 0;
+	enum sop_isp_raw raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+	int dev = ctx->isp_csi_cfg[raw_num].bind_dev;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
-	ret = check_vi_pipe_valid(vi_pipe);
+	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
 		return ret;
 
 	osal_memset(dump, 0, sizeof(dump));
-	dump[0].raw_dump.raw_num = dump[1].raw_dump.raw_num = ctx->isp_pipe_cfg[vi_pipe].bind_raw;
+	dump[0].raw_dump.raw_num = dump[1].raw_dump.raw_num = raw_num;
 	dump[0].time_out = dump[1].time_out = millisec;
 
 	ret = isp_get_smooth_raw_dump(vdev, dump);
@@ -1842,9 +1849,9 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 		return -1;
 	}
 
-	if (vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
-	    vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
-	    vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
+	if (vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
+	    vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
+	    vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
 		frm_num = 2;
 	else
 		frm_num = 1;
@@ -1855,8 +1862,8 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 		frame_info[i].video_frame.stride[0]   = (ctx->is_dpcm_on)
 							? 3 * UPPER(dump[i].src_w, 2)
 							: 3 * UPPER(dump[i].src_w, 1);
-		frame_info[i].video_frame.bayer_format  = vi_ctx->dev_attr[dev_id].bayer_format;
-		frame_info[i].video_frame.compress_mode = vi_ctx->pipe_attr[0].compress_mode;
+		frame_info[i].video_frame.bayer_format  = vi_ctx->dev_attr[dev].bayer_format;
+		frame_info[i].video_frame.compress_mode = vi_ctx->pipe_attr[pipe].compress_mode;
 		frame_info[i].video_frame.width       = dump[i].src_w;
 		frame_info[i].video_frame.height      = dump[i].src_h;
 		frame_info[i].video_frame.offset_left  = dump[i].crop_x;
@@ -1874,20 +1881,22 @@ int vi_get_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 	return 0;
 }
 
-int vi_put_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info_s *frame_info)
+int vi_put_smooth_rawdump(struct vi_dev *vdev, int pipe, video_frame_info_s *frame_info)
 {
 	int ret;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct raw_dump_info dump[2];
 	vb_blk vb;
-	int frm_num, i, pipe;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	int frm_num, i;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	enum sop_isp_raw raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+	int dev = ctx->isp_csi_cfg[raw_num].bind_dev;
 
 	osal_memset(dump, 0, sizeof(dump));
 
-	if (vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
-	    vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
-	    vi_ctx->dev_attr[vi_pipe].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
+	if (vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_LINE ||
+	    vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME ||
+	    vi_ctx->dev_attr[dev].wdr_attr.wdr_mode == WDR_MODE_2TO1_FRAME_FULL_RATE)
 		frm_num = 2;
 	else
 		frm_num = 1;
@@ -1900,30 +1909,29 @@ int vi_put_smooth_rawdump(struct sop_vi_dev *vdev, int vi_pipe, video_frame_info
 		}
 
 		dump[i].raw_dump.phy_addr = frame_info[i].video_frame.phyaddr[0];
-		vi_pr(VI_DBG, "Put paddr(0x%llx)\n", dump[i].raw_dump.phy_addr);
+		dump[i].raw_dump.raw_num = raw_num;
 
-		pipe = dump[i].raw_dump.raw_num;
-		dump[i].raw_dump.raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+		vi_pr(VI_DBG, "raw(%d) Put paddr(0x%llx)\n", raw_num, dump[i].raw_dump.phy_addr);
 	}
 
-	osal_mutex_lock(&vi_ctx->pipe_lock[vi_pipe]);
+	osal_mutex_lock(&vi_ctx->pipe_lock[pipe]);
 
 	ret = isp_put_smooth_raw_dump(vdev, dump);
 	if (ret != 0) {
 		vi_pr(VI_ERR, "isp_put_smooth_raw_dump failed\n");
-		osal_mutex_unlock(&vi_ctx->pipe_lock[vi_pipe]);
+		osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
 		return -1;
 	}
 
-	osal_mutex_unlock(&vi_ctx->pipe_lock[vi_pipe]);
+	osal_mutex_unlock(&vi_ctx->pipe_lock[pipe]);
 
 	return 0;
 }
 
-static int _vi_update_rotation_mesh(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e rotation)
+static int _vi_update_rotation_mesh(struct vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e rotation)
 {
 	struct gdc_mesh *pmesh = &vdev->mesh[vi_pipe][vi_chn];
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	osal_mutex_lock(&pmesh->lock);
 	pmesh->paddr = 0x80000000;
@@ -1933,32 +1941,7 @@ static int _vi_update_rotation_mesh(struct sop_vi_dev *vdev, int vi_pipe, int vi
 	return 0;
 }
 
-static int _vi_update_ldc_mesh(struct sop_vi_dev *vdev,
-			       vi_pipe pipe,
-			       vi_chn chn,
-			       const vi_ldc_attr_s *ldc_attr,
-			       u64 paddr)
-{
-	struct gdc_mesh *pmesh = &vdev->mesh[pipe][chn];
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
-
-	osal_mutex_lock(&pmesh->lock);
-	pmesh->paddr = paddr;
-	pmesh->vaddr = NULL;
-
-	vi_ctx->ldc_attr[pipe][chn] = *ldc_attr;
-	osal_mutex_unlock(&pmesh->lock);
-
-	vi_pr(VI_DBG, "Pipe(%d) Chn(%d) mesh base(0x%llx)\n", pipe, chn, (unsigned long long)paddr);
-	vi_pr(VI_DBG, "enable=%d, apect=%d, xyratio=%d, xoffset=%d, yoffset=%d, ratio=%d, rotation=%d\n",
-			ldc_attr->enable, ldc_attr->attr.aspect,
-			ldc_attr->attr.x_ratio, ldc_attr->attr.center_x_offset,
-			ldc_attr->attr.center_y_offset, ldc_attr->attr.distortion_ratio,
-			ldc_attr->attr.rotation);
-	return 0;
-}
-
-int vi_set_chn_rotation(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e rotation)
+int vi_set_chn_rotation(struct vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e rotation)
 {
 	int ret = 0;
 
@@ -1975,10 +1958,10 @@ int vi_set_chn_rotation(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, rotati
 	return _vi_update_rotation_mesh(vdev, vi_pipe, vi_chn, rotation);
 }
 
-int vi_get_chn_rotation(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e *rotation)
+int vi_get_chn_rotation(struct vi_dev *vdev, int vi_pipe, int vi_chn, rotation_e *rotation)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -1997,15 +1980,15 @@ int vi_get_chn_rotation(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, rotati
 	return ret;
 }
 
-int vi_set_chn_ldc_attr(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, const vi_ldc_attr_s *ldc_attr, u64 mesh_addr)
+int vi_set_chn_ldc_attr(struct vi_dev *vdev, int vi_pipe, int vi_chn, const vi_ldc_attr_s *ldc_attr, u64 mesh_addr)
 {
-	return _vi_update_ldc_mesh(vdev, vi_pipe, vi_chn, ldc_attr, mesh_addr);
+	return vi_update_ldc_mesh(vdev, vi_pipe, vi_chn, ldc_attr, mesh_addr);
 }
 
-int vi_get_chn_ldc_attr(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
+int vi_get_chn_ldc_attr(struct vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -2023,10 +2006,10 @@ int vi_get_chn_ldc_attr(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, struct
 	return ret;
 }
 
-int vi_set_chn_flip_mirror(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
+int vi_set_chn_flip_mirror(struct vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -2050,10 +2033,10 @@ int vi_set_chn_flip_mirror(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, str
 	return ret;
 }
 
-int vi_get_chn_flip_mirror(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
+int vi_get_chn_flip_mirror(struct vi_dev *vdev, int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -2073,10 +2056,10 @@ int vi_get_chn_flip_mirror(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, str
 	return ret;
 }
 
-int vi_attach_vb_pool(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vb_pool vbp)
+int vi_attach_vb_pool(struct vi_dev *vdev, int vi_pipe, int vi_chn, vb_pool vbp)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -2097,10 +2080,10 @@ int vi_attach_vb_pool(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn, vb_pool 
 	return 0;
 }
 
-int vi_detach_vb_pool(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn)
+int vi_detach_vb_pool(struct vi_dev *vdev, int vi_pipe, int vi_chn)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	ret = check_vi_pipe_valid(vi_pipe);
 	if (ret != 0)
@@ -2121,10 +2104,10 @@ int vi_detach_vb_pool(struct sop_vi_dev *vdev, int vi_pipe, int vi_chn)
 	return 0;
 }
 
-int vi_set_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t frame_count)
+int vi_set_dev_rx_frame_count(struct vi_dev *vdev, int dev, uint32_t frame_count)
 {
 	int ret = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	enum sop_isp_raw raw_num = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -2145,7 +2128,7 @@ int vi_set_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t frame_c
 	return 0;
 }
 
-int vi_get_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t *frame_count)
+int vi_get_dev_rx_frame_count(struct vi_dev *vdev, int dev, uint32_t *frame_count)
 {
 	int ret = 0;
 	enum sop_isp_raw raw_num = 0;
@@ -2161,9 +2144,9 @@ int vi_get_dev_rx_frame_count(struct sop_vi_dev *vdev, int dev, uint32_t *frame_
 	return 0;
 }
 
-void vi_sdk_release(struct sop_vi_dev *vdev)
+void vi_sdk_release(struct vi_dev *vdev)
 {
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	uint8_t dev = 0, pipe = 0, chn = 0;
 
 	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
@@ -2178,19 +2161,16 @@ void vi_sdk_release(struct sop_vi_dev *vdev)
 	for (dev = 0; dev < VI_MAX_DEV_NUM; dev++) {
 		vi_disable_dev(vdev, dev);
 	}
-
-	vi_sw_deinit(vdev);
-
 }
 
 /*****************************************************************************
  *  SDK layer ioctl operations for vi.c
  ****************************************************************************/
-long vi_sdk_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
+long vi_sdk_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 {
 	u32 id = ctrl->id;
 	long rc = ERR_VI_INVALID_PARA;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	switch (id) {
 	case VI_SDK_GET_DEV_NUM:

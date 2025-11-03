@@ -29,6 +29,6 @@ struct gamma_tbl {
 	struct reg_tbl rdata_gb;
 };
 
-int vi_dump_register(struct sop_vi_dev *vdev, int pipe, void *addr, int *size);
+int vi_dump_register(struct vi_dev *vdev, int pipe, void *addr, int *size);
 
 #endif

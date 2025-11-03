@@ -6,7 +6,7 @@
 struct platform_vi_dev {
 	osal_atomic			dev_open_cnt;
 
-	struct sop_vi_dev		vdev;
+	struct vi_dev		vdev;
 };
 
 #endif

@@ -14,6 +14,14 @@
 #define REG_DSI_WRAP_BASE(x) (0x0A098000)
 #define REG_VO_MAC_BASE(x) (0x0A0A8000)
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
+
+static const char *const clk_vo_name[] = {
+	"reg_clk_disp_vip_en", "reg_clk_dsi_mac_vip_en", "reg_clk_vo_mac_vip_en"
+};
+
 int driver_vo_init()
 {
 	int ret = 0;
@@ -38,6 +46,16 @@ int driver_vo_init()
 		goto vo_core_register_cb_err;
 	}
 
+	for (i = 0; i < ARRAY_SIZE(clk_vo_name); ++i) {
+		g_vo_ctx->clk_vo[i] = osal_clk_get(NULL, clk_vo_name[i]);
+		if (g_vo_ctx->clk_vo[i] == NULL) {
+			TRACE_VO(DBG_ERR, "Cannot get clk for %s\n", clk_vo_name[i]);
+		}
+		if (g_vo_ctx->clk_vo[i]) {
+			osal_clk_prepare_enable(g_vo_ctx->clk_vo[i]);
+		}
+	}
+
 	TRACE_VO(DBG_ERR, "driver_vo_init\n");
 
 	return ret;
@@ -50,6 +68,7 @@ vo_core_register_cb_err:
 int driver_vo_exit()
 {
 	int ret = 0;
+	int i = 0;
 
 	ret = vo_destroy_instance();
 	if (ret) {
@@ -60,6 +79,14 @@ int driver_vo_exit()
 	ret = vo_core_rm_cb();
 	if (ret) {
 		TRACE_VO(DBG_ERR, "Failed to rm vo cb, err %d\n", ret);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(g_vo_ctx->clk_vo); ++i) {
+		if ((g_vo_ctx->clk_vo[i]) && osal_clk_is_enabled(g_vo_ctx->clk_vo[i])) {
+			osal_clk_disable_unprepare(g_vo_ctx->clk_vo[i]);
+			osal_clk_put(NULL, g_vo_ctx->clk_vo[i]);
+			g_vo_ctx->clk_vo[i] = NULL;
+		}
 	}
 
 err_destroy_instance:

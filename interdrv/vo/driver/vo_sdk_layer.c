@@ -1218,7 +1218,7 @@ static int vo_set_videolayerattr(vo_layer layer, const vo_video_layer_attr_s *la
 		      layer_attr->pixformat, dev);
 
 	disp_set_window_bgcolor(dev, rgb[0], rgb[1], rgb[2]);
-	disp_enable_window_bgcolor(layer, true);
+	// disp_enable_window_bgcolor(layer, true);
 
 	rect.w = layer_attr->disp_rect.width;
 	rect.h = layer_attr->disp_rect.height;
@@ -1774,7 +1774,7 @@ static int vo_pause_chn(vo_layer layer, vo_chn chn)
 
 	jobs = &chn_ctx->chn_jobs;
 	osal_mutex_lock(&jobs->lock);
-	while (!FIFO_EMPTY(&jobs->waitq)) {
+	while (FIFO_SIZE(&jobs->waitq) > 1) {
 		FIFO_POP(&jobs->waitq, &vb);
 		vb_release_block((vb_blk)(uintptr_t)vb);
 	}

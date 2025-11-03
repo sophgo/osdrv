@@ -62,13 +62,13 @@ struct isp_event_q {
 	u8			count;
 };
 
-struct sop_isp_mbus_framefmt {
+struct isp_mbus_framefmt {
 	__u32	width;
 	__u32	height;
 	__u32	code;
 };
 
-struct sop_isp_rect {
+struct isp_rect {
 	__s32	left;
 	__s32	top;
 	__u32	width;
@@ -95,10 +95,47 @@ struct stream_state_s {
 	osal_atomic			isp_init;
 };
 
+struct _isp_raw_num_n {
+	enum sop_isp_raw raw_num;
+	struct osal_list_head list;
+};
+
+struct isp_sof_raw_num_q {
+	struct osal_list_head	list;
+	osal_spinlock		lock;
+};
+
+struct _isp_dqbuf_n {
+	u8		pipe_id; // vi raw_num
+	u8		chn_id; // vi_out buf_chn
+	u32		frm_num;
+	osal_timeval	tv;
+	struct osal_list_head list;
+};
+struct _isp_snr_i2c_node {
+	struct snsr_regs_s n;
+	struct osal_list_head list;
+};
+
+struct _isp_crop_node {
+	struct snsr_isp_s n;
+	struct osal_list_head list;
+};
+
+struct isp_snr_queue {
+	struct osal_list_head	list;
+	u32			num_rdy;
+};
+
+struct isp_snr_cfg {
+	struct isp_snr_queue i2c_queue;
+	struct isp_snr_queue crop_queue;
+	osal_spinlock lock;
+};
 /**
  * struct sop_vi - VI IP abstraction
  */
-struct sop_vi_dev {
+struct vi_dev {
 	void				*reg_base;
 
 	int				irq_num;
@@ -109,15 +146,14 @@ struct sop_vi_dev {
 	struct overflow_info		*overflow_info;
 	struct isp_ctx			ctx;
 	osal_timer			usr_pic_timer;
-	struct sop_isp_mbus_framefmt	usr_fmt;
-	struct sop_isp_rect		usr_crop;
+	struct isp_mbus_framefmt	usr_fmt;
+	struct isp_rect			usr_crop;
 
 	u8				gamma_tbl_idx;
 	u8				timeout_cnt;
 	u64				usr_pic_phy_addr[ISP_RAW_PATH_MAX];
 	unsigned long			usr_pic_delay;
 	enum sop_isp_source		isp_source;
-	struct sop_isp_snr_info		snr_info[ISP_PRERAW_MAX];
 
 	struct raw_dump_s		raw_dump[ISP_PRERAW_MAX];
 	struct raw_dump_work		raw_dump_work;
@@ -142,10 +178,13 @@ struct sop_vi_dev {
 
 	struct vb_jobs_t		vi_jobs[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
 
-	struct osal_list_head		qbuf_list[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
-	osal_spinlock			qbuf_lock;
-	u8				qbuf_num[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
+	struct isp_snr_cfg		isp_snr_cfg[ISP_PRERAW_MAX];
 
+	struct isp_buf_q		qbuf_q[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
+	struct isp_buf_q		dqbuf_q;
+	struct isp_sof_raw_num_q	pre_raw_num_q;
+
+	int				(*vi_qbuf)(mmf_chn_s mmf_chn, void *data);
 	u32				pre_fe_sof_cnt[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];
 	u32				pre_fe_frm_num[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];
 	u32				postraw_frame_number[VI_MAX_PIPE_NUM];

@@ -130,8 +130,7 @@ struct ldc_job {
 	gdc_identity_attr_s identity;
 	bool use_cmdq;
 	char coreid;
-	osal_wait job_done_wq;
-	bool job_done_evt;
+	osal_semaphore job_done_sem;
 	enum ldc_job_devs_type devs_type; // job dev type
 	int proc_idx;
 };

@@ -6,7 +6,7 @@
 #define VI_PRC_NAME	"soph/vi"
 
 static void *vi_shared_mem;
-static struct sop_vi_dev *m_vdev;
+static struct vi_dev *m_vdev;
 
 /*************************************************************************
  *	VI proc functions
@@ -14,9 +14,9 @@ static struct sop_vi_dev *m_vdev;
 
 static void _vi_proc_show(void)
 {
-	struct sop_vi_dev *vdev = m_vdev;
+	struct vi_dev *vdev = m_vdev;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_proc_ctx = NULL;
+	struct vi_ctx *vi_proc_ctx = NULL;
 	u8 i = 0, pipe = 0, chn = 0;
 	char o[8], p[8];
 	u8 is_rgb = 0;
@@ -35,7 +35,7 @@ static void _vi_proc_show(void)
 		return;
 	}
 
-	vi_proc_ctx = (struct sop_vi_ctx *)(vi_shared_mem);
+	vi_proc_ctx = (struct vi_ctx *)(vi_shared_mem);
 
 	pos += sprintf(buf + pos,
 		       "\n-------------------------------MODULE PARAM-------------------------------------\n");
@@ -362,7 +362,7 @@ static void _vi_proc_show(void)
 	osal_free(buf);
 }
 
-int vi_proc_init(struct sop_vi_dev *_vdev, void *shm)
+int vi_proc_init(struct vi_dev *_vdev, void *shm)
 {
 	m_vdev = _vdev;
 	vi_shared_mem = shm;
@@ -386,7 +386,7 @@ static void vi_proc_show(int32_t argc, char **argv)
 
 ALIOS_CLI_CMD_REGISTER(vi_proc_show, proc_vi, "vi_proc");
 
-int vi_create_proc(struct sop_vi_dev *vdev)
+int vi_create_proc(struct vi_dev *vdev)
 {
 	int ret = 0;
 
@@ -403,7 +403,7 @@ int vi_create_proc(struct sop_vi_dev *vdev)
 	return ret;
 }
 
-void vi_destroy_proc(struct sop_vi_dev *vdev)
+void vi_destroy_proc(struct vi_dev *vdev)
 {
 	vi_proc_remove();
 	vi_dbg_proc_remove();

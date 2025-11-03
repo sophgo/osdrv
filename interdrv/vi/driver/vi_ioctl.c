@@ -1,7 +1,7 @@
 #include "vi_ioctl.h"
 #include "vi_uapi.h"
 #include "vi_tun_ip_ctrl.h"
-#include "vi_interfaces.h"
+#include "vi.h"
 
 static int vi_ai_isp_wait_cond(const void *param)
 {
@@ -10,7 +10,7 @@ static int vi_ai_isp_wait_cond(const void *param)
 	return osal_atomic_read(flag) == E_AI_WAKE_TYPE_MW;
 }
 
-static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, struct vi_ai_isp_cfg *cfg)
+static int ai_isp_resolve_cfg(struct vi_dev *vdev, struct vi_ai_isp_cfg *cfg)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	uint8_t pipe = cfg->vi_pipe;
@@ -57,7 +57,7 @@ static int ai_isp_resolve_cfg(struct sop_vi_dev *vdev, struct vi_ai_isp_cfg *cfg
 	return 0;
 }
 
-static long _vi_s_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
+static long _vi_s_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	u32 id = ctrl->id;
@@ -144,7 +144,7 @@ static long _vi_s_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
 			snr_update->snr_cfg_node.snsr.need_update,
 			snr_update->snr_cfg_node.isp.need_update);
 
-		isp_snr_cfg_enq(snr_update, raw_num);
+		isp_snr_cfg_enq(&vdev->isp_snr_cfg[raw_num], snr_update);
 
 		rc = 0;
 		break;
@@ -221,7 +221,7 @@ static long _vi_s_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
 	return rc;
 }
 
-static long _vi_g_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
+static long _vi_g_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 {
 	u32 id = ctrl->id;
 	long rc = ERR_VI_INVALID_PARA;
@@ -482,7 +482,7 @@ static long _vi_g_ctrl(struct sop_vi_dev *vdev, struct vi_ctrl *ctrl)
 	return rc;
 }
 
-long vi_ioctl(struct sop_vi_dev *vdev, u_int cmd, struct vi_ctrl *ctrl)
+long vi_ioctl(struct vi_dev *vdev, u_int cmd, struct vi_ctrl *ctrl)
 {
 	long ret = 0;
 

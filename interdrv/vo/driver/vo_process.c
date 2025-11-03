@@ -98,7 +98,7 @@ static void disp_hw_enque(vo_dev dev, struct vo_layer_ctx *layer_ctx)
 
 	osal_spin_unlock_irqrestore(&layer_ctx->list_lock, &flags);
 
-	if (now_buf == NULL || layer_ctx->chn_ctx[layer_ctx->bind_dev_id].pause)
+	if (now_buf == NULL)
 		return;
 
 	// buf = &now_buf->buf;

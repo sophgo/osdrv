@@ -5,7 +5,6 @@
 
 #define VI_DBG_PROC_NAME	"soph/vi_dbg"
 
-extern int sop_isp_rdy_buf_empty(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn);
 struct isp_dump_info {
 	u64 phy_base;
 	u64 reg_base;
@@ -308,7 +307,7 @@ DUMP:
 
 static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 {
-	struct sop_vi_dev *vdev = m->private;
+	struct vi_dev *vdev = m->private;
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	enum sop_isp_fe_chn_num chn_num = ISP_FE_CH0;
@@ -442,7 +441,7 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 			for (chn_num = ISP_FE_CH0; chn_num < chn_max; chn_num++) {
 				pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
 				seq_printf(m, "VIYuvCh%dOutBufEmpty\t:%4d\n", chn_num,
-						sop_isp_rdy_buf_empty(vdev, pipe, chn_num));
+						sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][chn_num]));
 			}
 		} else {
 			if (_is_fe_post_offline(ctx)) { // fe->dram->post
@@ -462,14 +461,14 @@ static inline void _vi_dbg_proc_show(struct seq_file *m, void *v)
 
 			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
 			seq_printf(m, "VIPostOutBufEmpty\t:%4d\n",
-					sop_isp_rdy_buf_empty(vdev, pipe, ISP_FE_CH0));
+					sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][ISP_FE_CH0]));
 		}
 	}
 }
 
 static int vi_dbg_proc_show(struct seq_file *m, void *v)
 {
-	struct sop_vi_dev *vdev = m->private;
+	struct vi_dev *vdev = m->private;
 
 	if (proc_isp_mode == 255)
 		_vi_dbg_proc_show(m, v);
@@ -523,7 +522,7 @@ static const struct file_operations vi_dbg_proc_fops = {
 };
 #endif
 
-int vi_dbg_proc_init(struct sop_vi_dev *_vdev)
+int vi_dbg_proc_init(struct vi_dev *_vdev)
 {
 	int rc = 0;
 

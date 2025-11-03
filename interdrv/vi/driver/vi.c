@@ -1,5 +1,7 @@
 #include "vi.h"
+#include "vi_params.h"
 #include "comm_errno.h"
+#include "base_common.h"
 #include "base_cb.h"
 #include "cif_cb.h"
 #include "vpss_cb.h"
@@ -7,12 +9,24 @@
 #include "ldc_cb.h"
 #include "snsr_cb.h"
 #include "vbq.h"
-#include "base_common.h"
+
 #include "cmdq.h"
 #include "vi_sys.h"
 #include "comm_math.h"
 #include "vi_dma_setup.h"
+#include "vi_fe_ip_ctrl.h"
+#include "vi_subsys_ctrl.h"
+#include "vi_raw_ip_ctrl.h"
+#include "vi_rgb_ip_ctrl.h"
+#include "vi_yuv_ip_ctrl.h"
+#include "vi_tun_ip_ctrl.h"
+#include "vi_isp_buf_ctrl.h"
+
+#include "vi_perf_chk.h"
+#include "vi_raw_dump.h"
+
 #include "vi_misc.h"
+#include "vi_ext.h"
 
 #define VI_MAX_LIST_NUM		(0x40)
 #define VI_TIMEOUT_MS		(1000)
@@ -21,30 +35,46 @@
  *  Global variables
  ******************************************************/
 struct overflow_info *g_overflow_info;
+
+enum sop_isp_state {
+	ISP_STATE_IDLE,
+	ISP_STATE_RUNNING,
+	ISP_STATE_PREPARE,
+};
+
+enum sop_isp_bw_limit {
+	ISP_BW_LIMIT_RDMA,
+	ISP_BW_LIMIT_WDMA0,
+	ISP_BW_LIMIT_WDMA1,
+	ISP_BW_LIMIT_MAX,
+};
+
+enum sop_vi_err {
+	ISP_SUCCESS,
+	ISP_NO_BUFFER,
+	ISP_ERROR,
+	ISP_STOP,
+	ISP_DROP_FRM,
+	ISP_RUNNING,
+};
+
 struct _vi_gdc_cb_param {
 	mmf_chn_s chn;
 	enum gdc_usage usage;
 };
 
+struct _vi_buffer {
+	__u32			pipe_id; // raw_id
+	__u32			chn_id; // out_buf_chn
+	__u32			sequence;
+	osal_timeval		tv;
+	__u32			reserved;
+};
+
 /*******************************************************
  *  Internal APIs
  ******************************************************/
-
-/**
- * try to trigger preraw and linespliter after postraw done or drop frame done
- */
-static void isp_trig_whole_preraw(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	s8 ret = ISP_SUCCESS;
-
-	ret = _pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
-	if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-		ret |= _pre_hw_enque(vdev, raw_num, ISP_FE_CH1);
-	}
-}
-
-static inline void _vi_wake_up_post_th(struct sop_vi_dev *vdev)
+static inline void _vi_wake_up_post_th(struct vi_dev *vdev)
 {
 	enum E_VI_TH th_id = E_VI_TH_POSTRAW;
 
@@ -52,7 +82,7 @@ static inline void _vi_wake_up_post_th(struct sop_vi_dev *vdev)
 	osal_tasklet_schedule(&vdev->vi_th[th_id].tasklet);
 }
 
-static void vi_gdc_callback(struct sop_vi_dev *vdev, void *param, vb_blk blk)
+static void vi_gdc_callback(struct vi_dev *vdev, void *param, vb_blk blk)
 {
 	struct _vi_gdc_cb_param *_param = param;
 	int pipe = _param->chn.dev_id;
@@ -104,116 +134,51 @@ static void _vi_release_ext_buf(u64 phy_addr)
 	}
 }
 
-void isp_snr_cfg_enq(struct sop_isp_snr_update *snr_node, const enum sop_isp_raw raw_num)
+void isp_snr_cfg_enq(struct isp_snr_cfg *snr_cfg_queue, struct sop_isp_snr_update *snr_node)
 {
 	unsigned long flags;
 	struct _isp_snr_i2c_node *n, *q;
 	struct _isp_crop_node  *c_n;
+	struct isp_snr_queue *snr_i2c_queue = &snr_cfg_queue->i2c_queue;
+	struct isp_snr_queue *snr_crop_queue = &snr_cfg_queue->crop_queue;
 
 	if (snr_node == NULL)
 		return;
 
-	osal_spin_lock_irqsave(&snr_node_lock[raw_num], &flags);
+	osal_spin_lock_irqsave(&snr_cfg_queue->lock, &flags);
 
 	if (snr_node->snr_cfg_node.isp.need_update) {
 		c_n = osal_kmalloc(sizeof(*c_n), OSAL_GFP_ATOMIC);
 		if (c_n == NULL) {
 			vi_pr(VI_ERR, "SNR cfg node alloc size(%zu) fail\n", sizeof(*n));
-			osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
+			osal_spin_unlock_irqrestore(&snr_cfg_queue->lock, &flags);
 			return;
 		}
-		memcpy(&c_n->n, &snr_node->snr_cfg_node.isp, sizeof(struct snsr_isp_s));
-		osal_list_add_tail(&c_n->list, &isp_crop_queue[raw_num].list);
+		osal_memcpy(&c_n->n, &snr_node->snr_cfg_node.isp, sizeof(struct snsr_isp_s));
+		osal_list_add_tail(&c_n->list, &snr_crop_queue->list);
 	}
 
 	if (snr_node->snr_cfg_node.snsr.need_update) {
 		n = osal_kmalloc(sizeof(*n), OSAL_GFP_ATOMIC);
 		if (n == NULL) {
 			vi_pr(VI_ERR, "SNR cfg node alloc size(%zu) fail\n", sizeof(*n));
-			osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
+			osal_spin_unlock_irqrestore(&snr_cfg_queue->lock, &flags);
 			return;
 		}
 		osal_memcpy(&n->n, &snr_node->snr_cfg_node.snsr, sizeof(struct snsr_regs_s));
 
-		while (!osal_list_empty(&isp_snr_i2c_queue[raw_num].list)
-			&& (isp_snr_i2c_queue[raw_num].num_rdy >= (VI_MAX_LIST_NUM - 1))) {
-			q = osal_list_first_entry(&isp_snr_i2c_queue[raw_num].list, struct _isp_snr_i2c_node, list);
+		while (!osal_list_empty(&snr_i2c_queue->list)
+			&& (snr_i2c_queue->num_rdy >= (VI_MAX_LIST_NUM - 1))) {
+			q = osal_list_first_entry(&snr_i2c_queue->list, struct _isp_snr_i2c_node, list);
 			osal_list_del_init(&q->list);
-			--isp_snr_i2c_queue[raw_num].num_rdy;
+			--snr_i2c_queue->num_rdy;
 			osal_kfree(q);
 		}
-		osal_list_add_tail(&n->list, &isp_snr_i2c_queue[raw_num].list);
-		++isp_snr_i2c_queue[raw_num].num_rdy;
+		osal_list_add_tail(&n->list, &snr_i2c_queue->list);
+		++snr_i2c_queue->num_rdy;
 	}
 
-	osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
-}
-
-void sop_isp_rdy_buf_queue(struct sop_vi_dev *vdev, struct sop_isp_buf *b)
-{
-	unsigned long flags;
-	struct isp_ctx *ctx = &vdev->ctx;
-	int pipe = b->buf.index;
-	int chn = b->buf.reserved;
-	enum sop_isp_raw raw_num;
-
-	vi_pr(VI_DBG, "ISP buf_queue pipe=%d chn=%d\n", pipe, chn);
-
-	osal_spin_lock_irqsave(&vdev->qbuf_lock, &flags);
-	osal_list_add_tail(&b->list, &vdev->qbuf_list[pipe][chn]);
-	++vdev->qbuf_num[pipe][chn];
-	osal_spin_unlock_irqrestore(&vdev->qbuf_lock, &flags);
-
-	if (osal_atomic_read(&vdev->stream.isp_streamon[pipe]) && vdev->qbuf_num[pipe][chn] == 0) {
-		raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
-		if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
-			ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
-			_isp_yuv_bypass_trigger(vdev, raw_num, ISP_FE_CH0);
-		else {
-			if (!_is_fe_post_slice(&vdev->ctx))
-				isp_trig_whole_preraw(vdev, raw_num);
-		}
-	}
-}
-
-struct sop_isp_buf *sop_isp_rdy_buf_next(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn)
-{
-	unsigned long flags;
-	struct sop_isp_buf *b = NULL;
-
-	osal_spin_lock_irqsave(&vdev->qbuf_lock, &flags);
-	if (!osal_list_empty(&vdev->qbuf_list[pipe][chn]))
-		b = osal_list_first_entry(&vdev->qbuf_list[pipe][chn], struct sop_isp_buf, list);
-	osal_spin_unlock_irqrestore(&vdev->qbuf_lock, &flags);
-
-	return b;
-}
-
-int sop_isp_rdy_buf_empty(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn)
-{
-	unsigned long flags;
-	int empty = 0;
-
-	osal_spin_lock_irqsave(&vdev->qbuf_lock, &flags);
-	empty = (vdev->qbuf_num[pipe][chn] == 0);
-	osal_spin_unlock_irqrestore(&vdev->qbuf_lock, &flags);
-
-	return empty;
-}
-
-void sop_isp_rdy_buf_remove(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn)
-{
-	unsigned long flags;
-	struct sop_isp_buf *b = NULL;
-
-	osal_spin_lock_irqsave(&vdev->qbuf_lock, &flags);
-	if (!osal_list_empty(&vdev->qbuf_list[pipe][chn])) {
-		b = osal_list_first_entry(&vdev->qbuf_list[pipe][chn], struct sop_isp_buf, list);
-		osal_list_del_init(&b->list);
-		osal_kfree(b);
-		vdev->qbuf_num[pipe][chn]--;
-	}
-	osal_spin_unlock_irqrestore(&vdev->qbuf_lock, &flags);
+	osal_spin_unlock_irqrestore(&snr_cfg_queue->lock, &flags);
 }
 
 void _vi_dma_set_sw_mode(struct isp_ctx *ctx, enum sop_isp_raw raw_num, bool is_csi)
@@ -308,7 +273,7 @@ void _vi_dma_set_sw_mode(struct isp_ctx *ctx, enum sop_isp_raw raw_num, bool is_
 	}
 }
 
-static inline bool is_bypass_frame(const struct sop_vi_dev *vdev, const u8 pipe)
+static inline bool is_bypass_frame(const struct vi_dev *vdev, const u8 pipe)
 {
 	struct isp_ctx *ctx = (struct isp_ctx *)&vdev->ctx;
 	bool is_bypass = false;
@@ -318,7 +283,7 @@ static inline bool is_bypass_frame(const struct sop_vi_dev *vdev, const u8 pipe)
 	return is_bypass;
 }
 
-static void _vi_update_yuvtop_out_cfg(struct sop_vi_dev *vdev, uint8_t pipe)
+static void _vi_update_yuvtop_out_cfg(struct vi_dev *vdev, uint8_t pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	bool is_bypass = false;
@@ -339,7 +304,39 @@ static void _vi_update_yuvtop_out_cfg(struct sop_vi_dev *vdev, uint8_t pipe)
 		pipe, vdev->postraw_frame_number[pipe], ctx->isp_pipe_cfg[pipe].bypass_num, is_bypass);
 }
 
-static void _isp_rawtop_init(struct sop_vi_dev *vdev)
+static inline void _swap_post_sts_buf(struct isp_ctx *ctx, const u8 pipe)
+{
+	struct _membuf *pool;
+	unsigned long flags;
+	u8 idx;
+
+	pool = &ctx->isp_bufpool[pipe];
+
+	osal_spin_lock_irqsave(&pool->post_sts_lock, &flags);
+	if (pool->post_sts_in_use == 1) {
+		osal_spin_unlock_irqrestore(&pool->post_sts_lock, &flags);
+		vi_pr(VI_DBG, "post sts is in use\n");
+		return;
+	}
+	pool->post_sts_busy_idx ^= 1;
+	osal_spin_unlock_irqrestore(&pool->post_sts_lock, &flags);
+
+	idx = pool->post_sts_busy_idx ^ 1;
+
+	//af
+	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_AF_W, pool->sts_mem[idx].af.phy_addr);
+
+	//lsc_hist
+	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_LSCR_HIST, pool->sts_mem[idx].lsc_hist.phy_addr);
+
+	//drc_hist
+	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_DRC_HIST, pool->sts_mem[idx].drc_hist.phy_addr);
+
+	//yuvtop
+	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_LDCI_HIST, pool->sts_mem[idx].ldci_hist.phy_addr);
+}
+
+static void _isp_rawtop_init(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	bool is_hdr = ctx->cfg_info.is_hdr_on;
@@ -368,7 +365,7 @@ static void _isp_rawtop_init(struct sop_vi_dev *vdev)
 	ispblk_cfa_config(ctx, ISP_BLK_ID_CFA);
 }
 
-static void _isp_rgbtop_init(struct sop_vi_dev *vdev)
+static void _isp_rgbtop_init(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -388,7 +385,7 @@ static void _isp_rgbtop_init(struct sop_vi_dev *vdev)
 	ispblk_csc_config(ctx);
 }
 
-static void _isp_yuvtop_init(struct sop_vi_dev *vdev)
+static void _isp_yuvtop_init(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -423,7 +420,7 @@ static void _isp_yuvtop_init(struct sop_vi_dev *vdev)
 }
 
 static u32 _is_drop_next_frame(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	const enum sop_isp_fe_chn_num chn_num)
 {
@@ -461,7 +458,7 @@ static u32 _is_drop_next_frame(
 }
 
 static void _set_drop_frm_info(
-	const struct sop_vi_dev *vdev,
+	const struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	struct isp_i2c_data *i2c_data)
 {
@@ -481,7 +478,7 @@ static void _set_drop_frm_info(
 }
 
 static void _clear_drop_frm_info(
-	const struct sop_vi_dev *vdev,
+	const struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num)
 {
 	struct isp_ctx *ctx = (struct isp_ctx *)(&vdev->ctx);
@@ -492,7 +489,7 @@ static void _clear_drop_frm_info(
 }
 
 static void _isp_crop_update_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	struct _isp_crop_node *node)
 {
@@ -536,15 +533,15 @@ static void _isp_crop_update_chk(
 
 	if (del_node) {
 		vi_pr(VI_DBG, "crop del node and free\n");
-		osal_spin_lock_irqsave(&snr_node_lock[raw_num], &flags);
+		osal_spin_lock_irqsave(&vdev->isp_snr_cfg[raw_num].lock, &flags);
 		osal_list_del_init(&node->list);
 		osal_kfree(node);
-		osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
+		osal_spin_unlock_irqrestore(&vdev->isp_snr_cfg[raw_num].lock, &flags);
 	}
 }
 
 static void _isp_crop_update(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	struct _isp_crop_node **_crop_n,
 	const u16 _crop_num)
@@ -564,7 +561,7 @@ static void _isp_crop_update(
 }
 
 static void _snr_i2c_update(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	struct _isp_snr_i2c_node **_i2c_n,
 	const u16 _i2c_num,
@@ -661,11 +658,11 @@ static void _snr_i2c_update(
 
 		if (del_node == 0 && no_update) {
 			vi_pr(VI_DBG, "i2c node %d del node and free\n", j);
-			osal_spin_lock_irqsave(&snr_node_lock[raw_num], &flags);
+			osal_spin_lock_irqsave(&vdev->isp_snr_cfg[raw_num].lock, &flags);
 			osal_list_del_init(&node->list);
-			--isp_snr_i2c_queue[raw_num].num_rdy;
+			--vdev->isp_snr_cfg[raw_num].i2c_queue.num_rdy;
 			osal_kfree(node);
-			osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
+			osal_spin_unlock_irqrestore(&vdev->isp_snr_cfg[raw_num].lock, &flags);
 		} else if (del_node == 1) {
 			if (is_vblank_update)
 				node->n.magic_num_vblank++;
@@ -684,32 +681,35 @@ static void _snr_i2c_update(
 }
 
 static void _isp_snr_cfg_deq_and_fire(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	int needvblank)
 {
 	struct osal_list_head *pos, *temp;
 	struct _isp_snr_i2c_node *i2c_n[VI_MAX_LIST_NUM], *i2c_n_temp;
 	struct _isp_crop_node *crop_n[VI_MAX_LIST_NUM];
+	osal_spinlock *lock = &vdev->isp_snr_cfg[raw_num].lock;
+	struct isp_snr_queue *i2c_queue = &vdev->isp_snr_cfg[raw_num].i2c_queue;
+	struct isp_snr_queue *crop_queue = &vdev->isp_snr_cfg[raw_num].crop_queue;
 	unsigned long flags;
 	u16 i2c_num = 0, crop_num = 0;
 	int i;
 
-	osal_spin_lock_irqsave(&snr_node_lock[raw_num], &flags);
+	osal_spin_lock_irqsave(lock, &flags);
 	if (needvblank == 0) {
-		osal_list_for_each_safe(pos, temp, &isp_snr_i2c_queue[raw_num].list) {
+		osal_list_for_each_safe(pos, temp, &i2c_queue->list) {
 			i2c_n[i2c_num] = osal_list_entry(pos, struct _isp_snr_i2c_node, list);
 			i2c_num++;
 		}
 
-		osal_list_for_each_safe(pos, temp, &isp_crop_queue[raw_num].list) {
+		osal_list_for_each_safe(pos, temp, &crop_queue->list) {
 			if (crop_num < i2c_num) {
-				crop_n[crop_num] = list_entry(pos, struct _isp_crop_node, list);
+				crop_n[crop_num] = osal_list_entry(pos, struct _isp_crop_node, list);
 				crop_num++;
 			}
 		}
 	} else {
-		osal_list_for_each_safe(pos, temp, &isp_snr_i2c_queue[raw_num].list) {
+		osal_list_for_each_safe(pos, temp, &i2c_queue->list) {
 			i2c_n_temp = osal_list_entry(pos, struct _isp_snr_i2c_node, list);
 			for (i = 0; i < i2c_n_temp->n.regs_num; i++) {
 				if (i2c_n_temp->n.i2c_data[i].vblank_update &&
@@ -722,7 +722,7 @@ static void _isp_snr_cfg_deq_and_fire(
 		}
 	}
 
-	osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
+	osal_spin_unlock_irqrestore(lock, &flags);
 
 	if (i2c_num > 0)
 		_snr_i2c_update(vdev, raw_num, i2c_n, i2c_num, needvblank);
@@ -731,7 +731,7 @@ static void _isp_snr_cfg_deq_and_fire(
 		_isp_crop_update(vdev, raw_num, crop_n, crop_num);
 }
 
-static inline void _vi_clear_mmap_fbc_ring_base(struct sop_vi_dev *vdev, const u8 pipe)
+static inline void _vi_clear_mmap_fbc_ring_base(struct vi_dev *vdev, const u8 pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -744,10 +744,11 @@ static inline void _vi_clear_mmap_fbc_ring_base(struct sop_vi_dev *vdev, const u
 	}
 }
 
-static inline void _vi_wake_up_preraw_th(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+static inline void _vi_wake_up_preraw_th(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	unsigned long flags;
 	struct _isp_raw_num_n *n;
+	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
 	enum E_VI_TH th_id = E_VI_TH_PRERAW;
 
 	n = osal_kzalloc(sizeof(*n), OSAL_GFP_ATOMIC);
@@ -757,15 +758,15 @@ static inline void _vi_wake_up_preraw_th(struct sop_vi_dev *vdev, const enum sop
 	}
 	n->raw_num = raw_num;
 
-	osal_spin_lock_irqsave(&raw_num_lock, &flags);
-	osal_list_add_tail(&n->list, &pre_raw_num_q.list);
-	osal_spin_unlock_irqrestore(&raw_num_lock, &flags);
+	osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
+	osal_list_add_tail(&n->list, &raw_num_q->list);
+	osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
 	osal_atomic_set(&vdev->vi_th[th_id].flag, ISP_PRERAW_MAX);
 	osal_wait_wakeup(&vdev->vi_th[th_id].wq);
 }
 
-void vi_event_queue(struct sop_vi_dev *vdev, const u32 type, const u32 frm_num)
+void vi_event_queue(struct vi_dev *vdev, const u32 type, const u32 frm_num)
 {
 	unsigned long flags;
 	struct vi_event_k *ev_k = NULL;
@@ -813,1414 +814,6 @@ unlock:
 	if (ev_k) {
 		osal_wait_wakeup(&vdev->isp_event_wait_q);
 	}
-}
-
-int user_pic_trig(struct sop_vi_dev *vdev, bool is_frm_rst)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum sop_isp_raw raw_num = ISP_PRERAW0;
-	u8 pipe = 0;
-
-	if (!osal_atomic_read(&vdev->stream.isp_streamon[pipe])) {
-		vi_pr(VI_DBG, "isp stream is not on, can't trigger preraw\n");
-		return 1;
-	}
-
-	if (ctx->is_rawreplay) {
-		if (osal_atomic_read(&vdev->postraw_state) != ISP_STATE_IDLE)
-			return 1;
-
-		pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
-
-		isp_first_frm_reset(ctx, vdev->postraw_frame_number[pipe] == 0, false);
-
-		_vi_clear_mmap_fbc_ring_base(vdev, pipe);
-
-		vi_tuning_gamma_ips_update(ctx, pipe);
-		vi_tuning_dci_update(ctx, pipe);
-		vi_tuning_drc_update(ctx, pipe);
-
-		ispblk_fbc_debug_info(ctx);
-
-		_post_dma_update(vdev, pipe);
-
-		_pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
-
-		_vi_wake_up_preraw_th(vdev, raw_num);
-
-		vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]++;
-
-		if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
-			vi_event_queue(vdev, VI_EVENT_PRE0_EOF + ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0],
-					vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]);
-		}
-	}
-	return 0;
-}
-
-/* notice this function will be interrupted by ipcmsg,
- * so we need to check the param, insure the data is not NULL
- */
-static void _usr_pic_timer_handler(unsigned long data)
-{
-	struct sop_vi_dev *vdev = NULL;
-
-	if ((void *)data == NULL) {
-		vi_pr(VI_WARN, "timer data is NULL\n");
-		return;
-	}
-
-	vdev = (struct sop_vi_dev *)osal_timer_get_private_data((void *)data);
-
-	if (user_pic_trig(vdev, false)) {
-		goto EXIT;
-	}
-
-EXIT:
-	vi_pr(VI_DBG, "wait next trig\n");
-
-	if (vdev->usr_pic_timer.timer)
-		osal_timer_mod(&vdev->usr_pic_timer, vdev->usr_pic_delay);
-}
-
-int usr_pic_time_remove(struct sop_vi_dev *vdev)
-{
-	int ret = 0;
-
-	osal_timer_stop(&vdev->usr_pic_timer);
-
-	ret = osal_timer_destroy_sync(&vdev->usr_pic_timer);
-	if (ret) {
-		vi_pr(VI_ERR, "osal_timer_destroy_sync fail\n");
-		return ret;
-	}
-
-	vdev->usr_pic_timer.timer = NULL;
-	vdev->usr_pic_timer.handler = NULL;
-
-	return ret;
-}
-
-int usr_pic_timer_init(struct sop_vi_dev *vdev)
-{
-	int ret = 0;
-
-	memset(&vdev->usr_pic_timer, 0, sizeof(vdev->usr_pic_timer));
-	vdev->usr_pic_timer.handler = _usr_pic_timer_handler;
-	vdev->usr_pic_timer.data = (uintptr_t)vdev;
-	vdev->usr_pic_timer.interval = vdev->usr_pic_delay ? vdev->usr_pic_delay : 30;
-
-	ret = osal_timer_init(&vdev->usr_pic_timer);
-	if (ret) {
-		vi_pr(VI_ERR, "osal_timer_init fail\n");
-		return ret;
-	}
-
-	return ret;
-}
-
-int usr_pic_timer_start(struct sop_vi_dev *vdev)
-{
-	int ret = 0;
-
-	vdev->usr_pic_timer.interval = vdev->usr_pic_delay;
-
-	ret = osal_timer_start(&vdev->usr_pic_timer);
-	if (ret) {
-		vi_pr(VI_ERR, "osal_timer_start fail\n");
-		return ret;
-	}
-
-	return ret;
-}
-
-void sop_isp_dqbuf_list(struct sop_vi_dev *vdev, const u32 frm_num,
-			const u8 pipe_id, const u8 chn_id, osal_timeval tv)
-{
-	unsigned long flags;
-	struct _isp_dqbuf_n *n;
-
-	n = osal_kzalloc(sizeof(struct _isp_dqbuf_n), OSAL_GFP_ATOMIC);
-	if (n == NULL) {
-		vi_pr(VI_ERR, "DQbuf kmalloc size(%zu) fail\n", sizeof(struct _isp_dqbuf_n));
-		return;
-	}
-	n->pipe_id	= pipe_id;
-	n->chn_id	= chn_id;
-	n->frm_num	= frm_num;
-	n->tv		= tv;
-
-	osal_spin_lock_irqsave(&dq_lock, &flags);
-	osal_list_add_tail(&n->list, &dqbuf_q.list);
-	osal_spin_unlock_irqrestore(&dq_lock, &flags);
-}
-
-int vi_dqbuf(struct _vi_buffer *b)
-{
-	unsigned long flags;
-	struct _isp_dqbuf_n *n = NULL;
-	int ret = -1;
-
-	osal_spin_lock_irqsave(&dq_lock, &flags);
-	if (!osal_list_empty(&dqbuf_q.list)) {
-		n = osal_list_first_entry(&dqbuf_q.list, struct _isp_dqbuf_n, list);
-		b->pipe_id		= n->pipe_id;
-		b->chn_id		= n->chn_id;
-		b->sequence		= n->frm_num;
-		b->tv			= n->tv;
-		osal_list_del_init(&n->list);
-		osal_kfree(n);
-		ret = 0;
-	}
-	osal_spin_unlock_irqrestore(&dq_lock, &flags);
-
-	return ret;
-}
-
-static int _vi_call_cb(u32 m_id, u32 cmd_id, void *data)
-{
-	struct base_exe_m_cb exe_cb;
-
-	exe_cb.callee = m_id;
-	exe_cb.caller = E_MODULE_VI;
-	exe_cb.cmd_id = cmd_id;
-	exe_cb.data   = (void *)data;
-
-	return base_exe_module_cb(&exe_cb);
-}
-
-static int _isp_yuv_bypass_buf_enq(
-	struct sop_vi_dev *vdev,
-	const enum sop_isp_raw raw_num,
-	const u8 hw_chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_isp_buf *b = NULL;
-	enum isp_blk_id_t dmaid;
-	u64 tmp_addr = 0, i = 0;
-	u8 pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[hw_chn_num];
-	u8 chn = 0;
-
-	if (sop_isp_rdy_buf_empty(vdev, pipe, chn)) {
-		vi_pr(VI_WARN, "fe_%d chn_num_%d yuv bypass outbuf is empty\n", raw_num, hw_chn_num);
-		return 0;
-	}
-
-	b = sop_isp_rdy_buf_next(vdev, pipe, chn);
-	if (b == NULL)
-		return 0;
-
-	vi_pr(VI_DBG, "update yuv bypass outbuf: 0x%llx pipe_%d chn(%d)\n",
-			b->buf.planes[0].addr, pipe, chn);
-
-	dmaid = csibdg_dma_find_hwid(raw_num, hw_chn_num);
-
-	if (ctx->isp_csi_cfg[raw_num].is_422_to_420) {
-		for (i = 0; i < 2; i++) {
-			tmp_addr = b->buf.planes[i].addr;
-			if (vdev->pre_fe_frm_num[raw_num][hw_chn_num] == 0)
-				ispblk_dma_yuv_bypass_config(ctx, dmaid + i, tmp_addr, raw_num);
-			else
-				ispblk_dma_setaddr(ctx, dmaid + i, tmp_addr);
-		}
-	} else {
-		tmp_addr = b->buf.planes[0].addr;
-
-		if (vdev->pre_fe_frm_num[raw_num][hw_chn_num] == 0)
-			ispblk_dma_yuv_bypass_config(ctx, dmaid, tmp_addr, raw_num);
-		else
-			ispblk_dma_setaddr(ctx, dmaid, tmp_addr);
-	}
-
-	return 1;
-}
-
-static void _isp_yuv_bypass_trigger(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-
-	if (osal_atomic_read(&vdev->isp_err_handle_flag) == 1)
-		return;
-
-	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num])) {
-		if (osal_atomic_cmpxchg(&vdev->pre_fe_state[raw_num][hw_chn_num],
-					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
-					ISP_STATE_RUNNING) {
-			vi_pr(VI_DBG, "fe_%d chn_num_%d is running\n", raw_num, hw_chn_num);
-			return;
-		}
-
-		if (_isp_yuv_bypass_buf_enq(vdev, raw_num, hw_chn_num))
-			isp_pre_trig(ctx, raw_num, hw_chn_num);
-		else {
-			osal_atomic_set(&vdev->pre_fe_state[raw_num][hw_chn_num], ISP_STATE_IDLE);
-		}
-	}
-}
-
-void _vi_postraw_ctrl_setup(struct sop_vi_dev *vdev, uint8_t pipe)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-
-	if (!ctx->isp_pipe_cfg[pipe].is_enable)
-		return;
-
-	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
-		ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
-		return;
-
-	_isp_rawtop_init(vdev);
-	_isp_rgbtop_init(vdev);
-	_isp_yuvtop_init(vdev);
-
-	ispblk_preraw_vi_sel_config(ctx);
-}
-
-void _vi_pre_fe_ctrl_setup(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct cif_yuv_swap_s swap = {0};
-
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {//YUV sensor
-		if (ctx->isp_csi_cfg[raw_num].is_422_to_420) {//uyvy to yuyv to 420
-			swap.devno = raw_num;
-			swap.yc_swap = 1;
-			swap.uv_swap = 1;
-			_vi_call_cb(E_MODULE_CIF, MIPI_SET_YUV_SWAP, &swap);
-		}
-
-		if (ctx->isp_csi_cfg[raw_num].is_bt_demux)
-			ispblk_csibdg_lite_config(ctx, raw_num);
-		else {
-			ispblk_csibdg_yuv_bypass_config(ctx, raw_num);
-		}
-
-		ispblk_isptop_fe_config(ctx, raw_num, false);
-		ispblk_preraw_fe_config(ctx, raw_num);
-		ispblk_csibdg_crop_update(ctx, raw_num, true);
-		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH0, false);
-		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH1, false);
-		ispblk_aehist_config(ctx, raw_num, false);
-	} else { //RGB sensor
-		ispblk_isptop_fe_config(ctx, raw_num, true);
-		ispblk_preraw_fe_config(ctx, raw_num);
-		ispblk_csibdg_config(ctx, raw_num);
-		ispblk_csibdg_crop_update(ctx, raw_num, !ctx->isp_csi_cfg[raw_num].is_mux_dev);
-		ispblk_csibdg_wdma_crop_config(ctx, raw_num, ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0],
-						ctx->isp_csi_cfg[raw_num].is_mux_dev);
-		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH0, false);
-		if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
-			ispblk_clsc_config(ctx, raw_num, ISP_FE_CH1, false);
-		ispblk_aehist_config(ctx, raw_num, true);
-	}
-}
-
-void _vi_csi_ctrl_init(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum sop_isp_raw phy_raw = raw_num;
-	u8 i = 0;
-	struct cif_attr_s cif_attr;
-
-	if (!ctx->isp_csi_cfg[raw_num].is_patgen_en) {
-		phy_raw = find_phy_raw_num(ctx, raw_num);
-		/* Get stagger vsync info from cif */
-		cif_attr.devno = phy_raw;
-		if (_vi_call_cb(E_MODULE_CIF, CIF_CB_GET_CIF_ATTR, &cif_attr) == 0) {
-			ctx->isp_csi_cfg[raw_num].is_stagger_vsync = cif_attr.stagger_vsync;
-
-			ctx->isp_csi_cfg[raw_num].csibdg_width  = cif_attr.img_size.width;
-			ctx->isp_csi_cfg[raw_num].csibdg_height = cif_attr.img_size.height;
-			ctx->isp_csi_cfg[raw_num].max_width     = cif_attr.img_size.max_width;
-			ctx->isp_csi_cfg[raw_num].max_height    = cif_attr.img_size.max_height;
-
-			for (i = 0; i < ctx->isp_csi_cfg[raw_num].chn_num; i++) {
-				ctx->isp_csi_cfg[raw_num].crop[i].w = cif_attr.img_size.active_w;
-				ctx->isp_csi_cfg[raw_num].crop[i].h = cif_attr.img_size.active_h;
-				ctx->isp_csi_cfg[raw_num].crop[i].x = cif_attr.img_size.start_x;
-				ctx->isp_csi_cfg[raw_num].crop[i].y = cif_attr.img_size.start_y;
-			}
-
-			ctx->isp_csi_cfg[raw_num].rgb_color_mode_pre_crop =
-						bayer_type_before_crop(ctx->isp_csi_cfg[raw_num].rgb_color_mode,
-								cif_attr.img_size.start_x, cif_attr.img_size.start_y);
-		} else {
-			vi_pr(VI_ERR, "get cif attr fail\n");
-			return;
-		}
-	}
-
-	if (ctx->cfg_info.raw_num == ISP_PRERAW_MAX && !ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
-		//Postraw out size
-		ctx->cfg_info.raw_num = raw_num;
-	}
-
-	if (_is_fe_post_slice(ctx))
-		vi_calculate_slice_buf_setting(ctx, raw_num);
-
-	vi_pr(VI_DBG, "raw_num(%d) is_hdr(%d) is_yuv_sensor(%d) mux_mode(%d)\n", raw_num,
-							ctx->isp_csi_cfg[raw_num].is_hdr_on,
-							ctx->isp_csi_cfg[raw_num].is_yuv_sensor,
-							ctx->isp_csi_cfg[raw_num].mux_mode);
-	vi_pr(VI_INFO, "color_mode(%d) csibdg(%d:%d) max(%d:%d)\n",
-		ctx->isp_csi_cfg[raw_num].rgb_color_mode,
-		ctx->isp_csi_cfg[raw_num].csibdg_width, ctx->isp_csi_cfg[raw_num].csibdg_height,
-		ctx->isp_csi_cfg[raw_num].max_width, ctx->isp_csi_cfg[raw_num].max_height);
-}
-
-void _vi_isp_ctrl_init(struct sop_vi_dev *vdev, uint8_t pipe)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	uint8_t	raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
-	uint8_t chn = 0;
-
-	ctx->isp_pipe_cfg[pipe].is_enable = true;
-
-	//TODO need know which chn is bind to pipe
-	osal_memcpy(&ctx->isp_pipe_cfg[pipe].crop, &ctx->isp_csi_cfg[raw_num].crop[chn], sizeof(struct vi_rect));
-	ctx->isp_pipe_cfg[pipe].yuv_scene_mode = ctx->isp_csi_cfg[raw_num].yuv_scene_mode;
-	ctx->isp_pipe_cfg[pipe].is_yuv_sensor = ctx->isp_csi_cfg[raw_num].is_yuv_sensor;
-
-	if (ctx->is_rawreplay) {
-		ctx->isp_pipe_cfg[pipe].crop.w = vdev->usr_crop.width;
-		ctx->isp_pipe_cfg[pipe].crop.h = vdev->usr_crop.height;
-		ctx->isp_pipe_cfg[pipe].crop.x = vdev->usr_crop.left;
-		ctx->isp_pipe_cfg[pipe].crop.y = vdev->usr_crop.top;
-
-		ctx->isp_pipe_cfg[pipe].crop_se.w = vdev->usr_crop.width;
-		ctx->isp_pipe_cfg[pipe].crop_se.h = vdev->usr_crop.height;
-		ctx->isp_pipe_cfg[pipe].crop_se.x = vdev->usr_crop.left;
-		ctx->isp_pipe_cfg[pipe].crop_se.y = vdev->usr_crop.top;
-
-		ctx->isp_pipe_cfg[pipe].rgb_color_mode = bayer_type_mapping(vdev->usr_fmt.code);
-	}
-
-	ctx->isp_pipe_cfg[pipe].post_img_w = ctx->isp_pipe_cfg[pipe].crop.w;
-	ctx->isp_pipe_cfg[pipe].post_img_h = ctx->isp_pipe_cfg[pipe].crop.h;
-	ctx->isp_pipe_cfg[pipe].rgb_color_mode = ctx->isp_csi_cfg[raw_num].rgb_color_mode;
-
-	//cnr config
-	ctx->isp_pipe_cfg[pipe].cnr_scale_shift = (ctx->isp_pipe_cfg[pipe].crop.w > 2688) ? 3 : 2;
-	ctx->isp_pipe_cfg[pipe].cnr_cur_scale_shift =
-			ctx->isp_pipe_cfg[pipe].cnr_pre_scale_shift = ctx->isp_pipe_cfg[pipe].cnr_scale_shift;
-	ctx->isp_pipe_cfg[pipe].is_hdr_on = ctx->isp_csi_cfg[raw_num].is_hdr_on;
-
-	if (ctx->cfg_info.pipe == VI_MAX_PIPE_NUM) {
-		//Postraw out size
-		ctx->cfg_info.is_hdr_on = ctx->isp_pipe_cfg[pipe].is_hdr_on = ctx->isp_csi_cfg[raw_num].is_hdr_on;
-		ctx->cfg_info.pipe = pipe;
-		ctx->cfg_info.img_width = ctx->isp_pipe_cfg[pipe].crop.w;
-		ctx->cfg_info.img_height = ctx->isp_pipe_cfg[pipe].crop.h;
-
-		vi_pr(VI_INFO, "Rgb raw_num(%d) pipe(%d) init_w_h(%d:%d)\n", raw_num, ctx->cfg_info.pipe,
-		      ctx->cfg_info.img_width, ctx->cfg_info.img_height);
-	}
-
-	vi_pr(VI_INFO, "pipe(%d) yuv((%d) crop_x_y_w_h(%d:%d:%d:%d), cnr_shift(%d)",
-			pipe, ctx->isp_pipe_cfg[pipe].is_yuv_sensor,
-			ctx->isp_pipe_cfg[pipe].crop.x, ctx->isp_pipe_cfg[pipe].crop.y,
-			ctx->isp_pipe_cfg[pipe].crop.w, ctx->isp_pipe_cfg[pipe].crop.h,
-			ctx->isp_pipe_cfg[pipe].cnr_scale_shift);
-}
-
-void _vi_scene_ctrl(struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum sop_isp_raw raw_num = ISP_PRERAW0;
-
-	if (ctx->is_ctrl_inited)
-		return;
-
-	if (_is_fe_post_offline(ctx)) { //Multi sensor scenario
-		ctx->is_fbc_on = false;
-		ctx->is_multi_sensor = true;
-		if (ctx->is_rawreplay) { // dram->postraw
-			ctx->is_slice_buf_on = false;
-			ctx->is_fbc_on = true;
-		}
-	} else { //Single sensor onthefly or slicebuf
-		raw_num = ctx->cfg_info.raw_num;
-		ctx->is_multi_sensor = false;
-		ctx->is_fbc_on = true;
-
-		if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { // yuv sensor
-			ctx->isp_csi_cfg[raw_num].is_422_to_420 = false;
-
-			if (ctx->isp_csi_cfg[raw_num].mux_mode > 0 &&
-			    ctx->isp_csi_cfg[raw_num].inf_mode >= VI_MODE_BT656 &&
-			    ctx->isp_csi_cfg[raw_num].inf_mode <= VI_MODE_BT1120_INTERLEAVED) {
-				ctx->isp_csi_cfg[raw_num].is_bt_demux = true;
-				if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-					vi_pr(VI_WARN, "bt_demux sensor switch scene_mode to YUV_SCENE_ONLINE\n");
-					ctx->isp_csi_cfg[raw_num].yuv_scene_mode = ISP_YUV_SCENE_ONLINE;
-				}
-			}
-		}
-	}
-
-	ctx->is_ctrl_inited = true;
-
-	vi_pr(VI_INFO, "is_3dnr_on[%d], is_fbc_on[%d]\n", ctx->is_3dnr_on, ctx->is_fbc_on);
-}
-
-void _vi_bw_cal_set(struct sop_vi_dev *vdev)
-{
-#ifdef BW_CAL
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_proc_ctx = NULL;
-	void __iomem *bw_limiter;
-	u64 bwladdr[ISP_BW_LIMIT_MAX] = {0x0A074020, 0x0A072020, 0x0A078020}; // rdma, wdma0, wdma1
-	u32 data_size[ISP_BW_LIMIT_MAX] = {0}, BW[ISP_PRERAW_MAX][ISP_BW_LIMIT_MAX] = {0};
-	u32 total_bw = 0, bwlwin = 0, bwltxn = 0, margin = 125, fps = 25;
-	u32 def_bwltxn = 4, def_fps = 25;
-	u32 width, height;
-	u8 i, yuv_chn_num;
-	enum sop_isp_raw raw_num = ISP_PRERAW0;
-
-	vi_proc_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
-
-	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
-		if (!ctx->isp_csi_cfg[raw_num].is_enable)
-			continue;
-
-		fps = vi_proc_ctx->dev_attr[raw_num].snr_fps ?
-			vi_proc_ctx->dev_attr[raw_num].snr_fps :
-			def_fps;
-		width = ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0].w;
-		height = ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0].h;
-
-		if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {//RGB sensor
-			if (!ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-				data_size[ISP_BW_LIMIT_RDMA] = (411 * width * height) / 128 + 50052;
-				data_size[ISP_BW_LIMIT_WDMA0] = (396 * width * height) / 128 + 8160;
-				data_size[ISP_BW_LIMIT_WDMA1] = (391 * width * height) / 128 + 21536;
-			} else {
-				data_size[ISP_BW_LIMIT_RDMA] = (630 * width * height) / 128 + 50052;
-				data_size[ISP_BW_LIMIT_WDMA0] = (792 * width * height) / 128 + 8160;
-				data_size[ISP_BW_LIMIT_WDMA1] = (394 * width * height) / 128 + 38496;
-			}
-		} else { //YUV sensor
-			yuv_chn_num = ctx->isp_csi_cfg[raw_num].mux_mode + 1;
-			data_size[ISP_BW_LIMIT_RDMA] = (192 * yuv_chn_num * width * height) / 128;
-			data_size[ISP_BW_LIMIT_WDMA0] = (192 * yuv_chn_num * width * height) / 128;
-			data_size[ISP_BW_LIMIT_WDMA1] = 0;
-		}
-
-		for (i = 0; i < ISP_BW_LIMIT_MAX; ++i) {
-			BW[raw_num][i] = (fps * data_size[i]) / 1000000 + 1;
-		}
-	}
-
-	// TODO
-	// just restrain RDMA now, WDMA0/WDMA1 wait for Brian
-	// for (i = 0; i < BW_LIMIT_MAX; ++i) {
-	for (i = 0; i < 1; ++i) {
-		total_bw = 0;
-
-		for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
-			total_bw += BW[raw_num][i];
-		}
-
-		for (bwltxn = def_bwltxn; bwltxn > 1; --bwltxn) {
-			bwlwin = bwltxn * 256000 / ((((total_bw * 33) / 10) * margin) / 100);
-			if (bwlwin <= 1024)
-				break;
-		}
-
-		bw_limiter = osal_ioremap(bwladdr[i], 0x4);
-		_reg_write(bw_limiter, ((bwltxn << 10) | bwlwin));
-		vi_pr(VI_INFO, "isp %s bw_limiter=0x%x, BW=%d, bwltxn=%d, bwlwin=%d\n",
-				(i == 0) ? "rdma" : ((i == 1) ? "wdma0" : "wdma1"),
-				_reg_read(bw_limiter), total_bw, bwltxn, bwlwin);
-		osal_iounmap(bw_limiter, 0x4);
-	}
-#endif
-}
-
-static int _vi_mux_dev_gpio_init(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
-{
-	int rc = 0;
-	u8 i = 0, j = 0;
-	u8 cur_idx = 0;
-	char label[16] = {0};
-	struct csi_gpio *gpio = NULL;
-	struct _csi_switch_info *info = &ctx->isp_csi_cfg[raw_num].switch_info;
-
-	if (!ctx->isp_csi_cfg[raw_num].is_mux_dev)
-		return 0;
-
-	cur_idx = info->cur_idx;
-
-	for (i = 0; i < VI_MAX_DEV_SWITCH_DEPTH; i++) {
-		gpio = &info->snr_arr[0].gpio[i];
-		if (!gpio->enable)
-			continue;
-		sprintf(label, "gpio%d(%d, %d)", i, gpio->port, gpio->pin);
-		rc = vi_misc_gpio_request(&gpio->handle, gpio->port, gpio->pin, label);
-		if (rc) {
-			vi_pr(VI_ERR, "request for gpio(%d) failed:%d\n", gpio->pin, rc);
-			goto err_gpio_req;
-		}
-
-		rc = vi_misc_gpio_dir(&gpio->handle, gpio->port, gpio->pin, 1, gpio->pol);
-		if (rc) {
-			vi_pr(VI_ERR, "fail to set gpio(%d) dir failed:%d\n",
-				gpio->pin, rc);
-			goto err_gpio_req;
-		}
-	}
-
-	return rc;
-
-err_gpio_req:
-	for (j = 0; j < i; j++) {
-		gpio = &info->snr_arr[cur_idx].gpio[i];
-		if (!gpio->enable)
-			continue;
-		vi_misc_gpio_free(&gpio->handle, gpio->port, gpio->pin);
-	}
-
-	return rc;
-}
-
-static int _vi_mux_dev_gpio_deinit(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
-{
-	u8 i = 0;
-	u8 cur_idx = 0;
-	struct csi_gpio *gpio = NULL;
-	struct _csi_switch_info *info = &ctx->isp_csi_cfg[raw_num].switch_info;
-
-	if (!ctx->isp_csi_cfg[raw_num].is_mux_dev)
-		return 0;
-
-	for (i = 0; i < VI_MAX_DEV_SWITCH_DEPTH; i++) {
-		gpio = &info->snr_arr[cur_idx].gpio[i];
-		if (!gpio->enable)
-			continue;
-		vi_misc_gpio_free(&gpio->handle, gpio->port, gpio->pin);
-	}
-
-	return 0;
-}
-
-static int clean_misc_resources(struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct _isp_dqbuf_n *n = NULL, *dq_tmp = NULL;
-	struct _isp_raw_num_n *raw_n = NULL, *raw_tmp = NULL;
-	struct vi_event_k *ev_k = NULL, *ev_tmp = NULL;
-	struct isp_event_q *event_q = &vdev->event_q;
-	unsigned long flags;
-	struct isp_buffer *isp_b;
-	uint8_t i = 0;
-	union vi_sys_reset_apb reset_apb;
-
-	osal_spin_lock_irqsave(&dq_lock, &flags);
-	osal_list_for_each_entry_safe(n, dq_tmp, &dqbuf_q.list, list) {
-		osal_list_del_init(&n->list);
-		osal_kfree(n);
-	}
-	osal_spin_unlock_irqrestore(&dq_lock, &flags);
-
-	osal_spin_lock_irqsave(&event_q->lock, &flags);
-	osal_list_for_each_entry_safe(ev_k, ev_tmp, &event_q->list, list) {
-		osal_list_del_init(&ev_k->list);
-		osal_kfree(ev_k);
-	}
-	event_q->count = 0;
-	osal_spin_unlock_irqrestore(&event_q->lock, &flags);
-
-	osal_spin_lock_irqsave(&raw_num_lock, &flags);
-	osal_list_for_each_entry_safe(raw_n, raw_tmp, &pre_raw_num_q.list, list) {
-		osal_list_del_init(&raw_n->list);
-		osal_kfree(raw_n);
-	}
-	osal_spin_unlock_irqrestore(&raw_num_lock, &flags);
-
-	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
-		while ((isp_b = isp_buf_remove(&vdev->postraw_wdr_in_q[i])) != NULL) {
-			if (isp_b->is_ext == EXTERNAL_BUFFER) {
-				_vi_release_ext_buf(isp_b->addr);
-				osal_kfree(isp_b);
-			} else {
-				osal_vfree(isp_b);
-			}
-		}
-	}
-
-	while ((isp_b = isp_buf_remove(&vdev->postraw_in_q)) != NULL) {
-		if (isp_b->is_ext == EXTERNAL_BUFFER) {
-			_vi_release_ext_buf(isp_b->addr);
-			osal_kfree(isp_b);
-		} else {
-			osal_vfree(isp_b);
-		}
-	}
-
-	isp_reset(ctx);
-
-	reset_apb.raw = 0;
-	reset_apb.b.isp_top = 1;
-	vi_sys_toggle_reset_apb(reset_apb);
-
-	osal_atomic_set(&vdev->stream.isp_init, 0);
-
-	vi_pr(VI_INFO, "done\n");
-
-	return 0;
-}
-
-int vi_csi_start_streaming(struct sop_vi_dev *vdev, uint8_t raw_num)
-{
-	int ret = 0;
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct cif_attr_s cif_attr;
-	uint8_t total_chn = (ctx->isp_csi_cfg[raw_num].is_yuv_sensor)
-			? ctx->isp_csi_cfg[raw_num].mux_mode + 1
-			: ctx->isp_csi_cfg[raw_num].is_hdr_on + 1;
-	uint8_t chn_str = 0, pipe = 0;
-
-	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num])) {
-		vi_pr(VI_INFO, "raw_num(%d) is already streaming\n", raw_num);
-		return 0;
-	}
-
-	//TODO: workaround for csibdg reset issue, but need to check if it is necessary
-	ispblk_csibdg_reset(ctx, raw_num);
-
-	//sw workaround to disable csibdg enable first due to csibdg enable is on as default.
-	isp_streaming(ctx, false, raw_num);
-
-	if (ctx->is_rawreplay)
-		return 0;
-
-	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
-		ret = vi_get_csi_ion_buf(vdev, raw_num);
-		if (ret) {
-			vi_pr(VI_ERR, "get csi ion buf failed\n");
-			return ERR_VI_NOMEM;
-		}
-	} else {
-		//in suspend state, record the frame num for resume
-		ctx->isp_csi_cfg[raw_num].rx_ref_frm_num = vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0];
-	}
-
-	_vi_mempool_reset(&ctx->csi_mempool[raw_num]);
-
-	_isp_pre_fe_dma_setup(vdev, raw_num);
-
-	if (raw_num >= ISP_PRERAW_VIRT0) {
-		vi_pr(VI_DBG, "virtual raw should not set hw\n");
-		goto skip_hw_setup;
-	}
-
-	if (ctx->is_ai_isp && osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
-		ret = vi_create_thread(vdev, E_VI_TH_AI_ISP);
-		if (ret) {
-			vi_pr(VI_ERR, "Failed to create ai_isp thread\n");
-			goto err_create_ai_isp;
-		}
-	}
-
-	_vi_call_cb(E_MODULE_CIF, CIF_CB_RESET_LVDS, &raw_num);
-
-	/* Get stagger vsync info from cif */
-	cif_attr.devno = raw_num;
-	if (_vi_call_cb(E_MODULE_CIF, CIF_CB_GET_CIF_ATTR, &cif_attr) == 0)
-		ctx->isp_csi_cfg[raw_num].is_stagger_vsync = cif_attr.stagger_vsync;
-
-	ret = _vi_mux_dev_gpio_init(ctx, raw_num);
-	if (ret) {
-		vi_pr(VI_ERR, "fail to init gpio\n");
-		goto fail_to_init_gpio;
-	}
-
-	_vi_pre_fe_ctrl_setup(vdev, raw_num);
-	_isp_pre_ai_isp_dma_setup(vdev, raw_num);
-
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
-		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
-			if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
-				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & offline scaler\n", raw_num, pipe);
-			} else {
-				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & online scaler\n", raw_num, pipe);
-			}
-		} else {
-			vi_pr(VI_INFO, "raw_num [%d] YUV bypass ISP\n", raw_num);
-		}
-	}
-
-	_vi_dma_set_sw_mode(ctx, raw_num, true);
-
-	if (_is_fe_post_offline(ctx)) {
-		for (; chn_str < total_chn; chn_str++)
-			isp_pre_trig(ctx, raw_num, chn_str);
-	}
-
-skip_hw_setup:
-	osal_atomic_set(&vdev->stream.csi_streamon[raw_num], 1);
-
-	return ret;
-
-fail_to_init_gpio:
-	vi_destroy_thread(vdev, E_VI_TH_AI_ISP);
-err_create_ai_isp:
-	vi_free_ion_buf(vdev, &ctx->csi_mempool[raw_num]);
-
-	return ret;
-}
-
-int vi_csi_stop_streaming(struct sop_vi_dev *vdev, uint8_t raw_num)
-{
-	int ret = 0;
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct isp_buffer *isp_b;
-	struct _isp_snr_i2c_node *i2c_n = NULL, *i2c_tmp = NULL;
-	struct _isp_crop_node *crop_n = NULL, *crop_tmp = NULL;
-	unsigned long flags;
-	int count = 10;
-	int j = 0;
-	uint8_t i;
-	bool is_all_idle = true;
-
-	if (ctx->is_rawreplay) {
-		vi_pr(VI_INFO, "raw replay, skip clean csi resources\n");
-		goto clean_resources;
-	}
-
-	osal_atomic_set(&vdev->stream.csi_streamon[raw_num], 0);
-
-	while (--count > 0) {
-		if (osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH0]) == ISP_STATE_IDLE &&
-			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH1]) == ISP_STATE_IDLE &&
-			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH2]) == ISP_STATE_IDLE &&
-			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH3]) == ISP_STATE_IDLE)
-			break;
-		vi_pr(VI_DBG, "wait raw_num(%d) count(%d)\n", raw_num, count);
-#ifdef FPGA_PORTING
-		osal_msleep(500);
-#else
-		osal_msleep(20);
-#endif
-	}
-
-	if (count == 0) {
-		vi_pr(VI_WARN, "raw_num(%d) stop streaming timeout\n", raw_num);
-	}
-
-	isp_streaming(ctx, false, raw_num);
-
-	for (j = 0; j < ISP_FE_CHN_MAX; j++) {
-		while ((isp_b = isp_buf_remove(&vdev->pre_fe_out_q[raw_num][j])) != NULL)
-			osal_vfree(isp_b);
-		while ((isp_b = isp_buf_remove(&vdev->pre_ai_isp_in_q[raw_num][j])) != NULL)
-			osal_vfree(isp_b);
-		while ((isp_b = isp_buf_remove(&vdev->pre_ai_isp_out_q[raw_num][j])) != NULL)
-			osal_vfree(isp_b);
-		while ((isp_b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_dq[j])) != NULL)
-			osal_vfree(isp_b);
-		while ((isp_b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_q[j])) != NULL)
-			osal_vfree(isp_b);
-	}
-
-	osal_spin_lock_irqsave(&snr_node_lock[raw_num], &flags);
-	osal_list_for_each_entry_safe(i2c_n, i2c_tmp, &isp_snr_i2c_queue[raw_num].list, list) {
-		osal_list_del_init(&i2c_n->list);
-		osal_kfree(i2c_n);
-	}
-	isp_snr_i2c_queue[raw_num].num_rdy = 0;
-
-	osal_list_for_each_entry_safe(crop_n, crop_tmp, &isp_crop_queue[raw_num].list, list) {
-		osal_list_del_init(&crop_n->list);
-		osal_kfree(crop_n);
-	}
-	isp_crop_queue[raw_num].num_rdy = 0;
-	osal_spin_unlock_irqrestore(&snr_node_lock[raw_num], &flags);
-
-	_vi_mux_dev_gpio_deinit(ctx, raw_num);
-
-	// if suspend, no need to destroy resources
-	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
-		if (ctx->is_ai_isp) {
-			vi_destroy_thread(vdev, E_VI_TH_AI_ISP);
-		}
-
-		ret = vi_free_ion_buf(vdev, &ctx->csi_mempool[raw_num]);
-		if (ret != 0) {
-			vi_pr(VI_ERR, "free ion buf failed\n");
-			return ret;
-		}
-	}
-
-clean_resources:
-	for (i = 0; i < ISP_PRERAW_MAX; i++) {
-		if (osal_atomic_read(&vdev->stream.csi_streamon[i])) {
-			is_all_idle = false;
-			break;
-		}
-	}
-
-	if (is_all_idle) {
-		clean_misc_resources(vdev);
-	}
-
-	vi_pr(VI_INFO, "raw_num(%d) stop streaming\n", raw_num);
-
-	return 0;
-}
-
-/*start postraw*/
-int vi_isp_start_streaming(struct sop_vi_dev *vdev, uint8_t pipe, uint8_t chn)
-{
-	bool trig_pre = true;
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum sop_isp_raw raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
-	bool stream_on = true;
-
-	if (osal_atomic_read(&vdev->stream.isp_streamon[pipe])) {
-		vi_pr(VI_INFO, "pipe %d chn %d already start streaming\n", pipe, chn);
-		return 0;
-	}
-
-	ctx->isp_pipe_cfg[pipe].chn_enable |= BIT(chn);
-	ctx->isp_pipe_cfg[pipe].first_frm_rst = true;
-	ctx->isp_pipe_cfg[pipe].first_frm_cnt = 0;
-
-	osal_atomic_set(&vdev->stream.isp_streamon[pipe], 1);
-
-	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
-		vi_tuning_buf_clear(pipe);
-	}
-
-	_vi_mempool_reset(&ctx->isp_mempool[pipe]);
-	_vi_dma_setup(vdev, pipe);
-
-	if (!osal_atomic_read(&vdev->stream.isp_init)) {
-		ispblk_isptop_config(ctx);
-		_vi_dma_set_sw_mode(ctx, raw_num, false);
-		_vi_postraw_ctrl_setup(vdev, pipe);
-		_swap_post_sts_buf(ctx, pipe);
-		_post_dma_update(vdev, pipe);
-	}
-
-	if (osal_atomic_read(&vdev->state) == E_STATE_SUSPEND) {
-		pre_fe_tuning_update(ctx, raw_num);
-		postraw_tuning_update(ctx, pipe);
-	}
-
-	if (_is_all_online(ctx) || _is_fe_post_slice(ctx)) {
-		_vi_update_yuvtop_out_cfg(vdev, pipe);
-
-		if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //offline mode
-			_postraw_outbuf_enq(vdev, pipe, chn);
-		} else { //online mode
-			struct vpss_online_cb_info post_para = {0};
-
-			/* VI Online VPSS sc cb trigger */
-			post_para.snr_num = pipe;
-			post_para.is_tile = false;
-			osal_gettimeofday(&post_para.ts);
-			if (ctx->isp_pipe_cfg[pipe].bypass_num == 0 &&
-				_vi_call_cb(E_MODULE_VPSS, VPSS_CB_VI_ONLINE_TRIGGER, &post_para) != 0) {
-				vi_pr(VI_INFO, "snr_num_%d, sc_%d is not ready. try later\n", raw_num, pipe);
-				trig_pre = false;
-			}
-		}
-
-		if (!ctx->is_rawreplay && trig_pre) {
-			if (_is_fe_post_slice(ctx)) {
-				vi_record_post_trigger(vdev, pipe);
-				isp_post_trig(ctx);
-			}
-
-			isp_first_frm_reset(ctx, true, false);
-			ctx->isp_pipe_cfg[pipe].first_frm_rst = false;
-
-			if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { //RGB sensor
-				isp_pre_trig(ctx, raw_num, ISP_FE_CH0);
-				if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
-					isp_pre_trig(ctx, raw_num, ISP_FE_CH1);
-			}
-
-			if (_is_all_online(ctx))
-				osal_atomic_set(&vdev->postraw_state, ISP_STATE_RUNNING);
-			else {
-				osal_atomic_set(&vdev->pre_fe_state[raw_num][ISP_FE_CH0], ISP_STATE_RUNNING);
-				if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
-					osal_atomic_set(&vdev->pre_fe_state[raw_num][ISP_FE_CH1], ISP_STATE_RUNNING);
-			}
-		}
-	} else {
-		if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
-			ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS) { //vi vpss offline mode
-			u8 chn_str = 0, pipe_num;
-
-			//for yuv sensor, we need to enque all chn_str
-			for (; chn_str < ctx->isp_csi_cfg[raw_num].mux_mode + 1; chn_str++) {
-				pipe_num = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_str];
-				if (!osal_atomic_read(&vdev->stream.isp_streamon[pipe_num])) {
-					stream_on = false;
-					break;
-				}
-			}
-
-			if (stream_on) {
-				for (chn_str = 0; chn_str < ctx->isp_csi_cfg[raw_num].mux_mode + 1; chn_str++)
-					_isp_yuv_bypass_buf_enq(vdev, raw_num, chn_str);
-			}
-		}
-	}
-
-	if (osal_atomic_read(&vdev->stream.isp_init) == 0) {
-		osal_atomic_set(&vdev->stream.isp_init, 1);
-	}
-
-	isp_streaming(ctx, stream_on, raw_num);
-
-	vi_pr(VI_INFO, "pipe %d chn %d start streaming\n", pipe, chn);
-
-	return 0;
-}
-
-
-int vi_isp_stop_streaming(struct sop_vi_dev *vdev, uint8_t pipe, uint8_t chn)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_isp_buf *sop_vb, *tmp;
-	unsigned long flags;
-	int count = 5;
-
-	if (!ctx->isp_pipe_cfg[pipe].chn_enable) {
-		vi_pr(VI_INFO, "pipe %d chn %d already stop streaming\n", pipe, chn);
-		return 0;
-	}
-
-	ctx->isp_pipe_cfg[pipe].chn_enable &= ~BIT(chn);
-
-	if (!ctx->isp_pipe_cfg[pipe].chn_enable) {
-		osal_atomic_set(&vdev->stream.isp_streamon[pipe], 0);
-	}
-
-	while (--count > 0) {
-		if (osal_atomic_read(&vdev->postraw_state) == ISP_STATE_IDLE)
-			break;
-		vi_pr(VI_DBG, "wait pipe(%d) chn(%d) count(%d)\n", pipe, chn, count);
-#ifdef FPGA_PORTING
-		osal_msleep(500);
-#else
-		osal_msleep(20);
-#endif
-	}
-
-	if (count == 0) {
-		vi_pr(VI_WARN, "pipe(%d) chn(%d) stop streaming timeout\n", pipe, chn);
-	}
-
-	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
-		osal_spin_lock_irqsave(&vdev->qbuf_lock, &flags);
-		osal_list_for_each_entry_safe(sop_vb, tmp, &(vdev->qbuf_list[pipe][chn]), list) {
-			osal_kfree(sop_vb);
-		}
-		vdev->qbuf_num[pipe][chn] = 0;
-		OSAL_INIT_LIST_HEAD(&vdev->qbuf_list[pipe][chn]);
-		osal_spin_unlock_irqrestore(&vdev->qbuf_lock, &flags);
-	}
-
-	vi_pr(VI_INFO, "done\n");
-
-	return 0;
-}
-
-static int _pre_fe_outbuf_enque(
-	struct sop_vi_dev *vdev,
-	const enum sop_isp_raw raw_num,
-	const enum sop_isp_fe_chn_num chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum isp_blk_id_t dmaid;
-	enum sop_isp_raw phy_raw = find_phy_raw_num(ctx, raw_num);
-	struct isp_queue *fe_out_q = &vdev->pre_fe_out_q[phy_raw][chn_num];
-	struct isp_buffer *b = NULL;
-	bool is_dump_raw = false;
-
-	dmaid = csibdg_dma_find_hwid(phy_raw, chn_num);
-
-	if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START) {
-		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-			// For staggered sensor, dump raw only when both channels are ready
-			if (vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0] == vdev->pre_fe_frm_num[raw_num][ISP_FE_CH1]) {
-				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH0], RAWDUMP_PREPARE);
-				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH1], RAWDUMP_PREPARE);
-			}
-		} else { //for linear sensor, dump raw directly
-			osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn_num], RAWDUMP_PREPARE);
-			is_dump_raw = true;
-		}
-	} else if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_PREPARE) {
-		is_dump_raw = true;
-	} else if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_DONE
-			&& osal_atomic_read(&vdev->raw_dump[raw_num].isp_smooth_raw_dump_en) == SMOOTH_RAWDUMP_START) {
-		is_dump_raw = true;
-	}
-
-	if (is_dump_raw) {
-		fe_out_q = &vdev->raw_dump[raw_num].buf_q[chn_num];
-
-		vi_pr(VI_DBG, "pre_fe raw_dump cfg start\n");
-
-		b = isp_buf_next(fe_out_q);
-		if (b == NULL) {
-			vi_pr(VI_ERR, "Pre_fe_%d LE raw_dump outbuf is empty\n", raw_num);
-			return 0;
-		}
-
-		ispblk_dma_setaddr(ctx, dmaid, b->addr);
-
-		osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn_num], RAWDUMP_PREPARE_DONE);
-
-		osal_atomic_set(&ctx->isp_csi_cfg[raw_num].clsc_en[chn_num],
-					ispblk_clsc_is_enable(ctx, raw_num, chn_num));
-
-		ispblk_clsc_config(ctx, raw_num, chn_num, false);
-	} else {
-		b = isp_buf_next(fe_out_q);
-		if (!b) {
-			vi_pr(VI_INFO, "pre_fe_%d chn_num_%d outbuf is empty\n", raw_num, chn_num);
-			return 0;
-		}
-
-		if (ctx->isp_csi_cfg[raw_num].is_ai_isp && ctx->isp_csi_cfg[raw_num].ai_cfg.is_raw_planar) {
-			ispblk_dma_setaddr(ctx, dmaid + 3, b->addr);
-			ispblk_dma_setaddr(ctx, dmaid + 2, b->addr + b->size / 4);
-			ispblk_dma_setaddr(ctx, dmaid + 0, b->addr + (b->size * 2) / 4);
-			ispblk_dma_setaddr(ctx, dmaid + 1, b->addr + (b->size * 3) / 4);
-		} else {
-			ispblk_dma_setaddr(ctx, dmaid, b->addr);
-		}
-	}
-
-	return 1;
-}
-
-static int _postraw_inbuf_enq_check(
-	struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct isp_queue *post_in_q = NULL, *post_in_se_q = NULL;
-	struct isp_buffer *b = NULL, *b_se = NULL;
-	int ret = 0;
-	uint32_t pre_vi_sel_le = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE;
-	uint32_t pre_vi_sel_se = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE;
-
-	post_in_q = ctx->is_hdr_on ? &vdev->postraw_wdr_in_q[ISP_FE_CH0] : &vdev->postraw_in_q;
-
-retry:
-	b = isp_buf_next(post_in_q);
-	if (!b) {
-		if (post_in_q == &vdev->postraw_wdr_in_q[ISP_FE_CH0]) {
-			post_in_q = &vdev->postraw_in_q;
-			goto retry;
-		} else {
-			vi_pr(VI_DBG, "postraw_in_q buf is empty\n");
-		}
-		return 1;
-	}
-
-	post_in_se_q = (post_in_q == &vdev->postraw_wdr_in_q[ISP_FE_CH0])
-					? &vdev->postraw_wdr_in_q[ISP_FE_CH1]
-					: NULL;
-	if (post_in_se_q) {
-		b_se = isp_buf_next(post_in_se_q);
-		if (b_se == NULL) {
-			post_in_q = &vdev->postraw_in_q;
-			vi_pr(VI_DBG, "Pre_be se input syn buf is empty\n");
-			goto retry;
-		}
-
-		if ((tuning_dis[0] > 0 && tuning_dis[0] - 1 != b_se->pipe) ||
-			!ctx->isp_pipe_cfg[b_se->pipe].chn_enable) {
-			b_se = isp_buf_remove(post_in_se_q);
-			isp_buf_queue(&vdev->pre_fe_out_q[b_se->raw_num][b_se->chn_num], b_se);
-			vi_pr(VI_DBG, "return se to fe_out_q\n");
-		}
-	}
-
-	//wdr mode check se first
-	if ((tuning_dis[0] > 0 && tuning_dis[0] - 1 != b->pipe) ||
-		!ctx->isp_pipe_cfg[b->pipe].chn_enable) {
-		b = isp_buf_remove(post_in_q);
-		isp_buf_queue(&vdev->pre_fe_out_q[b->raw_num][b->chn_num], b);
-		vi_pr(VI_DBG, "return le to fe_out_q\n");
-		goto retry;
-	}
-
-	ctx->cfg_info.raw_num = b->raw_num;
-	ctx->cfg_info.chn_num = b->chn_num;
-	ctx->cfg_info.pipe = b->pipe;
-	ctx->cfg_info.is_hdr_on = b_se ? true : false;
-	ctx->cfg_info.is_yuv = false;
-	ctx->cfg_info.ai_cfg = b->ai_cfg;
-
-	ctx->isp_pipe_cfg[b->pipe].crop.x = b->crop.x;
-	ctx->isp_pipe_cfg[b->pipe].crop.y = b->crop.y;
-	ctx->isp_pipe_cfg[b->pipe].crop.w = ctx->cfg_info.img_width =
-							ctx->isp_pipe_cfg[b->pipe].post_img_w;
-	ctx->isp_pipe_cfg[b->pipe].crop.h = ctx->cfg_info.img_height =
-							ctx->isp_pipe_cfg[b->pipe].post_img_h;
-
-	ctx->isp_pipe_cfg[b->pipe].tv = b->tv;
-
-	//YUV sensor, offline return error, online than config be read dma.
-	if (ctx->isp_pipe_cfg[b->pipe].is_yuv_sensor) {
-		ctx->cfg_info.is_yuv = true;
-
-		if (ctx->isp_pipe_cfg[b->pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
-			return 1;
-
-		vi_pr(VI_DBG, "YUV fe->dram->yuv post input buf_addr = 0x%llx\n", b->addr);
-		ispblk_dma_yuv_bypass_config(ctx, pre_vi_sel_le, b->addr, b->raw_num);
-
-		return ret;
-	}
-
-	if (b->ai_cfg.is_raw_planar) {
-		//for ai_isp, need use rggb
-		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 3, b->addr);
-		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 2, b->addr + b->size / 4);
-		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 0, b->addr + (b->size * 2) / 4);
-		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 1, b->addr + (b->size * 3) / 4);
-		if (b_se) {
-			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 3, b_se->addr);
-			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 2, b_se->addr + b->size / 4);
-			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 0, b_se->addr + b->size / 2);
-			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 1, b_se->addr + (b->size * 3) / 4);
-		}
-	} else {
-		ispblk_dma_config(ctx, b->pipe, pre_vi_sel_le, b->addr);
-		if (b_se)
-			ispblk_dma_config(ctx, b->pipe, pre_vi_sel_se, b_se->addr);
-	}
-
-	vi_pr(VI_DBG, "next buf raw[%d]chn[%d] pipe(%d) w:h(%d:%d) addr(0x%llx) size(%d)\n",
-			ctx->cfg_info.raw_num, ctx->cfg_info.chn_num, ctx->cfg_info.pipe,
-			ctx->cfg_info.img_width, ctx->cfg_info.img_height, b->addr, b->size);
-
-	return ret;
-}
-
-static void _postraw_outbuf_enque(
-	struct sop_vi_dev *vdev,
-	const u8 pipe,
-	const u8 chn_num)
-{
-	struct vi_buffer *vb2_buf;
-	struct sop_isp_buf *b = NULL;
-	struct isp_ctx *ctx = &vdev->ctx;
-	u64 dma_addr = 0;
-	u32 dma_id = 0;
-	u8 i = 0;
-
-	//Get the buffer for postraw output buffer
-	b = sop_isp_rdy_buf_next(vdev, pipe, chn_num);
-	if (b == NULL) {
-		vi_pr(VI_DBG, "postraw_%d chn_%d next buffer is empty\n", pipe, chn_num);
-		return;
-	}
-
-	vb2_buf = &b->buf;
-
-	vi_pr(VI_DBG, "update isp-buf: 0x%llx-0x%llx\n",
-		vb2_buf->planes[0].addr, vb2_buf->planes[1].addr);
-
-	for (i = 0; i < 2; i++) {
-		dma_addr = (uint64_t)vb2_buf->planes[i].addr;
-		dma_id = (i == 0) ? ISP_BLK_ID_DMA_CTL_YUV_CROP_Y : ISP_BLK_ID_DMA_CTL_YUV_CROP_C;
-
-		ispblk_dma_setaddr(ctx, dma_id, dma_addr);
-	}
-}
-
-static u8 _postraw_outbuf_empty(
-	struct sop_vi_dev *vdev,
-	const u8 pipe,
-	const u8 hw_chn_num)
-{
-	u8 ret = 0;
-
-	if (sop_isp_rdy_buf_empty(vdev, pipe, hw_chn_num)) {
-		vi_pr(VI_DBG, "postraw pipe_%d chn_%d output buffer is empty\n", pipe, hw_chn_num);
-		ret = 1;
-	}
-
-	return ret;
-}
-
-void _postraw_outbuf_enq(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-
-	if (vdev->postraw_frame_number[pipe] < ctx->isp_pipe_cfg[pipe].bypass_num)
-		return;
-
-	_postraw_outbuf_enque(vdev, pipe, chn_num);
-}
-
-/*
- * for postraw offline only.
- *  trig preraw if there is output buffer in preraw output.
- */
-s8 _pre_hw_enque(
-	struct sop_vi_dev *vdev,
-	const enum sop_isp_raw raw_num,
-	const enum sop_isp_fe_chn_num chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	enum sop_isp_raw phy_raw = raw_num;
-	int pipe = 0;
-
-	//ISP frame error handling
-	if (osal_atomic_read(&vdev->isp_err_handle_flag) == 1) {
-		vi_pr(VI_DBG, "wait err_handling done\n");
-		return -ISP_ERROR;
-	}
-
-	if (!osal_atomic_read(&vdev->stream.csi_streamon[raw_num]) && !ctx->is_rawreplay) {
-		vi_pr(VI_DBG, "VI not ready\n");
-		return -ISP_STOP;
-	}
-
-	if (_is_drop_next_frame(vdev, raw_num, chn_num)) {
-		vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d drop_frame_num %d\n",
-				raw_num, chn_num, vdev->drop_frame_number[raw_num]);
-		return -ISP_DROP_FRM;
-	}
-
-	if (_is_fe_post_offline(ctx)) { //fe->dram->post
-		if (ctx->is_rawreplay) { //TODO mv to post_hw_enque
-			if (osal_atomic_cmpxchg(&vdev->postraw_state,
-						ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
-						ISP_STATE_RUNNING) {
-				vi_pr(VI_DBG, "Postraw is running\n");
-				return -ISP_RUNNING;
-			}
-
-			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
-			if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //Scaler onffline mode
-				if (_postraw_outbuf_empty(vdev, pipe, chn_num)) {
-					osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
-					return -ISP_NO_BUFFER;
-				}
-
-				_postraw_update_cfg_from_user(vdev, pipe, chn_num);
-				_postraw_outbuf_enq(vdev, pipe, chn_num);
-			} else { //Scaler online mode
-				struct vpss_online_cb_info post_para = {0};
-
-				/* VI Online VPSS sc cb trigger */
-				post_para.snr_num = pipe;
-				post_para.is_tile = false;
-				if (_vi_call_cb(E_MODULE_VPSS, VPSS_CB_VI_ONLINE_TRIGGER, &post_para) != 0) {
-					vi_pr(VI_DBG, "raw_%d, sc_%d is running\n", raw_num, pipe);
-					osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
-					return -ISP_RUNNING;
-				}
-			}
-
-			if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
-				_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
-
-			isp_pre_trig(ctx, raw_num, chn_num);
-		} else {
-			phy_raw = find_phy_raw_num(ctx, raw_num);
-			if (osal_atomic_cmpxchg(&vdev->pre_fe_state[phy_raw][chn_num],
-						ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
-						ISP_STATE_RUNNING) {
-				vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d is running\n", raw_num, chn_num);
-				return -ISP_RUNNING;
-			}
-
-			// only if fe->dram
-			if (_pre_fe_outbuf_enque(vdev, raw_num, chn_num)) {
-				isp_pre_trig(ctx, raw_num, chn_num);
-			} else {
-				osal_atomic_set(&vdev->pre_fe_state[phy_raw][chn_num], ISP_STATE_IDLE);
-				return -ISP_NO_BUFFER;
-			}
-		}
-	} else if (_is_all_online(ctx)) {
-		if (osal_atomic_read(&vdev->stream.isp_streamon[pipe]) == 0) {
-			vi_pr(VI_DBG, "raw_num(%d) is not streaming\n", raw_num);
-			return -ISP_STOP;
-		}
-
-		if (osal_atomic_cmpxchg(&vdev->postraw_state,
-					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
-					ISP_STATE_RUNNING) {
-			vi_pr(VI_DBG, "Postraw is running\n");
-			return -ISP_RUNNING;
-		}
-
-		pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
-		if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //Scaler onffline mode
-			if (_postraw_outbuf_empty(vdev, pipe, chn_num)) {
-				osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
-				return -ISP_NO_BUFFER;
-			}
-
-			_postraw_outbuf_enq(vdev, pipe, chn_num);
-		}
-
-		if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
-			_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
-
-		isp_pre_trig(ctx, raw_num, chn_num);
-	} else if (_is_fe_post_slice(ctx)) { //fe->slice->post
-		if (osal_atomic_cmpxchg(&vdev->pre_fe_state[raw_num][chn_num],
-					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
-					ISP_STATE_RUNNING) {
-			vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d is running\n", raw_num, chn_num);
-			return -ISP_RUNNING;
-		}
-
-		/*don't care fe state, only call by post_hw_enque*/
-		if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
-			_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
-		isp_pre_trig(ctx, raw_num, chn_num);
-	}
-
-	return ISP_SUCCESS;
-}
-
-static inline void _swap_post_sts_buf(struct isp_ctx *ctx, const u8 pipe)
-{
-	struct _membuf *pool;
-	unsigned long flags;
-	u8 idx;
-	pool = &ctx->isp_bufpool[pipe];
-
-	osal_spin_lock_irqsave(&pool->post_sts_lock, &flags);
-	if (pool->post_sts_in_use == 1) {
-		osal_spin_unlock_irqrestore(&pool->post_sts_lock, &flags);
-		vi_pr(VI_DBG, "post sts is in use\n");
-		return;
-	}
-	pool->post_sts_busy_idx ^= 1;
-	osal_spin_unlock_irqrestore(&pool->post_sts_lock, &flags);
-
-	idx = pool->post_sts_busy_idx ^ 1;
-
-	//af
-	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_AF_W, pool->sts_mem[idx].af.phy_addr);
-
-	//lsc_hist
-	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_LSCR_HIST, pool->sts_mem[idx].lsc_hist.phy_addr);
-
-	//drc_hist
-	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_DRC_HIST, pool->sts_mem[idx].drc_hist.phy_addr);
-
-	//yuvtop
-	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_LDCI_HIST, pool->sts_mem[idx].ldci_hist.phy_addr);
 }
 
 static inline void _post_drc_poly_update(struct isp_ctx *ctx, const u8 pipe)
@@ -2351,7 +944,7 @@ static inline void _post_yuv_crop_update(struct isp_ctx *ctx, const u8 pipe)
 	}
 }
 
-static inline void _post_dma_update(struct sop_vi_dev *vdev, const u8 pipe)
+static inline void _post_dma_update(struct vi_dev *vdev, const u8 pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -2398,8 +991,953 @@ static inline void _post_dma_update(struct sop_vi_dev *vdev, const u8 pipe)
 	}
 }
 
+void sop_isp_dqbuf_list(struct vi_dev *vdev, const u32 frm_num,
+			const u8 pipe_id, const u8 chn_id, osal_timeval tv)
+{
+	unsigned long flags;
+	struct _isp_dqbuf_n *n;
+	struct isp_buf_q *dqbuf_q = &vdev->dqbuf_q;
+
+	n = osal_kzalloc(sizeof(struct _isp_dqbuf_n), OSAL_GFP_ATOMIC);
+	if (n == NULL) {
+		vi_pr(VI_ERR, "DQbuf kmalloc size(%zu) fail\n", sizeof(struct _isp_dqbuf_n));
+		return;
+	}
+	n->pipe_id	= pipe_id;
+	n->chn_id	= chn_id;
+	n->frm_num	= frm_num;
+	n->tv		= tv;
+
+	osal_spin_lock_irqsave(&dqbuf_q->lock, &flags);
+	osal_list_add_tail(&n->list, &dqbuf_q->list);
+	osal_spin_unlock_irqrestore(&dqbuf_q->lock, &flags);
+}
+
+int vi_dqbuf(struct isp_buf_q *dqbuf_q, struct _vi_buffer *b)
+{
+	unsigned long flags;
+	struct _isp_dqbuf_n *n = NULL;
+	int ret = -1;
+
+	osal_spin_lock_irqsave(&dqbuf_q->lock, &flags);
+	if (!osal_list_empty(&dqbuf_q->list)) {
+		n = osal_list_first_entry(&dqbuf_q->list, struct _isp_dqbuf_n, list);
+		b->pipe_id		= n->pipe_id;
+		b->chn_id		= n->chn_id;
+		b->sequence		= n->frm_num;
+		b->tv			= n->tv;
+		osal_list_del_init(&n->list);
+		osal_kfree(n);
+		ret = 0;
+	}
+	osal_spin_unlock_irqrestore(&dqbuf_q->lock, &flags);
+
+	return ret;
+}
+
+static int _vi_call_cb(u32 m_id, u32 cmd_id, void *data)
+{
+	struct base_exe_m_cb exe_cb;
+
+	exe_cb.callee = m_id;
+	exe_cb.caller = E_MODULE_VI;
+	exe_cb.cmd_id = cmd_id;
+	exe_cb.data   = (void *)data;
+
+	return base_exe_module_cb(&exe_cb);
+}
+
+static int _isp_yuv_bypass_buf_enq(
+	struct vi_dev *vdev,
+	const enum sop_isp_raw raw_num,
+	const u8 hw_chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct sop_isp_buf *b = NULL;
+	enum isp_blk_id_t dmaid;
+	u64 tmp_addr = 0, i = 0;
+	u8 pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[hw_chn_num];
+	u8 chn = 0;
+
+	if (sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][chn])) {
+		vi_pr(VI_WARN, "fe_%d chn_num_%d yuv bypass outbuf is empty\n", raw_num, hw_chn_num);
+		return 0;
+	}
+
+	b = sop_isp_rdy_buf_next(&vdev->qbuf_q[pipe][chn]);
+	if (b == NULL)
+		return 0;
+
+	vi_pr(VI_DBG, "update yuv bypass outbuf: 0x%llx pipe_%d chn(%d)\n",
+			b->buf.planes[0].addr, pipe, chn);
+
+	dmaid = csibdg_dma_find_hwid(raw_num, hw_chn_num);
+
+	if (ctx->isp_csi_cfg[raw_num].is_422_to_420) {
+		for (i = 0; i < 2; i++) {
+			tmp_addr = b->buf.planes[i].addr;
+			if (vdev->pre_fe_frm_num[raw_num][hw_chn_num] == 0)
+				ispblk_dma_yuv_bypass_config(ctx, dmaid + i, tmp_addr, raw_num);
+			else
+				ispblk_dma_setaddr(ctx, dmaid + i, tmp_addr);
+		}
+	} else {
+		tmp_addr = b->buf.planes[0].addr;
+
+		if (vdev->pre_fe_frm_num[raw_num][hw_chn_num] == 0)
+			ispblk_dma_yuv_bypass_config(ctx, dmaid, tmp_addr, raw_num);
+		else
+			ispblk_dma_setaddr(ctx, dmaid, tmp_addr);
+	}
+
+	return 1;
+}
+
+static void _isp_yuv_bypass_trigger(struct vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	if (osal_atomic_read(&vdev->isp_err_handle_flag) == 1)
+		return;
+
+	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num])) {
+		if (osal_atomic_cmpxchg(&vdev->pre_fe_state[raw_num][hw_chn_num],
+					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
+					ISP_STATE_RUNNING) {
+			vi_pr(VI_DBG, "fe_%d chn_num_%d is running\n", raw_num, hw_chn_num);
+			return;
+		}
+
+		if (_isp_yuv_bypass_buf_enq(vdev, raw_num, hw_chn_num))
+			isp_pre_trig(ctx, raw_num, hw_chn_num);
+		else {
+			osal_atomic_set(&vdev->pre_fe_state[raw_num][hw_chn_num], ISP_STATE_IDLE);
+		}
+	}
+}
+
+void _vi_postraw_ctrl_setup(struct vi_dev *vdev, uint8_t pipe)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	if (!ctx->isp_pipe_cfg[pipe].is_enable)
+		return;
+
+	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
+		ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
+		return;
+
+	_isp_rawtop_init(vdev);
+	_isp_rgbtop_init(vdev);
+	_isp_yuvtop_init(vdev);
+
+	ispblk_preraw_vi_sel_config(ctx);
+}
+
+void _vi_pre_fe_ctrl_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct cif_yuv_swap_s swap = {0};
+
+	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {//YUV sensor
+		if (ctx->isp_csi_cfg[raw_num].is_422_to_420) {//uyvy to yuyv to 420
+			swap.devno = raw_num;
+			swap.yc_swap = 1;
+			swap.uv_swap = 1;
+			_vi_call_cb(E_MODULE_CIF, MIPI_SET_YUV_SWAP, &swap);
+		}
+
+		if (ctx->isp_csi_cfg[raw_num].is_bt_demux)
+			ispblk_csibdg_lite_config(ctx, raw_num);
+		else {
+			ispblk_csibdg_yuv_bypass_config(ctx, raw_num);
+		}
+
+		ispblk_isptop_fe_config(ctx, raw_num, false);
+		ispblk_preraw_fe_config(ctx, raw_num);
+		ispblk_csibdg_crop_update(ctx, raw_num, true);
+		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH0, false);
+		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH1, false);
+		ispblk_aehist_config(ctx, raw_num, false);
+	} else { //RGB sensor
+		ispblk_isptop_fe_config(ctx, raw_num, true);
+		ispblk_preraw_fe_config(ctx, raw_num);
+		ispblk_csibdg_config(ctx, raw_num);
+		ispblk_csibdg_crop_update(ctx, raw_num, !ctx->isp_csi_cfg[raw_num].is_mux_dev);
+		ispblk_csibdg_wdma_crop_config(ctx, raw_num, ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0],
+						ctx->isp_csi_cfg[raw_num].is_mux_dev);
+		ispblk_clsc_config(ctx, raw_num, ISP_FE_CH0, false);
+		if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
+			ispblk_clsc_config(ctx, raw_num, ISP_FE_CH1, false);
+		ispblk_aehist_config(ctx, raw_num, true);
+	}
+}
+
+static void vi_csi_sw_init(struct vi_dev *vdev, enum sop_isp_raw raw_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t chn = 0;
+
+	vdev->drop_frame_number[raw_num]    = 0;
+	vdev->dump_frame_number[raw_num]    = 0;
+	ctx->raw_chnstr_num[raw_num]        = 0;
+
+	for (chn = 0; chn < ISP_FE_CHN_MAX; chn++) {
+		vdev->pre_fe_sof_cnt[raw_num][chn] = 0;
+		vdev->pre_fe_frm_num[raw_num][chn] = 0;
+		vdev->raw_dump[raw_num].isp_byr[chn] = 0;
+
+		osal_atomic_set(&vdev->pre_fe_state[raw_num][chn], ISP_STATE_IDLE);
+		osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn], RAWDUMP_IDLE);
+	}
+
+	osal_atomic_set(&vdev->isp_int_flag[raw_num], RAWDUMP_IDLE);
+	osal_atomic_set(&vdev->raw_dump[raw_num].isp_smooth_raw_dump_en, SMOOTH_RAWDUMP_IDLE);
+	osal_atomic_set(&vdev->isp_err_times[raw_num], 0);
+
+	OSAL_INIT_LIST_HEAD(&vdev->isp_snr_cfg[raw_num].i2c_queue.list);
+	vdev->isp_snr_cfg[raw_num].i2c_queue.num_rdy = 0;
+	OSAL_INIT_LIST_HEAD(&vdev->isp_snr_cfg[raw_num].crop_queue.list);
+	vdev->isp_snr_cfg[raw_num].crop_queue.num_rdy = 0;
+
+	osal_atomic_set(&vdev->isp_ai_int_flag[raw_num], E_AI_WAKE_TYPE_NONE);
+}
+
+void vi_csi_ctrl_init(struct vi_dev *vdev, enum sop_isp_raw raw_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw phy_raw = raw_num;
+	u8 i = 0;
+	struct cif_attr_s cif_attr;
+
+	vi_csi_sw_init(vdev, raw_num);
+
+	if (!ctx->isp_csi_cfg[raw_num].is_patgen_en) {
+		phy_raw = find_phy_raw_num(ctx, raw_num);
+		/* Get stagger vsync info from cif */
+		cif_attr.devno = phy_raw;
+		if (_vi_call_cb(E_MODULE_CIF, CIF_CB_GET_CIF_ATTR, &cif_attr) == 0) {
+			ctx->isp_csi_cfg[raw_num].is_stagger_vsync = cif_attr.stagger_vsync;
+
+			ctx->isp_csi_cfg[raw_num].csibdg_width  = cif_attr.img_size.width;
+			ctx->isp_csi_cfg[raw_num].csibdg_height = cif_attr.img_size.height;
+			ctx->isp_csi_cfg[raw_num].max_width     = cif_attr.img_size.max_width;
+			ctx->isp_csi_cfg[raw_num].max_height    = cif_attr.img_size.max_height;
+
+			for (i = 0; i < ctx->isp_csi_cfg[raw_num].chn_num; i++) {
+				ctx->isp_csi_cfg[raw_num].crop[i].w = cif_attr.img_size.active_w;
+				ctx->isp_csi_cfg[raw_num].crop[i].h = cif_attr.img_size.active_h;
+				ctx->isp_csi_cfg[raw_num].crop[i].x = cif_attr.img_size.start_x;
+				ctx->isp_csi_cfg[raw_num].crop[i].y = cif_attr.img_size.start_y;
+			}
+
+			ctx->isp_csi_cfg[raw_num].rgb_color_mode_pre_crop =
+						bayer_type_before_crop(ctx->isp_csi_cfg[raw_num].rgb_color_mode,
+								cif_attr.img_size.start_x, cif_attr.img_size.start_y);
+		} else {
+			vi_pr(VI_ERR, "get cif attr fail\n");
+			return;
+		}
+	}
+
+	if (ctx->cfg_info.raw_num == ISP_PRERAW_MAX && !ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
+		//Postraw out size
+		ctx->cfg_info.raw_num = raw_num;
+	}
+
+	if (_is_fe_post_slice(ctx))
+		vi_calculate_slice_buf_setting(ctx, raw_num);
+
+	vi_pr(VI_DBG, "raw_num(%d) is_hdr(%d) is_yuv_sensor(%d) mux_mode(%d)\n", raw_num,
+							ctx->isp_csi_cfg[raw_num].is_hdr_on,
+							ctx->isp_csi_cfg[raw_num].is_yuv_sensor,
+							ctx->isp_csi_cfg[raw_num].mux_mode);
+	vi_pr(VI_INFO, "color_mode(%d) csibdg(%d:%d) max(%d:%d)\n",
+		ctx->isp_csi_cfg[raw_num].rgb_color_mode,
+		ctx->isp_csi_cfg[raw_num].csibdg_width, ctx->isp_csi_cfg[raw_num].csibdg_height,
+		ctx->isp_csi_cfg[raw_num].max_width, ctx->isp_csi_cfg[raw_num].max_height);
+}
+
+void vi_isp_ctrl_init(struct vi_dev *vdev, uint8_t pipe)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t	raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+	uint8_t chn = 0;
+
+	vdev->postraw_frame_number[pipe] = 0;
+	ctx->isp_pipe_cfg[pipe].first_frm_rst = true;
+	ctx->isp_pipe_cfg[pipe].bypass_num = 0;
+	ctx->isp_pipe_cfg[pipe].is_enable = true;
+
+	//TODO need know which chn is bind to pipe
+	osal_memcpy(&ctx->isp_pipe_cfg[pipe].crop, &ctx->isp_csi_cfg[raw_num].crop[chn], sizeof(struct vi_rect));
+	ctx->isp_pipe_cfg[pipe].yuv_scene_mode = ctx->isp_csi_cfg[raw_num].yuv_scene_mode;
+	ctx->isp_pipe_cfg[pipe].is_yuv_sensor = ctx->isp_csi_cfg[raw_num].is_yuv_sensor;
+
+	if (ctx->is_rawreplay) {
+		ctx->isp_pipe_cfg[pipe].crop.w = vdev->usr_crop.width;
+		ctx->isp_pipe_cfg[pipe].crop.h = vdev->usr_crop.height;
+		ctx->isp_pipe_cfg[pipe].crop.x = vdev->usr_crop.left;
+		ctx->isp_pipe_cfg[pipe].crop.y = vdev->usr_crop.top;
+
+		ctx->isp_pipe_cfg[pipe].crop_se.w = vdev->usr_crop.width;
+		ctx->isp_pipe_cfg[pipe].crop_se.h = vdev->usr_crop.height;
+		ctx->isp_pipe_cfg[pipe].crop_se.x = vdev->usr_crop.left;
+		ctx->isp_pipe_cfg[pipe].crop_se.y = vdev->usr_crop.top;
+
+		ctx->isp_pipe_cfg[pipe].rgb_color_mode = bayer_type_mapping(vdev->usr_fmt.code);
+	}
+
+	ctx->isp_pipe_cfg[pipe].post_img_w = ctx->isp_pipe_cfg[pipe].crop.w;
+	ctx->isp_pipe_cfg[pipe].post_img_h = ctx->isp_pipe_cfg[pipe].crop.h;
+	ctx->isp_pipe_cfg[pipe].rgb_color_mode = ctx->isp_csi_cfg[raw_num].rgb_color_mode;
+
+	//cnr config
+	ctx->isp_pipe_cfg[pipe].cnr_scale_shift = (ctx->isp_pipe_cfg[pipe].crop.w > 2688) ? 3 : 2;
+	ctx->isp_pipe_cfg[pipe].cnr_cur_scale_shift =
+			ctx->isp_pipe_cfg[pipe].cnr_pre_scale_shift = ctx->isp_pipe_cfg[pipe].cnr_scale_shift;
+	ctx->isp_pipe_cfg[pipe].is_hdr_on = ctx->isp_csi_cfg[raw_num].is_hdr_on;
+
+	if (ctx->cfg_info.pipe == VI_MAX_PIPE_NUM) {
+		//Postraw out size
+		ctx->cfg_info.is_hdr_on = ctx->isp_pipe_cfg[pipe].is_hdr_on = ctx->isp_csi_cfg[raw_num].is_hdr_on;
+		ctx->cfg_info.pipe = pipe;
+		ctx->cfg_info.img_width = ctx->isp_pipe_cfg[pipe].crop.w;
+		ctx->cfg_info.img_height = ctx->isp_pipe_cfg[pipe].crop.h;
+
+		vi_pr(VI_INFO, "Rgb raw_num(%d) pipe(%d) init_w_h(%d:%d)\n", raw_num, ctx->cfg_info.pipe,
+		      ctx->cfg_info.img_width, ctx->cfg_info.img_height);
+	}
+
+	vi_pr(VI_INFO, "pipe(%d) yuv((%d) crop_x_y_w_h(%d:%d:%d:%d), cnr_shift(%d)",
+			pipe, ctx->isp_pipe_cfg[pipe].is_yuv_sensor,
+			ctx->isp_pipe_cfg[pipe].crop.x, ctx->isp_pipe_cfg[pipe].crop.y,
+			ctx->isp_pipe_cfg[pipe].crop.w, ctx->isp_pipe_cfg[pipe].crop.h,
+			ctx->isp_pipe_cfg[pipe].cnr_scale_shift);
+}
+
+void vi_scene_ctrl(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+
+	if (ctx->is_ctrl_inited)
+		return;
+
+	ctx->is_3dnr_on = true;
+	ctx->is_dpcm_on = false;
+
+	if (_is_fe_post_offline(ctx)) { //Multi sensor scenario
+		ctx->is_fbc_on = false;
+		ctx->is_multi_sensor = true;
+		if (ctx->is_rawreplay) { // dram->postraw
+			ctx->is_slice_buf_on = false;
+			ctx->is_fbc_on = true;
+		}
+	} else { //Single sensor onthefly or slicebuf
+		raw_num = ctx->cfg_info.raw_num;
+		ctx->is_multi_sensor = false;
+		ctx->is_fbc_on = true;
+
+		if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { // yuv sensor
+			ctx->isp_csi_cfg[raw_num].is_422_to_420 = false;
+
+			if (ctx->isp_csi_cfg[raw_num].mux_mode > 0 &&
+			    ctx->isp_csi_cfg[raw_num].inf_mode >= VI_MODE_BT656 &&
+			    ctx->isp_csi_cfg[raw_num].inf_mode <= VI_MODE_BT1120_INTERLEAVED) {
+				ctx->isp_csi_cfg[raw_num].is_bt_demux = true;
+				if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+					vi_pr(VI_WARN, "bt_demux sensor switch scene_mode to YUV_SCENE_ONLINE\n");
+					ctx->isp_csi_cfg[raw_num].yuv_scene_mode = ISP_YUV_SCENE_ONLINE;
+				}
+			}
+		}
+	}
+
+	ctx->is_ctrl_inited = true;
+
+	vi_pr(VI_INFO, "is_3dnr_on[%d], is_fbc_on[%d]\n", ctx->is_3dnr_on, ctx->is_fbc_on);
+}
+
+void _vi_bw_cal_set(struct vi_dev *vdev)
+{
+#ifdef BW_CAL
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct vi_ctx *vi_proc_ctx = NULL;
+	void __iomem *bw_limiter;
+	u64 bwladdr[ISP_BW_LIMIT_MAX] = {0x0A074020, 0x0A072020, 0x0A078020}; // rdma, wdma0, wdma1
+	u32 data_size[ISP_BW_LIMIT_MAX] = {0}, BW[ISP_PRERAW_MAX][ISP_BW_LIMIT_MAX] = {0};
+	u32 total_bw = 0, bwlwin = 0, bwltxn = 0, margin = 125, fps = 25;
+	u32 def_bwltxn = 4, def_fps = 25;
+	u32 width, height;
+	u8 i, yuv_chn_num;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+
+	vi_proc_ctx = (struct vi_ctx *)(vdev->shared_mem);
+
+	for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
+		if (!ctx->isp_csi_cfg[raw_num].is_enable)
+			continue;
+
+		fps = vi_proc_ctx->dev_attr[raw_num].snr_fps ?
+			vi_proc_ctx->dev_attr[raw_num].snr_fps :
+			def_fps;
+		width = ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0].w;
+		height = ctx->isp_csi_cfg[raw_num].crop[ISP_FE_CH0].h;
+
+		if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {//RGB sensor
+			if (!ctx->isp_csi_cfg[raw_num].is_hdr_on) {
+				data_size[ISP_BW_LIMIT_RDMA] = (411 * width * height) / 128 + 50052;
+				data_size[ISP_BW_LIMIT_WDMA0] = (396 * width * height) / 128 + 8160;
+				data_size[ISP_BW_LIMIT_WDMA1] = (391 * width * height) / 128 + 21536;
+			} else {
+				data_size[ISP_BW_LIMIT_RDMA] = (630 * width * height) / 128 + 50052;
+				data_size[ISP_BW_LIMIT_WDMA0] = (792 * width * height) / 128 + 8160;
+				data_size[ISP_BW_LIMIT_WDMA1] = (394 * width * height) / 128 + 38496;
+			}
+		} else { //YUV sensor
+			yuv_chn_num = ctx->isp_csi_cfg[raw_num].mux_mode + 1;
+			data_size[ISP_BW_LIMIT_RDMA] = (192 * yuv_chn_num * width * height) / 128;
+			data_size[ISP_BW_LIMIT_WDMA0] = (192 * yuv_chn_num * width * height) / 128;
+			data_size[ISP_BW_LIMIT_WDMA1] = 0;
+		}
+
+		for (i = 0; i < ISP_BW_LIMIT_MAX; ++i) {
+			BW[raw_num][i] = (fps * data_size[i]) / 1000000 + 1;
+		}
+	}
+
+	// TODO
+	// just restrain RDMA now, WDMA0/WDMA1 wait for Brian
+	// for (i = 0; i < BW_LIMIT_MAX; ++i) {
+	for (i = 0; i < 1; ++i) {
+		total_bw = 0;
+
+		for (raw_num = ISP_PRERAW0; raw_num < ISP_PRERAW_MAX; raw_num++) {
+			total_bw += BW[raw_num][i];
+		}
+
+		for (bwltxn = def_bwltxn; bwltxn > 1; --bwltxn) {
+			bwlwin = bwltxn * 256000 / ((((total_bw * 33) / 10) * margin) / 100);
+			if (bwlwin <= 1024)
+				break;
+		}
+
+		bw_limiter = osal_ioremap(bwladdr[i], 0x4);
+		_reg_write(bw_limiter, ((bwltxn << 10) | bwlwin));
+		vi_pr(VI_INFO, "isp %s bw_limiter=0x%x, BW=%d, bwltxn=%d, bwlwin=%d\n",
+				(i == 0) ? "rdma" : ((i == 1) ? "wdma0" : "wdma1"),
+				_reg_read(bw_limiter), total_bw, bwltxn, bwlwin);
+		osal_iounmap(bw_limiter, 0x4);
+	}
+#endif
+}
+
+static int _vi_mux_dev_gpio_init(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+{
+	int rc = 0;
+	u8 i = 0, j = 0;
+	u8 cur_idx = 0;
+	char label[16] = {0};
+	struct csi_gpio *gpio = NULL;
+	struct _csi_switch_info *info = &ctx->isp_csi_cfg[raw_num].switch_info;
+
+	if (!ctx->isp_csi_cfg[raw_num].is_mux_dev)
+		return 0;
+
+	cur_idx = info->cur_idx;
+
+	for (i = 0; i < VI_MAX_DEV_SWITCH_DEPTH; i++) {
+		gpio = &info->snr_arr[0].gpio[i];
+		if (!gpio->enable)
+			continue;
+		sprintf(label, "gpio%d(%d, %d)", i, gpio->port, gpio->pin);
+		rc = vi_misc_gpio_request(&gpio->handle, gpio->port, gpio->pin, label);
+		if (rc) {
+			vi_pr(VI_ERR, "request for gpio(%d) failed:%d\n", gpio->pin, rc);
+			goto err_gpio_req;
+		}
+
+		rc = vi_misc_gpio_dir(&gpio->handle, gpio->port, gpio->pin, 1, gpio->pol);
+		if (rc) {
+			vi_pr(VI_ERR, "fail to set gpio(%d) dir failed:%d\n",
+				gpio->pin, rc);
+			goto err_gpio_req;
+		}
+	}
+
+	return rc;
+
+err_gpio_req:
+	for (j = 0; j < i; j++) {
+		gpio = &info->snr_arr[cur_idx].gpio[i];
+		if (!gpio->enable)
+			continue;
+		vi_misc_gpio_free(&gpio->handle, gpio->port, gpio->pin);
+	}
+
+	return rc;
+}
+
+static int _vi_mux_dev_gpio_deinit(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+{
+	u8 i = 0;
+	u8 cur_idx = 0;
+	struct csi_gpio *gpio = NULL;
+	struct _csi_switch_info *info = &ctx->isp_csi_cfg[raw_num].switch_info;
+
+	if (!ctx->isp_csi_cfg[raw_num].is_mux_dev)
+		return 0;
+
+	for (i = 0; i < VI_MAX_DEV_SWITCH_DEPTH; i++) {
+		gpio = &info->snr_arr[cur_idx].gpio[i];
+		if (!gpio->enable)
+			continue;
+		vi_misc_gpio_free(&gpio->handle, gpio->port, gpio->pin);
+	}
+
+	return 0;
+}
+
+void vi_sw_reset(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	ctx->is_ctrl_inited     = false;
+	ctx->is_ai_isp          = false;
+	ctx->virt_raw_offset    = 0;
+	ctx->cfg_info.raw_num   = ISP_PRERAW_MAX;
+	ctx->cfg_info.pipe      = VI_MAX_PIPE_NUM;
+	vdev->isp_source        = ISP_SOURCE_DEV;
+
+	osal_atomic_set(&vdev->isp_dbg_flag, 0);
+	osal_atomic_set(&vdev->state, E_STATE_DEFAULT);
+	osal_atomic_set(&vdev->is_drop, 0);
+	osal_atomic_set(&ctx->is_post_done, 0);
+}
+
+static int _pre_fe_outbuf_enque(
+	struct vi_dev *vdev,
+	const enum sop_isp_raw raw_num,
+	const enum sop_isp_fe_chn_num chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum isp_blk_id_t dmaid;
+	enum sop_isp_raw phy_raw = find_phy_raw_num(ctx, raw_num);
+	struct isp_queue *fe_out_q = &vdev->pre_fe_out_q[phy_raw][chn_num];
+	struct isp_buffer *b = NULL;
+	bool is_dump_raw = false;
+
+	dmaid = csibdg_dma_find_hwid(phy_raw, chn_num);
+
+	if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START) {
+		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
+			// For staggered sensor, dump raw only when both channels are ready
+			if (vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0] == vdev->pre_fe_frm_num[raw_num][ISP_FE_CH1]) {
+				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH0], RAWDUMP_PREPARE);
+				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH1], RAWDUMP_PREPARE);
+			}
+		} else { //for linear sensor, dump raw directly
+			osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn_num], RAWDUMP_PREPARE);
+			is_dump_raw = true;
+		}
+	} else if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_PREPARE) {
+		is_dump_raw = true;
+	} else if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_DONE
+			&& osal_atomic_read(&vdev->raw_dump[raw_num].isp_smooth_raw_dump_en) == SMOOTH_RAWDUMP_START) {
+		is_dump_raw = true;
+	}
+
+	if (is_dump_raw) {
+		fe_out_q = &vdev->raw_dump[raw_num].buf_q[chn_num];
+
+		vi_pr(VI_DBG, "pre_fe raw_dump cfg start\n");
+
+		b = isp_buf_next(fe_out_q);
+		if (b == NULL) {
+			vi_pr(VI_ERR, "Pre_fe_%d LE raw_dump outbuf is empty\n", raw_num);
+			return 0;
+		}
+
+		ispblk_dma_setaddr(ctx, dmaid, b->addr);
+
+		osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn_num], RAWDUMP_PREPARE_DONE);
+
+		osal_atomic_set(&ctx->isp_csi_cfg[raw_num].clsc_en[chn_num],
+					ispblk_clsc_is_enable(ctx, raw_num, chn_num));
+
+		ispblk_clsc_config(ctx, raw_num, chn_num, false);
+	} else {
+		b = isp_buf_next(fe_out_q);
+		if (!b) {
+			vi_pr(VI_INFO, "pre_fe_%d chn_num_%d outbuf is empty\n", raw_num, chn_num);
+			return 0;
+		}
+
+		/*0~3 BGbGrR ---> RGrBGb*/
+		if (ctx->isp_csi_cfg[raw_num].is_ai_isp && ctx->isp_csi_cfg[raw_num].ai_cfg.is_raw_planar) {
+			ispblk_dma_setaddr(ctx, dmaid + 3, b->addr);
+			ispblk_dma_setaddr(ctx, dmaid + 2, b->addr + b->size / 4);
+			ispblk_dma_setaddr(ctx, dmaid + 0, b->addr + (b->size * 2) / 4);
+			ispblk_dma_setaddr(ctx, dmaid + 1, b->addr + (b->size * 3) / 4);
+		} else {
+			ispblk_dma_setaddr(ctx, dmaid, b->addr);
+		}
+	}
+
+	return 1;
+}
+
+static int _postraw_inbuf_enq_check(
+	struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct isp_queue *post_in_q = NULL, *post_in_se_q = NULL;
+	struct isp_buffer *b = NULL, *b_se = NULL;
+	int ret = 0;
+	uint32_t pre_vi_sel_le = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE;
+	uint32_t pre_vi_sel_se = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE;
+
+	post_in_q = ctx->is_hdr_on ? &vdev->postraw_wdr_in_q[ISP_FE_CH0] : &vdev->postraw_in_q;
+
+retry:
+	b = isp_buf_next(post_in_q);
+	if (!b) {
+		if (post_in_q == &vdev->postraw_wdr_in_q[ISP_FE_CH0]) {
+			post_in_q = &vdev->postraw_in_q;
+			goto retry;
+		} else {
+			vi_pr(VI_DBG, "postraw_in_q buf is empty\n");
+		}
+		return 1;
+	}
+
+	post_in_se_q = (post_in_q == &vdev->postraw_wdr_in_q[ISP_FE_CH0])
+					? &vdev->postraw_wdr_in_q[ISP_FE_CH1]
+					: NULL;
+	if (post_in_se_q) {
+		b_se = isp_buf_next(post_in_se_q);
+		if (b_se == NULL) {
+			post_in_q = &vdev->postraw_in_q;
+			vi_pr(VI_DBG, "Pre_be se input syn buf is empty\n");
+			goto retry;
+		}
+
+		if ((tuning_dis[0] > 0 && tuning_dis[0] - 1 != b_se->pipe) ||
+			!ctx->isp_pipe_cfg[b_se->pipe].chn_enable) {
+			b_se = isp_buf_remove(post_in_se_q);
+			isp_buf_queue(&vdev->pre_fe_out_q[b_se->raw_num][b_se->chn_num], b_se);
+			vi_pr(VI_DBG, "return se to fe_out_q\n");
+		}
+	}
+
+	//wdr mode check se first
+	if ((tuning_dis[0] > 0 && tuning_dis[0] - 1 != b->pipe) ||
+		!ctx->isp_pipe_cfg[b->pipe].chn_enable) {
+		b = isp_buf_remove(post_in_q);
+		isp_buf_queue(&vdev->pre_fe_out_q[b->raw_num][b->chn_num], b);
+		vi_pr(VI_DBG, "return le to fe_out_q\n");
+		goto retry;
+	}
+
+	ctx->cfg_info.raw_num = b->raw_num;
+	ctx->cfg_info.chn_num = b->chn_num;
+	ctx->cfg_info.pipe = b->pipe;
+	ctx->cfg_info.is_hdr_on = b_se ? true : false;
+	ctx->cfg_info.is_yuv = false;
+	ctx->cfg_info.ai_cfg = b->ai_cfg;
+
+	ctx->isp_pipe_cfg[b->pipe].crop.x = b->crop.x;
+	ctx->isp_pipe_cfg[b->pipe].crop.y = b->crop.y;
+	ctx->isp_pipe_cfg[b->pipe].crop.w = ctx->cfg_info.img_width =
+							ctx->isp_pipe_cfg[b->pipe].post_img_w;
+	ctx->isp_pipe_cfg[b->pipe].crop.h = ctx->cfg_info.img_height =
+							ctx->isp_pipe_cfg[b->pipe].post_img_h;
+
+	ctx->isp_pipe_cfg[b->pipe].tv = b->tv;
+
+	//YUV sensor, offline return error, online than config be read dma.
+	if (ctx->isp_pipe_cfg[b->pipe].is_yuv_sensor) {
+		ctx->cfg_info.is_yuv = true;
+
+		if (ctx->isp_pipe_cfg[b->pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
+			return 1;
+
+		vi_pr(VI_DBG, "YUV fe->dram->yuv post input buf_addr = 0x%llx\n", b->addr);
+		ispblk_dma_yuv_bypass_config(ctx, pre_vi_sel_le, b->addr, b->raw_num);
+
+		return ret;
+	}
+
+	if (b->ai_cfg.is_raw_planar) {
+		//for ai_isp, need use rggb
+		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 3, b->addr);
+		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 2, b->addr + b->size / 4);
+		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 0, b->addr + (b->size * 2) / 4);
+		ispblk_dma_setaddr(ctx, pre_vi_sel_le + 1, b->addr + (b->size * 3) / 4);
+		if (b_se) {
+			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 3, b_se->addr);
+			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 2, b_se->addr + b->size / 4);
+			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 0, b_se->addr + b->size / 2);
+			ispblk_dma_setaddr(ctx, pre_vi_sel_se + 1, b_se->addr + (b->size * 3) / 4);
+		}
+	} else {
+		ispblk_dma_config(ctx, b->pipe, pre_vi_sel_le, b->addr);
+		if (b_se)
+			ispblk_dma_config(ctx, b->pipe, pre_vi_sel_se, b_se->addr);
+	}
+
+	vi_pr(VI_DBG, "next buf raw[%d]chn[%d] pipe(%d) w:h(%d:%d) addr(0x%llx) size(%d)\n",
+			ctx->cfg_info.raw_num, ctx->cfg_info.chn_num, ctx->cfg_info.pipe,
+			ctx->cfg_info.img_width, ctx->cfg_info.img_height, b->addr, b->size);
+
+	return ret;
+}
+
+static void _postraw_outbuf_enque(
+	struct vi_dev *vdev,
+	const u8 pipe,
+	const u8 chn_num)
+{
+	struct vi2_buffer *vb2_buf;
+	struct sop_isp_buf *b = NULL;
+	struct isp_ctx *ctx = &vdev->ctx;
+	u64 dma_addr = 0;
+	u32 dma_id = 0;
+	u8 i = 0;
+
+	//Get the buffer for postraw output buffer
+	b = sop_isp_rdy_buf_next(&vdev->qbuf_q[pipe][chn_num]);
+	if (b == NULL) {
+		vi_pr(VI_DBG, "postraw_%d chn_%d next buffer is empty\n", pipe, chn_num);
+		return;
+	}
+
+	vb2_buf = &b->buf;
+
+	vi_pr(VI_DBG, "update isp-buf: 0x%llx-0x%llx\n",
+		vb2_buf->planes[0].addr, vb2_buf->planes[1].addr);
+
+	for (i = 0; i < 2; i++) {
+		dma_addr = (uint64_t)vb2_buf->planes[i].addr;
+		dma_id = (i == 0) ? ISP_BLK_ID_DMA_CTL_YUV_CROP_Y : ISP_BLK_ID_DMA_CTL_YUV_CROP_C;
+
+		ispblk_dma_setaddr(ctx, dma_id, dma_addr);
+	}
+}
+
+static u8 _postraw_outbuf_empty(
+	struct vi_dev *vdev,
+	const u8 pipe,
+	const u8 hw_chn_num)
+{
+	u8 ret = 0;
+
+	if (sop_isp_rdy_buf_empty(&vdev->qbuf_q[pipe][hw_chn_num])) {
+		vi_pr(VI_DBG, "postraw pipe_%d chn_%d output buffer is empty\n", pipe, hw_chn_num);
+		ret = 1;
+	}
+
+	return ret;
+}
+
+void _postraw_outbuf_enq(struct vi_dev *vdev, const u8 pipe, const u8 chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+
+	if (vdev->postraw_frame_number[pipe] < ctx->isp_pipe_cfg[pipe].bypass_num)
+		return;
+
+	_postraw_outbuf_enque(vdev, pipe, chn_num);
+}
+
+/*
+ * update cfg by raw_num when post_num==0, maybe will update by raw_num and chn_num.
+ */
+static void _postraw_update_cfg_from_user(struct vi_dev *vdev, const u8 pipe, const u8 chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+
+	if (!vi_ctx->chn_crop[pipe][chn_num].enable) {
+		ctx->isp_pipe_cfg[pipe].is_postout_crop = false;
+		return;
+	}
+
+	ctx->isp_pipe_cfg[pipe].postout_crop.x = vi_ctx->chn_crop[pipe][chn_num].crop_rect.x;
+	ctx->isp_pipe_cfg[pipe].postout_crop.y = vi_ctx->chn_crop[pipe][chn_num].crop_rect.y;
+	ctx->isp_pipe_cfg[pipe].postout_crop.w = vi_ctx->chn_crop[pipe][chn_num].crop_rect.width;
+	ctx->isp_pipe_cfg[pipe].postout_crop.h = vi_ctx->chn_crop[pipe][chn_num].crop_rect.height;
+	ctx->isp_pipe_cfg[pipe].is_postout_crop = true;
+
+	vi_pr(VI_DBG, "chn_num[%d] crop(%d,%d,%d,%d)\n",
+			chn_num, ctx->isp_pipe_cfg[pipe].postout_crop.x,
+			ctx->isp_pipe_cfg[pipe].postout_crop.y,
+			ctx->isp_pipe_cfg[pipe].postout_crop.w,
+			ctx->isp_pipe_cfg[pipe].postout_crop.h);
+}
+
+/*
+ * for postraw offline only.
+ *  trig preraw if there is output buffer in preraw output.
+ */
+s8 _pre_hw_enque(
+	struct vi_dev *vdev,
+	const enum sop_isp_raw raw_num,
+	const enum sop_isp_fe_chn_num chn_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw phy_raw = raw_num;
+	int pipe = 0;
+
+	//ISP frame error handling
+	if (osal_atomic_read(&vdev->isp_err_handle_flag) == 1) {
+		vi_pr(VI_DBG, "wait err_handling done\n");
+		return -ISP_ERROR;
+	}
+
+	if (!osal_atomic_read(&vdev->stream.csi_streamon[raw_num]) && !ctx->is_rawreplay) {
+		vi_pr(VI_DBG, "VI not ready\n");
+		return -ISP_STOP;
+	}
+
+	if (_is_drop_next_frame(vdev, raw_num, chn_num)) {
+		vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d drop_frame_num %d\n",
+				raw_num, chn_num, vdev->drop_frame_number[raw_num]);
+		return -ISP_DROP_FRM;
+	}
+
+	if (_is_fe_post_offline(ctx)) { //fe->dram->post
+		if (ctx->is_rawreplay) { //TODO mv to post_hw_enque
+			if (osal_atomic_cmpxchg(&vdev->postraw_state,
+						ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
+						ISP_STATE_RUNNING) {
+				vi_pr(VI_DBG, "Postraw is running\n");
+				return -ISP_RUNNING;
+			}
+
+			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
+			if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //Scaler onffline mode
+				if (_postraw_outbuf_empty(vdev, pipe, chn_num)) {
+					osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
+					return -ISP_NO_BUFFER;
+				}
+
+				_postraw_update_cfg_from_user(vdev, pipe, chn_num);
+				_postraw_outbuf_enq(vdev, pipe, chn_num);
+			} else { //Scaler online mode
+				struct vpss_online_cb_info post_para = {0};
+
+				/* VI Online VPSS sc cb trigger */
+				post_para.snr_num = pipe;
+				post_para.is_tile = false;
+				if (_vi_call_cb(E_MODULE_VPSS, VPSS_CB_VI_ONLINE_TRIGGER, &post_para) != 0) {
+					vi_pr(VI_DBG, "raw_%d, sc_%d is running\n", raw_num, pipe);
+					osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
+					return -ISP_RUNNING;
+				}
+			}
+
+			if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
+				_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
+
+			isp_pre_trig(ctx, raw_num, chn_num);
+		} else {
+			phy_raw = find_phy_raw_num(ctx, raw_num);
+			if (osal_atomic_cmpxchg(&vdev->pre_fe_state[phy_raw][chn_num],
+						ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
+						ISP_STATE_RUNNING) {
+				vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d is running\n", raw_num, chn_num);
+				return -ISP_RUNNING;
+			}
+
+			// only if fe->dram
+			if (_pre_fe_outbuf_enque(vdev, raw_num, chn_num)) {
+				isp_pre_trig(ctx, raw_num, chn_num);
+			} else {
+				osal_atomic_set(&vdev->pre_fe_state[phy_raw][chn_num], ISP_STATE_IDLE);
+				return -ISP_NO_BUFFER;
+			}
+		}
+	} else if (_is_all_online(ctx)) {
+		if (osal_atomic_read(&vdev->stream.isp_streamon[pipe]) == 0) {
+			vi_pr(VI_DBG, "raw_num(%d) is not streaming\n", raw_num);
+			return -ISP_STOP;
+		}
+
+		if (osal_atomic_cmpxchg(&vdev->postraw_state,
+					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
+					ISP_STATE_RUNNING) {
+			vi_pr(VI_DBG, "Postraw is running\n");
+			return -ISP_RUNNING;
+		}
+
+		pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_num];
+		if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //Scaler onffline mode
+			if (_postraw_outbuf_empty(vdev, pipe, chn_num)) {
+				osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
+				return -ISP_NO_BUFFER;
+			}
+
+			_postraw_outbuf_enq(vdev, pipe, chn_num);
+		}
+
+		if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
+			_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
+
+		isp_pre_trig(ctx, raw_num, chn_num);
+	} else if (_is_fe_post_slice(ctx)) { //fe->slice->post
+		if (osal_atomic_cmpxchg(&vdev->pre_fe_state[raw_num][chn_num],
+					ISP_STATE_IDLE, ISP_STATE_RUNNING) ==
+					ISP_STATE_RUNNING) {
+			vi_pr(VI_DBG, "Pre_fe_%d chn_num_%d is running\n", raw_num, chn_num);
+			return -ISP_RUNNING;
+		}
+
+		/*don't care fe state, only call by post_hw_enque*/
+		if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START)
+			_isp_fe_raw_dump_cfg(vdev, raw_num, chn_num);
+		isp_pre_trig(ctx, raw_num, chn_num);
+	}
+
+	return ISP_SUCCESS;
+}
+
+/**
+ * try to trigger preraw and linespliter after postraw done or drop frame done
+ */
+static void isp_trig_whole_preraw(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	s8 ret = ISP_SUCCESS;
+
+	ret = _pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
+	if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
+		ret |= _pre_hw_enque(vdev, raw_num, ISP_FE_CH1);
+	}
+}
+
+
+void vi_preraw_trigger(struct vi_dev *vdev, const u8 pipe, const u8 chn)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw raw_num;
+
+	if (osal_atomic_read(&vdev->stream.isp_streamon[pipe]) == 0)
+		return;
+
+	raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
+		ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_BYPASS)
+		_isp_yuv_bypass_trigger(vdev, raw_num, ISP_FE_CH0);
+	else {
+		if (!_is_fe_post_slice(&vdev->ctx))
+			isp_trig_whole_preraw(vdev, raw_num);
+	}
+}
+
 static u32 _is_fisrt_frm_after_drop(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const u8 pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
@@ -2416,7 +1954,7 @@ static u32 _is_fisrt_frm_after_drop(
 		return 0;
 }
 
-static inline void _post_ctrl_update(struct sop_vi_dev *vdev, const u8 pipe)
+static inline void _post_ctrl_update(struct vi_dev *vdev, const u8 pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw dst_raw = ctx->isp_pipe_cfg[pipe].bind_raw;
@@ -2436,7 +1974,7 @@ static inline void _post_ctrl_update(struct sop_vi_dev *vdev, const u8 pipe)
 	}
 }
 
-static inline int _isp_clk_dynamic_en(struct sop_vi_dev *vdev, bool en)
+static inline int _isp_clk_dynamic_en(struct vi_dev *vdev, bool en)
 {
 #ifdef TODO_VI
 	if (clk_dynamic_en && vdev->isp_clk[5]) {
@@ -2480,33 +2018,9 @@ static inline int _isp_clk_dynamic_en(struct sop_vi_dev *vdev, bool en)
 	return 0;
 }
 
-/*
- * update cfg by raw_num when post_num==0, maybe will update by raw_num and chn_num.
- */
-static void _postraw_update_cfg_from_user(struct sop_vi_dev *vdev, const u8 pipe, const u8 chn_num)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
 
-	if (!vi_ctx->chn_crop[pipe][chn_num].enable) {
-		ctx->isp_pipe_cfg[pipe].is_postout_crop = false;
-		return;
-	}
 
-	ctx->isp_pipe_cfg[pipe].postout_crop.x = vi_ctx->chn_crop[pipe][chn_num].crop_rect.x;
-	ctx->isp_pipe_cfg[pipe].postout_crop.y = vi_ctx->chn_crop[pipe][chn_num].crop_rect.y;
-	ctx->isp_pipe_cfg[pipe].postout_crop.w = vi_ctx->chn_crop[pipe][chn_num].crop_rect.width;
-	ctx->isp_pipe_cfg[pipe].postout_crop.h = vi_ctx->chn_crop[pipe][chn_num].crop_rect.height;
-	ctx->isp_pipe_cfg[pipe].is_postout_crop = true;
-
-	vi_pr(VI_DBG, "chn_num[%d] crop(%d,%d,%d,%d)\n",
-			chn_num, ctx->isp_pipe_cfg[pipe].postout_crop.x,
-			ctx->isp_pipe_cfg[pipe].postout_crop.y,
-			ctx->isp_pipe_cfg[pipe].postout_crop.w,
-			ctx->isp_pipe_cfg[pipe].postout_crop.h);
-}
-
-static void vi_calc_pre_dci_motion(struct sop_vi_dev *vdev, uint8_t pipe)
+static void vi_calc_pre_dci_motion(struct vi_dev *vdev, uint8_t pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	unsigned long flags;
@@ -2566,7 +2080,7 @@ static void vi_calc_pre_dci_motion(struct sop_vi_dev *vdev, uint8_t pipe)
 	//calc motion lv
 	ispblk_mctf_mmap_status(ctx, &still, &trans, &motion);
 
-	if((still + trans + motion) != 0){
+	if ((still + trans + motion) != 0) {
 		motion_lv = osal_div_u64((trans + motion) * 255, (still + trans + motion));
 	} else {
 		motion_lv = 0;
@@ -2597,7 +2111,7 @@ static void vi_calc_pre_dci_motion(struct sop_vi_dev *vdev, uint8_t pipe)
  *  trig preraw if there is output buffer for postraw
  */
 static void _post_hw_enque(
-	struct sop_vi_dev *vdev)
+	struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
@@ -2806,370 +2320,12 @@ static void _post_hw_enque(
 	}
 }
 
-int vi_suspend(struct sop_vi_dev *vdev)
-{
-	int ret = 0;
-	struct isp_ctx *ctx = &vdev->ctx;
-	uint8_t pipe = 0, chn = 0;
-	enum sop_isp_raw raw_num = ISP_PRERAW0;
-
-	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
-		if (!ctx->isp_pipe_cfg[pipe].is_enable)
-			continue;
-		for (chn = 0; chn < VI_MAX_CHN_NUM; chn++) {
-			ret = vi_isp_stop_streaming(vdev, pipe, chn);
-			if (ret) {
-				vi_pr(VI_INFO, "vi stop streaming\n");
-				return ret;
-			}
-		}
-
-		raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
-		ret = vi_csi_stop_streaming(vdev, raw_num);
-		if (ret) {
-			vi_pr(VI_DBG, "vi csi stop streaming\n");
-			return ret;
-		}
-	}
-
-	return ret;
-}
-
-int vi_resume(struct sop_vi_dev *vdev)
-{
-	int ret = 0;
-	struct isp_ctx *ctx = &vdev->ctx;
-	uint8_t pipe = 0, chn = 0;
-	enum sop_isp_raw raw_num = ISP_PRERAW0;
-
-	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
-		if (!ctx->isp_pipe_cfg[pipe].is_enable)
-			continue;
-
-		raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
-		ret = vi_csi_start_streaming(vdev, raw_num);
-		if (ret) {
-			vi_pr(VI_DBG, "vi csi start streaming\n");
-			return ret;
-		}
-		for (chn = 0; chn < VI_MAX_CHN_NUM; chn++) {
-			ret = vi_isp_start_streaming(vdev, pipe, chn);
-			if (ret) {
-				vi_pr(VI_INFO, "vi stop streaming\n");
-				return ret;
-			}
-		}
-	}
-
-	return ret;
-}
-
-void vi_destroy_thread(struct sop_vi_dev *vdev, enum E_VI_TH th_id)
-{
-	if (th_id < 0 || th_id >= E_VI_TH_MAX) {
-		vi_pr(VI_ERR, "No such thread_id(%d)\n", th_id);
-		return;
-	}
-
-	if (th_id == E_VI_TH_POSTRAW) {
-		if (vdev->vi_th[th_id].tasklet.tasklet != NULL) {
-			osal_tasklet_kill(&vdev->vi_th[th_id].tasklet);
-		}
-		return;
-	}
-
-	if (vdev->vi_th[th_id].w_thread != NULL) {
-		osal_atomic_set(&vdev->vi_th[th_id].exit_flag, 1);
-		osal_wait_wakeup(&vdev->vi_th[th_id].wq);
-		osal_kthread_destroy(vdev->vi_th[th_id].w_thread, 1);
-
-		vdev->vi_th[th_id].w_thread = NULL;
-		osal_wait_destroy(&vdev->vi_th[th_id].wq);
-	}
-}
-
-int vi_create_thread(struct sop_vi_dev *vdev, enum E_VI_TH th_id)
-{
-	int rc = 0;
-	uint32_t prio = OSAL_TASK_PRIORITY_HIGH;
-
-	if (th_id < 0 || th_id >= E_VI_TH_MAX) {
-		vi_pr(VI_ERR, "No such thread_id(%d)\n", th_id);
-		return -1;
-	}
-
-	if (th_id == E_VI_TH_POSTRAW) {
-		if (vdev->vi_th[th_id].tasklet.tasklet == NULL) {
-			osal_memcpy(vdev->vi_th[th_id].th_name, "isp_post", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].tasklet.handler = isp_post_tasklet;
-			vdev->vi_th[th_id].tasklet.data = (unsigned long)vdev;
-
-			rc = osal_tasklet_init(&vdev->vi_th[th_id].tasklet);
-			if (rc != OSAL_SUCCESS) {
-				vi_pr(VI_ERR, "Unable to init tasklet %s.\n", vdev->vi_th[th_id].th_name);
-				return -1;
-			}
-			osal_atomic_set(&vdev->vi_th[th_id].flag, 0);
-		}
-		return 0;
-	}
-
-	if (vdev->vi_th[th_id].w_thread == NULL) {
-		switch (th_id) {
-		case E_VI_TH_PRERAW:
-			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_pre", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].th_handler = _vi_preraw_thread;
-			break;
-		case E_VI_TH_VBLANK_HANDLER:
-			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_blank", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].th_handler = _vi_vblank_handler_thread;
-			break;
-		case E_VI_TH_ERR_HANDLER:
-			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_err", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].th_handler = _vi_err_handler_thread;
-			break;
-		case E_VI_TH_EVENT_HANDLER:
-			osal_memcpy(vdev->vi_th[th_id].th_name, "vi_event_handler", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].th_handler = _vi_event_handler_thread;
-			break;
-		case E_VI_TH_AI_ISP:
-			osal_memcpy(vdev->vi_th[th_id].th_name, "vi_ai_isp", sizeof(vdev->vi_th[th_id].th_name));
-			vdev->vi_th[th_id].th_handler = _vi_ai_isp_handler_thread;
-			break;
-		default:
-			vi_pr(VI_ERR, "No such thread(%d)\n", th_id);
-			return -1;
-		}
-
-		osal_atomic_set(&vdev->vi_th[th_id].flag, 0);
-		osal_atomic_set(&vdev->vi_th[th_id].exit_flag, 0);
-		osal_atomic_set(&vdev->vi_th[th_id].thread_exit, 0);
-		osal_wait_init(&vdev->vi_th[th_id].wq);
-
-		vdev->vi_th[th_id].w_thread = osal_kthread_create(vdev->vi_th[th_id].th_handler,
-								(void *)vdev,
-								vdev->vi_th[th_id].th_name, 8192);
-		if (!vdev->vi_th[th_id].w_thread) {
-			vi_pr(VI_ERR, "Unable to start %s.\n", vdev->vi_th[th_id].th_name);
-			return -1;
-		}
-
-		osal_kthread_set_priority(vdev->vi_th[th_id].w_thread, prio);
-	}
-
-	return rc;
-}
-
-//open vi device
-void vi_sw_init(struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	u8 i = 0, j = 0;
-
-	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
-		for (j = 0; j < VI_MAX_CHN_NUM; ++j) {
-			osal_mutex_init(&vdev->mesh[i][j].lock);
-			osal_atomic_set(&vdev->mesh[i][j].gdc_flag, 0);
-		}
-	}
-
-	usr_pic_timer_init(vdev);
-	isp_raw_dump_init(vdev);
-
-	ctx->is_3dnr_on         = true;
-	ctx->is_dpcm_on         = false;
-	ctx->is_hdr_on          = false;
-	ctx->is_multi_sensor    = false;
-	ctx->is_sublvds_path    = false;
-	ctx->is_fbc_on          = true;
-	ctx->is_ctrl_inited     = false;
-	ctx->is_ai_isp          = false;
-	ctx->virt_raw_offset    = 0;
-	ctx->cfg_info.raw_num   = ISP_PRERAW_MAX;
-	ctx->cfg_info.pipe      = VI_MAX_PIPE_NUM;
-	vdev->isp_source        = ISP_SOURCE_DEV;
-
-	osal_memset(vdev->snr_info, 0, sizeof(struct sop_isp_snr_info) * ISP_PRERAW_MAX);
-
-	for (i = 0; i < ISP_PRERAW_MAX; i++) {
-		vdev->drop_frame_number[i]    = 0;
-		vdev->dump_frame_number[i]    = 0;
-		ctx->raw_chnstr_num[i]        = 0;
-
-		for (j = 0; j < ISP_FE_CHN_MAX; j++) {
-			vdev->pre_fe_sof_cnt[i][j] = 0;
-			vdev->pre_fe_frm_num[i][j] = 0;
-			vdev->raw_dump[i].isp_byr[j] = 0;
-
-			osal_atomic_set(&vdev->pre_fe_state[i][j], ISP_STATE_IDLE);
-			osal_atomic_set(&vdev->raw_dump[i].raw_dump_en[j], RAWDUMP_IDLE);
-		}
-
-		osal_spin_lock_init(&ctx->csi_bufpool[i].pre_fe_sts_lock);
-
-		osal_atomic_set(&vdev->isp_int_flag[i], RAWDUMP_IDLE);
-		osal_atomic_set(&vdev->raw_dump[i].isp_smooth_raw_dump_en, SMOOTH_RAWDUMP_IDLE);
-		osal_atomic_set(&vdev->isp_err_times[i], 0);
-	}
-
-	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
-		vdev->postraw_frame_number[i] = 0;
-		ctx->isp_pipe_cfg[i].is_enable = false;
-		ctx->isp_pipe_cfg[i].first_frm_rst = true;
-		ctx->isp_pipe_cfg[i].bypass_num = 0;
-		osal_spin_lock_init(&ctx->isp_bufpool[i].post_sts_lock);
-	}
-
-	for (i = 0; i < ISP_PRERAW_MAX; i++) {
-		for (j = 0; j < ISP_FE_CHN_MAX; j++) {
-			isp_buf_init(&vdev->pre_fe_out_q[i][j]);
-			vdev->pre_fe_out_q[i][j].raw_num = i;
-
-			isp_buf_init(&vdev->pre_ai_isp_in_q[i][j]);
-			vdev->pre_ai_isp_in_q[i][j].raw_num = i;
-
-			isp_buf_init(&vdev->pre_ai_isp_out_q[i][j]);
-			vdev->pre_ai_isp_out_q[i][j].raw_num = i;
-
-			isp_buf_init(&vdev->raw_dump[i].buf_q[j]);
-			vdev->raw_dump[i].buf_q[j].raw_num = i;
-
-			isp_buf_init(&vdev->raw_dump[i].buf_dq[j]);
-			vdev->raw_dump[i].buf_dq[j].raw_num = i;
-			vdev->raw_dump[i].buf_dq[j].depth = 1;
-		}
-
-		OSAL_INIT_LIST_HEAD(&isp_snr_i2c_queue[i].list);
-		isp_snr_i2c_queue[i].num_rdy = 0;
-		OSAL_INIT_LIST_HEAD(&isp_crop_queue[i].list);
-		isp_crop_queue[i].num_rdy = 0;
-
-		osal_atomic_set(&vdev->isp_int_flag[i], RAWDUMP_IDLE);
-		osal_wait_init(&vdev->isp_int_wait_q[i]);
-
-		osal_atomic_set(&vdev->isp_ai_int_flag[i], E_AI_WAKE_TYPE_NONE);
-		osal_wait_init(&vdev->isp_ai_wait_q[i]);
-	}
-
-	OSAL_INIT_LIST_HEAD(&pre_raw_num_q.list);
-	OSAL_INIT_LIST_HEAD(&dqbuf_q.list);
-	OSAL_INIT_LIST_HEAD(&vdev->event_q.list);
-	vdev->event_q.count = 0;
-
-	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
-		isp_buf_init(&vdev->postraw_wdr_in_q[i]);
-	}
-
-	isp_buf_init(&vdev->postraw_in_q);
-
-	osal_atomic_set(&vdev->state, E_STATE_DEFAULT);
-	osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
-	osal_atomic_set(&vdev->isp_err_handle_flag, 0);
-	osal_atomic_set(&vdev->isp_dbg_flag, 0);
-	osal_atomic_set(&vdev->is_drop, 0);
-	osal_atomic_set(&ctx->is_post_done, 0);
-}
-
-void vi_sw_deinit(struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	u8 i = 0, j = 0;
-
-	ctx->is_rawreplay = false;
-	usr_pic_time_remove(vdev);
-	isp_raw_dump_deinit(vdev);
-
-	for (i = 0; i < ISP_PRERAW_MAX; i++) {
-		osal_memset(&ctx->isp_csi_cfg[i], 0, sizeof(struct _csi_cfg));
-		osal_spin_lock_destroy(&ctx->csi_bufpool[i].pre_fe_sts_lock);
-		osal_wait_destroy(&vdev->isp_int_wait_q[i]);
-		osal_wait_destroy(&vdev->isp_ai_wait_q[i]);
-
-		for (j = 0; j < ISP_FE_CHN_MAX; j++) {
-			isp_buf_destroy(&vdev->pre_fe_out_q[i][j]);
-			isp_buf_destroy(&vdev->pre_ai_isp_in_q[i][j]);
-			isp_buf_destroy(&vdev->pre_ai_isp_out_q[i][j]);
-			isp_buf_destroy(&vdev->raw_dump[i].buf_q[j]);
-			isp_buf_destroy(&vdev->raw_dump[i].buf_dq[j]);
-		}
-	}
-
-	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
-		osal_memset(&ctx->isp_pipe_cfg[i], 0, sizeof(struct _isp_cfg));
-		ctx->isp_pipe_cfg[i].is_offline_scaler = true;
-
-		for (j = 0; j < VI_MAX_CHN_NUM; j++) {
-			osal_mutex_destroy(&vdev->mesh[i][j].lock);
-		}
-
-		osal_spin_lock_destroy(&ctx->isp_bufpool[i].post_sts_lock);
-	}
-
-
-	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
-		isp_buf_destroy(&vdev->postraw_wdr_in_q[i]);
-	}
-
-	isp_buf_destroy(&vdev->postraw_in_q);
-}
-
-static void _vi_init_param(struct sop_vi_dev *vdev)
-{
-	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
-	u8 i = 0, j = 0;
-
-	osal_memset(ctx, 0, sizeof(*ctx));
-
-	ctx->phys_regs = isp_get_phys_reg_bases();
-
-	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
-		osal_mutex_init(&vi_ctx->dev_lock[i]);
-	}
-
-	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
-		ctx->isp_pipe_cfg[i].rgb_color_mode     = ISP_BAYER_TYPE_GB;
-		ctx->isp_pipe_cfg[i].yuv_scene_mode     = ISP_YUV_SCENE_BYPASS;
-		ctx->isp_pipe_cfg[i].is_offline_scaler  = true;
-		osal_mutex_init(&vi_ctx->pipe_lock[i]);
-	}
-
-	osal_memset(&vdev->usr_crop, 0, sizeof(vdev->usr_crop));
-
-	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
-		for (j = 0; j < VI_MAX_CHN_NUM; j++) {
-			OSAL_INIT_LIST_HEAD(&vdev->qbuf_list[i][j]);
-			vdev->qbuf_num[i][j] = 0;
-		}
-	}
-
-	//ToDo sync_task_ext
-	for (i = 0; i < ISP_PRERAW_MAX; i++) {
-		osal_spin_lock_init(&snr_node_lock[i]);
-		sync_task_init(i);
-		OSAL_INIT_LIST_HEAD(&isp_snr_i2c_queue[i].list);
-		isp_snr_i2c_queue[i].num_rdy = 0;
-		OSAL_INIT_LIST_HEAD(&isp_crop_queue[i].list);
-		isp_crop_queue[i].num_rdy = 0;
-	}
-
-	OSAL_INIT_LIST_HEAD(&pre_raw_num_q.list);
-	OSAL_INIT_LIST_HEAD(&dqbuf_q.list);
-
-	osal_spin_lock_init(&raw_num_lock);
-	osal_spin_lock_init(&dq_lock);
-	osal_spin_lock_init(&vdev->event_q.lock);
-	osal_spin_lock_init(&vdev->qbuf_lock);
-
-	osal_wait_init(&vdev->isp_event_wait_q);
-	osal_wait_init(&vdev->isp_dbg_wait_q);
-}
 
 /*******************************************************
  *  File operations for core
  ******************************************************/
 
-static int vi_cb_msp_config(struct sop_vi_dev *vdev, struct vi_cb_msp_cfg *msp_cfg)
+static int vi_cb_msp_config(struct vi_dev *vdev, struct vi_cb_msp_cfg *msp_cfg)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	uint8_t pipe = 0;
@@ -3210,7 +2366,7 @@ static int vi_cb_msp_config(struct sop_vi_dev *vdev, struct vi_cb_msp_cfg *msp_c
 	return 0;
 }
 
-static int vi_cb_msp_info(struct sop_vi_dev *vdev, struct vi_cb_msp_info *msp_info)
+static int vi_cb_msp_info(struct vi_dev *vdev, struct vi_cb_msp_info *msp_info)
 {
 	uint8_t pipe = 0, idx = 0;
 	struct mlv_i_s *mlv_i;
@@ -3256,138 +2412,16 @@ find_msp_info:
 	return 0;
 }
 
-int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
-{
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)dev;
-	struct isp_ctx *ctx = &vdev->ctx;
-	int rc = -1;
-
-	if (dev == NULL) {
-		vi_pr(VI_ERR, "dev is null\n");
-		return -1;
-	}
-
-	switch (cmd) {
-	case VI_CB_QBUF_TRIGGER:
-		vi_pr(VI_INFO, "isp_ol_sc_trig_post\n");
-
-		_vi_wake_up_post_th(vdev);
-
-		rc = 0;
-		break;
-	case VI_CB_SC_FRM_DONE:
-		vi_pr(VI_DBG, "sc frm done cb\n");
-
-		_vi_wake_up_post_th(vdev);
-
-		rc = 0;
-		break;
-	case VI_CB_SET_VIVPSSMODE:
-	{
-		vi_vpss_mode_s vi_vpss_mode;
-		u8 pipe = 0;
-		u8 vi_online = 0;
-		u8 vi_slice = 0;
-
-		osal_memcpy(&vi_vpss_mode, arg, sizeof(vi_vpss_mode_s));
-
-		vi_online = (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_ONLINE) ||
-			    (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_OFFLINE);
-
-		vi_slice = (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_ONLINE) ||
-			    (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_OFFLINE);
-
-
-		ctx->is_offline_postraw = !vi_online;
-		ctx->is_slice_buf_on = vi_slice;
-
-		vi_pr(VI_DBG, "Caller_Mod(%d) set vi_online:%d, is_offline_postraw=%d\n",
-				caller, vi_online, ctx->is_offline_postraw);
-
-		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
-			u8 is_vpss_online = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_ONLINE) ||
-						  (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_ONLINE);
-
-			ctx->isp_pipe_cfg[pipe].is_offline_scaler = !is_vpss_online;
-			vi_pr(VI_DBG, "pipe_%d set is_offline_scaler:%d\n", pipe, !is_vpss_online);
-		}
-
-		rc = 0;
-		break;
-	}
-	case VI_CB_GDC_OP_DONE:
-	{
-		struct ldc_op_done_cfg *cfg =
-			(struct ldc_op_done_cfg *)arg;
-
-		vi_gdc_callback(vdev, cfg->param, cfg->blk);
-		rc = 0;
-		break;
-	}
-	case VI_CB_GDC_GET_CHN_ATTR:
-	{
-		struct ldc_op_done_cfg *ldc_cfg =
-			(struct ldc_op_done_cfg *)arg;
-		vi_chn_attr_s chn_attr;
-
-		struct vi_ldc_internal_chn_attr *attr = (struct vi_ldc_internal_chn_attr *)ldc_cfg->param;
-		rc = vi_get_chn_attr(vdev, attr->vi_chn_attr.vi_pipe, attr->vi_chn_attr.vi_chn, &chn_attr);
-		attr->vi_chn_attr.size = chn_attr.size;
-		break;
-	}
-	case VI_CB_GDC_SET_CHN_CFG:
-	{
-		struct ldc_op_done_cfg *ldc_cfg =
-			(struct ldc_op_done_cfg *)arg;
-
-		struct vi_ldc_internal_chn_ldc_cfg *cfg = (struct vi_ldc_internal_chn_ldc_cfg *)ldc_cfg->param;
-		rc = vi_set_chn_ldc_attr(vdev, cfg->vi_cfg.vi_pipe, cfg->vi_cfg.vi_chn,
-					 &cfg->vi_cfg.ldc_attr, cfg->vi_cfg.mesh_handle);
-		break;
-	}
-	case VI_CB_MSP_CFG:
-	{
-		struct vi_cb_msp_cfg *msp_cfg = (struct vi_cb_msp_cfg *)arg;
-
-		rc = vi_cb_msp_config(vdev, msp_cfg);
-		if (rc) {
-			vi_pr(VI_ERR, "msp config failed\n");
-		}
-
-		break;
-	}
-	case VI_CB_MSP_GET_INFO:
-	{
-		rc = vi_cb_msp_info(vdev, (struct vi_cb_msp_info *)arg);
-		if (rc) {
-			vi_pr(VI_ERR, "msp get info failed\n");
-		}
-
-		break;
-	}
-	case VI_CB_RESET_ISP:
-	{
-		vi_pr(VI_ERR, "VI_CB_RESET_ISP\n");
-		_vi_record_debug_info(ctx);
-		vi_err_wake_up_th(vdev, ctx->cfg_info.raw_num);
-	}
-	default:
-		break;
-	}
-
-	return rc;
-}
-
 /********************************************************************************
  *  VI event handler related
  *******************************************************************************/
-void vi_destory_dbg_thread(struct sop_vi_dev *vdev)
+void vi_destroy_dbg_thread(struct vi_dev *vdev)
 {
 	osal_atomic_set(&vdev->isp_dbg_flag, 1);
 	osal_wait_wakeup(&vdev->isp_dbg_wait_q);
 }
 
-static void _vi_timeout_chk(struct sop_vi_dev *vdev)
+static void _vi_timeout_chk(struct vi_dev *vdev)
 {
 	if (++vdev->timeout_cnt >= 2) {
 		osal_atomic_set(&vdev->isp_dbg_flag, 1);
@@ -3416,21 +2450,21 @@ static void _vi_update_chn_real_frame_rate(vi_chn_status_s *vi_chn_status)
 
 static int vi_event_thread_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	enum E_VI_TH th_id = E_VI_TH_EVENT_HANDLER;
 
 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
-		|| !osal_list_empty(&dqbuf_q.list)
+		|| !osal_list_empty(&vdev->dqbuf_q.list)
 		|| osal_atomic_read(&vdev->vi_th[th_id].exit_flag);
 }
 
-static int vi_ldc_handle_op(struct sop_vi_dev *vdev, mmf_chn_s *mmf_chn, vb_blk blk)
+static int vi_ldc_handle_op(struct vi_dev *vdev, mmf_chn_s *mmf_chn, vb_blk blk)
 {
 	uint8_t pipe = mmf_chn->dev_id;
 	uint8_t chn = mmf_chn->chn_id;
 	struct vb_s *vb = (struct vb_s *)(uintptr_t)blk;
 	struct gdc_mesh *pmesh = &vdev->mesh[pipe][chn];
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	struct _vi_gdc_cb_param cb_param = { .chn = *mmf_chn};
 
 	if (!osal_atomic_cmpxchg(&pmesh->gdc_flag, 0, 1)) {
@@ -3475,9 +2509,9 @@ static int vi_ldc_handle_op(struct sop_vi_dev *vdev, mmf_chn_s *mmf_chn, vb_blk 
 
 static int _vi_event_handler_thread(void *arg)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)arg;
+	struct vi_dev *vdev = (struct vi_dev *)arg;
 	struct isp_ctx *ctx = &vdev->ctx;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	int ret = 0;
 	enum E_VI_TH th_id = E_VI_TH_EVENT_HANDLER;
 	mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = 0, .chn_id = 0};
@@ -3517,7 +2551,7 @@ static int _vi_event_handler_thread(void *arg)
 			struct vb_s *vb = NULL;
 
 			//DQbuf from list.
-			if (vi_dqbuf(&b)) {
+			if (vi_dqbuf(&vdev->dqbuf_q, &b)) {
 				vi_pr(VI_DBG, "illegal wakeup raw_num[%d]\n", flag);
 				continue;
 			}
@@ -3560,7 +2594,7 @@ QBUF:
 			if (!(vi_ctx->is_chn_enable[pipe_id][chn_id]))
 				continue;
 
-			if (vi_sdk_qbuf(chn, vdev) != 0) {
+			if (vdev->vi_qbuf(chn, vdev) != 0) {
 				vb_pool poolid = VB_INVALID_POOLID;
 
 				if (vi_ctx->chn_attr[pipe_id][chn_id].bind_vb_pool == VB_INVALID_POOLID)
@@ -3569,7 +2603,7 @@ QBUF:
 					poolid = vi_ctx->chn_attr[pipe_id][chn_id].bind_vb_pool;
 
 				if (poolid != VB_INVALID_POOLID)
-					vb_acquire_block(vi_sdk_qbuf, chn, poolid, vdev);
+					vb_acquire_block(vdev->vi_qbuf, chn, poolid, vdev);
 			}
 		}
 
@@ -3684,7 +2718,7 @@ static void _vi_show_debug_info(void)
 	g_overflow_info = NULL;
 }
 
-static void _vi_err_retrig_pre_fe(struct sop_vi_dev *vdev)
+static void _vi_err_retrig_pre_fe(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num;
@@ -3722,7 +2756,7 @@ static void _vi_err_retrig_pre_fe(struct sop_vi_dev *vdev)
 	}
 }
 
-static void _vi_buffer_recycle_to_fe(struct sop_vi_dev *vdev)
+static void _vi_buffer_recycle_to_fe(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -3764,7 +2798,7 @@ static void _vi_buffer_recycle_to_fe(struct sop_vi_dev *vdev)
 	}
 }
 
-void _vi_err_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw err_raw_num)
+void _vi_err_handler(struct vi_dev *vdev, const enum sop_isp_raw err_raw_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num;
@@ -3896,7 +2930,7 @@ void _vi_err_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw err_raw_num
 
 static int vi_err_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	enum E_VI_TH th_id = E_VI_TH_ERR_HANDLER;
 
 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
@@ -3906,7 +2940,7 @@ static int vi_err_wait_cond_func(const void *param)
 static int _vi_err_handler_thread(void *arg)
 {
 	int ret = 0;
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)arg;
+	struct vi_dev *vdev = (struct vi_dev *)arg;
 	enum sop_isp_raw err_raw_num = ISP_PRERAW0;
 	enum E_VI_TH th_id = E_VI_TH_ERR_HANDLER;
 
@@ -3939,7 +2973,7 @@ static int _vi_err_handler_thread(void *arg)
 	return 0;
 }
 
-static inline void vi_err_wake_up_th(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+static inline void vi_err_wake_up_th(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
@@ -3971,7 +3005,7 @@ static inline void vi_err_wake_up_th(struct sop_vi_dev *vdev, enum sop_isp_raw r
 }
 
 u32 isp_err_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	struct isp_ctx *ctx,
 	union reg_isp_csi_bdg_interrupt_status_0 *cbdg_0_sts,
 	union reg_isp_csi_bdg_interrupt_status_1 *cbdg_1_sts)
@@ -4184,25 +3218,16 @@ u32 isp_err_chk(
 	return ret;
 }
 
-// static int vi_post_wait_cond_func(const void *param)
-// {
-// 	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
-// 	enum E_VI_TH th_id = E_VI_TH_POSTRAW;
-
-// 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
-// 		|| osal_atomic_read(&vdev->vi_th[th_id].exit_flag);
-// }
-
 static void isp_post_tasklet(unsigned long data)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)data;
+	struct vi_dev *vdev = (struct vi_dev *)data;
 
 	_post_hw_enque(vdev);
 }
 
 static int vi_preraw_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	enum E_VI_TH th_id = E_VI_TH_PRERAW;
 
 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
@@ -4212,11 +3237,12 @@ static int vi_preraw_wait_cond_func(const void *param)
 static int _vi_preraw_thread(void *arg)
 {
 	int ret = 0;
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)arg;
+	struct vi_dev *vdev = (struct vi_dev *)arg;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct osal_list_head *pos, *temp;
 	struct _isp_raw_num_n *n[VI_MAX_LIST_NUM] = {0};
+	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
 	unsigned long flags;
 	u32 enq_num = 0, i = 0;
 	u8 pipe = 0;
@@ -4238,25 +3264,29 @@ static int _vi_preraw_thread(void *arg)
 
 		osal_atomic_set(&vdev->vi_th[th_id].flag, 0);
 
-		osal_spin_lock_irqsave(&raw_num_lock, &flags);
-		osal_list_for_each_safe(pos, temp, &pre_raw_num_q.list) {
+		osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
+		osal_list_for_each_safe(pos, temp, &raw_num_q->list) {
 			n[enq_num] = osal_list_entry(pos, struct _isp_raw_num_n, list);
 			if (++enq_num >= VI_MAX_LIST_NUM || n[enq_num] == NULL)
 				break;
 		}
-		osal_spin_unlock_irqrestore(&raw_num_lock, &flags);
+		osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
 		for (i = 0; i < enq_num; i++) {
 			if (!n[i])
 				continue;
 			raw_num = n[i]->raw_num;
 
-			osal_spin_lock_irqsave(&raw_num_lock, &flags);
+			osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
 			osal_list_del_init(&n[i]->list);
 			osal_kfree(n[i]);
-			osal_spin_unlock_irqrestore(&raw_num_lock, &flags);
+			osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
 			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[0];
+
+			if (!ctx->isp_pipe_cfg[pipe].is_enable)
+				continue;
+
 			if (ctx->is_rawreplay) {
 				postraw_tuning_update(ctx, pipe);
 				//Update postraw sts awb/dci/hist_edge_v dma size/addr
@@ -4318,7 +3348,7 @@ static int _vi_preraw_thread(void *arg)
 	return 0;
 }
 
-static inline void _vi_wake_up_ai_isp_th(struct sop_vi_dev *vdev, enum sop_isp_raw raw_num)
+static inline void _vi_wake_up_ai_isp_th(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	enum E_VI_TH th_id = E_VI_TH_AI_ISP;
 
@@ -4328,7 +3358,7 @@ static inline void _vi_wake_up_ai_isp_th(struct sop_vi_dev *vdev, enum sop_isp_r
 
 static int vi_ai_isp_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	enum E_VI_TH th_id = E_VI_TH_AI_ISP;
 
 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
@@ -4342,7 +3372,7 @@ static int vi_ai_isp_wait_tpu_cond(const void *param)
 	return (osal_atomic_read(flag) == E_AI_WAKE_TYPE_AI_ISP_TH);
 }
 
-static void _isp_ai_isp_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+static void _isp_ai_isp_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	int ret = 0, timeout = 200;
 	struct isp_ctx *ctx = &vdev->ctx;
@@ -4414,6 +3444,8 @@ static void _isp_ai_isp_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw 
 				continue;
 			}
 			out_buf->ai_cfg = ctx->isp_csi_cfg[raw_num].ai_cfg;
+			out_buf->tv = in_buf->tv;
+			out_buf->frm_num = in_buf->frm_num;
 			isp_buf_queue(post_in_q, out_buf);
 		}
 		fe_chn++;
@@ -4426,7 +3458,7 @@ static int _vi_ai_isp_handler_thread(void *arg)
 {
 	int ret = 0;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)arg;
+	struct vi_dev *vdev = (struct vi_dev *)arg;
 	enum E_VI_TH th_id = E_VI_TH_AI_ISP;
 
 	while (!osal_atomic_read(&vdev->vi_th[th_id].exit_flag)) {
@@ -4458,7 +3490,7 @@ static int _vi_ai_isp_handler_thread(void *arg)
 
 static int vi_vblank_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	enum E_VI_TH th_id = E_VI_TH_VBLANK_HANDLER;
 
 	return osal_atomic_read(&vdev->vi_th[th_id].flag)
@@ -4468,7 +3500,7 @@ static int vi_vblank_wait_cond_func(const void *param)
 static int _vi_vblank_handler_thread(void *arg)
 {
 	int ret = 0;
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)arg;
+	struct vi_dev *vdev = (struct vi_dev *)arg;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
 	enum E_VI_TH th_id = E_VI_TH_VBLANK_HANDLER;
 
@@ -4500,7 +3532,7 @@ static int _vi_vblank_handler_thread(void *arg)
 	return 0;
 }
 
-static inline void _vi_wake_up_vblank_th(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+static inline void _vi_wake_up_vblank_th(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	enum E_VI_TH th_id = E_VI_TH_VBLANK_HANDLER;
 
@@ -4508,7 +3540,7 @@ static inline void _vi_wake_up_vblank_th(struct sop_vi_dev *vdev, const enum sop
 	osal_wait_wakeup(&vdev->vi_th[th_id].wq);
 }
 
-static void _isp_yuv_online_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
+static void _isp_yuv_online_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -4549,7 +3581,7 @@ static void _isp_yuv_online_handler(struct sop_vi_dev *vdev, const enum sop_isp_
 	}
 }
 
-static void _vi_wake_up_event_th(struct sop_vi_dev *vdev, const u8 pipe)
+static void _vi_wake_up_event_th(struct vi_dev *vdev, const u8 pipe)
 {
 	enum E_VI_TH th_id = E_VI_TH_EVENT_HANDLER;
 
@@ -4560,7 +3592,7 @@ static void _vi_wake_up_event_th(struct sop_vi_dev *vdev, const u8 pipe)
 	osal_wait_wakeup(&vdev->vi_th[th_id].wq);
 }
 
-static void _isp_yuv_bypass_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
+static void _isp_yuv_bypass_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_num, const u8 hw_chn_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	u8 pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[hw_chn_num];
@@ -4569,7 +3601,7 @@ static void _isp_yuv_bypass_handler(struct sop_vi_dev *vdev, const enum sop_isp_
 
 	osal_atomic_set(&vdev->pre_fe_state[raw_num][hw_chn_num], ISP_STATE_IDLE);
 
-	sop_isp_rdy_buf_remove(vdev, pipe, chn);
+	sop_isp_rdy_buf_remove(&vdev->qbuf_q[pipe][chn]);
 
 	osal_gettimeofday(&osal_tv);
 	sop_isp_dqbuf_list(vdev, vdev->pre_fe_frm_num[raw_num][hw_chn_num],
@@ -4580,10 +3612,11 @@ static void _isp_yuv_bypass_handler(struct sop_vi_dev *vdev, const enum sop_isp_
 	_isp_yuv_bypass_trigger(vdev, raw_num, hw_chn_num);
 }
 
-static void _isp_sof_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num)
+static void _isp_sof_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct _isp_dqbuf_n *n = NULL;
+	struct isp_buf_q *dq_q = &vdev->dqbuf_q;
 	unsigned long flags;
 
 	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num]) == 0)
@@ -4594,12 +3627,12 @@ static void _isp_sof_handler(struct sop_vi_dev *vdev, const enum sop_isp_raw raw
 
 	_vi_wake_up_post_th(vdev);
 
-	osal_spin_lock_irqsave(&dq_lock, &flags);
-	if (!osal_list_empty(&dqbuf_q.list)) {
-		n = osal_list_first_entry(&dqbuf_q.list, struct _isp_dqbuf_n, list);
+	osal_spin_lock_irqsave(&dq_q->lock, &flags);
+	if (!osal_list_empty(&dq_q->list)) {
+		n = osal_list_first_entry(&dq_q->list, struct _isp_dqbuf_n, list);
 		_vi_wake_up_event_th(vdev, n->pipe_id);
 	}
-	osal_spin_unlock_irqrestore(&dq_lock, &flags);
+	osal_spin_unlock_irqrestore(&dq_q->lock, &flags);
 
 	isp_sync_task_process(raw_num);
 
@@ -4708,7 +3741,7 @@ static void _mux_dev_cfg_gpio(struct isp_ctx *ctx, const enum sop_isp_raw raw_nu
 }
 
 static inline void _isp_pre_fe_done_handler(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	const enum sop_isp_fe_chn_num chn_num)
 {
@@ -4893,7 +3926,7 @@ static inline void _isp_pre_fe_done_handler(
 	}
 }
 
-static void _isp_postraw_shaw_done_handler(struct sop_vi_dev *vdev)
+static void _isp_postraw_shaw_done_handler(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 
@@ -4903,7 +3936,7 @@ static void _isp_postraw_shaw_done_handler(struct sop_vi_dev *vdev)
 	}
 }
 
-static void _isp_postraw_done_handler(struct sop_vi_dev *vdev)
+static void _isp_postraw_done_handler(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num = ctx->cfg_info.raw_num;
@@ -5000,7 +4033,7 @@ static void _isp_postraw_done_handler(struct sop_vi_dev *vdev)
 		if (vdev->postraw_frame_number[pipe] <= ctx->isp_pipe_cfg[pipe].bypass_num)
 			return;
 
-		sop_isp_rdy_buf_remove(vdev, pipe, chn_num);
+		sop_isp_rdy_buf_remove(&vdev->qbuf_q[pipe][chn_num]);
 		sop_isp_dqbuf_list(vdev, vdev->postraw_frame_number[pipe],
 				   pipe, chn_num,
 				   ctx->isp_pipe_cfg[pipe].tv);
@@ -5008,7 +4041,7 @@ static void _isp_postraw_done_handler(struct sop_vi_dev *vdev)
 	}
 }
 
-static void _isp_cmdq_done_chk(struct sop_vi_dev *vdev, const u32 cmdq_intr)
+static void _isp_cmdq_done_chk(struct vi_dev *vdev, const u32 cmdq_intr)
 {
 	uintptr_t cmdq = vdev->ctx.phys_regs[ISP_BLK_ID_CMDQ];
 
@@ -5020,7 +4053,7 @@ static void _isp_cmdq_done_chk(struct sop_vi_dev *vdev, const u32 cmdq_intr)
 	}
 }
 
-static void _isp_csibdg_lite_frame_start_chk(struct sop_vi_dev *vdev,
+static void _isp_csibdg_lite_frame_start_chk(struct vi_dev *vdev,
 					     const enum sop_isp_raw raw_num,
 					     const u32 frame_start)
 {
@@ -5044,7 +4077,7 @@ static void _isp_csibdg_lite_frame_start_chk(struct sop_vi_dev *vdev,
 }
 
 static void _isp_csibdg_lite_frame_done_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	const u32 frame_start)
 {
@@ -5072,7 +4105,7 @@ static void _isp_csibdg_lite_frame_done_chk(
 }
 
 static void _isp_csibdg_line_cnt_done_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	union reg_isp_csi_bdg_interrupt_status_1 cbdg_1_sts)
 {
@@ -5094,7 +4127,7 @@ static void _isp_csibdg_line_cnt_done_chk(
 }
 
 static void _isp_pre_fe_frame_start_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	const u8 frame_start)
 {
@@ -5140,7 +4173,7 @@ static void _isp_pre_fe_frame_start_chk(
 }
 
 static void _isp_pre_fe_frame_done_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const enum sop_isp_raw raw_num,
 	const u8 frame_done)
 {
@@ -5170,7 +4203,7 @@ static void _isp_pre_fe_frame_done_chk(
 }
 
 static void _isp_postraw_shadow_done_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const u8 shadow_done)
 {
 	if (shadow_done)
@@ -5178,7 +4211,7 @@ static void _isp_postraw_shadow_done_chk(
 }
 
 static void _isp_postraw_frame_done_chk(
-	struct sop_vi_dev *vdev,
+	struct vi_dev *vdev,
 	const u8 frame_done)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
@@ -5190,7 +4223,7 @@ static void _isp_postraw_frame_done_chk(
 	}
 }
 
-void vi_irq_handler(struct sop_vi_dev *vdev)
+void vi_irq_handler(struct vi_dev *vdev)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
 	union reg_isp_csi_bdg_interrupt_status_0 cbdg_0_sts[ISP_PRERAW_MAX] = { 0 };
@@ -5256,10 +4289,1011 @@ void vi_irq_handler(struct sop_vi_dev *vdev)
 	_isp_postraw_frame_done_chk(vdev, top_sts_0.bits.frame_done_post);
 }
 
-/*******************************************************
- *  Common interface for core
- ******************************************************/
-int vi_create_instance(struct sop_vi_dev *vdev)
+int vi_update_ldc_mesh(struct vi_dev *vdev,
+			       vi_pipe pipe,
+			       vi_chn chn,
+			       const vi_ldc_attr_s *ldc_attr,
+			       u64 paddr)
+{
+	struct gdc_mesh *pmesh = &vdev->mesh[pipe][chn];
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+
+	osal_mutex_lock(&pmesh->lock);
+	pmesh->paddr = paddr;
+	pmesh->vaddr = NULL;
+
+	vi_ctx->ldc_attr[pipe][chn] = *ldc_attr;
+	osal_mutex_unlock(&pmesh->lock);
+
+	vi_pr(VI_DBG, "Pipe(%d) Chn(%d) mesh base(0x%llx)\n", pipe, chn, (unsigned long long)paddr);
+	vi_pr(VI_DBG, "enable=%d, apect=%d, xyratio=%d, xoffset=%d, yoffset=%d, ratio=%d, rotation=%d\n",
+			ldc_attr->enable, ldc_attr->attr.aspect,
+			ldc_attr->attr.x_ratio, ldc_attr->attr.center_x_offset,
+			ldc_attr->attr.center_y_offset, ldc_attr->attr.distortion_ratio,
+			ldc_attr->attr.rotation);
+	return 0;
+}
+
+int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
+{
+	struct vi_dev *vdev = (struct vi_dev *)dev;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	struct isp_ctx *ctx = &vdev->ctx;
+	int rc = -1;
+
+	if (dev == NULL) {
+		vi_pr(VI_ERR, "dev is null\n");
+		return -1;
+	}
+
+	switch (cmd) {
+	case VI_CB_QBUF_TRIGGER:
+		vi_pr(VI_INFO, "isp_ol_sc_trig_post\n");
+
+		_vi_wake_up_post_th(vdev);
+
+		rc = 0;
+		break;
+	case VI_CB_SC_FRM_DONE:
+		vi_pr(VI_DBG, "sc frm done cb\n");
+
+		_vi_wake_up_post_th(vdev);
+
+		rc = 0;
+		break;
+	case VI_CB_SET_VIVPSSMODE:
+	{
+		vi_vpss_mode_s vi_vpss_mode;
+		u8 pipe = 0;
+		u8 vi_online = 0;
+		u8 vi_slice = 0;
+
+		osal_memcpy(&vi_vpss_mode, arg, sizeof(vi_vpss_mode_s));
+
+		vi_online = (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_ONLINE) ||
+			    (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_OFFLINE);
+
+		vi_slice = (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_ONLINE) ||
+			    (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_OFFLINE);
+
+
+		ctx->is_offline_postraw = !vi_online;
+		ctx->is_slice_buf_on = vi_slice;
+
+		vi_pr(VI_DBG, "Caller_Mod(%d) set vi_online:%d, is_offline_postraw=%d\n",
+				caller, vi_online, ctx->is_offline_postraw);
+
+		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
+			u8 is_vpss_online = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_ONLINE) ||
+						  (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_ONLINE);
+
+			ctx->isp_pipe_cfg[pipe].is_offline_scaler = !is_vpss_online;
+			vi_pr(VI_DBG, "pipe_%d set is_offline_scaler:%d\n", pipe, !is_vpss_online);
+		}
+
+		rc = 0;
+		break;
+	}
+	case VI_CB_GDC_OP_DONE:
+	{
+		struct ldc_op_done_cfg *cfg =
+			(struct ldc_op_done_cfg *)arg;
+
+		vi_gdc_callback(vdev, cfg->param, cfg->blk);
+		rc = 0;
+		break;
+	}
+	case VI_CB_GDC_GET_CHN_ATTR:
+	{
+		struct ldc_op_done_cfg *ldc_cfg =
+			(struct ldc_op_done_cfg *)arg;
+		vi_chn_attr_s chn_attr;
+		struct vi_ldc_internal_chn_attr *attr = (struct vi_ldc_internal_chn_attr *)ldc_cfg->param;
+
+		chn_attr = vi_ctx->chn_attr[attr->vi_chn_attr.vi_pipe][attr->vi_chn_attr.vi_chn];
+		attr->vi_chn_attr.size = chn_attr.size;
+		break;
+	}
+	case VI_CB_GDC_SET_CHN_CFG:
+	{
+		struct ldc_op_done_cfg *ldc_cfg =
+			(struct ldc_op_done_cfg *)arg;
+		struct vi_ldc_internal_chn_ldc_cfg *cfg = (struct vi_ldc_internal_chn_ldc_cfg *)ldc_cfg->param;
+
+		rc = vi_update_ldc_mesh(vdev, cfg->vi_cfg.vi_pipe, cfg->vi_cfg.vi_chn,
+					 &cfg->vi_cfg.ldc_attr, cfg->vi_cfg.mesh_handle);
+		break;
+	}
+	case VI_CB_MSP_CFG:
+	{
+		struct vi_cb_msp_cfg *msp_cfg = (struct vi_cb_msp_cfg *)arg;
+
+		rc = vi_cb_msp_config(vdev, msp_cfg);
+		if (rc) {
+			vi_pr(VI_ERR, "msp config failed\n");
+		}
+
+		break;
+	}
+	case VI_CB_MSP_GET_INFO:
+	{
+		rc = vi_cb_msp_info(vdev, (struct vi_cb_msp_info *)arg);
+		if (rc) {
+			vi_pr(VI_ERR, "msp get info failed\n");
+		}
+
+		break;
+	}
+	case VI_CB_RESET_ISP:
+	{
+		vi_pr(VI_ERR, "VI_CB_RESET_ISP\n");
+		_vi_record_debug_info(ctx);
+		vi_err_wake_up_th(vdev, ctx->cfg_info.raw_num);
+	}
+	default:
+		break;
+	}
+
+	return rc;
+}
+
+int user_pic_trig(struct vi_dev *vdev, bool is_frm_rst)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	u8 pipe = 0;
+
+	if (!osal_atomic_read(&vdev->stream.isp_streamon[pipe])) {
+		vi_pr(VI_DBG, "isp stream is not on, can't trigger preraw\n");
+		return 1;
+	}
+
+	if (ctx->is_rawreplay) {
+		if (osal_atomic_read(&vdev->postraw_state) != ISP_STATE_IDLE)
+			return 1;
+
+		pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
+
+		isp_first_frm_reset(ctx, vdev->postraw_frame_number[pipe] == 0, false);
+
+		_vi_clear_mmap_fbc_ring_base(vdev, pipe);
+
+		vi_tuning_gamma_ips_update(ctx, pipe);
+		vi_tuning_dci_update(ctx, pipe);
+		vi_tuning_drc_update(ctx, pipe);
+
+		ispblk_fbc_debug_info(ctx);
+
+		_post_dma_update(vdev, pipe);
+
+		_pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
+
+		_vi_wake_up_preraw_th(vdev, raw_num);
+
+		vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]++;
+
+		if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
+			vi_event_queue(vdev, VI_EVENT_PRE0_EOF + ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0],
+					vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]);
+		}
+	}
+	return 0;
+}
+
+/* notice this function will be interrupted by ipcmsg,
+ * so we need to check the param, insure the data is not NULL
+ */
+static void _usr_pic_timer_handler(unsigned long data)
+{
+	struct vi_dev *vdev = NULL;
+
+	if ((void *)data == NULL) {
+		vi_pr(VI_WARN, "timer data is NULL\n");
+		return;
+	}
+
+	vdev = (struct vi_dev *)osal_timer_get_private_data((void *)data);
+
+	if (user_pic_trig(vdev, false)) {
+		goto EXIT;
+	}
+
+EXIT:
+	vi_pr(VI_DBG, "wait next trig\n");
+
+	if (vdev->usr_pic_timer.timer)
+		osal_timer_mod(&vdev->usr_pic_timer, vdev->usr_pic_delay);
+}
+
+int usr_pic_time_remove(struct vi_dev *vdev)
+{
+	int ret = 0;
+
+	if (vdev->usr_pic_timer.timer == NULL || vdev->usr_pic_timer.handler == NULL) {
+		vi_pr(VI_DBG, "usr_pic_timer not init\n");
+		return 0;
+	}
+
+	osal_timer_stop(&vdev->usr_pic_timer);
+
+	ret = osal_timer_destroy_sync(&vdev->usr_pic_timer);
+	if (ret) {
+		vi_pr(VI_ERR, "osal_timer_destroy_sync fail\n");
+		return ret;
+	}
+
+	vdev->usr_pic_timer.timer = NULL;
+	vdev->usr_pic_timer.handler = NULL;
+
+	return ret;
+}
+
+int usr_pic_timer_init(struct vi_dev *vdev)
+{
+	int ret = 0;
+
+	if (vdev->usr_pic_timer.timer != NULL && vdev->usr_pic_timer.handler != NULL) {
+		vi_pr(VI_DBG, "usr_pic_timer already init\n");
+		return 0;
+	}
+
+	memset(&vdev->usr_pic_timer, 0, sizeof(vdev->usr_pic_timer));
+	vdev->usr_pic_timer.handler = _usr_pic_timer_handler;
+	vdev->usr_pic_timer.data = (uintptr_t)vdev;
+	vdev->usr_pic_timer.interval = vdev->usr_pic_delay ? vdev->usr_pic_delay : 30;
+
+	ret = osal_timer_init(&vdev->usr_pic_timer);
+	if (ret) {
+		vi_pr(VI_ERR, "osal_timer_init fail\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+int usr_pic_timer_start(struct vi_dev *vdev)
+{
+	int ret = 0;
+
+	vdev->usr_pic_timer.interval = vdev->usr_pic_delay;
+
+	ret = osal_timer_start(&vdev->usr_pic_timer);
+	if (ret) {
+		vi_pr(VI_ERR, "osal_timer_start fail\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static int clean_misc_resources(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct _isp_dqbuf_n *n = NULL, *dq_tmp = NULL;
+	struct isp_buf_q *dqbuf_q = &vdev->dqbuf_q;
+	struct _isp_raw_num_n *raw_n = NULL, *raw_tmp = NULL;
+	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
+	struct vi_event_k *ev_k = NULL, *ev_tmp = NULL;
+	struct isp_event_q *event_q = &vdev->event_q;
+	unsigned long flags;
+	struct isp_buffer *isp_b;
+	uint8_t i = 0;
+	union vi_sys_reset_apb reset_apb;
+
+	ctx->is_rawreplay = false;
+	usr_pic_time_remove(vdev);
+
+	osal_spin_lock_irqsave(&dqbuf_q->lock, &flags);
+	osal_list_for_each_entry_safe(n, dq_tmp, &dqbuf_q->list, list) {
+		osal_list_del_init(&n->list);
+		osal_kfree(n);
+	}
+	osal_spin_unlock_irqrestore(&dqbuf_q->lock, &flags);
+
+	osal_spin_lock_irqsave(&event_q->lock, &flags);
+	osal_list_for_each_entry_safe(ev_k, ev_tmp, &event_q->list, list) {
+		osal_list_del_init(&ev_k->list);
+		osal_kfree(ev_k);
+	}
+	event_q->count = 0;
+	osal_spin_unlock_irqrestore(&event_q->lock, &flags);
+
+	osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
+	osal_list_for_each_entry_safe(raw_n, raw_tmp, &raw_num_q->list, list) {
+		osal_list_del_init(&raw_n->list);
+		osal_kfree(raw_n);
+	}
+	osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
+
+	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
+		while ((isp_b = isp_buf_remove(&vdev->postraw_wdr_in_q[i])) != NULL) {
+			if (isp_b->is_ext == EXTERNAL_BUFFER) {
+				_vi_release_ext_buf(isp_b->addr);
+				osal_kfree(isp_b);
+			} else {
+				osal_vfree(isp_b);
+			}
+		}
+	}
+
+	while ((isp_b = isp_buf_remove(&vdev->postraw_in_q)) != NULL) {
+		if (isp_b->is_ext == EXTERNAL_BUFFER) {
+			_vi_release_ext_buf(isp_b->addr);
+			osal_kfree(isp_b);
+		} else {
+			osal_vfree(isp_b);
+		}
+	}
+
+	isp_reset(ctx);
+
+	reset_apb.raw = 0;
+	reset_apb.b.isp_top = 1;
+	vi_sys_toggle_reset_apb(reset_apb);
+
+	osal_atomic_set(&vdev->stream.isp_init, 0);
+
+	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		vi_sw_reset(vdev);
+	}
+
+	vi_pr(VI_INFO, "done\n");
+
+	return 0;
+}
+
+int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
+{
+	int ret = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct cif_attr_s cif_attr;
+	uint8_t total_chn = (ctx->isp_csi_cfg[raw_num].is_yuv_sensor)
+			? ctx->isp_csi_cfg[raw_num].mux_mode + 1
+			: ctx->isp_csi_cfg[raw_num].is_hdr_on + 1;
+	uint8_t chn_str = 0, pipe = 0;
+
+	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num])) {
+		vi_pr(VI_INFO, "raw_num(%d) is already streaming\n", raw_num);
+		return 0;
+	}
+
+	//TODO: workaround for csibdg reset issue, but need to check if it is necessary
+	ispblk_csibdg_reset(ctx, raw_num);
+
+	//sw workaround to disable csibdg enable first due to csibdg enable is on as default.
+	isp_streaming(ctx, false, raw_num);
+
+	if (ctx->is_rawreplay)
+		return 0;
+
+	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		ret = vi_get_csi_ion_buf(vdev, raw_num);
+		if (ret) {
+			vi_pr(VI_ERR, "get csi ion buf failed\n");
+			return ERR_VI_NOMEM;
+		}
+	} else {
+		//in suspend state, record the frame num for resume
+		ctx->isp_csi_cfg[raw_num].rx_ref_frm_num = vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0];
+	}
+
+	_vi_mempool_reset(&ctx->csi_mempool[raw_num]);
+
+	_isp_pre_fe_dma_setup(vdev, raw_num);
+
+	if (raw_num >= ISP_PRERAW_VIRT0) {
+		vi_pr(VI_DBG, "virtual raw should not set hw\n");
+		goto skip_hw_setup;
+	}
+
+	if (ctx->is_ai_isp && osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		ret = vi_create_thread(vdev, E_VI_TH_AI_ISP);
+		if (ret) {
+			vi_pr(VI_ERR, "Failed to create ai_isp thread\n");
+			goto err_create_ai_isp;
+		}
+	}
+
+	_vi_call_cb(E_MODULE_CIF, CIF_CB_RESET_LVDS, &raw_num);
+
+	/* Get stagger vsync info from cif */
+	cif_attr.devno = raw_num;
+	if (_vi_call_cb(E_MODULE_CIF, CIF_CB_GET_CIF_ATTR, &cif_attr) == 0)
+		ctx->isp_csi_cfg[raw_num].is_stagger_vsync = cif_attr.stagger_vsync;
+
+	ret = _vi_mux_dev_gpio_init(ctx, raw_num);
+	if (ret) {
+		vi_pr(VI_ERR, "fail to init gpio\n");
+		goto fail_to_init_gpio;
+	}
+
+	_vi_pre_fe_ctrl_setup(vdev, raw_num);
+	_isp_pre_ai_isp_dma_setup(vdev, raw_num);
+
+	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
+		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
+			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
+			if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
+				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & offline scaler\n", raw_num, pipe);
+			} else {
+				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & online scaler\n", raw_num, pipe);
+			}
+		} else {
+			vi_pr(VI_INFO, "raw_num [%d] YUV bypass ISP\n", raw_num);
+		}
+	}
+
+	_vi_dma_set_sw_mode(ctx, raw_num, true);
+
+	if (_is_fe_post_offline(ctx)) {
+		for (; chn_str < total_chn; chn_str++)
+			isp_pre_trig(ctx, raw_num, chn_str);
+	}
+
+skip_hw_setup:
+	osal_atomic_set(&vdev->stream.csi_streamon[raw_num], 1);
+
+	return ret;
+
+fail_to_init_gpio:
+	vi_destroy_thread(vdev, E_VI_TH_AI_ISP);
+err_create_ai_isp:
+	vi_free_ion_buf(vdev, &ctx->csi_mempool[raw_num]);
+
+	return ret;
+}
+
+int vi_csi_stop_streaming(struct vi_dev *vdev, uint8_t raw_num)
+{
+	int ret = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct isp_buffer *isp_b;
+	struct _isp_snr_i2c_node *i2c_n = NULL, *i2c_tmp = NULL;
+	struct _isp_crop_node *crop_n = NULL, *crop_tmp = NULL;
+	struct isp_snr_queue *i2c_queue = &vdev->isp_snr_cfg[raw_num].i2c_queue;
+	struct isp_snr_queue *crop_queue = &vdev->isp_snr_cfg[raw_num].crop_queue;
+	osal_spinlock *snr_node_lock = &vdev->isp_snr_cfg[raw_num].lock;
+	unsigned long flags;
+	int count = 10;
+	int j = 0;
+	uint8_t i;
+	bool is_all_idle = true;
+
+	if (ctx->is_rawreplay) {
+		vi_pr(VI_INFO, "raw replay, skip clean csi resources\n");
+		goto clean_resources;
+	}
+
+	osal_atomic_set(&vdev->stream.csi_streamon[raw_num], 0);
+
+	while (--count > 0) {
+		if (osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH0]) == ISP_STATE_IDLE &&
+			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH1]) == ISP_STATE_IDLE &&
+			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH2]) == ISP_STATE_IDLE &&
+			osal_atomic_read(&vdev->pre_fe_state[raw_num][ISP_FE_CH3]) == ISP_STATE_IDLE)
+			break;
+		vi_pr(VI_DBG, "wait raw_num(%d) count(%d)\n", raw_num, count);
+#ifdef FPGA_PORTING
+		osal_msleep(500);
+#else
+		osal_msleep(20);
+#endif
+	}
+
+	if (count == 0) {
+		vi_pr(VI_WARN, "raw_num(%d) stop streaming timeout\n", raw_num);
+	}
+
+	isp_streaming(ctx, false, raw_num);
+
+	for (j = 0; j < ISP_FE_CHN_MAX; j++) {
+		while ((isp_b = isp_buf_remove(&vdev->pre_fe_out_q[raw_num][j])) != NULL)
+			osal_vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&vdev->pre_ai_isp_in_q[raw_num][j])) != NULL)
+			osal_vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&vdev->pre_ai_isp_out_q[raw_num][j])) != NULL)
+			osal_vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_dq[j])) != NULL)
+			osal_vfree(isp_b);
+		while ((isp_b = isp_buf_remove(&vdev->raw_dump[raw_num].buf_q[j])) != NULL)
+			osal_vfree(isp_b);
+	}
+
+	osal_spin_lock_irqsave(snr_node_lock, &flags);
+	osal_list_for_each_entry_safe(i2c_n, i2c_tmp, &i2c_queue->list, list) {
+		osal_list_del_init(&i2c_n->list);
+		osal_kfree(i2c_n);
+	}
+	i2c_queue->num_rdy = 0;
+
+	osal_list_for_each_entry_safe(crop_n, crop_tmp, &crop_queue->list, list) {
+		osal_list_del_init(&crop_n->list);
+		osal_kfree(crop_n);
+	}
+	crop_queue->num_rdy = 0;
+	osal_spin_unlock_irqrestore(snr_node_lock, &flags);
+
+	_vi_mux_dev_gpio_deinit(ctx, raw_num);
+
+	// if suspend, no need to destroy resources
+	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		if (ctx->is_ai_isp) {
+			vi_destroy_thread(vdev, E_VI_TH_AI_ISP);
+		}
+
+		ret = vi_free_ion_buf(vdev, &ctx->csi_mempool[raw_num]);
+		if (ret != 0) {
+			vi_pr(VI_ERR, "free ion buf failed\n");
+			return ret;
+		}
+	}
+
+clean_resources:
+	for (i = 0; i < ISP_PRERAW_MAX; i++) {
+		if (osal_atomic_read(&vdev->stream.csi_streamon[i])) {
+			is_all_idle = false;
+			break;
+		}
+	}
+
+	if (is_all_idle) {
+		clean_misc_resources(vdev);
+	}
+
+	vi_pr(VI_INFO, "raw_num(%d) stop streaming\n", raw_num);
+
+	return 0;
+}
+
+/*start postraw*/
+int vi_isp_start_streaming(struct vi_dev *vdev, uint8_t pipe, uint8_t chn)
+{
+	bool trig_pre = true;
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+	bool stream_on = true;
+
+	if (osal_atomic_read(&vdev->stream.isp_streamon[pipe])) {
+		vi_pr(VI_INFO, "pipe %d chn %d already start streaming\n", pipe, chn);
+		return 0;
+	}
+
+	ctx->isp_pipe_cfg[pipe].chn_enable |= BIT(chn);
+	ctx->isp_pipe_cfg[pipe].first_frm_rst = true;
+	ctx->isp_pipe_cfg[pipe].first_frm_cnt = 0;
+
+	osal_atomic_set(&vdev->stream.isp_streamon[pipe], 1);
+
+	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		vi_tuning_buf_clear(pipe);
+	}
+
+	_vi_mempool_reset(&ctx->isp_mempool[pipe]);
+	_vi_dma_setup(vdev, pipe);
+
+	if (!osal_atomic_read(&vdev->stream.isp_init)) {
+		ispblk_isptop_config(ctx);
+		_vi_dma_set_sw_mode(ctx, raw_num, false);
+		_vi_postraw_ctrl_setup(vdev, pipe);
+		_swap_post_sts_buf(ctx, pipe);
+		_post_dma_update(vdev, pipe);
+	}
+
+	if (osal_atomic_read(&vdev->state) == E_STATE_SUSPEND) {
+		pre_fe_tuning_update(ctx, raw_num);
+		postraw_tuning_update(ctx, pipe);
+	}
+
+	if (_is_all_online(ctx) || _is_fe_post_slice(ctx)) {
+		_vi_update_yuvtop_out_cfg(vdev, pipe);
+
+		if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //offline mode
+			_postraw_outbuf_enq(vdev, pipe, chn);
+		} else { //online mode
+			struct vpss_online_cb_info post_para = {0};
+
+			/* VI Online VPSS sc cb trigger */
+			post_para.snr_num = pipe;
+			post_para.is_tile = false;
+			osal_gettimeofday(&post_para.ts);
+			if (ctx->isp_pipe_cfg[pipe].bypass_num == 0 &&
+				_vi_call_cb(E_MODULE_VPSS, VPSS_CB_VI_ONLINE_TRIGGER, &post_para) != 0) {
+				vi_pr(VI_INFO, "snr_num_%d, sc_%d is not ready. try later\n", raw_num, pipe);
+				trig_pre = false;
+			}
+		}
+
+		if (!ctx->is_rawreplay && trig_pre) {
+			if (_is_fe_post_slice(ctx)) {
+				vi_record_post_trigger(vdev, pipe);
+				isp_post_trig(ctx);
+			}
+
+			isp_first_frm_reset(ctx, true, false);
+			ctx->isp_pipe_cfg[pipe].first_frm_rst = false;
+
+			if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) { //RGB sensor
+				isp_pre_trig(ctx, raw_num, ISP_FE_CH0);
+				if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
+					isp_pre_trig(ctx, raw_num, ISP_FE_CH1);
+			}
+
+			if (_is_all_online(ctx))
+				osal_atomic_set(&vdev->postraw_state, ISP_STATE_RUNNING);
+			else {
+				osal_atomic_set(&vdev->pre_fe_state[raw_num][ISP_FE_CH0], ISP_STATE_RUNNING);
+				if (ctx->isp_csi_cfg[raw_num].is_hdr_on)
+					osal_atomic_set(&vdev->pre_fe_state[raw_num][ISP_FE_CH1], ISP_STATE_RUNNING);
+			}
+		}
+	} else {
+		if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
+			ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_BYPASS) { //vi vpss offline mode
+			u8 chn_str = 0, pipe_num;
+
+			//for yuv sensor, we need to enque all chn_str
+			for (; chn_str < ctx->isp_csi_cfg[raw_num].mux_mode + 1; chn_str++) {
+				pipe_num = ctx->isp_csi_cfg[raw_num].bind_pipe[chn_str];
+				if (!osal_atomic_read(&vdev->stream.isp_streamon[pipe_num])) {
+					stream_on = false;
+					break;
+				}
+			}
+
+			if (stream_on) {
+				for (chn_str = 0; chn_str < ctx->isp_csi_cfg[raw_num].mux_mode + 1; chn_str++)
+					_isp_yuv_bypass_buf_enq(vdev, raw_num, chn_str);
+			}
+		}
+	}
+
+	if (osal_atomic_read(&vdev->stream.isp_init) == 0) {
+		osal_atomic_set(&vdev->stream.isp_init, 1);
+	}
+
+	isp_streaming(ctx, stream_on, raw_num);
+
+	vi_pr(VI_INFO, "pipe %d chn %d start streaming\n", pipe, chn);
+
+	return 0;
+}
+
+
+int vi_isp_stop_streaming(struct vi_dev *vdev, uint8_t pipe, uint8_t chn)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct sop_isp_buf *sop_vb, *tmp;
+	struct isp_buf_q *qbuf_q = &vdev->qbuf_q[pipe][chn];
+	unsigned long flags;
+	int count = 5;
+
+	ctx->isp_pipe_cfg[pipe].chn_enable &= ~BIT(chn);
+
+	if (!ctx->isp_pipe_cfg[pipe].chn_enable) {
+		osal_atomic_set(&vdev->stream.isp_streamon[pipe], 0);
+	}
+
+	while (--count > 0) {
+		if (osal_atomic_read(&vdev->postraw_state) == ISP_STATE_IDLE)
+			break;
+		vi_pr(VI_DBG, "wait pipe(%d) chn(%d) count(%d)\n", pipe, chn, count);
+#ifdef FPGA_PORTING
+		osal_msleep(500);
+#else
+		osal_msleep(20);
+#endif
+	}
+
+	if (count == 0) {
+		osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
+		vi_pr(VI_WARN, "pipe(%d) chn(%d) stop streaming timeout\n", pipe, chn);
+	}
+
+	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
+		osal_spin_lock_irqsave(&qbuf_q->lock, &flags);
+		osal_list_for_each_entry_safe(sop_vb, tmp, &qbuf_q->list, list) {
+			osal_kfree(sop_vb);
+		}
+		qbuf_q->num = 0;
+		OSAL_INIT_LIST_HEAD(&qbuf_q->list);
+		osal_spin_unlock_irqrestore(&qbuf_q->lock, &flags);
+	}
+
+	vi_pr(VI_INFO, "done\n");
+
+	return 0;
+}
+
+int vi_suspend(struct vi_dev *vdev)
+{
+	int ret = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t pipe = 0, chn = 0;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+
+	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
+		if (!ctx->isp_pipe_cfg[pipe].is_enable)
+			continue;
+		for (chn = 0; chn < VI_MAX_CHN_NUM; chn++) {
+			ret = vi_isp_stop_streaming(vdev, pipe, chn);
+			if (ret) {
+				vi_pr(VI_INFO, "vi stop streaming\n");
+				return ret;
+			}
+		}
+
+		raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+		ret = vi_csi_stop_streaming(vdev, raw_num);
+		if (ret) {
+			vi_pr(VI_DBG, "vi csi stop streaming\n");
+			return ret;
+		}
+	}
+
+	return ret;
+}
+
+int vi_resume(struct vi_dev *vdev)
+{
+	int ret = 0;
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t pipe = 0, chn = 0;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+
+	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
+		if (!ctx->isp_pipe_cfg[pipe].is_enable)
+			continue;
+
+		raw_num = ctx->isp_pipe_cfg[pipe].bind_raw;
+		ret = vi_csi_start_streaming(vdev, raw_num);
+		if (ret) {
+			vi_pr(VI_DBG, "vi csi start streaming\n");
+			return ret;
+		}
+		for (chn = 0; chn < VI_MAX_CHN_NUM; chn++) {
+			ret = vi_isp_start_streaming(vdev, pipe, chn);
+			if (ret) {
+				vi_pr(VI_INFO, "vi stop streaming\n");
+				return ret;
+			}
+		}
+	}
+
+	return ret;
+}
+
+void vi_destroy_thread(struct vi_dev *vdev, enum E_VI_TH th_id)
+{
+	if (th_id < 0 || th_id >= E_VI_TH_MAX) {
+		vi_pr(VI_ERR, "No such thread_id(%d)\n", th_id);
+		return;
+	}
+
+	if (th_id == E_VI_TH_POSTRAW) {
+		if (vdev->vi_th[th_id].tasklet.tasklet != NULL) {
+			osal_tasklet_kill(&vdev->vi_th[th_id].tasklet);
+		}
+		return;
+	}
+
+	if (vdev->vi_th[th_id].w_thread != NULL) {
+		osal_atomic_set(&vdev->vi_th[th_id].exit_flag, 1);
+		osal_wait_wakeup(&vdev->vi_th[th_id].wq);
+		osal_kthread_destroy(vdev->vi_th[th_id].w_thread, 1);
+
+		vdev->vi_th[th_id].w_thread = NULL;
+		osal_wait_destroy(&vdev->vi_th[th_id].wq);
+	}
+}
+
+int vi_create_thread(struct vi_dev *vdev, enum E_VI_TH th_id)
+{
+	int rc = 0;
+	uint32_t prio = OSAL_TASK_PRIORITY_HIGH;
+
+	if (th_id < 0 || th_id >= E_VI_TH_MAX) {
+		vi_pr(VI_ERR, "No such thread_id(%d)\n", th_id);
+		return -1;
+	}
+
+	if (th_id == E_VI_TH_POSTRAW) {
+		if (vdev->vi_th[th_id].tasklet.tasklet == NULL) {
+			osal_memcpy(vdev->vi_th[th_id].th_name, "isp_post", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].tasklet.handler = isp_post_tasklet;
+			vdev->vi_th[th_id].tasklet.data = (unsigned long)vdev;
+
+			rc = osal_tasklet_init(&vdev->vi_th[th_id].tasklet);
+			if (rc != OSAL_SUCCESS) {
+				vi_pr(VI_ERR, "Unable to init tasklet %s.\n", vdev->vi_th[th_id].th_name);
+				return -1;
+			}
+			osal_atomic_set(&vdev->vi_th[th_id].flag, 0);
+		}
+		return 0;
+	}
+
+	if (vdev->vi_th[th_id].w_thread == NULL) {
+		switch (th_id) {
+		case E_VI_TH_PRERAW:
+			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_pre", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].th_handler = _vi_preraw_thread;
+			break;
+		case E_VI_TH_VBLANK_HANDLER:
+			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_blank", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].th_handler = _vi_vblank_handler_thread;
+			break;
+		case E_VI_TH_ERR_HANDLER:
+			osal_memcpy(vdev->vi_th[th_id].th_name, "task_isp_err", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].th_handler = _vi_err_handler_thread;
+			break;
+		case E_VI_TH_EVENT_HANDLER:
+			osal_memcpy(vdev->vi_th[th_id].th_name, "vi_event_handler", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].th_handler = _vi_event_handler_thread;
+			break;
+		case E_VI_TH_AI_ISP:
+			osal_memcpy(vdev->vi_th[th_id].th_name, "vi_ai_isp", sizeof(vdev->vi_th[th_id].th_name));
+			vdev->vi_th[th_id].th_handler = _vi_ai_isp_handler_thread;
+			break;
+		default:
+			vi_pr(VI_ERR, "No such thread(%d)\n", th_id);
+			return -1;
+		}
+
+		osal_atomic_set(&vdev->vi_th[th_id].flag, 0);
+		osal_atomic_set(&vdev->vi_th[th_id].exit_flag, 0);
+		osal_atomic_set(&vdev->vi_th[th_id].thread_exit, 0);
+		osal_wait_init(&vdev->vi_th[th_id].wq);
+
+		vdev->vi_th[th_id].w_thread = osal_kthread_create(vdev->vi_th[th_id].th_handler,
+								(void *)vdev,
+								vdev->vi_th[th_id].th_name, 8192);
+		if (!vdev->vi_th[th_id].w_thread) {
+			vi_pr(VI_ERR, "Unable to start %s.\n", vdev->vi_th[th_id].th_name);
+			return -1;
+		}
+
+		osal_kthread_set_priority(vdev->vi_th[th_id].w_thread, prio);
+	}
+
+	return rc;
+}
+
+static void _vi_init_param(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	u8 i = 0;
+
+	osal_memset(ctx, 0, sizeof(*ctx));
+
+	ctx->phys_regs = isp_get_phys_reg_bases();
+
+	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
+		osal_mutex_init(&vi_ctx->dev_lock[i]);
+	}
+
+	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
+		ctx->isp_pipe_cfg[i].rgb_color_mode     = ISP_BAYER_TYPE_GB;
+		ctx->isp_pipe_cfg[i].yuv_scene_mode     = ISP_YUV_SCENE_BYPASS;
+		ctx->isp_pipe_cfg[i].is_offline_scaler  = true;
+		osal_mutex_init(&vi_ctx->pipe_lock[i]);
+	}
+
+	osal_memset(&vdev->usr_crop, 0, sizeof(vdev->usr_crop));
+
+	//ToDo sync_task_ext
+	for (i = 0; i < ISP_PRERAW_MAX; i++) {
+		osal_spin_lock_init(&vdev->isp_snr_cfg[i].lock);
+		sync_task_init(i);
+		OSAL_INIT_LIST_HEAD(&vdev->isp_snr_cfg[i].i2c_queue.list);
+		vdev->isp_snr_cfg[i].i2c_queue.num_rdy = 0;
+		OSAL_INIT_LIST_HEAD(&vdev->isp_snr_cfg[i].crop_queue.list);
+		vdev->isp_snr_cfg[i].crop_queue.num_rdy = 0;
+	}
+
+	OSAL_INIT_LIST_HEAD(&vdev->pre_raw_num_q.list);
+	OSAL_INIT_LIST_HEAD(&vdev->dqbuf_q.list);
+	OSAL_INIT_LIST_HEAD(&vdev->event_q.list);
+	vdev->event_q.count = 0;
+
+	osal_spin_lock_init(&vdev->pre_raw_num_q.lock);
+	osal_spin_lock_init(&vdev->dqbuf_q.lock);
+	osal_spin_lock_init(&vdev->event_q.lock);
+
+	osal_wait_init(&vdev->isp_event_wait_q);
+	osal_wait_init(&vdev->isp_dbg_wait_q);
+
+	osal_atomic_set(&vdev->state, E_STATE_DEFAULT);
+}
+
+static void vi_init_resources(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t i = 0, j = 0;
+
+	for (i = 0; i < ISP_PRERAW_MAX; i++) {
+		osal_spin_lock_init(&ctx->csi_bufpool[i].pre_fe_sts_lock);
+		osal_wait_init(&vdev->isp_int_wait_q[i]);
+		osal_wait_init(&vdev->isp_ai_wait_q[i]);
+
+		for (j = 0; j < ISP_FE_CHN_MAX; j++) {
+			isp_buf_init(&vdev->pre_fe_out_q[i][j]);
+			vdev->pre_fe_out_q[i][j].raw_num = i;
+
+			isp_buf_init(&vdev->pre_ai_isp_in_q[i][j]);
+			vdev->pre_ai_isp_in_q[i][j].raw_num = i;
+
+			isp_buf_init(&vdev->pre_ai_isp_out_q[i][j]);
+			vdev->pre_ai_isp_out_q[i][j].raw_num = i;
+
+			isp_buf_init(&vdev->raw_dump[i].buf_q[j]);
+			vdev->raw_dump[i].buf_q[j].raw_num = i;
+
+			isp_buf_init(&vdev->raw_dump[i].buf_dq[j]);
+			vdev->raw_dump[i].buf_dq[j].raw_num = i;
+			vdev->raw_dump[i].buf_dq[j].depth = 1;
+		}
+	}
+
+	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
+		isp_buf_init(&vdev->postraw_wdr_in_q[i]);
+	}
+
+	isp_buf_init(&vdev->postraw_in_q);
+	isp_raw_dump_init(vdev);
+
+	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
+		osal_spin_lock_init(&ctx->isp_bufpool[i].post_sts_lock);
+
+		for (j = 0; j < VI_MAX_CHN_NUM; ++j) {
+			osal_mutex_init(&vdev->mesh[i][j].lock);
+			osal_atomic_set(&vdev->mesh[i][j].gdc_flag, 0);
+
+			osal_spin_lock_init(&vdev->qbuf_q[i][j].lock);
+			OSAL_INIT_LIST_HEAD(&vdev->qbuf_q[i][j].list);
+			vdev->qbuf_q[i][j].num = 0;
+		}
+	}
+}
+
+static void vi_deinit_resources(struct vi_dev *vdev)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	int i = 0, j = 0;
+
+	isp_raw_dump_deinit(vdev);
+
+	for (i = 0; i < ISP_PRERAW_MAX; i++) {
+		osal_spin_lock_destroy(&ctx->csi_bufpool[i].pre_fe_sts_lock);
+		osal_wait_destroy(&vdev->isp_int_wait_q[i]);
+		osal_wait_destroy(&vdev->isp_ai_wait_q[i]);
+
+		for (j = 0; j < ISP_FE_CHN_MAX; j++) {
+			isp_buf_destroy(&vdev->pre_fe_out_q[i][j]);
+			isp_buf_destroy(&vdev->pre_ai_isp_in_q[i][j]);
+			isp_buf_destroy(&vdev->pre_ai_isp_out_q[i][j]);
+			isp_buf_destroy(&vdev->raw_dump[i].buf_q[j]);
+			isp_buf_destroy(&vdev->raw_dump[i].buf_dq[j]);
+		}
+	}
+
+	for (i = 0; i < VI_MAX_PIPE_NUM; i++) {
+		for (j = 0; j < VI_MAX_CHN_NUM; j++) {
+			osal_mutex_destroy(&vdev->mesh[i][j].lock);
+			osal_spin_lock_destroy(&vdev->qbuf_q[i][j].lock);
+		}
+
+		osal_spin_lock_destroy(&ctx->isp_bufpool[i].post_sts_lock);
+	}
+
+	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
+		isp_buf_destroy(&vdev->postraw_wdr_in_q[i]);
+	}
+
+	isp_buf_destroy(&vdev->postraw_in_q);
+}
+
+int vi_create_instance(struct vi_dev *vdev)
 {
 	int ret = 0;
 
@@ -5271,6 +5305,8 @@ int vi_create_instance(struct sop_vi_dev *vdev)
 	vi_set_base_addr(vdev->reg_base);
 
 	_vi_init_param(vdev);
+
+	vi_init_resources(vdev);
 
 	ret = vi_create_thread(vdev, E_VI_TH_PRERAW);
 	if (ret) {
@@ -5309,10 +5345,10 @@ err_create_preraw:
 	return ret;
 }
 
-int vi_destroy_instance(struct sop_vi_dev *vdev)
+int vi_destroy_instance(struct vi_dev *vdev)
 {
 	int ret = 0, i = 0;
-	struct sop_vi_ctx *vi_ctx = (struct sop_vi_ctx *)(vdev->shared_mem);
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 
 	if (!vdev) {
 		vi_pr(VI_ERR, "invalid data\n");
@@ -5323,9 +5359,11 @@ int vi_destroy_instance(struct sop_vi_dev *vdev)
 		vi_destroy_thread(vdev, i);
 	}
 
+	vi_deinit_resources(vdev);
+
 	for (i = 0; i < ISP_PRERAW_MAX; i++) {
 		sync_task_exit(i);
-		osal_spin_lock_destroy(&snr_node_lock[i]);
+		osal_spin_lock_destroy(&vdev->isp_snr_cfg[i].lock);
 	}
 
 	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
@@ -5338,10 +5376,9 @@ int vi_destroy_instance(struct sop_vi_dev *vdev)
 			osal_mutex_destroy(&vi_ctx->pipe_lock[i]);
 	}
 
-	osal_spin_lock_destroy(&raw_num_lock);
-	osal_spin_lock_destroy(&dq_lock);
+	osal_spin_lock_destroy(&vdev->pre_raw_num_q.lock);
+	osal_spin_lock_destroy(&vdev->dqbuf_q.lock);
 	osal_spin_lock_destroy(&vdev->event_q.lock);
-	osal_spin_lock_destroy(&vdev->qbuf_lock);
 
 	osal_wait_destroy(&vdev->isp_event_wait_q);
 	osal_wait_destroy(&vdev->isp_dbg_wait_q);

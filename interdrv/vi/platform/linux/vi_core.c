@@ -24,7 +24,7 @@
 #include "base_cb.h"
 #include "vi_common.h"
 #include "vi_defines.h"
-#include "vi_interfaces.h"
+#include "vi.h"
 #include "vi_ioctl.h"
 #include "vi_ctx.h"
 #include "proc/vi_proc.h"
@@ -61,7 +61,7 @@ static int _vi_clk_ctrl(struct platform_vi_dev *vi_dev, u8 enable)
 {
 	u8 i = 0;
 	int rc = 0;
-	struct sop_vi_dev *vdev = &vi_dev->vdev;
+	struct vi_dev *vdev = &vi_dev->vdev;
 
 	for (i = 0; i < ARRAY_SIZE(vdev->clk_isp); ++i) {
 		if (vdev->clk_isp[i]) {
@@ -117,7 +117,7 @@ int vi_open(struct inode *inode, struct file *file)
 
 		_vi_clk_ctrl(vi_dev, true);
 
-		vi_sw_init(&vi_dev->vdev);
+		vi_sw_reset(&vi_dev->vdev);
 
 		vi_pr(VI_INFO, "-\n");
 	}
@@ -151,7 +151,7 @@ int vi_release(struct inode *inode, struct file *file)
 int vi_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct platform_vi_dev *vi_dev = file->private_data;
-	struct sop_vi_dev *vdev = &vi_dev->vdev;
+	struct vi_dev *vdev = &vi_dev->vdev;
 	unsigned long vm_start = vma->vm_start;
 	unsigned int vm_size = vma->vm_end - vma->vm_start;
 	unsigned int offset = vma->vm_pgoff << PAGE_SHIFT;
@@ -178,7 +178,7 @@ int vi_mmap(struct file *file, struct vm_area_struct *vma)
 unsigned int vi_poll(struct file *file, struct poll_table_struct *wait)
 {
 	struct platform_vi_dev *dev = file->private_data;
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct vi_dev *vdev = &dev->vdev;
 	struct isp_event_q *event_q = &vdev->event_q;
 	unsigned long req_events = poll_requested_events(wait);
 	unsigned int res = 0;
@@ -300,7 +300,7 @@ static long vi_core_ioctl(struct file *file, u_int cmd, u_long arg)
 {
 	long	ret = 0;
 	struct platform_vi_dev *dev = file->private_data;
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct vi_dev *vdev = &dev->vdev;
 	struct	vi_ext_control ext_ctrl;
 	struct	vi_ctrl ctrl;
 
@@ -381,7 +381,7 @@ static int vi_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_VI);
 }
 
-static int vi_core_register_cb(struct sop_vi_dev *dev)
+static int vi_core_register_cb(struct vi_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -394,7 +394,7 @@ static int vi_core_register_cb(struct sop_vi_dev *dev)
 
 static irqreturn_t vi_core_isr(int irq, void *priv)
 {
-	struct sop_vi_dev *vdev = priv;
+	struct vi_dev *vdev = priv;
 
 	vi_irq_handler(vdev);
 
@@ -482,7 +482,7 @@ static int vi_core_clk_deinit(struct platform_vi_dev *vi_dev)
 static int vi_core_probe(struct platform_device *pdev)
 {
 	struct platform_vi_dev *vi_dev;
-	struct sop_vi_dev *vdev;
+	struct vi_dev *vdev;
 	struct resource *res;
 	int ret = 0;
 
@@ -599,7 +599,7 @@ static int vi_core_remove(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct platform_vi_dev *vi_dev = dev_get_drvdata(&pdev->dev);
-	struct sop_vi_dev *vdev = &vi_dev->vdev;
+	struct vi_dev *vdev = &vi_dev->vdev;
 
 	ret = vi_destroy_instance(vdev);
 	if (ret) {
@@ -668,7 +668,7 @@ static int vi_core_resume(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct platform_vi_dev *dev = dev_get_drvdata(&pdev->dev);
-	struct sop_vi_dev *vdev = NULL;
+	struct vi_dev *vdev = NULL;
 
 	if (!dev) {
 		vi_pr(VI_ERR, "VI device is not initialized!\n");

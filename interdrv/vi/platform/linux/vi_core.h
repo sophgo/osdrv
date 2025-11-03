@@ -11,7 +11,7 @@ struct platform_vi_dev {
 	dev_t				cdev_id;
 	atomic_t			dev_open_cnt;
 
-	struct sop_vi_dev		vdev;
+	struct vi_dev		vdev;
 };
 
 #endif

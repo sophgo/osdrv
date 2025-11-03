@@ -2,7 +2,7 @@
 #include "base_cb.h"
 #include "vi_common.h"
 #include "vi_defines.h"
-#include "vi_interfaces.h"
+#include "vi.h"
 #include "vi_ioctl.h"
 #include "vi_ctx.h"
 #include "proc/vi_proc.h"
@@ -40,7 +40,7 @@ static int _vi_clk_ctrl(struct platform_vi_dev *vi_dev, u8 enable)
 {
 	u8 i = 0;
 	int rc = 0;
-	struct sop_vi_dev *vdev = &vi_dev->vdev;
+	struct vi_dev *vdev = &vi_dev->vdev;
 
 	for (i = 0; i < ARRAY_SIZE(vdev->clk_isp); ++i) {
 		if (vdev->clk_isp[i]) {
@@ -94,7 +94,7 @@ int driver_vi_open(void)
 
 		_vi_clk_ctrl(vi_dev, true);
 
-		vi_sw_init(&vi_dev->vdev);
+		vi_sw_reset(&vi_dev->vdev);
 
 		vi_pr(VI_INFO, "-\n");
 	}
@@ -132,7 +132,7 @@ int driver_vi_release(void)
 
 static int vi_event_wait_cond_func(const void *param)
 {
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 	struct isp_event_q *event_q = &vdev->event_q;
 
 	return !osal_list_empty(&event_q->list);
@@ -141,7 +141,7 @@ static int vi_event_wait_cond_func(const void *param)
 static int vi_dbg_wait_cond_func(const void *param)
 {
 	int ret = 0;
-	struct sop_vi_dev *vdev = (struct sop_vi_dev *)param;
+	struct vi_dev *vdev = (struct vi_dev *)param;
 
 	if (osal_atomic_read(&vdev->isp_dbg_flag)) {
 		osal_atomic_set(&vdev->isp_dbg_flag, 0);
@@ -155,7 +155,7 @@ int driver_vi_poll(enum poll_type type)
 {
 	int ret = 0;
 	struct platform_vi_dev *dev = g_vi_dev;
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct vi_dev *vdev = &dev->vdev;
 
 	switch (type) {
 	case POLL_TYPE_EVENT:
@@ -258,7 +258,7 @@ long driver_vi_ioctl(unsigned int cmd, unsigned long arg)
 {
 	long	ret = 0;
 	struct platform_vi_dev *dev = g_vi_dev;
-	struct sop_vi_dev *vdev = &dev->vdev;
+	struct vi_dev *vdev = &dev->vdev;
 	struct vi_ext_control ext_ctrl;
 	struct vi_ctrl ctrl;
 
@@ -296,7 +296,7 @@ static int vi_core_rm_cb(void)
 	return base_rm_module_cb(E_MODULE_VI);
 }
 
-static int vi_core_register_cb(struct sop_vi_dev *dev)
+static int vi_core_register_cb(struct vi_dev *dev)
 {
 	struct base_m_cb_info reg_cb;
 
@@ -309,7 +309,7 @@ static int vi_core_register_cb(struct sop_vi_dev *dev)
 
 static void vi_core_isr(int irq, void *priv)
 {
-	struct sop_vi_dev *vdev = priv;
+	struct vi_dev *vdev = priv;
 
 	vi_irq_handler(vdev);
 }
@@ -354,7 +354,7 @@ static int vi_core_clk_deinit(struct platform_vi_dev *vi_dev)
 
 int driver_vi_init(void)
 {
-	struct sop_vi_dev *vdev;
+	struct vi_dev *vdev;
 	int ret = 0;
 
 	vi_pr(VI_WARN, "+\n");
@@ -437,7 +437,7 @@ int driver_vi_exit(void)
 {
 	int ret = 0;
 	struct platform_vi_dev *vi_dev = g_vi_dev;
-	struct sop_vi_dev *vdev = &vi_dev->vdev;
+	struct vi_dev *vdev = &vi_dev->vdev;
 
 	if (!vi_dev) {
 		vi_pr(VI_ERR, "VI device is not initialized!\n");
@@ -509,7 +509,7 @@ int vi_core_resume(void)
 {
 	int ret = 0;
 	struct platform_vi_dev *dev = g_vi_dev;
-	struct sop_vi_dev *vdev = NULL;
+	struct vi_dev *vdev = NULL;
 
 	if (!dev) {
 		vi_pr(VI_ERR, "VI device is not initialized!\n");
