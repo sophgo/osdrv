@@ -21,6 +21,7 @@
 #include "venc_help.h"
 #include "venc_rc.h"
 #include "datastructure.h"
+#include "cdma.h"
 
 extern vb_blk vb_phys_addr2handle(uint64_t u64PhyAddr);
 extern wait_queue_head_t tVencWaitQueue[];
@@ -161,6 +162,7 @@ typedef struct encoder_handle
     unsigned int bs_buf_size;
     BOOL use_extern_bs_buf;
     PhysicalAddress extern_bs_addr;
+    FrameBuffer *framebuf_list;
 } ENCODER_HANDLE;
 
 static int get_vpu_rcmode(int cvi_rcmode)
@@ -608,8 +610,9 @@ static int alloc_bitstream_buf(void *handle)
     vpu_buffer_t vb_buffer;
     int i = 0;
     int ret = 0;
+    int bitstream_size = pst_handle->min_src_frame_count * VPU_ALIGN4096(pst_handle->open_param.bitstreamBufferSize);
 
-    if (pst_handle->use_extern_bs_buf) {
+    if (pst_handle->use_extern_bs_buf && CheckTopAddr(0, pst_handle->extern_bs_addr, bitstream_size)) {
         memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
         vb_buffer.size = VPU_ALIGN4096(pst_handle->open_param.bitstreamBufferSize);
         for (i = 0; i < pst_handle->min_src_frame_count; i++) {
@@ -1201,6 +1204,40 @@ static int thread_wait_interrupt(void *param)
     return 0;
 }
 
+static int venc_free_framebuffer(FrameBuffer *pst_fb)
+{
+    vpu_buffer_t vb_buffer;
+
+    if(pst_fb == NULL)
+        return -1;
+
+    if(pst_fb->stride == 0 || pst_fb->height == 0)
+        return -1;
+
+    if(pst_fb->bufY) {
+        vb_buffer.size = pst_fb->stride * pst_fb->height;
+        vb_buffer.phys_addr = pst_fb->bufY;
+        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+    }
+
+    if(pst_fb->bufCb) {
+        if(pst_fb->cbcrInterleave)
+            vb_buffer.size = pst_fb->stride * pst_fb->height / 2;
+        else
+            vb_buffer.size = pst_fb->stride * pst_fb->height / 4;
+        vb_buffer.phys_addr = pst_fb->bufCb;
+        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+    }
+
+    if(pst_fb->bufCr && !pst_fb->cbcrInterleave) {
+        vb_buffer.size = pst_fb->stride * pst_fb->height / 4;
+        vb_buffer.phys_addr = pst_fb->bufCr;
+        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+    }
+
+    return 0;
+}
+
 void internal_venc_init(void)
 {
     mutex_lock(&__venc_init_mutex);
@@ -1358,6 +1395,17 @@ int internal_venc_close(void *handle)
         pEncParam->vbVuiRbsp.phys_addr = 0UL;
     }
 
+    if(pst_handle->framebuf_list){
+        for(i = 0; i < pst_handle->min_recon_frame_count; i++) {
+            if(pst_handle->framebuf_list[i].bufY) {
+                venc_free_framebuffer(&pst_handle->framebuf_list[i]);
+                osal_memset(&pst_handle->framebuf_list[i], 0, sizeof(FrameBuffer));
+            }
+        }
+        osal_free(pst_handle->framebuf_list);
+        pst_handle->framebuf_list = NULL;
+    }
+
     Queue_Destroy(pst_handle->stream_packs);
     Queue_Destroy(pst_handle->free_stream_buffer);
     Queue_Destroy(pst_handle->customMapBuffer);
@@ -1499,6 +1547,72 @@ int venc_get_encode_header(void *handle, void *arg)
     return ret;
 }
 
+static int venc_copy_framebuf(FrameBuffer *framebuf_list, FrameBuffer *src_fb)
+{
+    vpu_buffer_t vb_buffer;
+    struct cdma_1d_param param1d;
+    int y_size = src_fb->stride * src_fb->height;
+
+    // copy Y buffer
+    if(framebuf_list->bufY == NULL) {
+        memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
+        vb_buffer.size = y_size;
+        vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
+        framebuf_list->bufY = vb_buffer.phys_addr;
+    }
+    param1d.data_type = CDMA_DATA_TYPE_8BIT;
+    param1d.src_addr = src_fb->bufY;
+    param1d.dst_addr = framebuf_list->bufY;
+    param1d.len = y_size;
+    cdma_copy1d(&param1d);
+    src_fb->bufY = framebuf_list->bufY;
+    VLOG(INFO, "copy Y data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
+
+    // copy Cb\Cr buffer
+    if(!src_fb->cbcrInterleave) {
+        if(framebuf_list->bufCb == NULL) {
+            vb_buffer.size = y_size / 4;
+            vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
+            framebuf_list->bufCb = vb_buffer.phys_addr;
+        }
+        param1d.src_addr = src_fb->bufCb;
+        param1d.dst_addr = framebuf_list->bufCb;
+        param1d.len = y_size / 4;
+        cdma_copy1d(&param1d);
+        src_fb->bufCb = framebuf_list->bufCb;
+        VLOG(INFO, "copy Cb data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
+
+        if(framebuf_list->bufCr == NULL) {
+            vb_buffer.size = y_size / 4;
+            vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
+            framebuf_list->bufCr = vb_buffer.phys_addr;
+        }
+        param1d.src_addr = src_fb->bufCr;
+        param1d.dst_addr = framebuf_list->bufCr;
+        param1d.len = y_size / 4;
+        cdma_copy1d(&param1d);
+        src_fb->bufCr = framebuf_list->bufCr;
+        VLOG(INFO, "copy Cr data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
+    }
+    else {
+        if(framebuf_list->bufCb == NULL) {
+            vb_buffer.size = y_size / 2;
+            vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
+            framebuf_list->bufCb = vb_buffer.phys_addr;
+            framebuf_list->bufCr = 0;
+        }
+        param1d.src_addr = src_fb->bufCb;
+        param1d.dst_addr = framebuf_list->bufCb;
+        param1d.len = y_size / 2;
+        cdma_copy1d(&param1d);
+        src_fb->bufCb = framebuf_list->bufCb;
+        src_fb->bufCr = framebuf_list->bufCr;
+        VLOG(INFO, "copy Cb data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
+    }
+
+    return 0;
+}
+
 static int venc_build_enc_param(ENCODER_HANDLE *pst_handle, EncOnePicCfg *pPicCfg
                                 , FrameBuffer *pst_fb, EncParam *pst_enc_param)
 {
@@ -1506,11 +1620,13 @@ static int venc_build_enc_param(ENCODER_HANDLE *pst_handle, EncOnePicCfg *pPicCf
     PhysicalAddress *customMapAddr = NULL;
     drv_enc_param *pEncParam = &pst_handle->enc_param;
     int src_idx;
+    int y_szie, cb_szie;
 
     pst_fb->bufY = pPicCfg->phyAddrY;
     pst_fb->bufCb = pPicCfg->phyAddrCb;
     pst_fb->bufCr = pPicCfg->phyAddrCr;
     pst_fb->stride = pPicCfg->stride;
+    pst_fb->height = pPicCfg->height;
     pst_fb->cbcrInterleave = pPicCfg->cbcrInterleave;
     pst_fb->nv21 = pPicCfg->nv21;
 
@@ -1543,6 +1659,23 @@ static int venc_build_enc_param(ENCODER_HANDLE *pst_handle, EncOnePicCfg *pPicCf
         pst_handle->input_frame[src_idx].pts = pPicCfg->u64Pts;
         pst_handle->input_frame[src_idx].idx = pst_handle->frame_idx;
         pst_handle->input_frame[src_idx].custom_map_addr = pEncParam->customMapOpt.addrCustomMap;
+    }
+
+    y_szie = pst_fb->stride * pst_fb->height;
+    if(pst_fb->cbcrInterleave)
+        cb_szie = pst_fb->stride * pst_fb->height / 2;
+    else
+        cb_szie = pst_fb->stride * pst_fb->height / 4;
+    if(!CheckTopAddr(0, pst_fb->bufY, y_szie) ||
+        !CheckTopAddr(0, pst_fb->bufCb, cb_szie) ||
+        (pst_fb->cbcrInterleave ? 0 : !CheckTopAddr(0, pst_fb->bufCr, cb_szie)))
+    {
+        if(pst_handle->framebuf_list == NULL) {
+            pst_handle->framebuf_list = osal_malloc((pst_handle->min_src_frame_count + 1) * sizeof(FrameBuffer));
+            osal_memset(pst_handle->framebuf_list, 0, (pst_handle->min_src_frame_count + 1) * sizeof(FrameBuffer));
+        }
+
+        venc_copy_framebuf(&pst_handle->framebuf_list[src_idx], pst_fb);
     }
 
     pst_enc_param->sourceFrame = pst_fb;

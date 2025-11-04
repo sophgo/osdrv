@@ -909,6 +909,7 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
             if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size)) {
                 break;
             }
+            vdb.size = 0;
         }
     }
 

@@ -99,7 +99,7 @@ typedef struct decoder_handle{
     DISPLAY_MODE display_mode;
     char decode_one_frame;
     int frame_num;
-    int bsBufFlag;
+    unsigned char bsBufFlag[4];
     int frameBufFlag;
     int emptyBufSize;
     int wait_decoded_finish;
@@ -290,6 +290,9 @@ static int alloc_framebuffer(void *pHandle)
         else
             pst_handle->numOfDecwtl = 0;
     }
+    VLOG(INFO, "numOfDecFbc:%d numOfDecwtl:%d minFrameBufferCount:%d frame_buffer_count:%d cmd_queue_depth:%d\n",
+        pst_handle->numOfDecFbc, pst_handle->numOfDecwtl,
+        pst_handle->seq_info->minFrameBufferCount, pst_handle->frame_buffer_count, pst_handle->cmd_queue_depth);
 
     format = (pst_handle->seq_info->lumaBitdepth > 8 ||
               pst_handle->seq_info->chromaBitdepth > 8) ?
@@ -314,7 +317,7 @@ static int alloc_framebuffer(void *pHandle)
             }
         }
         else {
-            blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_STATIC_POOLID, 1);
+            blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_EXTERNAL_POOLID, 1);
         }
 
         if (blk == VB_INVALID_HANDLE)
@@ -371,7 +374,7 @@ static int alloc_framebuffer(void *pHandle)
                 }
             }
             else {
-                blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_STATIC_POOLID, 1);
+                blk = vb_create_block(pst_handle->pst_frame_buffer[i].bufY, NULL, VB_EXTERNAL_POOLID, 1);
             }
 
             if (blk == VB_INVALID_HANDLE)
@@ -675,7 +678,6 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
     SecAxiUse  sec_axi_info = {0};
     int cycle_per_tick = 256;
     unsigned int height_from_user, width_from_user;
-    int numOfDecFbc, numOfDecwtl;
 
     ret = VPU_WaitInterruptEx(pst_handle->handle, timeout);
     if (ret < 0) {
@@ -727,15 +729,8 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
                 return RETCODE_FAILURE;
             }
 
-            if (pst_handle->open_param->wtlEnable){
-                numOfDecFbc = pst_handle->seq_info->minFrameBufferCount + pst_handle->cmd_queue_depth;
-                numOfDecwtl = pst_handle->seq_info->frameBufDelay + pst_handle->frame_buffer_count + pst_handle->cmd_queue_depth;
-            }
-            else{
-                numOfDecFbc = pst_handle->seq_info->minFrameBufferCount + pst_handle->cmd_queue_depth + pst_handle->frame_buffer_count;
-                numOfDecwtl = 0;
-            }
-            if(pst_handle->numOfDecFbc < numOfDecFbc || pst_handle->numOfDecwtl < numOfDecwtl) {
+            if(pst_handle->numOfDecFbc < pst_handle->seq_info->minFrameBufferCount ||
+                pst_handle->numOfDecwtl < (pst_handle->open_param->wtlEnable ? pst_handle->seq_info->frameBufDelay : 0)) {
                 VLOG(ERR, "framebuffers cnt is less than the VPU minimum require. minFrameBufferCount:%d  frameBufDelayCount:%d\n",
                 pst_handle->seq_info->minFrameBufferCount, pst_handle->seq_info->frameBufDelay);
                 pst_handle->seq_status = SEQ_DECODE_FRAMEBUFFER_NOTENOUGH;
@@ -976,10 +971,13 @@ reinit:
     else
         vb_buffer.size = pst_handle->open_param->bitstreamBufferSize;
 
-    if (pInitDecCfg->bitstream_buffer == NULL)
-        pst_handle->bsBufFlag = 0;
-    else
-        pst_handle->bsBufFlag = 1;
+    osal_memset(pst_handle->bsBufFlag, 0, 4);
+    if (pInitDecCfg->bitstream_buffer != NULL) {
+        if(pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END)
+            osal_memset(pst_handle->bsBufFlag, 1, pst_handle->cmd_queue_depth);
+        else
+            pst_handle->bsBufFlag[0] = 1;
+    }
     if(pInitDecCfg->frame_buffer == NULL || pInitDecCfg->Ytable_buffer == NULL || pInitDecCfg->Ctable_buffer == NULL)
         pst_handle->frameBufFlag = 0;
     else
@@ -987,17 +985,25 @@ reinit:
 
     if (pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END) {
         for (i=0; i<pst_handle->cmd_queue_depth; i++) {
-            if(pst_handle->bsBufFlag == 0) {
-                vdi_allocate_dma_memory(core_idx, &vb_buffer, 0, 0);
+            if(pst_handle->bsBufFlag[i] == 0) {
+                vdi_allocate_dma_memory(core_idx, &vb_buffer, "DEC_BS", 0);
             }
             else {
                 buf_info = (buffer_info_s *)pInitDecCfg->bitstream_buffer;
-                vb_buffer.phys_addr = buf_info[i].phys_addr;
-                vb_buffer.size = buf_info[i].size;
-                vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
-                vb_buffer.base = vb_buffer.virt_addr;
-                vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+                if(CheckTopAddr(core_idx, buf_info[i].phys_addr, buf_info[i].size)) {
+                    vb_buffer.phys_addr = buf_info[i].phys_addr;
+                    vb_buffer.size = buf_info[i].size;
+                    vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
+                    vb_buffer.base = vb_buffer.virt_addr;
+                    vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+                }
+                else {
+                    vdi_allocate_dma_memory(core_idx, &vb_buffer, "DEC_BS", 0);
+                    pst_handle->bsBufFlag[i] = 0;
+                    VLOG(WARN, "core:%d Bitstream buf%d across 4G memory.\n", core_idx, i);
+                }
             }
+
             pst_handle->bitstream_buffer[i] = vb_buffer.phys_addr;
             Queue_Enqueue(pst_handle->free_src_buffer, &vb_buffer.phys_addr);
         }
@@ -1006,16 +1012,23 @@ reinit:
         pst_handle->open_param->bitstreamBuffer = 0;
 
     } else if (pst_handle->open_param->bitstreamMode == BS_MODE_INTERRUPT) {
-        if(pst_handle->bsBufFlag == 0) {
-            vdi_allocate_dma_memory(core_idx, &vb_buffer, 0, 0);
+        if(pst_handle->bsBufFlag[0] == 0) {
+            vdi_allocate_dma_memory(core_idx, &vb_buffer, "DEC_BS", 0);
         }
         else {
             buf_info = (buffer_info_s *)pInitDecCfg->bitstream_buffer;
-            vb_buffer.phys_addr = buf_info[0].phys_addr;
-            vb_buffer.size = buf_info[0].size;
-            vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
-            vb_buffer.base = vb_buffer.virt_addr;
-            vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+            if(CheckTopAddr(core_idx, buf_info[0].phys_addr, buf_info[0].size)) {
+                vb_buffer.phys_addr = buf_info[0].phys_addr;
+                vb_buffer.size = buf_info[0].size;
+                vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
+                vb_buffer.base = vb_buffer.virt_addr;
+                vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+            }
+            else {
+                vdi_allocate_dma_memory(core_idx, &vb_buffer, "DEC_BS", 0);
+                pst_handle->bsBufFlag[0] = 0;
+                VLOG(WARN, "core:%d Bitstream buf0 across 4G memory.\n", core_idx);
+            }
         }
         pst_handle->bitstream_buffer[0] = vb_buffer.phys_addr;
         pst_handle->bitstream_size = vb_buffer.size;
@@ -1075,6 +1088,7 @@ reinit:
 fail:
 
     VPU_DecReleaseCore(core_idx);
+    VPU_DeInit(core_idx);
 
     if (pst_handle == NULL)
         return ret;
@@ -1083,7 +1097,7 @@ fail:
         vb_buffer.size = pst_handle->open_param->bitstreamBufferSize;
         vb_buffer.phys_addr = pst_handle->bitstream_buffer[i];
         if (vb_buffer.phys_addr) {
-            if(pst_handle->bsBufFlag == 0)
+            if(pst_handle->bsBufFlag[i] == 0)
                 vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
             else
                 vdi_dettach_dma_memory(pst_handle->core_idx, &vb_buffer);
@@ -1141,7 +1155,7 @@ int vdec_close(void *pHandle)
         vb.size = pst_handle->bitstream_size;
         vb.phys_addr = pst_handle->bitstream_buffer[i];
         if (vb.phys_addr) {
-            if(pst_handle->bsBufFlag == 0)
+            if(pst_handle->bsBufFlag[i] == 0)
                 vdi_free_dma_memory(pst_handle->core_idx, &vb, 0, 0);
             else
                 vdi_dettach_dma_memory(pst_handle->core_idx, &vb);

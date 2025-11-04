@@ -160,6 +160,7 @@ typedef struct _EncOnePicCfg_ {
     PhysicalAddress phyAddrCb;
     PhysicalAddress phyAddrCr;
     int stride;
+    int height;
     int cbcrInterleave;
     int nv21;
     int picMotionLevel;

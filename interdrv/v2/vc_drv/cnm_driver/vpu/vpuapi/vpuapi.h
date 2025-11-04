@@ -7150,6 +7150,7 @@ RetCode VPU_EncSetWrPtr(
 PhysicalAddress VPU_MapToAddr40Bit(int coreIdx, unsigned int Addr);
 int VPU_DecRequestCore(void);
 int VPU_DecReleaseCore(unsigned int core_idx);
+Int32 CheckTopAddr(Uint32 coreIdx, Uint64 addr, Uint32 size);
 
 #ifdef __cplusplus
 }

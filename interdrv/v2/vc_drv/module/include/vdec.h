@@ -8,7 +8,7 @@
 
 #define MAX_DEC_PIC_WIDTH               4096
 #define MAX_DEC_PIC_HEIGHT              2304
-
+#define DEC_TIMEOUT (-3)
 
 typedef struct _vdec_dbg_ {
     int startFn;

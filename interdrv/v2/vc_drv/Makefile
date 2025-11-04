@@ -10,6 +10,7 @@ VC_DRV_HEADER := -I$(PWD)									\
 COMMON_DRV_HEADER := -I$(PWD)/../include/common/uapi 			\
 					-I$(PWD)/../include/chip/$(CVIARCH_L)/uapi/ \
 					-I$(PWD)/../include/common/kapi/ 			\
+					-I$(PWD)/../include/chip/soph/kapi 			\
 					-I$(PWD)/../base/
 
 JPU_INC := -I$(PWD)/cnm_driver/jpeg/jpuapi \

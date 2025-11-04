@@ -46,6 +46,22 @@ static RetCode CheckDecInstanceValidity(CodecInst* pCodecInst)
     return RETCODE_SUCCESS;//ProductVpuDecCheckCapability(pCodecInst);
 }
 
+Int32 CheckTopAddr(Uint32 coreIdx, Uint64 addr, Uint32 size)
+{
+    int ext_addr = vdi_get_ddr_map(coreIdx);
+    int top_addr1, top_addr2;
+
+    if(addr == NULL)
+        return -1;
+
+    top_addr1 = addr >> 32 & 0xffff;
+    top_addr2 = (addr + size - 1) >> 32 & 0xffff;
+
+    if(ext_addr == top_addr1 && ext_addr == top_addr2)
+        return 1;
+
+    return 0;
+}
 
 Int32 VPU_IsInit(Uint32 coreIdx)
 {

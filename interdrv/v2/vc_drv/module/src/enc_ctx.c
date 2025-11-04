@@ -341,8 +341,10 @@ static int jpege_enc_one_pic(void *ctx,
         //otherwise parallel / multiple jpg encode will failure
         //retry, workaround for https://jira.sophgo.com/browse/SE9SW-1454
         status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-        if (status == ENC_TIMEOUT)
+        if (status == ENC_TIMEOUT) {
+            DRV_VENC_ERR("Failed to retry jpeg_enc_send_frame.\n");
             return DRV_ERR_VENC_BUSY;
+        }
     }
 
     if (status != 0) {
@@ -862,6 +864,7 @@ static int vid_enc_enc_one_pic(void *ctx,
     pPicCfg->src_end = pstFrame->video_frame.srcend;
     pPicCfg->src_idx = pstFrame->video_frame.frame_idx;
     pPicCfg->stride = psi->strideY;
+    pPicCfg->height = psi->height;
     switch (pstFrame->video_frame.pixel_format) {
     case PIXEL_FORMAT_NV12:
         pPicCfg->cbcrInterleave = 1;

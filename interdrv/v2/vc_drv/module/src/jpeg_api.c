@@ -15,6 +15,7 @@
 #include "bind.h"
 #include "ion.h"
 #include "datastructure.h"
+#include "cdma.h"
 
 #ifdef MAX
 #undef MAX
@@ -62,6 +63,9 @@ typedef struct {
     JpgEncHandle        handle;
     jpu_buffer_t        stream_buffer;
     jpu_buffer_t        header_buffer;
+    jpu_buffer_t        cross4g_Y_buffer; // only be used for transfer when soure buffer is in different 4G memory region
+    jpu_buffer_t        cross4g_Cb_buffer;
+    jpu_buffer_t        cross4g_Cr_buffer;
     jpeg_stream_info    stream_buffer_ex;//for stream buffer for
     JpgEncOpenParam     open_param;
     JpgEncParamSet      header_param;
@@ -552,6 +556,12 @@ static void _calc_slice_height(JpgEncOpenParam* open_param, Uint32 slice_height)
 
 }
 
+static int is_cross_4g(uint64_t addr, uint64_t size, uint64_t ref_addr) {
+    if(addr == NULL || ref_addr == NULL)
+        return 0;
+    return ((addr >> 32) != (ref_addr >> 32)) || ((addr >> 32) != ((addr + size) >> 32));
+}
+
 int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
 {
     JpgRet ret = JPG_RET_FAILURE;
@@ -608,7 +618,8 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
     pst_handle->open_param.qfactor_max = config.u.enc.qmax;
     pst_handle->stream_buffer.size = pst_handle->config->bsSize;
 
-    if(!config.u.enc.external_bs_addr){
+    if(!config.u.enc.external_bs_addr ||
+        is_cross_4g(config.u.enc.external_bs_addr, pst_handle->stream_buffer.size, config.u.enc.external_bs_addr)){
         pst_handle->stream_buffer.is_cached = 0;
         if (jdi_allocate_dma_memory(&pst_handle->stream_buffer) < 0) {
             JLOG(ERR, "fail to allocate bitstream buffer\n" );
@@ -680,7 +691,7 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
 ERR_ENC_INIT:
 
     if (pst_handle->stream_buffer.phys_addr) {
-        if(config.u.enc.external_bs_addr)
+        if(pst_handle->stream_buffer.base == 0)
             jdi_remove_external_memory(&pst_handle->stream_buffer);
         else
             jdi_free_dma_memory(&pst_handle->stream_buffer);
@@ -719,7 +730,8 @@ int jpeg_dec_open(drv_jpg_handle handle, drv_jpg_config config)
     if (pst_handle->disp_frame == NULL)
         return ret;
 
-    if(config.u.dec.external_bs_addr && config.u.dec.external_bs_size)
+    if(config.u.dec.external_bs_addr && config.u.dec.external_bs_size  &&
+        !is_cross_4g(config.u.dec.external_bs_addr, config.u.dec.external_bs_size, config.u.dec.external_bs_addr))
     {
         memset(&pst_handle->stream_buffer, 0, sizeof(jpu_buffer_t));
         pst_handle->stream_buffer.phys_addr = config.u.dec.external_bs_addr;
@@ -777,7 +789,7 @@ int jpeg_dec_open(drv_jpg_handle handle, drv_jpg_config config)
 ERR_DEC_JPU_OPEN:
 
     if (pst_handle->stream_buffer.phys_addr) {
-        if(config.u.dec.external_bs_addr && config.u.dec.external_bs_size)
+        if(pst_handle->stream_buffer.base == 0)
             jdi_remove_external_memory(&pst_handle->stream_buffer);
         else
             jdi_free_dma_memory(&pst_handle->stream_buffer);
@@ -844,6 +856,15 @@ int jpeg_enc_close(drv_jpg_handle handle)
 
     if(pst_handle->header_buffer.base)
         jdi_free_dma_memory(&pst_handle->header_buffer);
+
+    if(pst_handle->cross4g_Y_buffer.base)
+        jdi_free_dma_memory(&pst_handle->cross4g_Y_buffer);
+
+    if(pst_handle->cross4g_Cb_buffer.base)
+        jdi_free_dma_memory(&pst_handle->cross4g_Cb_buffer);
+
+    if(pst_handle->cross4g_Cr_buffer.base)
+        jdi_free_dma_memory(&pst_handle->cross4g_Cr_buffer);
 
     if(pst_handle->stream_buffer.base)
         jdi_free_dma_memory(&pst_handle->stream_buffer);
@@ -1030,6 +1051,26 @@ static int _jpeg_dump_register(int core_idx, int inst_idx)
 
     return 0;
 }
+
+static int get_frame_luma_size(DRVFRAMEBUF *data)
+{
+    return data->strideY * data->height;
+}
+
+static int get_frame_chroma_size(DRVFRAMEBUF *data)
+{
+    switch (data->format) {
+        case DRV_FORMAT_420:
+            return data->strideC * data->height / 2;
+        case DRV_FORMAT_422:
+        case DRV_FORMAT_224:
+        case DRV_FORMAT_444:
+            return data->strideC * data->height;
+        default:
+            return 0;
+    }
+}
+
 /* send jpu data to decode or encode */
 int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
 {
@@ -1039,6 +1080,8 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     int int_reason = 0;
     JPEG_ENC_HANDLE *pst_handle;
     int enc_timeout;
+    int luma_size, chroma_size;
+    struct cdma_1d_param param1d;
 
     if (NULL == handle) {
         JLOG(ERR,"handle = NULL\n");
@@ -1080,9 +1123,80 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
         }
     }
 
-    source_buffer.bufY = data->vbY.phys_addr;
-    source_buffer.bufCb = data->vbCb.phys_addr;
-    source_buffer.bufCr = data->vbCr.phys_addr;
+    luma_size = get_frame_luma_size(data);
+    if(data->chromaInterleave == DRV_CBCR_SEPARATED)
+        chroma_size = get_frame_chroma_size(data);
+    else
+        chroma_size = get_frame_chroma_size(data) * 2;
+    /*  check the following conditions:
+        1. input framebuffer and stream buffer is in the same 4GB space
+        2. input framebuffer is crossing 4GB boundary,
+        we need to allocate a new buffer and copy the data to it before sending to JPU.
+    */
+    if(is_cross_4g(data->vbY.phys_addr, luma_size, pst_handle->stream_buffer.phys_addr) ||
+        is_cross_4g(data->vbCb.phys_addr, chroma_size, pst_handle->stream_buffer.phys_addr) ||
+        ((data->chromaInterleave == DRV_CBCR_SEPARATED) ? is_cross_4g(data->vbCr.phys_addr, chroma_size, pst_handle->stream_buffer.phys_addr) : 0))
+    {
+        JLOG(WARN, "source buffer and stream buffer are not in the same 4GB space. Need to allocate new buffer.\n");
+
+        /* copy luma buffer */
+        pst_handle->cross4g_Y_buffer.size = luma_size;
+        pst_handle->cross4g_Y_buffer.is_cached = 0;
+        if (jdi_allocate_dma_memory(&pst_handle->cross4g_Y_buffer) < 0) {
+            JLOG(ERR, "fail to allocate pst_handle->cross4g_Y_buffer size:%ld\n", pst_handle->cross4g_Y_buffer.size);
+            return JPG_RET_FAILURE;
+        }
+
+        param1d.data_type = CDMA_DATA_TYPE_8BIT;
+        param1d.src_addr = data->vbY.phys_addr;
+        param1d.dst_addr = pst_handle->cross4g_Y_buffer.phys_addr;
+        param1d.len = luma_size;
+
+        cdma_copy1d(&param1d);
+        source_buffer.bufY = pst_handle->cross4g_Y_buffer.phys_addr;
+
+        if(data->format != FORMAT_400) {
+            /* copy chorma buffer */
+            pst_handle->cross4g_Cb_buffer.size = chroma_size;
+            pst_handle->cross4g_Cb_buffer.is_cached = 0;
+            if (jdi_allocate_dma_memory(&pst_handle->cross4g_Cb_buffer) < 0) {
+                JLOG(ERR, "fail to allocate pst_handle->cross4g_Cb_buffer size:%ld\n", pst_handle->cross4g_Cb_buffer.size);
+                return JPG_RET_FAILURE;
+            }
+
+            param1d.data_type = CDMA_DATA_TYPE_8BIT;
+            param1d.src_addr = data->vbCb.phys_addr;
+            param1d.dst_addr = pst_handle->cross4g_Cb_buffer.phys_addr;
+            param1d.len = chroma_size;
+
+            cdma_copy1d(&param1d);
+            source_buffer.bufCb = pst_handle->cross4g_Cb_buffer.phys_addr;
+
+            if(data->chromaInterleave == DRV_CBCR_SEPARATED) {
+                pst_handle->cross4g_Cr_buffer.size = chroma_size;
+                pst_handle->cross4g_Cr_buffer.is_cached = 0;
+                if (jdi_allocate_dma_memory(&pst_handle->cross4g_Cr_buffer) < 0) {
+                    JLOG(ERR, "fail to allocate pst_handle->cross4g_temp_buffer size:%ld\n", pst_handle->cross4g_Cr_buffer.size);
+                    return JPG_RET_FAILURE;
+                }
+
+                param1d.data_type = CDMA_DATA_TYPE_8BIT;
+                param1d.src_addr = data->vbCr.phys_addr;
+                param1d.dst_addr = pst_handle->cross4g_Cr_buffer.phys_addr;
+                param1d.len = chroma_size;
+
+                cdma_copy1d(&param1d);
+                source_buffer.bufCr = pst_handle->cross4g_Cr_buffer.phys_addr;
+            }
+            else
+                source_buffer.bufCr = 0;
+        }
+    }
+    else {
+        source_buffer.bufY  = data->vbY.phys_addr;
+        source_buffer.bufCb = data->vbCb.phys_addr;
+        source_buffer.bufCr = data->vbCr.phys_addr;
+    }
     source_buffer.stride = data->strideY;
     source_buffer.strideC = data->strideC;
     source_buffer.format = data->format;
@@ -1111,7 +1225,7 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return -2; // ENC_TIMEOUT
+            return ENC_TIMEOUT; // ENC_TIMEOUT
         }
         if (int_reason == -2) {
             JLOG(ERR, "Interrupt occurred. but this interrupt is not for my instance enc\n");
@@ -1481,7 +1595,7 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
             JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return JPG_RET_FAILURE;
+            return DEC_TIMEOUT;
         }
 
         if (int_reason == -2) {

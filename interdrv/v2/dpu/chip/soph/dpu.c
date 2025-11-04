@@ -25,6 +25,10 @@
 #define EOF_WAIT_TIMEOUT_MS  10000
 #define HW_WAIT_TIMEOUT_MS  35
 
+#define DRAM_BASE_ONLINE_CHFH_H 0x2
+#define DRAM_BASE_ONLINE_CHFH_L 0x120000
+#define DRAM_BASE_FGS_CHFH_H 0x2
+#define DRAM_BASE_FGS_CHFH_L 0x17f000
 
 #define CTX_EVENT_WKUP       0x0001
 #define CTX_EVENT_EOF        0x0002
@@ -55,12 +59,20 @@ static unsigned int dram_base_right_l;
 static unsigned int dram_base_right_h;
 static unsigned int dram_base_chfh_l;
 static unsigned int dram_base_chfh_h;
+static struct semaphore g_dpu_core_sem;
 
 static unsigned long timeout;
 
 static struct dpu_dev_s *dpu_dev;
 static dpu_reg_s dpu_reg;
 static struct dpu_ctx_s *dpu_ctx[DPU_MAX_GRP_NUM] = { [0 ... DPU_MAX_GRP_NUM - 1] = NULL };
+
+struct dpu_edge_wait {
+	wait_queue_head_t wait;
+	unsigned char flag;
+};
+
+static struct dpu_edge_wait data;
 
 //Get Available Grp lock
 static struct mutex dpu_get_grp_lock;
@@ -697,8 +709,14 @@ void dpu_notify_isr_evt(void)
 					i, handler_ctx[i].hdl_state,
 					handler_ctx[i].events);
 	}
-
-	wake_up_interruptible(&dpu_dev->wait);
+	if (!dpu_ctx[0]->bm_scene)
+		wake_up_interruptible(&dpu_dev->wait);
+	else {
+		struct dpu_edge_wait *data = (struct dpu_edge_wait *)dpu_ctx[0]->data;
+		data->flag = 1;
+		wake_up(&data->wait);
+		// up(&g_dpu_core_sem);
+	}
 }
 
 // static int _vb_dqbuf(mmf_chn_s chn, enum chn_type_e chn_type, vb_blk *blk)
@@ -877,8 +895,6 @@ static unsigned char get_work_mask(struct dpu_ctx_s *ctx)
 			continue;
 		mask |= BIT(dpu_chn_id);
 	}
-	if (mask == 0)
-		return 0;
 
 	return mask;
 }
@@ -2512,6 +2528,10 @@ static int commit_hw_settings(dpu_grp working_grp)
 	}else if(dpu_ctx[working_grp]->grp_attr.dpu_mode == DPU_MODE_SGBM_FGS_ONLINE_MUX0 ||
 			 dpu_ctx[working_grp]->grp_attr.dpu_mode == DPU_MODE_SGBM_FGS_ONLINE_MUX1 ||
 			 dpu_ctx[working_grp]->grp_attr.dpu_mode == DPU_MODE_SGBM_FGS_ONLINE_MUX2 ){
+		if (dpu_ctx[0]->bm_scene) {
+			dram_base_chfh_h = DRAM_BASE_ONLINE_CHFH_H;
+			dram_base_chfh_l = DRAM_BASE_ONLINE_CHFH_L;
+		}
 		seg_len= dpu_reg.reg_dpu_img_width;
 		seg_num= dpu_reg.reg_dpu_img_height;
 		register_sgbm_ld1_ld(seg_len, seg_num,dram_base_left_h, \
@@ -2532,6 +2552,10 @@ static int commit_hw_settings(dpu_grp working_grp)
 		TRACE_DPU(DBG_INFO,"[%s]write fgs reg\n",__func__);
 	}else if(dpu_ctx[working_grp]->grp_attr.dpu_mode == DPU_MODE_FGS_MUX0 ||
 			 dpu_ctx[working_grp]->grp_attr.dpu_mode == DPU_MODE_FGS_MUX1 ){
+		if (dpu_ctx[0]->bm_scene) {
+			dram_base_chfh_h = DRAM_BASE_FGS_CHFH_H;
+			dram_base_chfh_l = DRAM_BASE_FGS_CHFH_L;
+		}
 		seg_len= dpu_reg.reg_dpu_fgs_img_width;
 		seg_num= dpu_reg.reg_dpu_fgs_img_height;
 		register_fgs_gx_ld(seg_len, seg_num,dram_base_left_h, \
@@ -3145,7 +3169,6 @@ static void dpu_handle_frame_done(struct dpu_handler_ctx_s *ctx)
 
 static void dpu_handle_offline(struct dpu_handler_ctx_s *ctx)
 {
-
 	struct timespec64 time;
 	unsigned int state;
 	unsigned long long duration64;
@@ -3459,8 +3482,119 @@ void dpu_init(void *arg)
 // TRACE_DPU(DBG_ERR,"base_ion_alloc fail! ret(%d)\n", ret);
 // return;
 // }
+	sema_init(&g_dpu_core_sem, DPU_IP_NUM);
 	TRACE_DPU(DBG_INFO, "phyaddr_chfh(0x%llx)", dpu_dev->phyaddr_chfh);
 	dpu_start_handler(dpu_dev);
+}
+
+int dpu_edge_send_frame(struct bm_dpu_cfg *cfg)
+{
+	unsigned int ret;
+	unsigned char working_mask = 0;
+	unsigned long long phyAddr_left;
+	unsigned long long phyAddr_right;
+	unsigned long long phyAddr_out;
+	unsigned long long phyAddr_out_btcost;
+	dpu_grp working_grp = cfg->grp_attr.dpu_grp_id;
+	if (working_grp >= DPU_MAX_GRP_NUM) {
+		TRACE_DPU(DBG_ERR, "Invalid working_grp %d\n", working_grp);
+		return -EINVAL;
+	}
+	init_waitqueue_head(&data.wait);
+	data.flag = 0;
+	if (!dpu_ctx[working_grp]) {
+		dpu_ctx[working_grp] = kzalloc(sizeof(struct dpu_ctx_s), GFP_KERNEL);
+		if (!dpu_ctx[working_grp]) {
+			TRACE_DPU(DBG_ERR, "dpu_ctx_s kzalloc fail.\n");
+			return ERR_DPU_NOMEM;
+		}
+	}
+	memset(dpu_ctx[working_grp], 0, sizeof(struct dpu_ctx_s));
+	dpu_ctx[working_grp]->data = (void *)&data;
+
+	mutex_init(&dpu_ctx[working_grp]->lock);
+	dpu_ctx[working_grp]->iscreated = TRUE;
+	dpu_ctx[working_grp]->bm_scene = TRUE;
+	dpu_ctx[working_grp]->chn_num = 1;
+	dpu_ctx[working_grp]->pixel_format = PIXEL_FORMAT_YUV_400 ;
+	dpu_ctx[working_grp]->cost_time_for_sec = 0 ;
+	dpu_ctx[working_grp]->frame_num = 0;
+	dpu_ctx[working_grp]->dpu_dev_id =0;
+	dpu_ctx[working_grp]->chfh_blk = VB_INVALID_HANDLE;
+	dpu_ctx[working_grp]->isstarted = TRUE;
+	dpu_ctx[working_grp]->grp_state = GRP_STATE_IDLE;
+	memcpy(&dpu_ctx[working_grp]->grp_attr, &(cfg->grp_attr.grp_attr), sizeof(dpu_ctx[working_grp]->grp_attr));
+
+	dpu_ctx[working_grp]->grp_work_wtatus.start_cnt ++;
+	// ktime_get_ts64(&ctx->time);
+	// down(&g_dpu_core_sem);
+
+	// sc's mask
+	working_mask = get_work_mask(dpu_ctx[working_grp]);
+
+	ret =dpu_reg_config(working_grp);
+	if(ret != SUCCESS){
+		TRACE_DPU(DBG_ERR, "grp(%d) dpu para config failed.\n", working_grp);
+
+		goto dpu_next_job;
+	}
+
+	phyAddr_left  = cfg->frame_set_cfg.src_left_frame.video_frame.phyaddr[0];
+	phyAddr_right = cfg->frame_set_cfg.src_right_frame.video_frame.phyaddr[0];
+	phyAddr_out = cfg->frame_get_cfg.video_frame.video_frame.phyaddr[0];
+	phyAddr_out_btcost = cfg->frame_get_cfg.video_frame.video_frame.phyaddr[1];
+
+	dram_base_out_l = phyAddr_out &(0xFFFFFFFF);
+    dram_base_out_h = phyAddr_out >> 32;
+    dram_base_out_btcost_l = phyAddr_out_btcost &(0xFFFFFFFF);
+    dram_base_out_btcost_h = phyAddr_out_btcost >> 32;
+    dram_base_left_l = phyAddr_left &(0xFFFFFFFF);
+    dram_base_left_h = phyAddr_left >> 32;
+    dram_base_right_l = phyAddr_right &(0xFFFFFFFF);
+    dram_base_right_h = phyAddr_right >> 32;
+
+	dpu_ctx[working_grp]->pixel_format = cfg->frame_set_cfg.src_left_frame.video_frame.pixel_format;
+
+	dpu_enable_clk();
+	dpu_reset();
+
+	commit_hw_settings(working_grp);
+	dpu_ctx[working_grp]->grp_state = GRP_STATE_HW_STARTED;
+	hw_start(working_grp);
+	dpu_dev->hw_busy= TRUE;
+
+	wait_event_timeout(data.wait, data.flag, msecs_to_jiffies(cfg->frame_get_cfg.millisec));
+	if (!data.flag) {
+		dpu_dev->hw_busy = FALSE;
+		goto dpu_next_job;
+	}
+	// mutex_unlock(&dpu_jobs[working_grp].lock);
+
+	// commit hw settings of this dpu-grp.
+	TRACE_DPU(DBG_INFO, "reg_base(0x%llx) .\n",reg_base );
+	TRACE_DPU(DBG_INFO, "reg_dma_sgbm_ld1(0x%llx) .\n",reg_base_sgbm_ld1_dma);
+	TRACE_DPU(DBG_INFO, "reg_dma_sgbm_ld2(0x%llx) .\n",reg_base_sgbm_ld2_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_sgbm_median_dma(0x%llx) .\n",reg_base_sgbm_median_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_sgbm_bf_dma(0x%llx) .\n",reg_base_sgbm_bf_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_fgs_gx_dma(0x%llx) .\n",reg_base_fgs_gx_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_fgs_ux_dma(0x%llx) .\n",reg_base_fgs_ux_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_fgs_chfh_st_dma(0x%llx) .\n",reg_base_fgs_chfh_st_dma);
+	TRACE_DPU(DBG_INFO, "reg_base_fgs_chfh_ld_dma(0x%llx) .\n",reg_base_fgs_chfh_ld_dma);
+
+	// TRACE_DPU(DBG_INFO, "ctx[%d] working_grp=%d\n",
+	// 	ctx->dpu_dev_id, ctx->working_grp);
+
+	return SUCCESS;
+
+dpu_next_job:
+	dpu_ctx[working_grp]->grp_state = GRP_STATE_IDLE;
+	// up(&g_dpu_core_sem);
+
+	dpu_ctx[working_grp]->grp_work_wtatus.start_fail_cnt++;
+	// kfree(dpu_ctx[working_grp]);
+	// dpu_ctx[working_grp] = NULL;
+	TRACE_DPU(DBG_INFO, "dpu_do_necxt_job         -\n");
+	return FAILURE;
 }
 
 void dpu_deinit(void *arg)
