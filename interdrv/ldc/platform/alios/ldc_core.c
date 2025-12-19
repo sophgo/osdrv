@@ -323,7 +323,6 @@ CMDQ_STATUS_UNKOWN:
 			}
 			ldc_intr_ctrl(0x00, top_id);
 			ldc_disable(top_id);
-			ldc_clk_deinit(ctx);
 			ldc_irq_handler(intr_status, ctx, top_id, done_job);
 		}
 	}

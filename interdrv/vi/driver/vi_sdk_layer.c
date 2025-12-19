@@ -185,9 +185,8 @@ static int vi_set_dev_bind_info(struct vi_dev *vdev, int dev, vi_dev_bind_pipe_s
 	ctx->isp_csi_cfg[cur_raw].bind_dev = dev;
 	ctx->bind_raw[dev] = cur_raw;
 	ctx->isp_csi_cfg[cur_raw].is_patgen_en = ctx->csi_patgen_en[dev];
-	vi_ctx->total_chn_num += attr->num;
 
-	vi_pr(VI_INFO, "dev(%d) raw_num_%d total_chn_num=%d\n", dev, cur_raw, vi_ctx->total_chn_num);
+	vi_pr(VI_INFO, "dev(%d) raw_num_%d\n", dev, cur_raw);
 
 	return 0;
 }
@@ -517,7 +516,7 @@ static void vi_configure_mux_dev(struct vi_dev *vdev, int dev)
 	if (!vi_ctx->dev_attr_ex[dev].mux_dev) {
 		ctx->isp_csi_cfg[cur_raw].phy_raw = cur_raw;
 		vi_ctx->is_dev_enable[dev] = true;
-		vi_ctx->total_dev_num++;
+		osal_atomic_inc(&vi_ctx->total_dev_num);
 		return;
 	}
 
@@ -540,7 +539,7 @@ static void vi_configure_mux_dev(struct vi_dev *vdev, int dev)
 	ctx->isp_csi_cfg[cur_raw].phy_raw = phy_raw;
 	ctx->isp_csi_cfg[cur_raw].is_mux_dev = true;
 	info->cur_nums++;
-	vi_ctx->total_dev_num++;
+	osal_atomic_inc(&vi_ctx->total_dev_num);
 	vi_ctx->is_dev_enable[dev] = true;
 }
 
@@ -576,7 +575,7 @@ int vi_enable_dev(struct vi_dev *vdev, int dev)
 		return ERR_VI_FAILED_NOTCONFIG;
 	}
 
-	if (!_is_fe_post_offline(ctx) && vi_ctx->total_dev_num) {
+	if (!_is_fe_post_offline(ctx) && osal_atomic_read(&vi_ctx->total_dev_num)) {
 		vi_pr(VI_ERR, "onthefly or slice only support single sensor\n");
 		return ERR_VI_NOT_SUPPORT;
 	}
@@ -600,7 +599,7 @@ int vi_enable_dev(struct vi_dev *vdev, int dev)
 	vi_scene_ctrl(vdev);
 
 	vi_pr(VI_DBG, "dev_%d, raw_num(%d) enable=%d, total_dev_num=%d\n",
-		dev, raw_num, vi_ctx->is_dev_enable[dev], vi_ctx->total_dev_num);
+		dev, raw_num, vi_ctx->is_dev_enable[dev], osal_atomic_read(&vi_ctx->total_dev_num));
 
 	osal_mutex_unlock(&vi_ctx->dev_lock[dev]);
 
@@ -635,7 +634,7 @@ int vi_disable_dev(struct vi_dev *vdev, int dev)
 
 	osal_memset(&ctx->isp_csi_cfg[raw_num], 0, sizeof(struct _csi_cfg));
 
-	vi_ctx->total_dev_num--;
+	osal_atomic_dec(&vi_ctx->total_dev_num);
 	vi_ctx->is_dev_enable[dev] = false;
 	osal_memset(&vi_ctx->dev_attr[dev], 0, sizeof(vi_dev_attr_s));
 	osal_memset(&vi_ctx->dev_attr_ex[dev], 0, sizeof(vi_dev_attr_ex_s));
@@ -2175,7 +2174,7 @@ long vi_sdk_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 	switch (id) {
 	case VI_SDK_GET_DEV_NUM:
 	{
-		ctrl->val = vi_ctx->total_dev_num;
+		ctrl->val = osal_atomic_read(&vi_ctx->total_dev_num);
 		rc = 0;
 		break;
 	}
@@ -2667,7 +2666,7 @@ long vi_sdk_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 		osal_usleep_range(200 * 1000, 500 * 1000);
 
 		//stop recivice csi
-		osal_atomic_set(&vdev->is_drop, 0);
+		osal_atomic_set(&vdev->is_drop, 1);
 
 		osal_usleep_range(200 * 1000, 500 * 1000);
 

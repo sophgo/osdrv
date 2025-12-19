@@ -7,15 +7,19 @@
 
 #include "defines.h"
 #include "comm_vi.h"
+#include "comm_sys.h"
 #include "module/osal_mutex.h"
+#include "module/osal_atomic.h"
 
 #define VI_SHARE_MEM_SIZE           (0x2000)
 
 struct vi_ctx {
-	__u8 total_chn_num;
-	__u8 total_dev_num;
+	osal_atomic total_dev_num;
 	__u8 is_chn_enable[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
 	__u8 is_dev_enable[VI_MAX_DEV_NUM];
+
+	// mode
+	vi_vpss_mode_s mode;
 
 	// mod param
 	vi_mode_param_s mod_param;

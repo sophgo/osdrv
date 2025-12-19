@@ -28,7 +28,7 @@
 #include "vi_misc.h"
 #include "vi_ext.h"
 
-#define VI_MAX_LIST_NUM		(0x40)
+#define VI_MAX_LIST_NUM		(0x20)
 #define VI_TIMEOUT_MS		(1000)
 
 /*******************************************************
@@ -137,7 +137,7 @@ static void _vi_release_ext_buf(u64 phy_addr)
 void isp_snr_cfg_enq(struct isp_snr_cfg *snr_cfg_queue, struct sop_isp_snr_update *snr_node)
 {
 	unsigned long flags;
-	struct _isp_snr_i2c_node *n, *q;
+	struct _isp_snr_i2c_node *n;
 	struct _isp_crop_node  *c_n;
 	struct isp_snr_queue *snr_i2c_queue = &snr_cfg_queue->i2c_queue;
 	struct isp_snr_queue *snr_crop_queue = &snr_cfg_queue->crop_queue;
@@ -159,21 +159,20 @@ void isp_snr_cfg_enq(struct isp_snr_cfg *snr_cfg_queue, struct sop_isp_snr_updat
 	}
 
 	if (snr_node->snr_cfg_node.snsr.need_update) {
-		n = osal_kmalloc(sizeof(*n), OSAL_GFP_ATOMIC);
-		if (n == NULL) {
-			vi_pr(VI_ERR, "SNR cfg node alloc size(%zu) fail\n", sizeof(*n));
-			osal_spin_unlock_irqrestore(&snr_cfg_queue->lock, &flags);
-			return;
+		if (snr_i2c_queue->num_rdy < VI_MAX_LIST_NUM) {
+			n = osal_kmalloc(sizeof(*n), OSAL_GFP_ATOMIC);
+			if (n == NULL) {
+				vi_pr(VI_ERR, "SNR cfg node alloc size(%zu) fail\n", sizeof(*n));
+				osal_spin_unlock_irqrestore(&snr_cfg_queue->lock, &flags);
+				return;
+			}
+		} else {
+			n = osal_list_first_entry(&snr_i2c_queue->list, struct _isp_snr_i2c_node, list);
+			osal_list_del_init(&n->list);
+			snr_i2c_queue->num_rdy--;
 		}
-		osal_memcpy(&n->n, &snr_node->snr_cfg_node.snsr, sizeof(struct snsr_regs_s));
 
-		while (!osal_list_empty(&snr_i2c_queue->list)
-			&& (snr_i2c_queue->num_rdy >= (VI_MAX_LIST_NUM - 1))) {
-			q = osal_list_first_entry(&snr_i2c_queue->list, struct _isp_snr_i2c_node, list);
-			osal_list_del_init(&q->list);
-			--snr_i2c_queue->num_rdy;
-			osal_kfree(q);
-		}
+		osal_memcpy(&n->n, &snr_node->snr_cfg_node.snsr, sizeof(struct snsr_regs_s));
 		osal_list_add_tail(&n->list, &snr_i2c_queue->list);
 		++snr_i2c_queue->num_rdy;
 	}
@@ -577,8 +576,9 @@ static void _snr_i2c_update(
 	u16 del_node = 0;
 	u32 dev_mask = 0;
 	u32 cmd = burst_i2c_en ? CVI_SNS_I2C_BURST_QUEUE : CVI_SNS_I2C_WRITE;
-	u8 no_update = 1;
 	u32 fe_frm_num = 0;
+	u32 magic_num = 0;
+	u32 max_magic_num = 0;
 
 	if (vdev->ctx.is_rawreplay || vdev->ctx.isp_csi_cfg[raw_num].is_patgen_en)
 		return;
@@ -587,19 +587,15 @@ static void _snr_i2c_update(
 
 	for (j = 0; j < _i2c_num; j++) {
 		node = _i2c_n[j];
-		no_update = 1;
 
 		vi_pr(VI_DBG, "raw_num=%d, i2c_num=%d, j=%d, magic_num=%d, fe_frm_num=%d, v_blank_update=%d\n",
 				raw_num, _i2c_num, j, node->n.magic_num, fe_frm_num, is_vblank_update);
 
+		magic_num = is_vblank_update ? node->n.magic_num_vblank : node->n.magic_num;
+		max_magic_num = MAX(node->n.magic_num_vblank, node->n.magic_num);
 		//magic num set by ISP team. fire i2c when magic num same as last fe frm num.
-		if (((node->n.magic_num == fe_frm_num ||
-			 (node->n.magic_num < fe_frm_num && (j + 1) >= _i2c_num)) && (!is_vblank_update)) ||
-			 ((node->n.magic_num_vblank  == fe_frm_num ||
-			 (node->n.magic_num_vblank  < fe_frm_num && (j + 1) >= _i2c_num)) && (is_vblank_update))) {
-
-			if ((node->n.magic_num != fe_frm_num && !is_vblank_update) ||
-				(node->n.magic_num_vblank != fe_frm_num && is_vblank_update)) {
+		if (magic_num == fe_frm_num || (magic_num < fe_frm_num && (j + 1) >= _i2c_num)) {
+			if (magic_num != fe_frm_num) {
 				vi_pr(VI_WARN, "exception handle, send delayed i2c data.\n");
 			}
 
@@ -612,31 +608,39 @@ static void _snr_i2c_update(
 				if (burst_i2c_en)
 					dev_mask |= BIT(i2c_data->i2c_dev);
 
-				if (i2c_data->update && (i2c_data->dly_frm_num == 0)) {
+				if (!i2c_data->update)
+					continue;
+
+				//means need to update
+				if (i2c_data->dly_frm_num == 0) {
 					if ((i2c_data->vblank_update && is_vblank_update)
-					|| (!i2c_data->vblank_update && !is_vblank_update)) {
+						|| (!i2c_data->vblank_update && !is_vblank_update)) {
 						vi_sys_cmm_cb_i2c(cmd, (void *)i2c_data);
 						i2c_data->update = 0;
 
 						_set_drop_frm_info(vdev, raw_num, i2c_data);
 					} else {
-						no_update = 0;
+						del_node = 1;
 					}
-				} else if (i2c_data->update && !(i2c_data->dly_frm_num == 0)) {
-					vi_pr(VI_DBG, "addr=0x%x, dly_frm=%d\n",
+				} else {
+					if ((i2c_data->vblank_update && is_vblank_update)
+						|| (!i2c_data->vblank_update && !is_vblank_update)) {
+						vi_pr(VI_DBG, "addr=0x%x, dly_frm=%d\n",
 							i2c_data->reg_addr, i2c_data->dly_frm_num);
-					i2c_data->dly_frm_num--;
+						i2c_data->dly_frm_num--;
+					}
 					del_node = 1;
 				}
 			}
 
-		} else if ((node->n.magic_num < fe_frm_num && !is_vblank_update) ||
-					(node->n.magic_num_vblank < fe_frm_num && is_vblank_update)) {
-
+			if (max_magic_num < fe_frm_num) {
+				vi_pr(VI_DBG, "max_magic_num %d < fe_frm_num %d, postpone i2c node\n",
+					max_magic_num, fe_frm_num);
+				del_node = 1;
+			}
+		} else if (magic_num < fe_frm_num) {
 			if ((j + 1) < _i2c_num) {
-
 				next_node = _i2c_n[j + 1];
-
 				for (i = 0; i < next_node->n.regs_num; i++) {
 					next_i2c_data = &next_node->n.i2c_data[i];
 					i2c_data = &node->n.i2c_data[i];
@@ -656,7 +660,7 @@ static void _snr_i2c_update(
 			del_node = 2;
 		}
 
-		if (del_node == 0 && no_update) {
+		if (del_node == 0) {
 			vi_pr(VI_DBG, "i2c node %d del node and free\n", j);
 			osal_spin_lock_irqsave(&vdev->isp_snr_cfg[raw_num].lock, &flags);
 			osal_list_del_init(&node->list);
@@ -668,7 +672,8 @@ static void _snr_i2c_update(
 				node->n.magic_num_vblank++;
 			else
 				node->n.magic_num++;
-			vi_pr(VI_DBG, "postpone i2c node\n");
+			vi_pr(VI_DBG, "postpone i2c node, magic_num_vblank:%d, magic_num:%d, fe_frm_num:%d\n",
+					node->n.magic_num_vblank, node->n.magic_num, fe_frm_num);
 		}
 	}
 
@@ -1777,6 +1782,18 @@ static void _postraw_update_cfg_from_user(struct vi_dev *vdev, const u8 pipe, co
 			ctx->isp_pipe_cfg[pipe].postout_crop.h);
 }
 
+static void postraw_update_sw_param(struct vi_dev *vdev, const u8 pipe)
+{
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	vi_vpss_mode_s vi_vpss_mode = vi_ctx->mode;
+
+	ctx->isp_pipe_cfg[pipe].is_offline_scaler = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_OFFLINE)
+						|| (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_OFFLINE)
+						|| (vi_vpss_mode.mode[pipe] == VI_SLICE_VPSS_OFFLINE);
+
+}
+
 /*
  * for postraw offline only.
  *  trig preraw if there is output buffer in preraw output.
@@ -2018,8 +2035,6 @@ static inline int _isp_clk_dynamic_en(struct vi_dev *vdev, bool en)
 	return 0;
 }
 
-
-
 static void vi_calc_pre_dci_motion(struct vi_dev *vdev, uint8_t pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
@@ -2140,6 +2155,8 @@ static void _post_hw_enque(
 		pipe = ctx->cfg_info.pipe;
 		chn_num = ctx->cfg_info.chn_num;
 
+		postraw_update_sw_param(vdev, pipe);
+
 		if (!ctx->isp_pipe_cfg[pipe].is_offline_scaler) { //Scaler online mode
 			struct vpss_online_cb_info post_para = {0};
 
@@ -2167,7 +2184,10 @@ static void _post_hw_enque(
 		if (_isp_clk_dynamic_en(vdev, true) < 0)
 			return;
 
-		ispblk_post_yuv_cfg_update(ctx, pipe);
+		ispblk_post_cfg_update(ctx);
+
+		if (pre_pipe != pipe)
+			ispblk_post_yuv_cfg_update(ctx, pipe);
 
 		if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
 			if (ctx->isp_pipe_cfg[pipe].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
@@ -2212,6 +2232,8 @@ static void _post_hw_enque(
 		raw_num = ctx->cfg_info.raw_num;
 		pipe = ctx->cfg_info.pipe;
 		chn_num = ctx->cfg_info.chn_num;
+
+		postraw_update_sw_param(vdev, pipe);
 
 		if (_is_drop_next_frame(vdev, raw_num, chn_num)) {
 			vi_pr(VI_DBG, "%d chn_num_%d drop_frame_num %d\n",
@@ -2806,6 +2828,7 @@ void _vi_err_handler(struct vi_dev *vdev, const enum sop_isp_raw err_raw_num)
 	int count = 10;
 	bool fe_idle, post_idle;
 	uint8_t pipe;
+	bool rst_vpss = false;
 
 	//step 1 : set frm vld = 0
 	isp_frm_err_handler(ctx, err_raw_num, 1);
@@ -2843,8 +2866,13 @@ void _vi_err_handler(struct vi_dev *vdev, const enum sop_isp_raw err_raw_num)
 		osal_usleep_range(5 * 1000, 10 * 1000);
 	}
 
+	//cur post pipe
+	pipe = ctx->cfg_info.pipe;
+
 	//If fe/be/post not done;
 	if (count == 0) {
+		rst_vpss = !ctx->isp_pipe_cfg[pipe].is_offline_scaler;
+
 		vi_pr(VI_ERR, "isp status fe_0(ch0:%d, ch1:%d, ch2:%d, ch3:%d)\n",
 				osal_atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH0]),
 				osal_atomic_read(&vdev->pre_fe_state[ISP_PRERAW0][ISP_FE_CH1]),
@@ -2861,6 +2889,8 @@ void _vi_err_handler(struct vi_dev *vdev, const enum sop_isp_raw err_raw_num)
 				osal_atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH2]),
 				osal_atomic_read(&vdev->pre_fe_state[ISP_PRERAW_LITE0][ISP_FE_CH3]));
 		vi_pr(VI_ERR, "isp status postraw(%d)\n", osal_atomic_read(&vdev->postraw_state));
+	} else {
+		rst_vpss = !_is_fe_post_offline(ctx) && !ctx->isp_pipe_cfg[pipe].is_offline_scaler;
 	}
 
 	//step 3 : set csibdg sw abort and wait abort done
@@ -2876,12 +2906,11 @@ void _vi_err_handler(struct vi_dev *vdev, const enum sop_isp_raw err_raw_num)
 	isp_frm_err_handler(ctx, err_raw_num, 4);
 
 	//send err cb to vpss if vpss online
-	if (!_is_fe_post_offline(ctx) &&
-		!ctx->isp_pipe_cfg[err_raw_num].is_offline_scaler) { //VPSS online
+	if (rst_vpss) { //VPSS online
 		struct vpss_online_err_handle_info err_cb = {0};
 
 		/* VPSS Online error handle */
-		err_cb.snr_num = err_raw_num;
+		err_cb.snr_num = pipe;
 		if (_vi_call_cb(E_MODULE_VPSS, VPSS_CB_ONLINE_ERR_HANDLE, &err_cb) != 0) {
 			vi_pr(VI_ERR, "VPSS_CB_ONLINE_ERR_HANDLE is failed\n");
 		}
@@ -4344,9 +4373,9 @@ int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 	case VI_CB_SET_VIVPSSMODE:
 	{
 		vi_vpss_mode_s vi_vpss_mode;
-		u8 pipe = 0;
 		u8 vi_online = 0;
 		u8 vi_slice = 0;
+		u8 pipe = 0;
 
 		osal_memcpy(&vi_vpss_mode, arg, sizeof(vi_vpss_mode_s));
 
@@ -4356,22 +4385,21 @@ int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 		vi_slice = (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_ONLINE) ||
 			    (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_OFFLINE);
 
+		vi_ctx->mode = vi_vpss_mode;
+		rc = 0;
+
+		if (osal_atomic_read(&vi_ctx->total_dev_num))
+			break;
 
 		ctx->is_offline_postraw = !vi_online;
 		ctx->is_slice_buf_on = vi_slice;
 
+		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++)
+			postraw_update_sw_param(vdev, pipe);
+
 		vi_pr(VI_DBG, "Caller_Mod(%d) set vi_online:%d, is_offline_postraw=%d\n",
 				caller, vi_online, ctx->is_offline_postraw);
 
-		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
-			u8 is_vpss_online = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_ONLINE) ||
-						  (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_ONLINE);
-
-			ctx->isp_pipe_cfg[pipe].is_offline_scaler = !is_vpss_online;
-			vi_pr(VI_DBG, "pipe_%d set is_offline_scaler:%d\n", pipe, !is_vpss_online);
-		}
-
-		rc = 0;
 		break;
 	}
 	case VI_CB_GDC_OP_DONE:
@@ -4857,6 +4885,8 @@ int vi_isp_start_streaming(struct vi_dev *vdev, uint8_t pipe, uint8_t chn)
 		vi_pr(VI_INFO, "pipe %d chn %d already start streaming\n", pipe, chn);
 		return 0;
 	}
+
+	postraw_update_sw_param(vdev, pipe);
 
 	ctx->isp_pipe_cfg[pipe].chn_enable |= BIT(chn);
 	ctx->isp_pipe_cfg[pipe].first_frm_rst = true;

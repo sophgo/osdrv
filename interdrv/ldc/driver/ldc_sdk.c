@@ -554,7 +554,6 @@ static void ldc_submit_hw(struct ldc_ctx *ctx, int top_id
 	TRACE_LDC(DBG_DEBUG, "update map_base(%#llx)\n", cfg.map_base);
 	TRACE_LDC(DBG_DEBUG, "update bgcolor(%#x), pix_fmt(%d)\n", cfg.bgcolor, cfg.pix_fmt);
 
-	ldc_clk_init(ctx);
 	ldc_reset(top_id);
 	ldc_init(top_id);
 	if (top_id >= DEV_DWA_0)
@@ -725,7 +724,6 @@ static void ldc_submit_hw_cmdq(struct ldc_ctx *ctx, int top_id
 			}
 		}
 
-		ldc_clk_init(ctx);
 		ldc_reset(top_id);
 		ldc_init(top_id);
 		if (top_id >= DEV_DWA_0)

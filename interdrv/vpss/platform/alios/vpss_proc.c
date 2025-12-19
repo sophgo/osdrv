@@ -226,6 +226,8 @@ int vpss_ctx_proc_show()
 				int32_t x, y;
 				uint32_t w, h;
 
+				if (!ctx->grp_ctx[i]->chn_ctxs[j].is_enabled)
+					continue;
 				memset(c, 0, sizeof(c));
 				chn_ctx = &ctx->grp_ctx[i]->chn_ctxs[j];
 				if (chn_ctx->chn_attr.aspect_ratio.mode == ASPECT_RATIO_NONE)
@@ -295,6 +297,9 @@ int vpss_ctx_proc_show()
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (ctx->grp_ctx[i] && ctx->grp_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
+				if (!ctx->grp_ctx[i]->chn_ctxs[j].is_enabled)
+					continue;
+
 				chn_ctx = &ctx->grp_ctx[i]->chn_ctxs[j];
 				printf("%8s%2d%8s%2d%10s%10s%10d%10d%10d%10d\n",
 					"#",
@@ -341,6 +346,9 @@ int vpss_ctx_proc_show()
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (ctx->grp_ctx[i] && ctx->grp_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
+				if (!ctx->grp_ctx[i]->chn_ctxs[j].is_enabled)
+					continue;
+
 				memset(c, 0, sizeof(c));
 				chn_ctx = &ctx->grp_ctx[i]->chn_ctxs[j];
 				_pix_fmt_to_string(chn_ctx->chn_attr.pixel_format, c, sizeof(c));
@@ -369,6 +377,9 @@ int vpss_ctx_proc_show()
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (ctx->grp_ctx[i] && ctx->grp_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
+				if (!ctx->grp_ctx[i]->chn_ctxs[j].is_enabled)
+					continue;
+
 				memset(c, 0, sizeof(c));
 				chn_ctx = &ctx->grp_ctx[i]->chn_ctxs[j];
 				if (chn_ctx->rotation == ROTATION_0)
@@ -394,6 +405,9 @@ int vpss_ctx_proc_show()
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (ctx->grp_ctx[i] && ctx->grp_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
+				if (!ctx->grp_ctx[i]->chn_ctxs[j].is_enabled)
+					continue;
+
 				chn_ctx = &ctx->grp_ctx[i]->chn_ctxs[j];
 				printf("%8s%2d%8s%2d%10s%10s%10d%10d\n%10d%10d%10d%20d\n",
 					"#",

@@ -128,6 +128,7 @@ void ldc_dev_init(struct ldc_ctx *dev)
 		return;
 	}
 
+	ldc_clk_init(dev);
 	for (i = 0; i < LDC_DEV_MAX_CNT; i++) {
 		osal_atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
 		dev->core[i].dev_type = (enum ldc_type)i;
@@ -158,6 +159,7 @@ void ldc_dev_deinit(struct ldc_ctx *dev)
 		osal_atomic_set(&dev->core[i].state, LDC_CORE_STATE_IDLE);
 		ldc_core_deinit(i);
 	}
+	ldc_clk_deinit(dev);
 
 	osal_atomic_set(&dev->state, LDC_DEV_STATE_STOP);
 

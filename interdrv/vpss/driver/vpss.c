@@ -1147,7 +1147,7 @@ static unsigned char vpss_frame_ctrl(unsigned long long frame_index, frame_rate_
 	simplify_rate(frame_rate->dst_frame_rate, frame_rate->src_frame_rate,
 		&dst_simp, &src_simp);
 
-	index = osal_div_u64(frame_index, src_simp);
+	index = osal_div_u64_rem(frame_index, src_simp);
 	if (index == 0) {
 		return true;
 	}

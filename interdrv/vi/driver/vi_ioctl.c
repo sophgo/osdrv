@@ -136,15 +136,16 @@ static long _vi_s_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 			break;
 		}
 
-		vi_pr(VI_DBG, "dev_%d, raw_num_%d, magic_num=%d, regs_num=%d, i2c_update=%d, isp_update=%d\n",
+		isp_snr_cfg_enq(&vdev->isp_snr_cfg[raw_num], snr_update);
+
+		vi_pr(VI_DBG, "dev_%d, raw_num_%d, magic_num=%d, regs_num=%d, i2c_update=%d, isp_update=%d, list(%d)\n",
 			snr_update->raw_num,
 			raw_num,
 			snr_update->snr_cfg_node.snsr.magic_num,
 			snr_update->snr_cfg_node.snsr.regs_num,
 			snr_update->snr_cfg_node.snsr.need_update,
-			snr_update->snr_cfg_node.isp.need_update);
-
-		isp_snr_cfg_enq(&vdev->isp_snr_cfg[raw_num], snr_update);
+			snr_update->snr_cfg_node.isp.need_update,
+			vdev->isp_snr_cfg[raw_num].i2c_queue.num_rdy);
 
 		rc = 0;
 		break;

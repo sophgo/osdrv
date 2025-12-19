@@ -155,6 +155,22 @@ s32 mailbox_send(MsgData *msg)
 		ipcm_debug("%s", buf);
 	}
 	if (valid >= MAILBOX_MAX_NUM) {
+
+		rtos_cmdqu_t = (cmdqu_t *) mailbox_context;
+		for (valid = 0; valid < MAILBOX_MAX_NUM; valid++) {
+			ipcm_err( "mailbox send msg:\n"	\
+				"\trtos_cmdqu_t->linux_valid = %d\n"	\
+				"\trtos_cmdqu_t->rtos_valid = %d\n"		\
+				"\trtos_cmdqu_t->ip_id =%lx %d\n"		\
+				"\trtos_cmdqu_t->cmd_id = %d\n"			\
+				"\trtos_cmdqu_t->block = %d\n"			\
+				"\trtos_cmdqu_t->param_ptr addr=%lx %x\n" ,						\
+				rtos_cmdqu_t->resv.valid.linux_valid, rtos_cmdqu_t->resv.valid.rtos_valid,
+				(unsigned long)&rtos_cmdqu_t->ip_id, rtos_cmdqu_t->ip_id, rtos_cmdqu_t->cmd_id,
+				rtos_cmdqu_t->block, (unsigned long)&rtos_cmdqu_t->param_ptr, rtos_cmdqu_t->param_ptr);
+			rtos_cmdqu_t++;
+		}
+
 		ipcm_err("No valid mailbox is available\n");
 		return -EMBUSY;
 	}

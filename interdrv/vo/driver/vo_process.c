@@ -226,9 +226,6 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 	mmf_chn_s chn;
 	struct vb_jobs_t *jobs;
 	struct vb_s *vb = (struct vb_s *)(uintptr_t)blk;
-	struct disp_buffer *disp_buf;
-	unsigned char i = 0;
-	unsigned long flags;
 
 	if (!gdc_param)
 		return;
@@ -269,11 +266,6 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 	}
 	osal_atomic_set(&chn_ctx->mesh.gdc_flag, 0);
 
-	disp_buf = osal_vzalloc(sizeof(*disp_buf));
-	if (!disp_buf) {
-		TRACE_VO(DBG_ERR, "osal_vzalloc size(%zu) fail\n", sizeof(struct disp_buffer));
-		return;
-	}
 
 	osal_mutex_lock(&layer_ctx->layer_lock);
 
@@ -282,7 +274,6 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 	if (!jobs->inited) {
 		osal_mutex_unlock(&jobs->lock);
 		osal_mutex_unlock(&layer_ctx->layer_lock);
-		osal_vfree(disp_buf);
 		TRACE_VO(DBG_NOTICE, "layer(%d) chn(%d) jobs not initialized yet.\n",
 				chn.dev_id, chn.chn_id);
 		return;
@@ -307,25 +298,10 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 	osal_atomic_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
 	osal_vfree(gdc_param);
 
-	disp_buf->blk = (vb_blk)(uintptr_t)vb;
-	disp_buf->buf.length = 3;
 
-	disp_buf->buf.start_x = vb->buf.offset_left;
-	disp_buf->buf.start_y = vb->buf.offset_top;
-
-	for (i = 0; i < disp_buf->buf.length; i++) {
-		disp_buf->buf.planes[i].addr = vb->buf.phy_addr[i];
-		disp_buf->buf.planes[i].bytesused = vb->buf.stride[i];
-	}
-
-	osal_spin_lock_irqsave(&layer_ctx->list_lock, &flags);
-	osal_list_add_tail(&disp_buf->list, &layer_ctx->list_wait);
-	osal_spin_unlock_irqrestore(&layer_ctx->list_lock, &flags);
 
 	osal_mutex_unlock(&layer_ctx->layer_lock);
 
-	TRACE_VO(DBG_INFO, "layer(%d) add buffer(0x%llx) to wait list.\n",
-		 layer_ctx->layer, vb->phy_addr);
 }
 
 static int _mesh_gdc_do_op_cb(enum gdc_usage usage, const void *usage_param,
@@ -441,10 +417,18 @@ static int layer_process(struct vo_layer_ctx *layer_ctx)
 		osal_vfree(disp_buf);
 	}
 
+
+	disp_buf = osal_vzalloc(sizeof(*disp_buf));
+	if (!disp_buf) {
+		TRACE_VO(DBG_ERR, "osal_vzalloc size(%zu) fail\n", sizeof(struct disp_buffer));
+		return 0;
+	}
+
 	osal_mutex_lock(&layer_ctx->layer_lock);
 	chn_num = vo_get_chn_buffers(layer_ctx, blks);
 	if (!chn_num) {
 		osal_mutex_unlock(&layer_ctx->layer_lock);
+		osal_vfree(disp_buf);
 		return 0;
 	}
 
@@ -462,7 +446,25 @@ static int layer_process(struct vo_layer_ctx *layer_ctx)
 		chn_ctx->src_height = vb->buf.size.height;
 	}
 
+	disp_buf->blk = (vb_blk)(uintptr_t)vb;
+	disp_buf->buf.length = 3;
+
+	disp_buf->buf.start_x = vb->buf.offset_left;
+	disp_buf->buf.start_y = vb->buf.offset_top;
+
+	for (i = 0; i < disp_buf->buf.length; i++) {
+		disp_buf->buf.planes[i].addr = vb->buf.phy_addr[i];
+		disp_buf->buf.planes[i].bytesused = vb->buf.stride[i];
+	}
+
+	osal_spin_lock_irqsave(&layer_ctx->list_lock, &flags);
+	osal_list_add_tail(&disp_buf->list, &layer_ctx->list_wait);
+	osal_spin_unlock_irqrestore(&layer_ctx->list_lock, &flags);
+
 	osal_mutex_unlock(&layer_ctx->layer_lock);
+
+	TRACE_VO(DBG_INFO, "layer(%d) add buffer(0x%llx) to wait list.\n",
+		layer_ctx->layer, vb->phy_addr);
 
 	if(plogodata != NULL) {
 		base_ion_free((uintptr_t)plogodata);
@@ -699,9 +701,6 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk, void *data)
 	struct vb_jobs_t *jobs;
 	struct vb_s *vb = (struct vb_s *)(uintptr_t)blk;
 	frame_rate_ctrl_s chn_frame_ctrl;
-	struct disp_buffer *disp_buf;
-	unsigned char i = 0;
-	unsigned long flags;
 	size_s size;
 
 	ret = check_vo_chn_valid(chn.dev_id, chn.chn_id);
@@ -796,12 +795,6 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk, void *data)
 		return -1;
 	}
 
-	disp_buf = osal_vzalloc(sizeof(*disp_buf));
-	if (!disp_buf) {
-		TRACE_VO(DBG_ERR, "osal_vzalloc size(%zu) fail\n", sizeof(struct disp_buffer));
-		ret = ERR_VO_NO_MEM;
-		return ret;
-	}
 
 	osal_mutex_lock(&layer_ctx->layer_lock);
 
@@ -812,7 +805,6 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk, void *data)
 		osal_mutex_unlock(&layer_ctx->layer_lock);
 		TRACE_VO(DBG_NOTICE, "layer(%d) chn(%d) jobs not initialized yet.\n",
 				chn.dev_id, chn.chn_id);
-		osal_vfree(disp_buf);
 		return -1;
 	}
 	if (FIFO_FULL(&jobs->waitq)) {
@@ -836,25 +828,8 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk, void *data)
 	TRACE_VO(DBG_INFO, "layer(%d) chn(%d) push vb(0x%llx).\n",
 		 chn.dev_id, chn.chn_id, vb->phy_addr);
 
-	disp_buf->blk = (vb_blk)(uintptr_t)vb;
-	disp_buf->buf.length = 3;
-
-	disp_buf->buf.start_x = vb->buf.offset_left;
-	disp_buf->buf.start_y = vb->buf.offset_top;
-
-	for (i = 0; i < disp_buf->buf.length; i++) {
-		disp_buf->buf.planes[i].addr = vb->buf.phy_addr[i];
-		disp_buf->buf.planes[i].bytesused = vb->buf.stride[i];
-	}
-
-	osal_spin_lock_irqsave(&layer_ctx->list_lock, &flags);
-	osal_list_add_tail(&disp_buf->list, &layer_ctx->list_wait);
-	osal_spin_unlock_irqrestore(&layer_ctx->list_lock, &flags);
-
 	osal_mutex_unlock(&layer_ctx->layer_lock);
 
-	TRACE_VO(DBG_INFO, "layer(%d) add buffer(0x%llx) to wait list.\n",
-		 layer_ctx->layer, vb->phy_addr);
 
 	return ret;
 }

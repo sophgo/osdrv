@@ -451,13 +451,19 @@ void ispblk_blc_dg_wb_tun_cfg(
 	struct isp_ctx *ctx,
 	struct sop_vip_isp_wbg_config *cfg)
 {
-	uintptr_t blc_db_wb;
+	uintptr_t blc_db_wb_cur, blc_db_wb_pre;
 	union reg_blc_dg_wb_base_config base_config;
 
 	if (!cfg->update)
 		return;
 
-	blc_db_wb = cfg->inst ? ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB1] : ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB0];
+	if (cfg->inst) {
+		blc_db_wb_cur = ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB1];
+		blc_db_wb_pre = ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB0];
+	} else {
+		blc_db_wb_cur = ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB0];
+		blc_db_wb_pre = ctx->phys_regs[ISP_BLK_ID_BLC_DG_WB1];
+	}
 
 	base_config.bits.shift_mode = 1;
 	base_config.bits.cg_enable = 1;
@@ -465,9 +471,11 @@ void ispblk_blc_dg_wb_tun_cfg(
 	base_config.bits.blc_se_enable = cfg->blc_se_enable;
 	base_config.bits.wbg_le_enable = cfg->wbg_le_enable;
 	base_config.bits.wbg_se_enable = cfg->wbg_se_enable;
-	ISP_WR_REG(blc_db_wb, reg_blc_dg_wb_t, base_config, base_config.raw);
+	ISP_WR_REG(blc_db_wb_cur, reg_blc_dg_wb_t, base_config, base_config.raw);
+	//need disable another one to avoid conflict
+	ISP_WR_REG(blc_db_wb_pre, reg_blc_dg_wb_t, base_config, 0);
 
-	ISP_WR_REGS_BURST(blc_db_wb, reg_blc_dg_wb_t, wbg_le_gain0, cfg->burst_cfg, cfg->burst_cfg.wbg_le_gain0);
+	ISP_WR_REGS_BURST(blc_db_wb_cur, reg_blc_dg_wb_t, wbg_le_gain0, cfg->burst_cfg, cfg->burst_cfg.wbg_le_gain0);
 }
 
 //TODO bmtest not set hw_auto_cf_en
@@ -1284,6 +1292,7 @@ void ispblk_cacp_tun_cfg(
 	u16 i;
 	union reg_ca_00 ca_00;
 	union reg_ca_04 wdata;
+	int pipe = ctx->cfg_info.pipe;
 
 	if (!cfg->update)
 		return;
@@ -1305,13 +1314,23 @@ void ispblk_cacp_tun_cfg(
 			wdata.bits.cacp_mem_w = 1;
 			ISP_WR_REG(cacp, reg_ca_t, reg_04, wdata.raw);
 		}
-	} else { //cp mode
-		for (i = 0; i < 256; i++) {
-			wdata.raw = 0;
-			wdata.bits.cacp_mem_d = ((cfg->cp_y_lut[i] << 16) |
-					(cfg->cp_u_lut[i] << 8) | (cfg->cp_v_lut[i]));
-			wdata.bits.cacp_mem_w = 1;
-			ISP_WR_REG(cacp, reg_ca_t, reg_04, wdata.raw);
+	} else { //cp mode workaround for uv swap in offline scaler
+		if (ctx->isp_pipe_cfg[pipe].is_uv_swap && ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
+			for (i = 0; i < 256; i++) {
+				wdata.raw = 0;
+				wdata.bits.cacp_mem_d = ((cfg->cp_y_lut[i] << 16) |
+						(cfg->cp_v_lut[i] << 8) | (cfg->cp_u_lut[i]));
+				wdata.bits.cacp_mem_w = 1;
+				ISP_WR_REG(cacp, reg_ca_t, reg_04, wdata.raw);
+			}
+		} else {
+			for (i = 0; i < 256; i++) {
+				wdata.raw = 0;
+				wdata.bits.cacp_mem_d = ((cfg->cp_y_lut[i] << 16) |
+						(cfg->cp_u_lut[i] << 8) | (cfg->cp_v_lut[i]));
+				wdata.bits.cacp_mem_w = 1;
+				ISP_WR_REG(cacp, reg_ca_t, reg_04, wdata.raw);
+			}
 		}
 	}
 

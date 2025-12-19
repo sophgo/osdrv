@@ -144,6 +144,7 @@ void isp_csi_intr_status(
  *	Runtime Control Flow Config
  ****************************************************************************/
 void isp_first_frm_reset(struct isp_ctx *ctx, u8 reset, bool is_drop_frm);
+void ispblk_post_cfg_update(struct isp_ctx *ctx);
 void ispblk_post_yuv_cfg_update(struct isp_ctx *ctx, const u8 pipe);
 void ispblk_post_cfg_update(struct isp_ctx *ctx);
 int ispblk_dma_get_size(struct isp_ctx *ctx, int dmaid, u32 _w, u32 _h);

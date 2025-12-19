@@ -95,7 +95,9 @@ void gfbg_gop_set_cfg(u8 inst, u8 layer, struct disp_gop_cfg *cfg, bool update)
 
 	gfbg_reg_set_shadow_mask(inst, true);
 
-	_reg_write(REG_DISP_GOP_CFG(inst, layer), cfg->gop_ctrl.raw);
+	if (cfg->ow_cfg[0].addr) {
+		_reg_write(REG_DISP_GOP_CFG(inst, layer), cfg->gop_ctrl.raw);
+	}
 	_reg_write(REG_DISP_GOP_FONTCOLOR(inst, layer),
 		(cfg->font_fg_color << 16) | cfg->font_bg_color);
 	if (cfg->gop_ctrl.b.colorkey_en)

@@ -745,6 +745,8 @@ static int vo_callback_process(gfbg_par *par, vo_layer layer_id, bool *is_contin
 			callback_modify_address(par, layer_id);
 		}
 
+		gfbg_drv_set_layer_enable(layer_id, true);
+
 	}
 
 	*is_continue = par->show;

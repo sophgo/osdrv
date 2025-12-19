@@ -1476,7 +1476,7 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 
 void _ispblk_vi_sel_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 {
-	ispblk_preraw_vi_sel_config(ctx);
+
 }
 
 void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
@@ -1491,8 +1491,6 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	uintptr_t dpc = ctx->phys_regs[ISP_BLK_ID_DPC];
 	uintptr_t map_curve = ctx->phys_regs[ISP_BLK_ID_MAPCURVE];
 	uintptr_t cfa = ctx->phys_regs[ISP_BLK_ID_CFA];
-
-	ispblk_rawtop_config(ctx);
 
 	// close raw_top ip
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
@@ -1554,8 +1552,6 @@ void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	uintptr_t ee_ext = ctx->phys_regs[ISP_BLK_ID_PRE_EE_EXT];
 	uintptr_t csc = ctx->phys_regs[ISP_BLK_ID_CSC];
 
-	ispblk_rgbtop_config(ctx);
-
 	// close raw_top ip
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor) { //YUV sensor
 		//PFR
@@ -1587,8 +1583,6 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	uintptr_t ca_lite = ctx->phys_regs[ISP_BLK_ID_CA_LITE];
 	uintptr_t ycur = ctx->phys_regs[ISP_BLK_ID_YCURVE];
 	uintptr_t resize = ctx->phys_regs[ISP_BLK_ID_RESIZE];
-
-	ispblk_yuvtop_config(ctx);
 
 	//close yuv_top ip
 	if (ctx->isp_pipe_cfg[pipe].is_yuv_sensor &&
@@ -1629,6 +1623,13 @@ void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const u8 pipe)
 	ispblk_ldci_config(ctx, false, false);
 }
 
+void ispblk_post_cfg_update(struct isp_ctx *ctx)
+{
+	ispblk_preraw_vi_sel_config(ctx);
+	ispblk_rawtop_config(ctx);
+	ispblk_rgbtop_config(ctx);
+	ispblk_yuvtop_config(ctx);
+}
 /*
  * Update all YUV related blocks, rewriting by post_tuning
  */

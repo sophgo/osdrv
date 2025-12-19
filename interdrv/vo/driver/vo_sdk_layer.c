@@ -7,6 +7,7 @@
 #include "vo_process.h"
 #include "vo_sdk_layer.h"
 #include "comm_buffer.h"
+#include "ion.h"
 
 static inline int check_struct_size(unsigned int size, unsigned int type_size)
 {
@@ -1297,9 +1298,12 @@ static int vo_set_layer_proc_amp(vo_layer layer, const int *proc_amp)
 static int vo_clear_chnbuf(vo_layer layer, vo_chn chn, bool clear)
 {
 	int ret = -1;
+	int i;
 	vb_blk blk;
 	struct vo_layer_ctx *layer_ctx;
 	struct vo_chn_ctx *chn_ctx;
+	struct vb_s *vb;
+	struct vb_jobs_t *jobs;
 
 	ret = check_vo_chn_valid(layer, chn);
 	if (ret != 0)
@@ -1321,11 +1325,40 @@ static int vo_clear_chnbuf(vo_layer layer, vo_chn chn, bool clear)
 	}
 
 	//clear chn workq vb
-	while (clear && !base_mod_jobs_workq_empty(&chn_ctx->chn_jobs)) {
-		blk = base_mod_jobs_workq_pop(&chn_ctx->chn_jobs);
-		if (blk != VB_INVALID_HANDLE)
-			vb_release_block(blk);
+	if (clear && !base_mod_jobs_workq_empty(&chn_ctx->chn_jobs)) {
+
+		jobs = &chn_ctx->chn_jobs;
+		osal_mutex_lock(&jobs->lock);
+		while (FIFO_SIZE(&jobs->workq) > 1) {
+			FIFO_POP(&jobs->workq, &vb);
+			vb_release_block((vb_blk)(uintptr_t)vb);
+		}
+		FIFO_GET_FRONT(&jobs->workq, &vb);
+
+		if ((layer_ctx->layer_attr.pixformat == PIXEL_FORMAT_YUV_PLANAR_420)
+		|| (layer_ctx->layer_attr.pixformat == PIXEL_FORMAT_NV12)
+		|| (layer_ctx->layer_attr.pixformat == PIXEL_FORMAT_NV21)) {
+
+			for (i = 0; i < 3; i++) {
+				if (vb->buf.length[i] == 0)
+					continue;
+
+				if (i == 0)
+					memset(vb->vir_addr, 0x00, vb->buf.length[i]);
+				else if (i == 1)
+					memset(vb->vir_addr + vb->buf.length[0], 0x80, vb->buf.length[i]);
+				else
+					memset(vb->vir_addr + vb->buf.length[0] + vb->buf.length[1], 0x80, vb->buf.length[i]);
+
+				base_ion_cache_flush(vb->buf.phy_addr[i], vb->vir_addr, vb->buf.length[i]);
+			}
+		} else {
+			TRACE_VO(DBG_ERR, "PixFormat not support yet.\n");
+		}
+		osal_mutex_unlock(&jobs->lock);
 	}
+
+
 
 	release_buffer(layer_ctx, &layer_ctx->list_done);
 	release_buffer(layer_ctx, &layer_ctx->list_work);
@@ -1774,7 +1807,7 @@ static int vo_pause_chn(vo_layer layer, vo_chn chn)
 
 	jobs = &chn_ctx->chn_jobs;
 	osal_mutex_lock(&jobs->lock);
-	while (FIFO_SIZE(&jobs->waitq) > 1) {
+	while (!FIFO_EMPTY(&jobs->waitq)) {
 		FIFO_POP(&jobs->waitq, &vb);
 		vb_release_block((vb_blk)(uintptr_t)vb);
 	}
