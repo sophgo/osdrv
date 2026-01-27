@@ -1082,6 +1082,7 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     int enc_timeout;
     int luma_size, chroma_size;
     struct cdma_1d_param param1d;
+    int cross4g_flag = 0;
 
     if (NULL == handle) {
         JLOG(ERR,"handle = NULL\n");
@@ -1139,6 +1140,7 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     {
         JLOG(WARN, "source buffer and stream buffer are not in the same 4GB space. Need to allocate new buffer.\n");
 
+        cross4g_flag= 1;
         /* copy luma buffer */
         pst_handle->cross4g_Y_buffer.size = luma_size;
         pst_handle->cross4g_Y_buffer.is_cached = 0;
@@ -1161,7 +1163,8 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             pst_handle->cross4g_Cb_buffer.is_cached = 0;
             if (jdi_allocate_dma_memory(&pst_handle->cross4g_Cb_buffer) < 0) {
                 JLOG(ERR, "fail to allocate pst_handle->cross4g_Cb_buffer size:%ld\n", pst_handle->cross4g_Cb_buffer.size);
-                return JPG_RET_FAILURE;
+                ret = JPG_RET_FAILURE;
+                goto ENC_FAILE;
             }
 
             param1d.data_type = CDMA_DATA_TYPE_8BIT;
@@ -1177,7 +1180,8 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
                 pst_handle->cross4g_Cr_buffer.is_cached = 0;
                 if (jdi_allocate_dma_memory(&pst_handle->cross4g_Cr_buffer) < 0) {
                     JLOG(ERR, "fail to allocate pst_handle->cross4g_temp_buffer size:%ld\n", pst_handle->cross4g_Cr_buffer.size);
-                    return JPG_RET_FAILURE;
+                    ret = JPG_RET_FAILURE;
+                    goto ENC_FAILE;
                 }
 
                 param1d.data_type = CDMA_DATA_TYPE_8BIT;
@@ -1203,8 +1207,10 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     enc_param.sourceFrame = &source_buffer;
 
     pst_handle->handle->coreIndex = pst_handle->core_idx = JPU_RequestCore(JPU_INTERRUPT_TIMEOUT_MS);
-    if (pst_handle->core_idx < 0)
-        return JPG_RET_FAILURE;
+    if (pst_handle->core_idx < 0){
+        ret = JPG_RET_FAILURE;
+        goto ENC_FAILE;
+    }
 
     JPU_SetExtAddr(pst_handle->core_idx, source_buffer.bufY >> 32);
 
@@ -1212,20 +1218,24 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     if( ret != JPG_RET_SUCCESS ) {
         JLOG(ERR, "JPU_EncStartOneFrame failed Error code is 0x%x \n", ret );
         JPU_ReleaseCore(pst_handle->core_idx);
-        return ret;
+        ret = JPG_RET_FAILURE;
+	    goto ENC_FAILE;
     }
 
     while(1) {
         int_reason = JPU_WaitInterrupt(pst_handle->handle, enc_timeout);
         if (int_reason == -1) {
-            JLOG(ERR, "Error enc: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d\n",
+            JLOG(ERR, "Error enc: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d, timeout:%d\n",
             pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
-            irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
+            irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx], enc_timeout);
             _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
             ret = JPU_EncGetOutputInfo(pst_handle->handle, &pst_handle->output_info);
+            JPU_SWTopReset(pst_handle->core_idx);
+            JPU_SWReset(pst_handle->core_idx, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);
-            return ENC_TIMEOUT; // ENC_TIMEOUT
+            ret = ENC_TIMEOUT; // ENC_TIMEOUT
+	        goto ENC_FAILE;
         }
         if (int_reason == -2) {
             JLOG(ERR, "Interrupt occurred. but this interrupt is not for my instance enc\n");
@@ -1243,7 +1253,8 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
             if (ret != JPG_RET_SUCCESS) {
                 JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
                 JPU_ReleaseCore(pst_handle->core_idx);
-                return ret;
+                //return ret;
+	            goto ENC_FAILE;
             }
 
             if(!pst_handle->stream_buffer.base)
@@ -1260,7 +1271,8 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     if (ret != JPG_RET_SUCCESS) {
         JPU_ReleaseCore(pst_handle->core_idx);
         JLOG(ERR, "JPU_EncGetOutputInfo failed Error code is 0x%x \n", ret);
-        return ret;
+        //return ret;
+        goto ENC_FAILE;
     }
 
     if(pst_handle->stream_buffer_ex.stream_len) {
@@ -1276,6 +1288,19 @@ int jpeg_enc_send_frame(drv_jpg_handle handle, DRVFRAMEBUF *data, int timeout)
     JPU_ReleaseCore(pst_handle->core_idx);
 
     jpeg_rc_update_pic_info(pst_handle, pst_handle->output_info.bitstreamSize * 8);
+    return ret;
+ENC_FAILE:
+    if(cross4g_flag == 1){
+        if(pst_handle->cross4g_Y_buffer.base){
+            jdi_free_dma_memory(&pst_handle->cross4g_Y_buffer);
+        }
+        if(pst_handle->cross4g_Cb_buffer.base){
+            jdi_free_dma_memory(&pst_handle->cross4g_Cb_buffer);
+        }
+        if(pst_handle->cross4g_Cr_buffer.base){
+            jdi_free_dma_memory(&pst_handle->cross4g_Cr_buffer);
+        }
+    }
     return ret;
 }
 
@@ -1588,10 +1613,12 @@ int jpeg_dec_send_stream(drv_jpg_handle handle, void *data, int length, int time
 
     while(1) {
         if ((int_reason=JPU_WaitInterrupt(pst_handle->handle, dec_timeout)) == -1) {
-            JLOG(ERR, "Error dec: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d\n",
+            JLOG(ERR, "Error dec: timeout happened,core:%d inst %d, reason:%d, irq_status:%d, irq_cnt:%d, timeout:%d\n",
             pst_handle->core_idx, pst_handle->handle->instIndex, int_reason,
-            irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx]);
+            irq_status[pst_handle->core_idx],jpu_core_irq_count[pst_handle->core_idx], dec_timeout);
             _jpeg_dump_register(pst_handle->core_idx, pst_handle->handle->instIndex);
+            JPU_SWTopReset(pst_handle->core_idx);
+            JPU_SWReset(pst_handle->core_idx, NULL);
             JPU_SetJpgPendingInstEx(pst_handle->handle, NULL);
             JpgLeaveLock();
             JPU_ReleaseCore(pst_handle->core_idx);

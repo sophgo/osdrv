@@ -118,7 +118,6 @@ typedef struct _vdec_context {
 #define DRV_VDEC_INPUT_ERR -11
 
 #define VDEC_TIME_BLOCK_MODE (-1)
-#define VDEC_RET_TIMEOUT (-2)
 #define VDEC_TIME_TRY_MODE (0)
 #define VDEC_DEFAULT_MUTEX_MODE VDEC_TIME_BLOCK_MODE
 

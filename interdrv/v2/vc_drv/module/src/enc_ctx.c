@@ -332,25 +332,20 @@ static int jpege_enc_one_pic(void *ctx,
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     pHandle = pEncCtx->ext.jpeg.handle;
-
     _set_src_info(psi, pEncCtx, pstFrame);
 
     status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-    if (status == ENC_TIMEOUT) {
-        //jpeg_enc_one_pic TimeOut..dont close
-        //otherwise parallel / multiple jpg encode will failure
-        //retry, workaround for https://jira.sophgo.com/browse/SE9SW-1454
-        status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
-        if (status == ENC_TIMEOUT) {
-            DRV_VENC_ERR("Failed to retry jpeg_enc_send_frame.\n");
+    if (status != 0) {
+        if (pHandle != NULL)
+            jpeg_enc_close(pHandle);
+        if ((status == ENC_TIMEOUT) && (s32MIlliSec >= 0)) {
+            DRV_VENC_ERR("jpeg_enc_send_frame ret timeout\n");
+            return DRV_ERR_VENC_BUSY;
+
+        } else {
+            DRV_VENC_ERR("Failed to jpeg_enc_send_stream, ret = %d\n", status);
             return DRV_ERR_VENC_BUSY;
         }
-    }
-
-    if (status != 0) {
-        DRV_VENC_ERR("Failed to jpeg_enc_send_frame, ret = %x\n", status);
-        jpeg_enc_close(pHandle);
-        return DRV_ERR_VENC_BUSY;
     }
 
     return status;
