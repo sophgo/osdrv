@@ -1706,6 +1706,13 @@ int jpeg_enc_get_stream(drv_jpg_handle handle, void *data, unsigned long int *pu
         pStream = pStream+1;
     }
 
+    if (pst_handle->stream_buffer.is_cached == 1) {
+        if (jdi_invalidate_cache(&pst_handle->stream_buffer) < 0) {
+            JLOG(ERR, "fail to invalidate bitstream buffer\n");
+            return ret;
+        }
+    }
+
     if(!pst_handle->stream_buffer_ex.stream_len) {
         pStream->phys_addr = pst_handle->stream_buffer.phys_addr;
         pStream->virt_addr = (__u8*)pst_handle->stream_buffer.virt_addr;

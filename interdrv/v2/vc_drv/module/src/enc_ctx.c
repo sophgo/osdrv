@@ -336,8 +336,6 @@ static int jpege_enc_one_pic(void *ctx,
 
     status = jpeg_enc_send_frame(pHandle, &srcInfo, s32MIlliSec);
     if (status != 0) {
-        if (pHandle != NULL)
-            jpeg_enc_close(pHandle);
         if ((status == ENC_TIMEOUT) && (s32MIlliSec >= 0)) {
             DRV_VENC_ERR("jpeg_enc_send_frame ret timeout\n");
             return DRV_ERR_VENC_BUSY;

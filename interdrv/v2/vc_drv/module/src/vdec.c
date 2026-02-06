@@ -486,8 +486,6 @@ static int jpeg_decode(vdec_chn_context *pChnHandle, const vdec_stream_s *pstStr
     /* send jpeg data for decode or encode operator */
     ret = jpeg_dec_send_stream(pChnHandle->pHandle, pstStream->pu8Addr, pstStream->u32Len, s32MilliSec);
     if (ret != 0) {
-        if (pChnHandle->pHandle != NULL)
-            jpeg_dec_close(pChnHandle->pHandle);
         if ((ret == DEC_TIMEOUT) && (s32MilliSec >= 0)) {
             DRV_VDEC_ERR("jpeg_dec_send_stream ret timeout\n");
             return DRV_ERR_VDEC_BUSY;
