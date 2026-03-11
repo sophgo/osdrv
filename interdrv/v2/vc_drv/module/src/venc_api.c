@@ -24,7 +24,7 @@
 #include "platform.h"
 #include "cdma.h"
 
-extern wait_queue_head_t tVencWaitQueue[];
+extern wait_queue_head_t *tVencWaitQueue;
 static DEFINE_MUTEX(__venc_init_mutex);
 
 #define MAX_SRC_BUFFER_NUM 32
@@ -348,7 +348,7 @@ void set_open_param(EncOpenParam *pst_open_param, InitEncConfig *pst_init_cfg)
     }
 
     /* for CMD_ENC_RC_PARAM */
-    pst_open_param->rcEnable = (pst_init_cfg->rcMode == RC_MODE_FIXQP) ? FALSE : TRUE;;
+    pst_open_param->rcEnable = (pst_init_cfg->rcMode == RC_MODE_FIXQP) ? FALSE : TRUE;
     pst_open_param->vbvBufferSize = 3000;
     param->roiEnable = 1;
     param->bitAllocMode = 0;
@@ -501,23 +501,6 @@ static void release_frame_idx(void * handle, int srcIdx)
     pst_handle->input_frame[srcIdx].buffer_addr = 0;
 }
 
-static int check_top_addr(int coreIdx, Uint64 addr, Uint32 size)
-{
-    int ext_addr = vdi_get_ddr_map(coreIdx);
-    int top_addr1, top_addr2;
-
-    if(addr == NULL)
-        return -1;
-
-    top_addr1 = addr >> 32 & 0xf;
-    top_addr2 = (addr + size - 1) >> 32 & 0xf;
-
-    if(ext_addr == top_addr1 && ext_addr == top_addr2)
-        return 1;
-
-    return 0;
-}
-
 static int  alloc_framebuffer(void * handle)
 {
     ENCODER_HANDLE *pst_handle = handle;
@@ -597,7 +580,7 @@ static int alloc_bitstream_buf(void *handle)
     int ret = 0;
     int bitstream_size = pst_handle->min_src_frame_count * VPU_ALIGN4096(pst_handle->open_param.bitstreamBufferSize);
 
-    if (pst_handle->use_extern_bs_buf && check_top_addr(0, pst_handle->extern_bs_addr, bitstream_size)) {
+    if (pst_handle->use_extern_bs_buf && CheckTopAddr(0, pst_handle->extern_bs_addr, bitstream_size)) {
         memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
         vb_buffer.size = VPU_ALIGN4096(pst_handle->open_param.bitstreamBufferSize);
         for (i = 0; i < pst_handle->min_src_frame_count; i++) {
@@ -791,7 +774,7 @@ Int32 venc_write_vui_rbsp_data(void *handle,  Uint8 *pVuiRbspBuf, int32_t vui_le
     drv_enc_param *pst_ext_param = &pst_handle->enc_param;
     int ret = 0;
 
-    if (pst_open_param->encodeVuiRbsp) {
+    if (pst_open_param->encodeVuiRbsp && pst_ext_param->vbVuiRbsp.phys_addr == 0UL) {
         pst_ext_param->vbVuiRbsp.size = VUI_HRD_RBSP_BUF_SIZE;
 
         if (vdi_allocate_dma_memory(pst_handle->core_idx, &pst_ext_param->vbVuiRbsp, "ENC_VUIBUF", 0) < 0) {
@@ -1160,6 +1143,7 @@ static int thread_wait_interrupt(void *param)
     QueueStatusInfo queue_status = {0};
     int ret;
     int retry_times = 0;
+    int int_reason = 0;
 
     VLOG(INFO, "start\n");
 
@@ -1171,14 +1155,14 @@ static int thread_wait_interrupt(void *param)
         }
 
         retry_times = 0;
-        ret = VPU_WaitInterruptEx(pst_handle->handle, 100);
-        if (ret == -1)
+        int_reason = VPU_WaitInterruptEx(pst_handle->handle, 100);
+        if (int_reason == -1)
             continue;
 
-        if (ret > 0) {
-            VPU_ClearInterruptEx(pst_handle->handle, ret);
+        if (int_reason > 0) {
+            VPU_ClearInterruptEx(pst_handle->handle, int_reason);
 
-            if (ret & (1 << INT_WAVE5_ENC_SET_PARAM)) {
+            if (int_reason & (1 << INT_WAVE5_ENC_SET_PARAM)) {
                 ret = VPU_EncCompleteSeqInit(pst_handle->handle, &init_info);
                 if (ret == RETCODE_VPU_RESPONSE_TIMEOUT) {
                     VLOG(ERR, "Failed to VPU_EncCompleteSeqInit()\n");
@@ -1186,12 +1170,12 @@ static int thread_wait_interrupt(void *param)
                 }
             }
 
-            if (ret & (1 << INT_WAVE5_ENC_PIC)) {
+            if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
                 venc_process_frame_done(pst_handle, VENC_ASYNC_TRUE);
             }
 
-            if (ret & (1 << INT_WAVE5_BSBUF_FULL)) {
-                VLOG(INFO, "INT_BSBUF_FULL 0x%x\n", ret);
+            if (int_reason & (1 << INT_WAVE5_BSBUF_FULL)) {
+                VLOG(INFO, "INT_BSBUF_FULL 0x%x\n", int_reason);
                 venc_process_bsbuf_full(pst_handle);
                 VPU_EncUpdateBitstreamBuffer(pst_handle->handle, 0);
                 continue;
@@ -1316,12 +1300,39 @@ reinit:
 
 int internal_venc_close(void *handle)
 {
-    int i;
-    vpu_buffer_t vb_buffer;
     ENCODER_HANDLE *pst_handle = handle;
     drv_enc_param *pEncParam = &pst_handle->enc_param;
     UserDataList *userdataNode = NULL;
     UserDataList *n;
+
+    if (pst_handle->thread_handle != NULL) {
+        pst_handle->stop_thread = 1;
+        osal_thread_join(pst_handle->thread_handle, NULL);
+    }
+
+    Queue_Destroy(pst_handle->stream_packs);
+    VPU_DeInit(pst_handle->core_idx);
+
+    list_for_each_entry_safe(userdataNode, n, &pEncParam->userdataList, list) {
+        if (userdataNode->userDataBuf != NULL && userdataNode->userDataLen != 0) {
+            osal_free(userdataNode->userDataBuf);
+            list_del(&userdataNode->list);// in create_chn alloc
+            osal_free(userdataNode);
+        }
+    }
+    // init in createchn
+    pEncParam->userDataBufSize = 0;
+
+    vfree(pst_handle);
+    return 0;
+}
+
+int venc_op_stop(void *handle, void *arg)
+{
+    int i;
+    vpu_buffer_t vb_buffer;
+    ENCODER_HANDLE *pst_handle = handle;
+    drv_enc_param *pEncParam = &pst_handle->enc_param;
     int int_reason = 0;
 
     if (pst_handle->thread_handle != NULL) {
@@ -1346,23 +1357,21 @@ int internal_venc_close(void *handle)
         osal_msleep(10);
     }
 
-    // release cache header
     if (pst_handle->header_cache_pack.len > 0 && pst_handle->header_cache_pack.u64PhyAddr) {
         vb_buffer.phys_addr = pst_handle->header_cache_pack.u64PhyAddr;
         vb_buffer.size = VENC_HEADER_BUF_SIZE;
         vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
         memset(&pst_handle->header_cache_pack, 0, sizeof(stPack));
+        pst_handle->header_encoded = 0;
     }
 
     for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
         if (pst_handle->pst_frame_buffer[i].size == 0)
             continue;
-
         vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
         vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
         vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
     }
-
     if (pst_handle->pst_frame_buffer != NULL) {
         vfree(pst_handle->pst_frame_buffer);
         pst_handle->pst_frame_buffer = NULL;
@@ -1387,12 +1396,18 @@ int internal_venc_close(void *handle)
             vdi_remove_extern_memory(pst_handle->core_idx, &vb_buffer, ENC_BS, 0);
         }
     }
+    // enable alloc_bitstream_buf
+    pst_handle->bitstream_buffer[0] = 0L;
 
     while(Queue_Get_Cnt(pst_handle->customMapBuffer) > 0) {
         PhysicalAddress *phys_addr = Queue_Dequeue(pst_handle->customMapBuffer);
-        vb_buffer.phys_addr = *phys_addr;
-        vb_buffer.size = pst_handle->customMapBufferSize;
-        vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, ENC_ETC, 0);
+        if (phys_addr && *phys_addr) {
+            vb_buffer.phys_addr = *phys_addr;
+            vb_buffer.size = pst_handle->customMapBufferSize;
+            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, ENC_ETC, 0);
+        } else {
+            VLOG(ERR, "customMapBuffer phys_addr is 0\n",__func__,__LINE__);
+        }
     }
 
     if (pEncParam->vbVuiRbsp.size) {
@@ -1412,21 +1427,10 @@ int internal_venc_close(void *handle)
         pst_handle->framebuf_list = NULL;
     }
 
-    Queue_Destroy(pst_handle->stream_packs);
-    Queue_Destroy(pst_handle->free_stream_buffer);
+    Queue_Flush(pst_handle->stream_packs);
     Queue_Destroy(pst_handle->customMapBuffer);
-    VPU_DeInit(pst_handle->core_idx);
+    Queue_Destroy(pst_handle->free_stream_buffer);
 
-    list_for_each_entry_safe(userdataNode, n, &pEncParam->userdataList, list) {
-        if (userdataNode->userDataBuf != NULL && userdataNode->userDataLen != 0) {
-            osal_free(userdataNode->userDataBuf);
-            list_del(&userdataNode->list);
-            osal_free(userdataNode);
-        }
-    }
-    pEncParam->userDataBufSize = 0;
-
-    vfree(pst_handle);
     return 0;
 }
 
@@ -1576,7 +1580,7 @@ static int venc_copy_framebuf(FrameBuffer *framebuf_list, FrameBuffer *src_fb)
     int y_size = src_fb->stride * src_fb->height;
 
     // copy Y buffer
-    if(framebuf_list->bufY == NULL) {
+    if(!framebuf_list->bufY) {
         memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
         vb_buffer.size = y_size;
         vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
@@ -1592,7 +1596,7 @@ static int venc_copy_framebuf(FrameBuffer *framebuf_list, FrameBuffer *src_fb)
 
     // copy Cb\Cr buffer
     if(!src_fb->cbcrInterleave) {
-        if(framebuf_list->bufCb == NULL) {
+        if(!framebuf_list->bufCb) {
             vb_buffer.size = y_size / 4;
             vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
             framebuf_list->bufCb = vb_buffer.phys_addr;
@@ -1604,7 +1608,7 @@ static int venc_copy_framebuf(FrameBuffer *framebuf_list, FrameBuffer *src_fb)
         src_fb->bufCb = framebuf_list->bufCb;
         VLOG(INFO, "copy Cb data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
 
-        if(framebuf_list->bufCr == NULL) {
+        if(!framebuf_list->bufCr) {
             vb_buffer.size = y_size / 4;
             vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
             framebuf_list->bufCr = vb_buffer.phys_addr;
@@ -1617,7 +1621,7 @@ static int venc_copy_framebuf(FrameBuffer *framebuf_list, FrameBuffer *src_fb)
         VLOG(INFO, "copy Cr data src:0x%lx dst:0x%lx size:%d\n", param1d.src_addr, param1d.dst_addr, param1d.len);
     }
     else {
-        if(framebuf_list->bufCb == NULL) {
+        if(!framebuf_list->bufCb) {
             vb_buffer.size = y_size / 2;
             vdi_allocate_dma_memory(0, &vb_buffer, "ENC_FRAMEBUF", 0);
             framebuf_list->bufCb = vb_buffer.phys_addr;
@@ -1688,9 +1692,9 @@ static int venc_build_enc_param(ENCODER_HANDLE *pst_handle, EncOnePicCfg *pPicCf
         cb_szie = pst_fb->stride * pst_fb->height / 2;
     else
         cb_szie = pst_fb->stride * pst_fb->height / 4;
-    if(!check_top_addr(0, pst_fb->bufY, y_szie) ||
-        !check_top_addr(0, pst_fb->bufCb, cb_szie) ||
-        (pst_fb->cbcrInterleave ? 0 : !check_top_addr(0, pst_fb->bufCr, cb_szie)))
+    if(!CheckTopAddr(0, pst_fb->bufY, y_szie) ||
+        !CheckTopAddr(0, pst_fb->bufCb, cb_szie) ||
+        (pst_fb->cbcrInterleave ? 0 : !CheckTopAddr(0, pst_fb->bufCr, cb_szie)))
     {
         if(pst_handle->framebuf_list == NULL) {
             pst_handle->framebuf_list = osal_malloc((pst_handle->min_src_frame_count + 1) * sizeof(FrameBuffer));
@@ -1931,8 +1935,8 @@ static int venc_get_encoded_info(void *handle, int s32MilliSec)
                 return 0;
             }
 
-            if (ret & (1 << INT_WAVE5_BSBUF_FULL)) {
-                VLOG(INFO, "INT_BSBUF_FULL 0x%x\n", ret);
+            if (int_reason & (1 << INT_WAVE5_BSBUF_FULL)) {
+                VLOG(INFO, "INT_BSBUF_FULL 0x%x\n", int_reason);
                 venc_process_bsbuf_full(pst_handle);
                 VPU_EncUpdateBitstreamBuffer(pst_handle->handle, 0);
             }
@@ -1951,27 +1955,23 @@ int internal_venc_get_stream(void *handle, VEncStreamInfo *pStreamInfo, int s32M
     Uint32 packs_cnt = 0;
 
     if (!pst_handle->is_bind_mode || pst_handle->is_isolate_send) {
-        if (s32MilliSec > 0) {
-            timeout = jiffies + msecs_to_jiffies(s32MilliSec);
-        REWAIT:
-            ret = wait_for_completion_timeout(&pst_handle->semGetStreamCmd,
+        timeout = jiffies + msecs_to_jiffies(s32MilliSec);
+    REWAIT:
+        ret = wait_for_completion_timeout(&pst_handle->semGetStreamCmd,
                     msecs_to_jiffies(s32MilliSec));
-            if (pst_handle->ouput_end == 1)
-                return 0;
 
-            if (ret == 0) {
-                if (Queue_Get_Cnt(pst_handle->stream_packs) > 0) {
-                    pStreamInfo->psp = pst_handle->stream_packs;
-                    return 0;
-                }
-                return -2;
-            } else if (Queue_Get_Cnt(pst_handle->stream_packs) == 0) {
-                if (time_after(jiffies, timeout)){
-                    return -2;
-                }
-                // wait again
-                goto REWAIT;
+        if (ret == 0) {
+            if (Queue_Get_Cnt(pst_handle->stream_packs) > 0) {
+                pStreamInfo->psp = pst_handle->stream_packs;
+                return 0;
             }
+            return -2;
+        } else if (Queue_Get_Cnt(pst_handle->stream_packs) == 0) {
+            if (time_after(jiffies, timeout)){
+                return -2;
+            }
+            // wait again
+            goto REWAIT;
         }
     } else if (pst_handle->is_bind_mode) {
         ret = venc_get_encoded_info(handle, s32MilliSec);
@@ -2270,6 +2270,18 @@ int venc_op_set_chn_attr(void *handle, void *arg)
     return 0;
 }
 
+int venc_op_set_chn_resolution(void *handle, void *arg)
+{
+    ENCODER_HANDLE *pst_handle = handle;
+    EncOpenParam *pst_open_param = &pst_handle->open_param;
+    VidChnRes *pChnRes = (VidChnRes *)arg;
+
+    pst_open_param->picWidth = pChnRes->u32PicWidth;
+    pst_open_param->picHeight = pChnRes->u32PicHeight;
+
+    return 0;
+}
+
 int venc_op_set_ref(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
@@ -2348,11 +2360,9 @@ int venc_op_set_roi(void *handle, void *arg)
     int MB_NUM = MbWidth * MbHeight;
     int CTU_NUM = ctuMapWidthCnt * ctuMapHeightCnt ;
 
-
     // when first set roi,you need to alloc memory
     if (pst_handle->customMapBuffer == NULL) {
         pst_handle->customMapBuffer = Queue_Create_With_Lock(pst_handle->min_src_frame_count, sizeof(PhysicalAddress));
-
         memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
         pst_handle->customMapBufferSize = (pst_handle->open_param.bitstreamFormat == STD_AVC) ? MB_NUM : CTU_NUM * 8;
         vb_buffer.size = pst_handle->customMapBufferSize;
@@ -2419,12 +2429,25 @@ int venc_op_encode_userdata(void *handle, void *arg)
     UserData *pSrc = (UserData *)arg;
     unsigned int len;
     UserDataList *userdataNode = NULL;
+    UserDataList *pos = NULL;
+    UserDataList *n = NULL;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
     drv_enc_param *pEncParam = &pst_handle->enc_param;
 
     if (pSrc == NULL || pSrc->userData == NULL || pSrc->len == 0) {
         VLOG(ERR, "no user data\n");
         return -1;
+    }
+
+    if (!list_empty(&pEncParam->userdataList)) {
+        list_for_each_entry_safe(pos, n, &pEncParam->userdataList, list) {
+            if (pos->userDataBuf != NULL && pos->userDataLen != 0) {
+                osal_free(pos->userDataBuf);
+                list_del(&pos->list);// in create_chn alloc
+                osal_free(pos);
+            }
+        }
+        list_del_init_careful(&pEncParam->userdataList);
     }
 
     userdataNode = (UserDataList *)osal_calloc(1, sizeof(UserDataList));
@@ -2934,6 +2957,8 @@ DRV_VENC_IOCTL_OP IoctlOp[] = {
     { DRV_H26X_OP_SET_EXTERN_BS_BUF, venc_op_set_extern_bs_buf},
     { DRV_H26X_OP_GET_BS_PACKS_NUM, venc_op_get_bs_packs_num},
     { DRV_H26X_OP_RELEASE_HEADER, venc_op_release_header},
+    { DRV_H26X_OP_STOP, venc_op_stop},
+    { DRV_H26X_OP_SET_CHN_RESOLUTION, venc_op_set_chn_resolution},
 };
 
 int internal_venc_ioctl(void *handle, int op, void *arg)

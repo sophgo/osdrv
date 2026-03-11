@@ -17,8 +17,6 @@
 #include "jpu_helper.h"
 #include "vc_getopt.h"
 
-static fb_context s_fb[MAX_JPEG_NUM_INSTANCE];
-
 static size_t StoreYuvImageBurstFormat_V20(int chromaStride, Uint8 * dst, int picWidth, int picHeight, Uint32 bitDepth, PhysicalAddress addrY, PhysicalAddress addrCb, PhysicalAddress addrCr, int stride, FrameFormat format, int endian, CbCrInterLeave intlv, PackedFormat packed);
 // Figure A.6 - Zig-zag sequence of quantized DCT coefficients
 const int InvScanTable[64] = {
@@ -1089,94 +1087,6 @@ void GetFrameBufStride(FrameFormat subsample, CbCrInterLeave cbcrIntlv, PackedFo
     if (oChromaHeight) *oChromaHeight = cHeight;
 }
 
-BOOL AllocateFrameBuffer(Uint32 instIdx, FrameFormat subsample, CbCrInterLeave cbcrIntlv, PackedFormat packed,
-                         Uint32 rotation, BOOL scalerOn, Uint32 width, Uint32 height, Uint32 bitDepth, Uint32 num)
-{
-    fb_context *fb;
-    Uint32  fbLumaStride, fbLumaHeight, fbChromaStride, fbChromaHeight;
-    size_t  fbLumaSize, fbChromaSize, fbSize;
-    Uint32  i;
-    Uint32  bytePerPixel = (bitDepth + 7)/8;
-
-    if (rotation == 90 || rotation == 270) {
-        if (subsample == FORMAT_422) subsample = FORMAT_440;
-        else if (subsample == FORMAT_440) subsample = FORMAT_422;
-    }
-
-    GetFrameBufStride(subsample, cbcrIntlv, packed, scalerOn, width, height, bytePerPixel, &fbLumaStride, &fbLumaHeight, &fbChromaStride, &fbChromaHeight);
-
-    JLOG(INFO,"AllocateFrameBuffer subsample:%d fbChromaStride:%d fbChromaHeight:%d\n", subsample, fbChromaStride, fbChromaHeight);
-
-    fbLumaSize   = (size_t)fbLumaStride * (size_t)fbLumaHeight;
-    fbChromaSize = (size_t)fbChromaStride * (size_t)fbChromaHeight;
-
-    if (cbcrIntlv == CBCR_SEPARATED) {
-        /* fbChromaSize MUST be zero when format is packed mode */
-        fbSize = fbLumaSize + 2*fbChromaSize;
-
-    }
-    else {
-        /* Semi-planar */
-        fbSize = fbLumaSize + fbChromaSize;
-    }
-
-    fb = &s_fb[instIdx];
-
-    if (fb->vb_base.size == 0) {
-        fb->vb_base.size = fbSize;
-        fb->vb_base.size *= (size_t)num;
-        if (jdi_allocate_dma_memory(&fb->vb_base) < 0) {
-            JLOG(ERR, "Fail to allocate frame buffer size=%ld\n", fb->vb_base.size);
-            return FALSE;
-        }
-
-        fb->last_addr = fb->vb_base.phys_addr;
-        fb->last_virt = fb->vb_base.virt_addr;
-    }
-
-    for (i=fb->last_num; i<fb->last_num+num; i++) {
-        fb->frameBuf[i].Format = subsample;
-        fb->frameBuf[i].Index  = i;
-        fb->frameBuf[i].vbY.phys_addr = fb->last_addr;
-        fb->frameBuf[i].vbY.virt_addr = fb->last_virt;
-        fb->frameBuf[i].vbY.size = fbLumaSize;
-
-        fb->last_addr += fb->frameBuf[i].vbY.size;
-        fb->last_addr = JPU_CEIL(8, fb->last_addr);
-        fb->last_virt += fb->last_addr - fb->frameBuf[i].vbY.phys_addr;
-
-        if (fbChromaSize) {
-            fb->frameBuf[i].vbCb.phys_addr = fb->last_addr;
-            fb->frameBuf[i].vbCb.virt_addr = fb->last_virt;
-            fb->frameBuf[i].vbCb.size = fbChromaSize;
-
-            fb->last_addr += fb->frameBuf[i].vbCb.size;
-            fb->last_addr = JPU_CEIL(8, fb->last_addr);
-            fb->last_virt += fb->last_addr - fb->frameBuf[i].vbCb.phys_addr;
-
-            fb->frameBuf[i].vbCr.phys_addr = (cbcrIntlv == CBCR_SEPARATED) ? fb->last_addr : 0;
-            fb->frameBuf[i].vbCr.virt_addr = (cbcrIntlv == CBCR_SEPARATED) ? fb->last_virt : 0;
-            fb->frameBuf[i].vbCr.size      = (cbcrIntlv == CBCR_SEPARATED) ? fbChromaSize  : 0;
-
-            fb->last_addr += fb->frameBuf[i].vbCr.size;
-            fb->last_addr = JPU_CEIL(8, fb->last_addr);
-            fb->last_virt += fb->last_addr - fb->frameBuf[i].vbCr.phys_addr;
-        }
-
-        fb->frameBuf[i].strideY = fbLumaStride;
-        fb->frameBuf[i].strideC = fbChromaStride;
-        JLOG(INFO,"AllocateFrameBuffer f  strideC:%d\n", fb->frameBuf[i].strideC);
-#ifdef SUPPORT_PADDING_UNALIGNED_YUV
-        fb->frameBuf[i].fbLumaHeight = fbLumaHeight;
-        fb->frameBuf[i].fbChromaHeight = fbChromaHeight;
-#endif
-    }
-
-    fb->last_num += num;
-
-    return TRUE;
-}
-
 int GetDPBBufSize(int framebufFormat, int picWidth, int picHeight, int picWidth_C, int interleave)
 {
     int framebufSize = 0;
@@ -1557,65 +1467,6 @@ BOOL ParseMultiLongOptions(TestMultiConfig* config, const char* argName, char* v
     }
 
     return ret;
-}
-
-int GetFrameBufBase(int instIdx)
-{
-    fb_context *fb;
-    fb = &s_fb[instIdx];
-
-    return fb->vb_base.phys_addr;
-}
-
-int GetFrameBufAllocSize(int instIdx)
-{
-    fb_context *fb;
-    fb = &s_fb[instIdx];
-
-    return (fb->last_addr - fb->vb_base.phys_addr);
-}
-
-
-FRAME_BUF *GetFrameBuffer(int instIdx, int idx)
-{
-    fb_context *fb;
-    fb = &s_fb[instIdx];
-    return &fb->frameBuf[idx];
-}
-
-FRAME_BUF* FindFrameBuffer(int instIdx, PhysicalAddress addrY)
-{
-    int i;
-    fb_context *fb;
-
-    fb = &s_fb[instIdx];
-
-    for (i=0; i <MAX_FRAME; i++)
-    {
-        if (fb->frameBuf[i].vbY.phys_addr == addrY)
-        {
-            return &fb->frameBuf[i];
-        }
-    }
-
-    return NULL;
-}
-
-void FreeFrameBuffer(int instIdx)
-{
-    fb_context *fb;
-
-    fb = &s_fb[instIdx];
-
-    fb->last_num = 0;
-    fb->last_addr = -1;
-
-    if(fb->vb_base.size > 0)
-    {
-        jdi_free_dma_memory(&fb->vb_base);
-        fb->vb_base.base = 0;
-        fb->vb_base.size = 0;
-    }
 }
 
 char* jpuGetFileExtension(const char* filename)

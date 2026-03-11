@@ -44,6 +44,7 @@
 #define CVI_MON_CDEV_NAME "cvi-mon"
 #define CVI_MON_CLASS_NAME "cvi-mon"
 
+
 struct cvi_list_node {
 	struct device *dev;
 	struct list_head list;
@@ -123,7 +124,7 @@ static inline long get_duration_us(const struct timespec *start, const struct ti
 }
 
 //static void cvi_mon_bw_profile_timer_handler(unsigned long data)
-enum hrtimer_restart cvi_mon_bw_profile_timer_handler(struct hrtimer *timer)
+static enum hrtimer_restart cvi_mon_bw_profile_timer_handler(struct hrtimer *timer)
 {
 	//stop last
 	axi_mon_snapshot_all();
@@ -190,9 +191,14 @@ static ssize_t cvi_mon_bw_proc_write(struct file *file, const char __user *user_
 	return count;
 }
 
+
 static int cvi_mon_bw_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return single_open(file, cvi_mon_bw_proc_show, PDE_DATA(inode));
+#else
+	return 0;
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -234,7 +240,11 @@ static int cvi_mon_window_proc_show(struct seq_file *m, void *v)
 
 static int cvi_mon_window_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return single_open(file, cvi_mon_window_proc_show, PDE_DATA(inode));
+#else
+	return 0;
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -448,8 +458,11 @@ static const struct file_operations mon_fops = {
 int cvi_mon_register_cdev(struct cvi_mon_device *ndev)
 {
 	int ret;
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	mon_class = class_create(THIS_MODULE, CVI_MON_CLASS_NAME);
+#else
+	mon_class = class_create(CVI_MON_CLASS_NAME);
+#endif
 	if (IS_ERR(mon_class)) {
 		pr_err("create mon class failed\n");
 		return PTR_ERR(mon_class);
@@ -626,7 +639,11 @@ static int cvi_mon_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 static int cvi_mon_remove(struct platform_device *pdev)
+#else
+static void cvi_mon_remove(struct platform_device *pdev)
+#endif
 {
 	struct cvi_mon_device *ndev = platform_get_drvdata(pdev);
 	struct cvi_mon_work *mon_work = &ndev->mon_work;
@@ -642,7 +659,12 @@ static int cvi_mon_remove(struct platform_device *pdev)
 	pr_debug("===cvi_mon_remove\n");
 
 	proc_remove(mon_proc_dir);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return 0;
+#else
+	return;
+#endif
 }
 
 static const struct of_device_id cvi_mon_match[] = {

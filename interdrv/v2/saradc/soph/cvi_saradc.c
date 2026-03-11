@@ -34,6 +34,7 @@
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/version.h>
 
 #include "./cvi_saradc.h"
 #include "pinctrl-cv186x.h"
@@ -353,16 +354,31 @@ static int cvi_saradc_probe(struct platform_device *pdev)
 	return 0;
 }
 
+/* platform_driver.remove return type changed from int to void in Linux 6.12 */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int cvi_saradc_remove(struct	platform_device	*pdev)
 {
 	struct iio_dev *indio_dev =	platform_get_drvdata(pdev);
 	struct cvi_saradc_device *ndev = iio_priv(indio_dev);
+
 	iio_device_unregister(indio_dev);
 	platform_saradc_clk_deinit(ndev);
 
-	pr_debug("cvi_saradc_remove\n");
+	pr_debug("%s\n", __func__);
 	return 0;
 }
+#else
+static void cvi_saradc_remove(struct	platform_device	*pdev)
+{
+	struct iio_dev *indio_dev =	platform_get_drvdata(pdev);
+	struct cvi_saradc_device *ndev = iio_priv(indio_dev);
+
+	iio_device_unregister(indio_dev);
+	platform_saradc_clk_deinit(ndev);
+
+	pr_debug("%s\n", __func__);
+}
+#endif
 
 static const struct	of_device_id cvi_saradc_match[]	= {
 	{.compatible = "cvitek,saradc"},

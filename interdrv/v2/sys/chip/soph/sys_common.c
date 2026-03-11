@@ -4,9 +4,10 @@
 #include <linux/io.h>
 #include <linux/defines.h>
 #include <linux/sys_uapi.h>
-
+#include "sys_common.h"
 #include "vo_sys.h"
 #include "reg.h"
+#include "sys.h"
 #include "sys_debug.h"
 
 /* register bank */

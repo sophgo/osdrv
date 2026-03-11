@@ -1,6 +1,7 @@
 #ifndef __VO_COMMON_H__
 #define __VO_COMMON_H__
 
+#include <linux/version.h>
 #include <linux/debugfs.h>
 
 #ifdef __cplusplus
@@ -10,8 +11,10 @@
 #define GOP_ALIGNMENT 0x10
 
 extern int vo_log_lv;
+#if (KERNEL_VERSION(6, 0, 0) > LINUX_VERSION_CODE)
 #define MIN(a, b) (((a) < (b))?(a):(b))
 #define MAX(a, b) (((a) > (b))?(a):(b))
+#endif
 #define UPPER(x, y) (((x) + ((1 << (y)) - 1)) >> (y))   // for alignment
 #define CEIL(x, y) (((x) + ((1 << (y)))) >> (y))   // for alignment
 

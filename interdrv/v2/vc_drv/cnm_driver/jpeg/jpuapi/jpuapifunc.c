@@ -1871,7 +1871,6 @@ int JpegDecodeHeader(JpgInst *    pJpgInst, JpgDecInfo *jpg)
     int size;
     BOOL yuv400_4Blocks = TRUE;   /* process 4block at a time for improving performance */
 
-    JpuWriteReg(pJpgInst->coreIndex, MJPEG_INST_CTRL_START_REG, (1<<0));
     for (i=0; i<THTC_LIST_CNT; i++) {
         jpg->thtc[i] = -1;
     }

@@ -5,6 +5,15 @@
 #include <linux/thermal.h>
 #include <linux/clk.h>
 #include <linux/reboot.h>
+#include <linux/version.h>
+
+#ifdef CONFIG_CPU_FREQ
+#include <linux/sched/cpufreq.h>
+#include <linux/cpu.h>
+#include <linux/cpufreq.h>
+#include <linux/pm_qos.h>
+#endif
+
 struct dev_freq {
 	unsigned long cpu_freq;
 	unsigned long tpu_freq;
@@ -91,6 +100,9 @@ static int cv186x_cooling_get_cur_state(struct thermal_cooling_device *cdev,
 static int cv186x_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 					unsigned long state)
 {
+#ifdef CONFIG_CPU_FREQ
+	int i;
+#endif
 	struct cv186x_cooling_device *cvcdev = cdev->devdata;
 
 	dev_dbg(&cdev->device, "set cur_state=%ld\n", state);
@@ -102,12 +114,23 @@ static int cv186x_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 	if (state < cvcdev->max_clk_state && state != cvcdev->clk_state) {
 		dev_dbg(&cdev->device, "dev_freq[%ld].cpu_freq=%ld\n", state, cvcdev->dev_freqs[state].cpu_freq);
 		dev_dbg(&cdev->device, "dev_freq[%ld].tpu_freq=%ld\n", state, cvcdev->dev_freqs[state].tpu_freq);
+#ifdef CONFIG_CPU_FREQ
+		for_each_possible_cpu(i) {
+			struct cpufreq_policy *policy;
 
+			policy = cpufreq_cpu_get(i);
+			if (!policy)
+				continue;
+
+			if (freq_qos_update_request(policy->max_freq_req, cvcdev->dev_freqs[state].cpu_freq / 1000) < 0)
+				pr_warn("Failed to update freq constraint: CPU%d\n", i);
+		}
+#else
 		if (cvcdev->dev_freqs[state].cpu_freq != clk_get_rate(cvcdev->clk_cpu)) {
 			dev_dbg(&cdev->device, "set cpu freq=%ld\n", cvcdev->dev_freqs[state].cpu_freq);
 			clk_set_rate(cvcdev->clk_cpu, cvcdev->dev_freqs[state].cpu_freq);
 		}
-
+#endif
 		if (cvcdev->dev_freqs[state].tpu_freq != clk_get_rate(cvcdev->clk_tpu)) {
 			dev_dbg(&cdev->device, "set tpu freq=%ld\n", cvcdev->dev_freqs[state].tpu_freq);
 			clk_set_rate(cvcdev->clk_tpu, cvcdev->dev_freqs[state].tpu_freq);
@@ -252,6 +275,8 @@ static int cv186x_cooling_probe(struct platform_device *pdev)
 	return 0;
 }
 
+/* platform_driver.remove return type changed from int to void in Linux 6.12 */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int cv186x_cooling_remove(struct platform_device *pdev)
 {
 	struct cv186x_cooling_device *cvcdev = platform_get_drvdata(pdev);
@@ -261,6 +286,15 @@ static int cv186x_cooling_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#else
+static void cv186x_cooling_remove(struct platform_device *pdev)
+{
+	struct cv186x_cooling_device *cvcdev = platform_get_drvdata(pdev);
+
+	if (!IS_ERR(cvcdev))
+		cv186x_cooling_device_unregister(cvcdev);
+}
+#endif
 
 static const struct of_device_id cv186x_cooling_match[] = {
 	{.compatible = "cvitek,cv186x-cooling"},

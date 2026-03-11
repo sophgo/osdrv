@@ -19,7 +19,7 @@
 #include <linux/kthread.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/moduleparam.h>
-
+#include <linux/version.h>
 #include "vpuconfig.h"
 #include "../vdi_osal.h"
 
@@ -45,7 +45,6 @@ static osal_mutex_t s_log_mutex;
 
 struct vdi_osal_file {
     struct file *filep;
-    mm_segment_t old_fs;
 };
 
 int InitLog()
@@ -108,18 +107,12 @@ void LogMsg(int level, const char *format, ...)
     vsnprintf( logBuf, MAX_PRINT_LENGTH, format, ptr );
     va_end(ptr);
 
-#ifdef ANDROID
-    if (level == ERR) ALOGE("%s", logBuf);
-    else              ALOGI("%s", logBuf);
-    fputs(logBuf, stderr);
-#else
     sprintf(logMsg, "%s%s%s", prefix, logBuf, postfix);
     if (level == ERR) {
         pr_err("%s\n", logMsg);
     } else {
-        printk("%s\n", logMsg);
+        pr_info("%s\n", logMsg);
     }
-#endif
 
     if ((log_decor & LOG_HAS_FILE) && fpLog)
     {
@@ -534,9 +527,16 @@ osal_thread_t osal_thread_create(int(*start_routine)(void*), void*arg, char* nam
 {
     osal_thread_t   handle = NULL;
 #ifdef PLATFORM_SOC
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0))
     struct sched_param param = {
         .sched_priority = 95,
     };
+#else
+    const struct sched_attr attr = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = 95,
+    };
+#endif
 #endif
     handle = kthread_run(start_routine, arg, name);
     if (IS_ERR(handle)) {
@@ -544,7 +544,11 @@ osal_thread_t osal_thread_create(int(*start_routine)(void*), void*arg, char* nam
         return NULL;
     }
 #ifdef PLATFORM_SOC
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0))
     sched_setscheduler(handle, SCHED_RR, &param);
+#else
+    sched_setattr_nocheck(handle, &attr);
+#endif
 #endif
     return handle;
 }

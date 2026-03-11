@@ -9,7 +9,7 @@
 //
 // Description  :
 //-----------------------------------------------------------------------------
-#if defined(linux) || defined(__linux) || defined(ANDROID)
+#if defined(linux) || defined(__linux)
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -18,7 +18,6 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 
-#include "driver/jpu.h"
 #include "../jdi.h"
 #include "jpulog.h"
 #include "jpuapifunc.h"
@@ -32,39 +31,15 @@
 typedef void *  		MUTEX_HANDLE;
 #endif
 
-extern int jpu_get_register_info(int core_idx, jpudrv_buffer_t *arg);
-extern int jpu_reset(int core_idx);
-extern int jpu_wait_interrupt(jpudrv_intr_info_t *arg);
-extern int jpu_free_memory(jpudrv_buffer_t *arg);
-extern int jpu_alloc_memory(jpudrv_buffer_t *arg);
-extern int jpu_invalidate_cache(jpudrv_buffer_t *arg);
-extern int jpu_flush_cache(jpudrv_buffer_t *arg);
-extern int jpu_core_release_resource(int id);
-extern int jpu_core_request_resource(int timeout);
-extern int jpu_open_device(void);
-extern int jpu_get_instancepool(jpudrv_buffer_t* arg);
-extern int jpu_open_instance(jpudrv_inst_info_t *instInfo);
-extern int jpu_close_instance(jpudrv_inst_info_t *instInfo);
-extern int jpu_set_clock_gate(int core_idx, int *enable);
-extern uint32_t jpu_get_extension_address(int core_idx);
-extern void jpu_set_extension_address(int core_idx, uint32_t addr);
-extern void jpu_sw_top_reset(int core_idx);
-extern void jpu_lock(void);
-extern void jpu_unlock(void);
+#define JDI_DRAM_PHYSICAL_BASE          0x00
+#define JDI_DRAM_PHYSICAL_SIZE          (4*1024*1024*1024)
+#define JDI_SYSTEM_ENDIAN               JDI_LITTLE_ENDIAN
+#define JDI_NUM_LOCK_HANDLES            4
 
 static Uint32 jdi_core_stat_fps[MAX_NUM_JPU_CORE] = {0};
 static Uint64 jdi_core_stat_lastts[MAX_NUM_JPU_CORE] = {0};
 static int jpu_show_fps = 0;
 module_param(jpu_show_fps, uint, 0644);
-
-
-/***********************************************************************************
-*
-***********************************************************************************/
-#define JDI_DRAM_PHYSICAL_BASE          0x00
-#define JDI_DRAM_PHYSICAL_SIZE          (4*1024*1024*1024)
-#define JDI_SYSTEM_ENDIAN               JDI_LITTLE_ENDIAN
-#define JDI_NUM_LOCK_HANDLES            4
 
 typedef struct jpudrv_buffer_pool_t
 {
@@ -82,7 +57,7 @@ typedef struct  {
     Int32                   jpu_buffer_pool_count;
 } jdi_info_t;
 
-static jdi_info_t s_jdi_info;
+static jdi_info_t *s_jdi_info;
 
 static Int32 swap_endian(BYTE* data, size_t len, Uint32 endian);
 
@@ -110,9 +85,9 @@ int jdi_get_task_num(void)
     jdi_info_t *jdi;
     int task_num;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
-    if (jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00) {
+    if (jdi == NULL || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00) {
         return 0;
     }
 
@@ -131,7 +106,9 @@ int jdi_init(void)
     jdi_info_t *jdi;
     int i;
 
-    jdi = &s_jdi_info;
+    if (s_jdi_info == NULL)
+        s_jdi_info = vzalloc(sizeof(jdi_info_t));
+    jdi = s_jdi_info;
 
     if (jdi->jpu_fd != -1 && jdi->jpu_fd != 0x00)
     {
@@ -184,7 +161,7 @@ int jdi_release(void)
     jdi_info_t *jdi;
     int i;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if (!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00) {
         return 0;
@@ -200,11 +177,11 @@ int jdi_release(void)
         return 0;
     }
 
-    memset(jdi, 0x00, sizeof(jdi_info_t));
-
     for (i=0; i<MAX_NUM_JPU_CORE; i++)
         jdi_set_clock_gate(i, 0);
 
+    vfree(s_jdi_info);
+    s_jdi_info = NULL;
     return 0;
 }
 
@@ -213,7 +190,7 @@ jpu_instance_pool_t *jdi_get_instance_pool(void)
     jdi_info_t *jdi;
     jpudrv_buffer_t jdb = {0};
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00 )
         return NULL;
@@ -240,7 +217,7 @@ int jdi_open_instance(unsigned long inst_idx)
     jdi_info_t *jdi;
     jpudrv_inst_info_t inst_info;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -257,7 +234,7 @@ int jdi_close_instance(unsigned long inst_idx)
     jdi_info_t *jdi;
     jpudrv_inst_info_t inst_info;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -271,7 +248,7 @@ int jdi_close_instance(unsigned long inst_idx)
 int jdi_get_instance_num(void)
 {
     jdi_info_t *jdi;
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -282,7 +259,7 @@ int jdi_get_instance_num(void)
 int jdi_hw_reset(int core_idx)
 {
     jdi_info_t *jdi;
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -303,7 +280,7 @@ void jdi_unlock(void)
 
 void jdi_write_register(int core_idx, unsigned long addr, unsigned int data)
 {
-    jdi_info_t *jdi = &s_jdi_info;
+    jdi_info_t *jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return;
@@ -316,7 +293,7 @@ unsigned long jdi_read_register(int core_idx, unsigned long addr)
 {
     jdi_info_t *jdi;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00)
         return (unsigned int)-1;
@@ -334,7 +311,7 @@ size_t jdi_write_memory(unsigned long addr, unsigned char *data, size_t len, int
     unsigned long offset;
 #endif
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return 0;
@@ -394,7 +371,7 @@ size_t jdi_read_memory(unsigned long addr, unsigned char *data, size_t len, int 
     unsigned long offset;
 #endif
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -444,7 +421,7 @@ int jdi_insert_external_memory(jpu_buffer_t *vb)
     int i;
     jpudrv_buffer_t jdb;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -482,7 +459,7 @@ void jdi_remove_external_memory(jpu_buffer_t *vb)
     jpudrv_buffer_t jdb;
 
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!vb || !jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return;
@@ -519,7 +496,7 @@ int jdi_allocate_dma_memory(jpu_buffer_t *vb)
     int i;
     jpudrv_buffer_t jdb;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -566,7 +543,7 @@ void jdi_free_dma_memory(jpu_buffer_t *vb)
     jpudrv_buffer_t jdb;
 
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!vb || !jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return;
@@ -640,12 +617,12 @@ int jdi_set_clock_gate(int core_idx, int enable)
     jdi_info_t *jdi = NULL;
     int ret;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return -1;
 
     jdi->clock_state[core_idx] = enable;
-    jpu_set_clock_gate(core_idx, &enable);
+    ret = jpu_set_clock_gate(core_idx, &enable);
     return ret;
 }
 
@@ -654,7 +631,7 @@ int jdi_get_clock_gate(int core_idx)
     jdi_info_t *jdi;
     int ret;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd==-1 || jdi->jpu_fd == 0x00)
         return -1;
@@ -696,11 +673,7 @@ int jdi_wait_inst_ctrl_busy(int core_idx, int timeout, unsigned int addr_flag_re
 
 static u64 jdi_get_current_time(void)
 {
-    struct timespec64 ts;
-
-    ktime_get_ts64(&ts);
-
-    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // in ms
+    return jpu_get_current_time();
 }
 
 
@@ -712,7 +685,7 @@ int jdi_wait_interrupt(int core_idx, int timeout, unsigned long instIdx)
     int ret;
     jpudrv_intr_info_t intr_info;
 
-    jdi = &s_jdi_info;
+    jdi = s_jdi_info;
 
     if(!jdi || jdi->jpu_fd <= 0)
         return -1;
@@ -740,7 +713,7 @@ int jdi_wait_interrupt(int core_idx, int timeout, unsigned long instIdx)
         }
 
         if (currentTs >= jdi_core_stat_lastts[intr_info.core_idx] + 1000 ) {
-            JLOG(ERR, "jdi core:%d fps:%d  \n"
+            pr_info("jdi core:%d fps:%d  \n"
                 , intr_info.core_idx, jdi_core_stat_fps[intr_info.core_idx]);
 
             jdi_core_stat_lastts[intr_info.core_idx] = currentTs;
@@ -874,6 +847,18 @@ void jdi_release_core(int coreidx)
 
 int jdi_request_core(int timeout)
 {
-    return jpu_core_request_resource(timeout);
+    int core_idx;
+
+    core_idx = jpu_core_request_resource(timeout);
+    if (core_idx >= 0) {
+        jpu_clear_stat_info(core_idx);
+        s_jpu_usage_info.jpu_laster_time[core_idx] = jdi_get_current_time();
+    }
+
+    return core_idx;
 }
 
+void jpu_update_stat_cycles(int coreIdx, int hwCycles)
+{
+    s_jpu_usage_info.jpu_stat_cycles[coreIdx] += hwCycles;
+}

@@ -1,6 +1,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
+#include <linux/utsname.h>
 
 #include "dpu_debug.h"
 #include <linux/comm_dpu.h>
@@ -295,7 +296,7 @@ static void _disp_range_to_string(dpu_disp_range_e disp_range, char *str, int le
 	}
 }
 
-int dpu_ctx_proc_show(struct seq_file *m, void *v)
+static int dpu_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i, j;
 	char c[50];
@@ -311,7 +312,11 @@ int dpu_ctx_proc_show(struct seq_file *m, void *v)
 	struct dpu_ctx_s **p_dpu_ctx = dpu_get_shdw_ctx();
 
 	// Module Param
-	seq_printf(m, "\nModule: [DPU], Build Time[%s]\n", UTS_VERSION);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    seq_printf(m, "\nModule: [DPU], Build Time[%s]\n", UTS_VERSION);
+#else
+    seq_printf(m, "\nModule: [DPU], Build Time[%s]\n", utsname()->version);
+#endif
 	seq_puts(m, "\n-------------------------------DPU HardWare STATUS-------------------------------\n");
 	seq_printf(m, "%20s%20s\n", "Busy", "STCnt");
 	//
@@ -533,7 +538,11 @@ static ssize_t dpu_proc_write(struct file *file, const char __user *user_buf, si
 
 static int dpu_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, dpu_proc_show, PDE_DATA(inode));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    return single_open(file, dpu_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, dpu_proc_show, pde_data(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

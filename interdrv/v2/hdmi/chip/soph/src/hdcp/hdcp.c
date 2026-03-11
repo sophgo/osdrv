@@ -15,18 +15,18 @@
 #define INT_HDCP_FAIL		(A_APIINTSTAT_HDCP_FAILED_MASK)
 #define INT_HDCP_ENGAGED	(A_APIINTSTAT_HDCP_ENGAGED_MASK)
 
-void _set_device_mode(hdmi_tx_dev_t *dev, video_mode_t mode)
+static void __maybe_unused _set_device_mode(hdmi_tx_dev_t *dev, video_mode_t mode)
 {
 	u8 set_mode = (mode == HDMI ? 1 : 0) ; // 1 - HDMI : 0 - DVI
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_HDMIDVI_MASK, set_mode);
 }
 
-void _enable_feature11(hdmi_tx_dev_t *dev, u8 bit)
+static void _enable_feature11(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_EN11FEATURE_MASK, bit);
 }
 
-void _override_hdcp2p2_switch(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused _override_hdcp2p2_switch(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(HDCP22REG_CTRL, HDCP22REG_CTRL_OVR_EN_MASK,  bit);
 }
@@ -36,27 +36,27 @@ void hdcp_rxdetect(hdmi_tx_dev_t *dev, u8 enable)
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_RXDETECT_MASK, enable);
 }
 
-void _enable_avmute(hdmi_tx_dev_t *dev, u8 bit)
+static void _enable_avmute(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_AVMUTE_MASK, bit);
 }
 
-void _ri_check(hdmi_tx_dev_t *dev, u8 bit)
+static void _ri_check(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_SYNCRICHECK_MASK, bit);
 }
 
-void _bypass_encryption(hdmi_tx_dev_t *dev, u8 bit)
+static void _bypass_encryption(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_BYPENCRYPTION_MASK, bit);
 }
 
-void _enable_i2c_fast_mode(hdmi_tx_dev_t *dev, u8 bit)
+static void _enable_i2c_fast_mode(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_I2CFASTMODE_MASK, bit);
 }
 
-void _enhanced_link_verification(hdmi_tx_dev_t *dev, u8 bit)
+static void _enhanced_link_verification(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG0, A_HDCPCFG0_ELVENA_MASK, bit);
 }
@@ -67,104 +67,104 @@ void hdcp_sw_reset(hdmi_tx_dev_t *dev)
 	dev_write_mask(A_HDCPCFG1, A_HDCPCFG1_SWRESET_MASK, 0);
 }
 
-void _disable_encryption(hdmi_tx_dev_t *dev, u8 bit)
+static void _disable_encryption(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG1, A_HDCPCFG1_ENCRYPTIONDISABLE_MASK, bit);
 }
 
-void _encoding_packet_header(hdmi_tx_dev_t *dev, u8 bit)
+static void _encoding_packet_header(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG1, A_HDCPCFG1_PH2UPSHFTENC_MASK, bit);
 }
 
-void _disable_ksv_list_check(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused _disable_ksv_list_check(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_HDCPCFG1, A_HDCPCFG1_DISSHA1CHECK_MASK, bit);
 }
 
-u8 _hdcp_engaged(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _hdcp_engaged(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask(A_HDCPOBS0, A_HDCPOBS0_HDCPENGAGED_MASK);
 }
 
-u8 _authentication_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _authentication_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask(A_HDCPOBS0, A_HDCPOBS0_SUBSTATEA_MASK | A_HDCPOBS0_STATEA_MASK);
 }
 
-u8 _cipher_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _cipher_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask(A_HDCPOBS2, A_HDCPOBS2_STATEE_MASK);
 }
 
-u8 _revocation_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _revocation_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask((A_HDCPOBS1), A_HDCPOBS1_STATER_MASK);
 }
 
-u8 _oess_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _oess_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask((A_HDCPOBS1), A_HDCPOBS1_STATEOEG_MASK);
 }
 
-u8 _eess_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _eess_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read_mask((A_HDCPOBS2), A_HDCPOBS2_STATEEEG_MASK);
 }
 
-u8 _debug_info(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _debug_info(hdmi_tx_dev_t *dev)
 {
 	return dev_read(A_HDCPOBS3);
 }
 
-void _interrupt_clear(hdmi_tx_dev_t *dev, u8 value)
+static void _interrupt_clear(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write((A_APIINTCLR), value);
 }
 
-u8 _interrupt_status(hdmi_tx_dev_t *dev)
+static u8 _interrupt_status(hdmi_tx_dev_t *dev)
 {
 	return dev_read(A_APIINTSTAT);
 }
 
-void _interrupt_mask(hdmi_tx_dev_t *dev, u8 value)
+static void _interrupt_mask(hdmi_tx_dev_t *dev, u8 value)
 {;
 	dev_write((A_APIINTMSK), value);
 }
 
-u8 _hdcp_interrupt_mask_status(hdmi_tx_dev_t *dev)
+static u8 _hdcp_interrupt_mask_status(hdmi_tx_dev_t *dev)
 {
 	return dev_read(A_APIINTMSK);
 }
 
-void _hsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void _hsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_VIDPOLCFG, A_VIDPOLCFG_HSYNCPOL_MASK, bit);
 }
 
 
-void _vsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void _vsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_VIDPOLCFG, A_VIDPOLCFG_VSYNCPOL_MASK, bit);
 }
 
-void _hdcp_data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void _hdcp_data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_VIDPOLCFG, A_VIDPOLCFG_DATAENPOL_MASK, bit);
 }
 
-void _unencrypted_video_color(hdmi_tx_dev_t *dev, u8 value)
+static void _unencrypted_video_color(hdmi_tx_dev_t *dev, u8 value)
 {
 
 	dev_write_mask(A_VIDPOLCFG, A_VIDPOLCFG_UNENCRYPTCONF_MASK, value);
 }
 
-void _oess_window_size(hdmi_tx_dev_t *dev, u8 value)
+static void _oess_window_size(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write((A_OESSWCFG), value);
 }
 
-u16 _core_version(hdmi_tx_dev_t *dev)
+static u16 __maybe_unused _core_version(hdmi_tx_dev_t *dev)
 {
 	u16 version = 0;
 	version = dev_read(A_COREVERLSB);
@@ -172,34 +172,34 @@ u16 _core_version(hdmi_tx_dev_t *dev)
 	return version;
 }
 
-u8 _controller_version(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _controller_version(hdmi_tx_dev_t *dev)
 {
 	return dev_read(A_HDCPCFG0);
 }
 
-void _memory_access_request(hdmi_tx_dev_t *dev, u8 bit)
+static void _memory_access_request(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_KSVMEMCTRL, A_KSVMEMCTRL_KSVMEMREQUEST_MASK, bit);
 }
 
-u8 _memory_access_granted(hdmi_tx_dev_t *dev)
+static u8 _memory_access_granted(hdmi_tx_dev_t *dev)
 {
 	return (u8)((dev_read(A_KSVMEMCTRL) & A_KSVMEMCTRL_KSVMEMACCESS_MASK) >> 1);
 }
 
-void _update_ksv_list_state(hdmi_tx_dev_t *dev, u8 bit)
+static void _update_ksv_list_state(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(A_KSVMEMCTRL, A_KSVMEMCTRL_SHA1FAIL_MASK, bit);
 	dev_write_mask(A_KSVMEMCTRL, A_KSVMEMCTRL_KSVCTRLUPD_MASK, 1);
 	dev_write_mask(A_KSVMEMCTRL, A_KSVMEMCTRL_KSVCTRLUPD_MASK, 0);
 }
 
-u8 _ksv_sha1_status(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _ksv_sha1_status(hdmi_tx_dev_t *dev)
 {
 	return (u8)((dev_read(A_KSVMEMCTRL) & A_KSVMEMCTRL_KSVSHA1STATUS_MASK) >> 4);
 }
 
-u16 _bstatus_read(hdmi_tx_dev_t *dev)
+static u16 _bstatus_read(hdmi_tx_dev_t *dev)
 {
 	u16 bstatus = 0;
 
@@ -208,7 +208,7 @@ u16 _bstatus_read(hdmi_tx_dev_t *dev)
 	return bstatus;
 }
 
-void _m0_read(hdmi_tx_dev_t *dev, u8 * data)
+static void __maybe_unused _m0_read(hdmi_tx_dev_t *dev, u8 * data)
 {
 	u8 i = 0;
 	for (i = 0 ; i < HDCP_M0_SIZE; i++ ) {
@@ -231,7 +231,7 @@ int _ksv_list_read(hdmi_tx_dev_t *dev, u16 size, u8 * data)
 	return 0;
 }
 #endif
-void _sha1vh_read(hdmi_tx_dev_t *dev, u8 * data)
+static void __maybe_unused _sha1vh_read(hdmi_tx_dev_t *dev, u8 * data)
 {
 	u8 i = 0;
 	for (i = 0 ; i < HDCP_VH_SIZE; i++ ) {
@@ -239,12 +239,12 @@ void _sha1vh_read(hdmi_tx_dev_t *dev, u8 * data)
 	}
 }
 
-void _revoc_list_write(hdmi_tx_dev_t *dev, u16 addr, u8 data)
+static void __maybe_unused _revoc_list_write(hdmi_tx_dev_t *dev, u16 addr, u8 data)
 {
 	dev_write(HDCP_REVOC_LIST + addr, data);
 }
 
-void _an_write(hdmi_tx_dev_t *dev, u8 * data)
+static void __maybe_unused _an_write(hdmi_tx_dev_t *dev, u8 * data)
 {
 	short i = 0;
 	if (data != 0) {
@@ -257,7 +257,7 @@ void _an_write(hdmi_tx_dev_t *dev, u8 * data)
 	}
 }
 
-u8 _bksv_read(hdmi_tx_dev_t *dev, u8 * bksv)
+static u8 __maybe_unused _bksv_read(hdmi_tx_dev_t *dev, u8 * bksv)
 {
 	short i = 0;
 	if (bksv != 0) {
@@ -270,7 +270,7 @@ u8 _bksv_read(hdmi_tx_dev_t *dev, u8 * bksv)
 	}
 }
 
-u8 _hdcp_2p2_version(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _hdcp_2p2_version(hdmi_tx_dev_t *dev)
 {
 	pr_err("%s:TBI", __func__);
 	//1 - Configure the RX FIFO to read HDCP 2.2 version:
@@ -290,14 +290,14 @@ u8 _hdcp_2p2_version(hdmi_tx_dev_t *dev)
 	return 0x0;
 }
 
-u8 _hdcp_2p2_reset_engine(hdmi_tx_dev_t *dev)
+static u8 _hdcp_2p2_reset_engine(hdmi_tx_dev_t *dev)
 {
 	pr_err("%s:TBI", __func__);
 	//Reset the HDCP 2.2 engine, write “1” in the h22s_ctrl.swrstreq bit field register.
 	return TRUE;
 }
 
-u8 _hdcp_2p2_authentication(hdmi_tx_dev_t *dev)
+static u8 _hdcp_2p2_authentication(hdmi_tx_dev_t *dev)
 {
 	pr_err("%s:TBI", __func__);
 	//Perform the HDCP 2.2 authentication as described in the “HDCP 2.2 Authentication” on page 228.
@@ -447,7 +447,7 @@ int hdcp_initialize(hdmi_tx_dev_t *dev)
 	return 0;
 }
 
-void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp)
+static void hdcp_1p4_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp)
 {
 	//_OverrideHDCP2p2Switch(dev, TRUE);
 
@@ -572,7 +572,7 @@ int hdcp_configure(hdmi_tx_dev_t *dev, hdcp_params_t * hdcp, video_params_t *vid
 }
 
 // SHA-1 calculation by Software
-u8 _read_ksv_list(hdmi_tx_dev_t *dev, int *param)
+static u8 _read_ksv_list(hdmi_tx_dev_t *dev, int *param)
 {
 	int timeout = 1000;
 	u16 bstatus = 0;

@@ -25,7 +25,7 @@ ccflags-y +=-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
 
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
-KBUILD_EXTRA_SYMBOLS += $(PWD)/../Module.symvers
+# KBUILD_EXTRA_SYMBOLS += $(PWD)/../Module.symvers
 else
 all:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules

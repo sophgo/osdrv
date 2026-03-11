@@ -1,6 +1,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
+#include <linux/utsname.h>
 
 #include "base_ctx.h"
 
@@ -169,7 +170,7 @@ static void _pix_fmt_to_string(pixel_format_e pix_fmt, char *str, int len)
 	}
 }
 
-int vpss_ctx_proc_show(struct seq_file *m, void *v)
+static int vpss_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i, j;
 	char c[32];
@@ -181,7 +182,11 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 	vpss_get_mod_param(&mod_param);
 
 	// Module Param
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	seq_printf(m, "\nModule: [VPSS], Build Time[%s]\n", UTS_VERSION);
+#else
+	seq_printf(m, "\nModule: [VPSS], Build Time[%s]\n", utsname()->version);
+#endif
 	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------\n");
 	seq_printf(m, "%25s\n", "vpss_vb_source");
 	seq_printf(m, "%25s\n", vb_source[mod_param.vpss_buf_source]);
@@ -448,7 +453,7 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-int vpp_ctx_proc_show(struct seq_file *m, void *v)
+static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i;
 	char c[32];
@@ -563,7 +568,7 @@ int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VPSS USAGE INFO-------------------------\n");
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		seq_printf(m, "{\"id\":%d, \"usage(instant|long)\":%5d%%|%5d%% \n", i, dev->vpss_cores[i].duty_ratio,\
-                (int)(dev->vpss_cores[i].duty_ratio_long / ts.tv_sec));
+			(int)(dev->vpss_cores[i].duty_ratio_long / ts.tv_sec));
 	}
 
 	return 0;
@@ -605,7 +610,11 @@ static ssize_t vpss_proc_write(struct file *file, const char __user *user_buf, s
 
 static int vpss_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	return single_open(file, vpss_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, vpss_proc_show, pde_data(inode));
+#endif
 }
 
 static ssize_t vpp_proc_write(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
@@ -627,7 +636,11 @@ static ssize_t vpp_proc_write(struct file *file, const char __user *user_buf, si
 
 static int vpp_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	return single_open(file, vpp_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, vpp_proc_show, pde_data(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

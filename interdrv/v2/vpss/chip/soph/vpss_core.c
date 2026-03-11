@@ -63,7 +63,7 @@ module_param(vpss_log_lv, int, 0644);
 module_param(hw_mask, int, 0644);
 
 
-void vpss_timer_core_update(void *data)
+static void vpss_timer_core_update(void *data)
 {
 	u8 i;
 	u32 duration;
@@ -89,7 +89,7 @@ void vpss_timer_core_update(void *data)
 	}
 }
 
-int vpss_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
+static int vpss_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	//struct vpss_device *vpss_dev = (struct vpss_device *)dev;
 	int rc = -1;
@@ -675,20 +675,22 @@ err_dev:
  * bmd_remove - device remove method.
  * @pdev: Pointer of platform device.
  */
-static int vpss_remove(struct platform_device *pdev)
+static void vpss_remove(struct platform_device *pdev)
 {
 	struct vpss_device *dev;
 	int i;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
-		return -EINVAL;
+		// return -EINVAL;
+		return;
 	}
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get vpss drvdata");
-		return -EINVAL;
+		// return -EINVAL;
+		return;
 	}
 
 	vpss_dev_deinit(dev);
@@ -707,10 +709,18 @@ static int vpss_remove(struct platform_device *pdev)
 
 	TRACE_VPSS(DBG_WARN, "vpss remove done\n");
 
-	return 0;
+	// return 0;
 }
 
-int vpss_suspend(struct device *dev)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+static int vpss_remove_ex(struct platform_device *pdev)
+{
+    vpss_remove(pdev);
+    return 0;
+}
+#endif
+
+static int vpss_suspend(struct device *dev)
 {
 	s32 ret = 0;
 
@@ -731,10 +741,12 @@ int vpss_suspend(struct device *dev)
 	return 0;
 }
 
-int vpss_resume(struct device *dev)
+static int vpss_resume(struct device *dev)
 {
 	s32 ret = 0;
 	u8 i = 0;
+	struct vpss_device *vpss_dev = dev_get_drvdata(dev);
+	struct vpss_core *core;
 
 	/*step 1 turn on clock*/
 	vpss_clk_enable();
@@ -743,7 +755,16 @@ int vpss_resume(struct device *dev)
 	/*step 2 register reset*/
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		if (hw_mask & BIT(i)) {
+			core = &vpss_dev->vpss_cores[i];
+
+			if (core->clk_vpss)
+				clk_enable(core->clk_vpss);
+
 			sclr_ctrl_init(i, true);
+
+			if (core->clk_vpss)
+				clk_disable(core->clk_vpss);
+
 			TRACE_VPSS(DBG_INFO, "vpss-%d init done\n", i);
 		}
 	}
@@ -783,7 +804,11 @@ static struct platform_device vpss_pdev = {
 
 static struct platform_driver vpss_pdrv = {
 	.probe      = vpss_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+	.remove     = vpss_remove_ex,
+#else
 	.remove     = vpss_remove,
+#endif
 	.driver     = {
 		.name		= "vpss",
 		.owner		= THIS_MODULE,
@@ -863,3 +888,7 @@ MODULE_AUTHOR("weiyong.luo");
 MODULE_LICENSE("GPL");
 module_init(vpss_core_init);
 module_exit(vpss_core_exit);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
+MODULE_IMPORT_NS(DMA_BUF);
+#endif
+

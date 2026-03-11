@@ -17,4 +17,6 @@ int mesh_gdc_do_op(struct ldc_vdev *wdev, enum gdc_usage usage,
 		   void *cb_param, unsigned int cb_param_size, mod_id_e mod_id,
 		   rotation_e rotation);
 
+void mesh_gen_get_1st_size(size_s in_size, unsigned int *mesh_1st_size);
+
 #endif /* _MESH_H */

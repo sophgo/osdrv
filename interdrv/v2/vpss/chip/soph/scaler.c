@@ -16,6 +16,7 @@
 #else
 #include <linux/types.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 #endif	// ENV_CVITEST
 
@@ -645,7 +646,7 @@ struct sclr_core_cfg *sclr_get_cfg(u8 inst)
  * @param inst: (0~3), the instance of scaler which want to be configured.
  * @param read_shadow: true(shadow); false(working)
  */
-void sclr_reg_shadow_sel(u8 inst, bool read_shadow)
+static void sclr_reg_shadow_sel(u8 inst, bool read_shadow)
 {
 	_reg_write(reg_base + REG_SCL_SHD(inst), (read_shadow ? 0x0 : 0x2));
 }
@@ -739,7 +740,7 @@ void sclr_set_scale_phase(u8 inst, u32 h_ph, u32 v_ph)
  *					 In cb mode, use it's own coeff rather than ones update by sclr_update_coef().
  * @param update: update parameter or not
  */
-void sclr_set_scale_mode(u8 inst, bool mir_enable, bool cb_enable, bool update)
+static void sclr_set_scale_mode(u8 inst, bool mir_enable, bool cb_enable, bool update)
 {
 		u32 tmp = 0;
 
@@ -1020,7 +1021,7 @@ bool sclr_img_reg_shadow_mask(u8 inst, bool mask)
 	return is_masked;
 }
 
-void vpss_v_sw_top_reset(u8 inst)
+static void vpss_v_sw_top_reset(u8 inst)
 {
 	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
 	_reg_write_mask(vi_sys_reg_base + 0x4, reset_apb_mask[inst], reset_apb_mask[inst]);// apb reset
@@ -1030,7 +1031,7 @@ void vpss_v_sw_top_reset(u8 inst)
 	return;
 }
 
-void vpss_d_sw_top_reset(u8 inst)
+static void vpss_d_sw_top_reset(u8 inst)
 {
 	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
 	_reg_write_mask(vo_sys_reg_base + 0x4, reset_mask[inst], reset_mask[inst]);// apb reset
@@ -1040,7 +1041,7 @@ void vpss_d_sw_top_reset(u8 inst)
 	return;
 }
 
-void vpss_t_sw_top_reset(u8 inst)
+static void vpss_t_sw_top_reset(u8 inst)
 {
 	_reg_write_mask(top_rst_reg_base, reset_mask[inst], 0);// sw + apb reset
 	_reg_write_mask(top_rst_reg_base, reset_mask[inst], reset_mask[inst]);
@@ -2346,7 +2347,7 @@ static void _map_ctrl_to_odma(struct sclr_ctrl_cfg *cfg,
 	odma_cfg->mem.pitch_c = cfg->dst.pitch_c;
 }
 
-int _map_img_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg, union cmdq_set *cmd_start,
+static int _map_img_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg, union cmdq_set *cmd_start,
 			 u16 cmd_idx)
 {
 	struct sclr_img_cfg img_cfg;
@@ -2417,7 +2418,7 @@ int _map_img_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg, union cmdq_set *cmd_start,
 	return cmd_idx;
 }
 
-int _map_sc_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg,
+static int _map_sc_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg,
 			union cmdq_set *cmd_start, u16 cmd_idx)
 {
 	u32 tmp = 0;
@@ -2522,7 +2523,7 @@ int _map_sc_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg,
 	return cmd_idx;
 }
 
-int _map_border_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg,
+static int _map_border_to_cmdq(struct sclr_ctrl_cfg *ctrl_cfg,
 			union cmdq_set *cmd_start, u16 cmd_idx)
 {
 	u8 i = 0;

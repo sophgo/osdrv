@@ -11,7 +11,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/compat.h>
-
+#include <linux/vmalloc.h>
 #include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/version.h>
@@ -281,7 +281,11 @@ static int base_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 static int base_remove(struct platform_device *pdev)
+#else
+static void base_remove(struct platform_device *pdev)
+#endif
 {
 	struct base_device *ndev = platform_get_drvdata(pdev);
 
@@ -300,7 +304,11 @@ static int base_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 	TRACE_BASE(DBG_DEBUG, "%s DONE\n", __func__);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return 0;
+#else
+	return;
+#endif
 }
 
 static const struct of_device_id base_dt_match[] = { { .compatible = "cvitek,base" }, {} };
@@ -319,7 +327,11 @@ static int __init base_init(void)
 {
 	int rc;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	pbase_class = class_create(THIS_MODULE, BASE_CLASS_NAME);
+#else
+	pbase_class = class_create(BASE_CLASS_NAME);
+#endif
 	if (IS_ERR(pbase_class)) {
 		TRACE_BASE(DBG_ERR, "create class failed\n");
 		rc = PTR_ERR(pbase_class);
@@ -348,3 +360,6 @@ MODULE_DESCRIPTION("Cvitek base driver");
 MODULE_LICENSE("GPL");
 module_init(base_init);
 module_exit(base_exit);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
+MODULE_IMPORT_NS(DMA_BUF);
+#endif

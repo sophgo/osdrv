@@ -55,6 +55,15 @@ struct ddr_retrain {
 /**
  * struct sop_vi - VI IP abstraction
  */
+
+struct vi_proc_core_status {
+	u32 hw_duration;
+	u32 hw_duration_total;
+	u32 duty_ratio;
+	u32 duty_ratio_long;
+	struct timespec64 ts_start;
+	struct timespec64 ts_end;
+};
 struct sop_vi_dev {
 	struct device			*dev;
 	struct class			*vi_class;
@@ -122,6 +131,7 @@ struct sop_vi_dev {
 	struct vi_thread_attr		vi_th[E_VI_TH_MAX];
 	atomic_t			state;
 	atomic_t			isp_error_type[ISP_PRERAW_MAX];
+	struct vi_proc_core_status vi_core_status;
 };
 
 #ifdef __cplusplus

@@ -15,7 +15,7 @@
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(_WIN64) || defined(WIN32) || defined(__MINGW32__)
 #	define PLATFORM_WIN32
-#elif defined(linux) || defined(__linux) || defined(ANDROID)
+#elif defined(linux) || defined(__linux)
 #	define PLATFORM_LINUX
 #elif defined(unix) || defined(__unix)
 #   define PLATFORM_QNX
@@ -37,18 +37,11 @@
 #define API_VERSION_PATCH       9
 #define API_VERSION             ((API_VERSION_MAJOR<<16) | (API_VERSION_MINOR<<8) | API_VERSION_PATCH)
 
-#if defined(PLATFORM_NON_OS) || defined(ANDROID) || defined(MFHMFT_EXPORTS) || defined(PLATFORM_QNX) || defined(_MSC_VER)
-//#define SUPPORT_FFMPEG_DEMUX
-#else
-// #define SUPPORT_FFMPEG_DEMUX
-#endif
-
 //------------------------------------------------------------------------------
 // COMMON
 //------------------------------------------------------------------------------
-#if defined(linux) || defined(__linux) || defined(ANDROID)
+#if defined(linux) || defined(__linux)
 #define SUPPORT_INTERRUPT
-#define SUPPORT_MULTI_INST_INTR
 #endif
 
 

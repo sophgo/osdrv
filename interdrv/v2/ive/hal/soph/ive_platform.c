@@ -1033,7 +1033,7 @@ static void cmdq_printk(cmdq_c *p)
 }
 #endif
 
-uint32_t width_align(const uint32_t width, const uint32_t align)
+static uint32_t width_align(const uint32_t width, const uint32_t align)
 {
 	uint32_t stride = (uint32_t)(width / align) * align;
 	if (stride < width) {
@@ -1043,7 +1043,7 @@ uint32_t width_align(const uint32_t width, const uint32_t align)
 }
 
 //#define ENUM_TYPE_CASE(x) (#x+15)
-u32 get_channel_count(ive_image_type_e type)
+static u32 get_channel_count(ive_image_type_e type)
 {
 	switch (type) {
 	case IVE_IMAGE_TYPE_U8C1:
@@ -1072,7 +1072,7 @@ u32 get_channel_count(ive_image_type_e type)
 	}
 }
 
-void dump_ive_image(char *name, ive_image_s *img)
+static void dump_ive_image(char *name, ive_image_s *img)
 {
 	s32 i = 0;
 
@@ -1094,7 +1094,7 @@ void dump_ive_image(char *name, ive_image_s *img)
 	}
 }
 
-void dump_ive_data(char *name, ive_data_s *data)
+static void dump_ive_data(char *name, ive_data_s *data)
 {
 	pr_info("Data %s\n", name);
 	if (data != NULL) {
@@ -1109,7 +1109,7 @@ void dump_ive_data(char *name, ive_data_s *data)
 	}
 }
 
-void dump_ive_mem(char *name, ive_mem_info_s *mem)
+static void dump_ive_mem(char *name, ive_mem_info_s *mem)
 {
 	pr_info("Mem %s\n", name);
 	if (mem != NULL) {
@@ -1122,7 +1122,7 @@ void dump_ive_mem(char *name, ive_mem_info_s *mem)
 	}
 }
 
-s32 get_img_fmt_sel(ive_image_type_e type)
+static s32 get_img_fmt_sel(ive_image_type_e type)
 {
 	s32 r = FAILURE;
 
@@ -1432,7 +1432,7 @@ s32 ive_dump_reg_state(bool bDump)
 	return SUCCESS;
 }
 
-void ive_reset_reg(s32 select, ive_top_c *Top, s32 dev_id)
+static void ive_reset_reg(s32 select, ive_top_c *Top, s32 dev_id)
 {
 	s32 i = 0;
 	s32 size = 0;
@@ -1771,7 +1771,7 @@ void ive_reset_reg(s32 select, ive_top_c *Top, s32 dev_id)
 	}
 }
 
-s32 clear_framedone(s32 status, s32 log, s32 dev_id)
+static s32 clear_framedone(s32 status, s32 log, s32 dev_id)
 {
 	if (log)
 		pr_info("framedone [%x]\n", status);
@@ -1782,7 +1782,7 @@ s32 clear_framedone(s32 status, s32 log, s32 dev_id)
 	return status;
 }
 
-s32 clear_interrupt_status(s32 status, bool enlog, s32 dev_id)
+static s32 clear_interrupt_status(s32 status, bool enlog, s32 dev_id)
 {
 	if (enlog)
 		pr_info("interrupt status [%x]\n", status);
@@ -1915,7 +1915,7 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 	return ret;
 }
 
-s32 emit_bgm_tile(
+static s32 emit_bgm_tile(
 	struct ive_device *ndev, bool enWdma_y, bool enOdma, s32 optype,
 	ive_top_c *ive_top_c, ive_filterop_c *ive_filterop_c,
 	img_in_c *img_in_c_f, ive_gmm_c *ive_gmm_c_f, isp_dma_ctl_c *wdma_y_ctl_c,
@@ -1935,12 +1935,12 @@ s32 emit_bgm_tile(
 	s32 done_mask = 0;
 	s32 tileNum = 1 + (width - 1) / 480;
 	s32 remain_width = width;
-	s32 tileLen[6] = { 0 };
-	s32 segLen[6] = { 0 };
-	s32 inOffset[6] = { 0 };
-	s32 outOffset[6] = { 0 };
-	s32 cropstart[6] = { 0 };
-	s32 cropend[6] = { 0 };
+	s32 tileLen[MAX_TILES] = { 0 };
+	s32 segLen[MAX_TILES] = { 0 };
+	s32 inOffset[MAX_TILES] = { 0 };
+	s32 outOffset[MAX_TILES] = { 0 };
+	s32 cropstart[MAX_TILES] = { 0 };
+	s32 cropend[MAX_TILES] = { 0 };
 	s32 i, round, n;
 	//DEFINE_img_in_c(_img_in_c);
 	img_in_c _img_in_c = _DEFINE_img_in_c;
@@ -2014,7 +2014,7 @@ s32 emit_bgm_tile(
 		ive_update_bg_c_f = &_ive_update_bg_c;
 	}
 
-	if (tileNum > 6)
+	if (tileNum > MAX_TILES)
 		return FAILURE;
 
 	//for (dev_id = 0; dev_id < IVE_DEV_MAX; dev_id++) {
@@ -2573,7 +2573,7 @@ s32 emit_bgm_tile(
 	return SUCCESS;
 }
 
-s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
+static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 		 ive_filterop_c *ive_filterop_c, img_in_c *img_in_c_f,
 		 isp_dma_ctl_c *wdma_y_ctl_c, isp_dma_ctl_c *rdma_img1_ctl_c,
 		 isp_dma_ctl_c *wdma_c_ctl_c, isp_dma_ctl_c *rdma_eigval_ctl_c,
@@ -2593,12 +2593,12 @@ s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 
 	s32 tileNum = (src1->width - 32 + 447) / 448;
 	s32 remain_width = src1->width + 32 * (tileNum - 1);
-	s32 tileLen[6] = { 0 };
-	s32 segLen[6] = { 0 };
-	s32 inOffset[6] = { 0 };
-	s32 outOffset[6] = { 0 };
-	s32 cropstart[6] = { 0 };
-	s32 cropend[6] = { 0 };
+	s32 tileLen[MAX_TILES] = { 0 };
+	s32 segLen[MAX_TILES] = { 0 };
+	s32 inOffset[MAX_TILES] = { 0 };
+	s32 outOffset[MAX_TILES] = { 0 };
+	s32 cropstart[MAX_TILES] = { 0 };
+	s32 cropend[MAX_TILES] = { 0 };
 	bool isCanny = (optype == MOD_CANNY);
 	ive_map_c *ive_map_c_f;
 	isp_dma_ctl_c *rdma_gradfg_ctl_c;
@@ -2620,7 +2620,7 @@ s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 	ive_map_c_f = &_ive_map_c;
 	rdma_gradfg_ctl_c = &_rdma_gradfg_ctl_c;
 
-	if (tileNum > 6)
+	if (tileNum > MAX_TILES)
 		return FAILURE;
 
 	//for (dev_id = 0; dev_id < IVE_DEV_MAX; dev_id++) {
@@ -3213,7 +3213,7 @@ s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 	return SUCCESS;
 }
 
-void ive_set_int(ive_top_c *ive_top_c, bool isEnable, s32 dev_id)
+static void ive_set_int(ive_top_c *ive_top_c, bool isEnable, s32 dev_id)
 {
 	ive_top_c->reg_94.reg_intr_en_hist = isEnable;
 	ive_top_c->reg_94.reg_intr_en_intg = isEnable;
@@ -3228,7 +3228,7 @@ void ive_set_int(ive_top_c *ive_top_c, bool isEnable, s32 dev_id)
 	writel(ive_top_c->reg_94.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_94));
 }
 
-void ive_reset(struct ive_device *ndev, ive_top_c *ive_top_c, s32 dev_id)
+static void ive_reset(struct ive_device *ndev, ive_top_c *ive_top_c, s32 dev_id)
 {
 	s32 i = 0;
 	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
@@ -3302,7 +3302,7 @@ void ive_reset(struct ive_device *ndev, ive_top_c *ive_top_c, s32 dev_id)
 	//}
 }
 
-s32 ive_get_mod_u8(s32 tpye)
+static s32 ive_get_mod_u8(s32 tpye)
 {
 	switch (tpye) {
 	case IVE_IMAGE_TYPE_U8C1:
@@ -3314,7 +3314,7 @@ s32 ive_get_mod_u8(s32 tpye)
 	return -1;
 }
 
-void ive_set_wh(ive_top_c *top, u32 w, u32 h, char *name, s32 dev_id)
+static void ive_set_wh(ive_top_c *top, u32 w, u32 h, char *name, s32 dev_id)
 {
 	top->reg_2.reg_img_heightm1 = h - 1;
 	top->reg_2.reg_img_widthm1 = w - 1;
@@ -3325,7 +3325,7 @@ void ive_set_wh(ive_top_c *top, u32 w, u32 h, char *name, s32 dev_id)
 	g_debug_info.src_h = top->reg_2.reg_img_heightm1;
 }
 
-s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s32 dev_id)
+static s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s32 dev_id)
 {
 	// s32 swMode = 0;
 	s32 swMode = 0;
@@ -3393,7 +3393,7 @@ s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s32 dev_
 	return SUCCESS;
 }
 
-s32 set_img_dst2(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_c_ctl_c, s32 dev_id)
+static s32 set_img_dst2(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_c_ctl_c, s32 dev_id)
 {
 	//DEFINE_isp_dma_ctl_c(_wdma_c_ctl_c);
 	isp_dma_ctl_c _wdma_c_ctl_c = _DEFINE_isp_dma_ctl_c;
@@ -3434,7 +3434,7 @@ s32 set_img_dst2(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_c_ctl_c, s32 dev_
 	return SUCCESS;
 }
 
-s32 set_img_src1(ive_src_image_s *src_img, img_in_c *img_in_c, ive_top_c *ive_top_c, s32 dev_id)
+static s32 set_img_src1(ive_src_image_s *src_img, img_in_c *img_in_c, ive_top_c *ive_top_c, s32 dev_id)
 {
 	//test2:reset image in ip before input
 	img_in_c->reg_068.reg_ip_clr_w1t = 1;
@@ -3583,7 +3583,7 @@ s32 set_img_src1(ive_src_image_s *src_img, img_in_c *img_in_c, ive_top_c *ive_to
 	return SUCCESS;
 }
 
-s32 set_img_src2(ive_src_image_s *src_img, isp_dma_ctl_c *rdma_img1_ctl_c, s32 dev_id)
+static s32 set_img_src2(ive_src_image_s *src_img, isp_dma_ctl_c *rdma_img1_ctl_c, s32 dev_id)
 {
 	//DEFINE_isp_dma_ctl_c(_rdma_img1_ctl_c);
 	isp_dma_ctl_c _rdma_img1_ctl_c = _DEFINE_isp_dma_ctl_c;
@@ -3616,7 +3616,7 @@ s32 set_img_src2(ive_src_image_s *src_img, isp_dma_ctl_c *rdma_img1_ctl_c, s32 d
 	return SUCCESS;
 }
 
-s32 set_isp_rdma(s32 optype, isp_rdma_c *rdma_c, s32 dev_id)
+static s32 set_isp_rdma(s32 optype, isp_rdma_c *rdma_c, s32 dev_id)
 {
 	isp_rdma_c _rdma_c = _DEFINE_ISP_RDMA_C;
 	if (rdma_c == NULL) {
@@ -3640,7 +3640,7 @@ s32 set_isp_rdma(s32 optype, isp_rdma_c *rdma_c, s32 dev_id)
 }
 
 
-s32 set_rdma_eigval(ive_src_image_s *pstSrc, isp_dma_ctl_c *rdma_eigval_ctl_c, s32 dev_id)
+static s32 set_rdma_eigval(ive_src_image_s *pstSrc, isp_dma_ctl_c *rdma_eigval_ctl_c, s32 dev_id)
 {
 	//DEFINE_isp_dma_ctl_c(_rdma_eigval_ctl_c);
 	isp_dma_ctl_c _rdma_eigval_ctl_c = _DEFINE_isp_dma_ctl_c;
@@ -3676,7 +3676,7 @@ s32 set_rdma_eigval(ive_src_image_s *pstSrc, isp_dma_ctl_c *rdma_eigval_ctl_c, s
 	return SUCCESS;
 }
 
-s32 set_odma(ive_src_image_s *dst_img, ive_filterop_c *ive_filterop_c, s32 w,
+static s32 set_odma(ive_src_image_s *dst_img, ive_filterop_c *ive_filterop_c, s32 w,
 		s32 h, s32 dev_id)
 {
 	ive_filterop_c->odma_reg_00.reg_fmt_sel = get_img_fmt_sel(dst_img->type);
@@ -3793,7 +3793,7 @@ s32 set_odma(ive_src_image_s *dst_img, ive_filterop_c *ive_filterop_c, s32 w,
 	return SUCCESS;
 }
 
-s32 ive_base_op(struct ive_device *ndev, ive_src_image_s *pstSrc1,
+static s32 ive_base_op(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 			ive_src_image_s *pstSrc2, ive_dst_image_s *pstDst,
 			bool instant, s32 op, void *ctrl, s32 dev_id)
 {
@@ -4816,7 +4816,7 @@ s32 ive_thresh(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return ret;
 }
 
-s32 erode_dilate_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
+static s32 erode_dilate_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			ive_dst_image_s *pstDst, u8 *mask,
 			bool instant, s32 op, s32 dev_id)
 {
@@ -5251,7 +5251,7 @@ ive_frame_diff_motion(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	return ret;
 }
 
-s32 gmm_gmm2_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
+static s32 gmm_gmm2_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			ive_dst_image_s *pstBg, ive_src_image_s *_pstModel,
 			ive_dst_image_s *pstFg, ive_top_c *ive_top_c,
 			ive_filterop_c *ive_filterop_c, img_in_c *img_in_c,
@@ -6476,7 +6476,7 @@ s32 ive_bernsen(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return ret;
 }
 
-s32 _ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
+static s32 _ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			ive_dst_image_s *pstDst, ive_filter_ctrl_s *pstFltCtrl,
 			bool instant, ive_top_c *ive_top_c,
 			img_in_c *img_in_c, ive_filterop_c *ive_filterop_c,
@@ -6673,7 +6673,7 @@ s32 ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return ret;
 }
 
-s32 _ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
+static s32 _ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			 ive_dst_image_s *pstDst, ive_csc_ctrl_s *pstCscCtrl,
 			 bool instant, ive_top_c *ive_top_c,
 			 img_in_c *img_in_c, ive_filterop_c *ive_filterop_c,
@@ -7521,7 +7521,7 @@ s32 ive_map(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	s32 ret = SUCCESS;
 	s32 l = 0;
 	u16 u16Word;
-	u16 *_pu16Ptr = NULL;
+	// u16 *_pu16Ptr = NULL;
 	u8 *pu8Ptr = NULL;
 	u16 *pu16Ptr = NULL;
 	//DEFINE_img_in_c(img_in_c);
@@ -7599,7 +7599,7 @@ s32 ive_map(struct ive_device *ndev, ive_src_image_s *pstSrc,
 
 	set_isp_rdma(MOD_MAP, NULL, dev_id);
 	if (set_img_src1(pstSrc, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
-		vfree(_pu16Ptr);
+		// vfree(_pu16Ptr);
 		kfree(ive_top_c);
 		return FAILURE;
 	}
@@ -7910,7 +7910,7 @@ s32 ive_lbp(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return ret;
 }
 
-s32 _ive_16bit_to_8bit(ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
+static s32 _ive_16bit_to_8bit(ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
 				 ive_top_c *ive_top_c, ive_filterop_c *ive_filterop_c,
 				 isp_dma_ctl_c *wdma_y_ctl_c, isp_dma_ctl_c *rdma_eigval_ctl_c, s32 dev_id)
 {
@@ -9052,7 +9052,7 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	return ret;
 }
 
-void _sclr_get_2tap_scale(ive_top_c *ive_top_c, ive_src_image_s *pstSrc,
+static void _sclr_get_2tap_scale(ive_top_c *ive_top_c, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDst, s32 dev_id)
 {
 	u32 src_wd, src_ht, dst_wd, dst_ht, scale_x, scale_y;
@@ -9540,7 +9540,7 @@ s32 ive_hw_equalize_hist(struct ive_device *ndev,
 	return SUCCESS;
 }
 
-s32
+static s32
 hw_stbox_flt_and_eig_calc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			   ive_dst_image_s *pstDst, s8 *mask,
 			   u16 *max_eig, bool instant,
@@ -9666,7 +9666,7 @@ hw_stbox_flt_and_eig_calc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return SUCCESS;
 }
 
-s32 _hw_stcandi_corner(struct ive_device *ndev, ive_src_image_s *pstSrc,
+static s32 _hw_stcandi_corner(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDst, u16 max_eig,
 			  ive_st_candi_corner_ctrl_s *pstStCandiCornerCtrl,
 			  bool instant, ive_top_c *ive_top_c,

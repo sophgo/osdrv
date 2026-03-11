@@ -1,7 +1,7 @@
 #ifndef _CMDQ_H_
 #define _CMDQ_H_
 
-#include <stdbool.h>
+// #include <stdbool.h>
 //#include <common.h>
 
 enum {

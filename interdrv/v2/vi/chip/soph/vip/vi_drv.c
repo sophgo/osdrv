@@ -2140,7 +2140,7 @@ void ispblk_blc_enable(struct isp_ctx *ctx, int blc_id, bool en, bool bypass)
 	ISP_WR_BITS(blc, reg_isp_blc_t, blc_2, blc_enable, en);
 }
 
-int ispblk_blc_config(struct isp_ctx *ctx, u32 blc_id, bool en, bool bypass)
+static __maybe_unused int ispblk_blc_config(struct isp_ctx *ctx, u32 blc_id, bool en, bool bypass)
 {
 	int id = blc_find_hwid(blc_id);
 	uintptr_t blc;
@@ -2267,7 +2267,7 @@ static void _ispblk_isptop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_ra
 	ISP_WR_REG(isptopb, reg_isp_top_t, scenarios_ctrl, scene_ctrl.raw);
 }
 
-void _ispblk_be_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+static void _ispblk_be_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t preraw_be = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_BE];
 	uintptr_t vi_sel = ctx->phys_regs[ISP_BLK_ID_PRE_RAW_VI_SEL];
@@ -2300,7 +2300,7 @@ void _ispblk_be_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 	ISP_WR_BITS(preraw_be, reg_pre_raw_be_t, img_size_le, frame_heightm1, ctx->img_height - 1);
 }
 
-void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+static void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t rawtop = ctx->phys_regs[ISP_BLK_ID_RAWTOP];
 	uintptr_t raw_rdma = ctx->phys_regs[ISP_BLK_ID_RAW_RDMA0];
@@ -2350,7 +2350,7 @@ void _ispblk_rawtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 	ISP_WR_BITS(rawtop, reg_raw_top_t, raw_2, img_heightm1, ctx->img_height - 1);
 }
 
-void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+static void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t rgbtop = ctx->phys_regs[ISP_BLK_ID_RGBTOP];
 	uintptr_t manr = ctx->phys_regs[ISP_BLK_ID_MMAP];
@@ -2407,7 +2407,7 @@ void _ispblk_rgbtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_n
 	ISP_WR_BITS(rgbtop, reg_isp_rgb_top_t, reg_9, rgbtop_imgh_m1, ctx->img_height - 1);
 }
 
-void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
+static void _ispblk_yuvtop_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 {
 	uintptr_t yuvtop = ctx->phys_regs[ISP_BLK_ID_YUVTOP];
 	uintptr_t tnr = ctx->phys_regs[ISP_BLK_ID_TNR];
@@ -2519,7 +2519,7 @@ void ispblk_post_yuv_cfg_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_
 	_ispblk_yuvtop_cfg_update(ctx, raw_num);
 }
 
-void _ispblk_lsc_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
+static void _ispblk_lsc_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t lsc = ctx->phys_regs[ISP_BLK_ID_LSC0];
 	int width = (ctx->isp_pipe_cfg[raw_num].is_tile)
@@ -2578,7 +2578,7 @@ void _ispblk_lsc_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	}
 }
 
-void _ispblk_ltm_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
+static void _ispblk_ltm_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t ltm = ctx->phys_regs[ISP_BLK_ID_LTM];
 	union reg_ltm_h8c reg_8c;
@@ -2589,7 +2589,7 @@ void _ispblk_ltm_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	ISP_WR_REG(ltm, reg_ltm_t, reg_h8c, reg_8c.raw);
 }
 
-void _ispblk_manr_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
+static void _ispblk_manr_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t manr = ctx->phys_regs[ISP_BLK_ID_MMAP];
 	union reg_isp_mmap_6c reg_6c;
@@ -2610,7 +2610,7 @@ void _ispblk_manr_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	}
 }
 
-void _ispblk_dci_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
+static void _ispblk_dci_cfg_update(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	uintptr_t dci = ctx->phys_regs[ISP_BLK_ID_DCI];
 
@@ -3297,7 +3297,7 @@ void isp_slice_buf_trig(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 	}
 }
 
-void _ispblk_dma_slice_config(struct isp_ctx *ctx, int dmaid, int en)
+static void _ispblk_dma_slice_config(struct isp_ctx *ctx, int dmaid, int en)
 {
 	uintptr_t dmab = ctx->phys_regs[dmaid];
 

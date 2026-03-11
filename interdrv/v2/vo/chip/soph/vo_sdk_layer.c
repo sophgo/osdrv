@@ -2435,7 +2435,7 @@ static int vo_hide_chn(vo_layer layer, vo_chn chn)
 
 	mutex_lock(&g_vo_ctx->layer_ctx[layer].layer_lock);
 	g_vo_ctx->layer_ctx[layer].chn_ctx[chn].hide = true;
-	g_vo_ctx->layer_ctx[layer].is_layer_update = true;
+	g_vo_ctx->layer_ctx[layer].layer_update_mask |= BIT(chn);
 	mutex_unlock(&g_vo_ctx->layer_ctx[layer].layer_lock);
 
 	jobs = &chn_ctx->chn_jobs;
@@ -2464,7 +2464,7 @@ static int vo_show_chn(vo_layer layer, vo_chn chn)
 
 	mutex_lock(&g_vo_ctx->layer_ctx[layer].layer_lock);
 	g_vo_ctx->layer_ctx[layer].chn_ctx[chn].hide = false;
-	g_vo_ctx->layer_ctx[layer].is_layer_update = true;
+	g_vo_ctx->layer_ctx[layer].layer_update_mask |= BIT(chn);
 	mutex_unlock(&g_vo_ctx->layer_ctx[layer].layer_lock);
 
 	return 0;

@@ -42,7 +42,7 @@ static void _show_vb_status(struct seq_file *m)
 		return;
 	}
 
-	seq_printf(m, "\nModule: [VB], Build Time[%s]\n", UTS_VERSION);
+	seq_printf(m, "\nModule: [VB]\n");
 	seq_puts(m, "-----VB PUB CONFIG-----------------------------------------------------------------------------------------------------------------\n");
 	seq_printf(m, "%10s(%3d), %10s(%3d)\n", "MaxPoolCnt", max_pool_cnt, "MaxBlkCnt", max_blk_cnt);
 

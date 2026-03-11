@@ -71,7 +71,7 @@ extern const char *const disp_irq_name[DISP_MAX_INST];
 static void _update_vo_real_frame_rate(struct timer_list *timer);
 DEFINE_TIMER(vo_timer_proc, _update_vo_real_frame_rate);
 
-void _disp_sel_remux(vo_dev VoDev, const struct vo_d_remap *pins, unsigned int pin_num)
+static void _disp_sel_remux(vo_dev VoDev, const struct vo_d_remap *pins, unsigned int pin_num)
 {
 	int i = 0;
 
@@ -310,7 +310,7 @@ static int _vo_call_cb(u32 m_id, u32 cmd_id, void *data)
 	return base_exe_module_cb(&exe_cb);
 }
 
-int _vo_create_proc(struct vo_ctx *ctx)
+static int _vo_create_proc(struct vo_ctx *ctx)
 {
 	int ret = 0;
 
@@ -326,7 +326,7 @@ int _vo_create_proc(struct vo_ctx *ctx)
 	return ret;
 }
 
-void _vo_destroy_proc(void)
+static void _vo_destroy_proc(void)
 {
 	vo_disp_proc_remove();
 	vo_proc_remove();
@@ -532,6 +532,8 @@ static void _vo_hw_enque(vo_dev dev, struct vo_layer_ctx *layer_ctx)
 	cfg->mem.addr2 = b->buf.planes[2].addr;
 	cfg->mem.pitch_y = b->buf.planes[0].bytesused;
 	cfg->mem.pitch_c = b->buf.planes[1].bytesused;
+	cfg->mem.start_x = b->buf.planes[0].m.offset & 0xffff;
+	cfg->mem.start_y = b->buf.planes[0].m.offset >> 16;
 	disp_set_mem(dev, &cfg->mem);
 
 	layer_ctx->display_pts = ((struct vb_s *)b->blk)->buf.pts;
@@ -729,7 +731,7 @@ static void _vo_gdc_callback(void *gdc_param, vb_blk blk)
 		 chn.dev_id, chn.chn_id, vb->phy_addr);
 
 	atomic_long_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
-	g_vo_ctx->layer_ctx[chn.dev_id].is_layer_update = true;
+	g_vo_ctx->layer_ctx[chn.dev_id].layer_update_mask |= BIT(chn.chn_id);
 	vfree(gdc_param);
 }
 
@@ -759,111 +761,122 @@ static int _mesh_gdc_do_op_cb(enum gdc_usage usage, const void *usage_param,
 	return base_exe_module_cb(&exe_cb);
 }
 
-
-static int _vo_get_chn_buffers(struct vo_layer_ctx *layer_ctx, vb_blk *blk)
+static vb_blk _vo_get_chn_buffer(struct vo_layer_ctx *layer_ctx, int chn_id)
 {
-	vo_chn chn;
-	struct vo_chn_ctx *chn_ctx;
-	struct vb_jobs_t *jobs;
+	struct vo_chn_ctx *chn_ctx = &layer_ctx->chn_ctx[chn_id];
+	struct vb_jobs_t *jobs = &chn_ctx->chn_jobs;
+	vb_blk blk = VB_INVALID_HANDLE;
 	struct vb_s *old_workq = NULL;
 	struct vb_s *new_workq = NULL;
 	struct vb_s *vb;
-	int chn_num = 0;
-	vo_dev dev = layer_ctx->bind_dev_id;
-	mmf_chn_s mmf_chn = {.mod_id = ID_VO, .dev_id = dev, .chn_id = 0};
+	mmf_chn_s mmf_chn = {.mod_id = ID_VO, .dev_id = layer_ctx->bind_dev_id, .chn_id = 0};
+	bool next_update = false;
 
-	for (chn = 0; chn < VO_MAX_CHN_NUM; ++chn) {
-		chn_ctx = &layer_ctx->chn_ctx[chn];
-		jobs = &chn_ctx->chn_jobs;
+	if (!chn_ctx->is_chn_enable)
+		return VB_INVALID_HANDLE;
+	if (chn_ctx->hide)
+		return VB_INVALID_HANDLE;
 
-		if (!chn_ctx->is_chn_enable)
-			continue;
-		if (chn_ctx->hide)
-			continue;
-		if (chn_ctx->pause) {
-			mutex_lock(&jobs->lock);
-			if (!FIFO_EMPTY(&jobs->waitq) && chn_ctx->refresh) {
-				if (!FIFO_EMPTY(&jobs->workq))
-					FIFO_POP(&jobs->workq, &old_workq);
-
-				FIFO_POP(&jobs->waitq, &vb);
-				FIFO_PUSH(&jobs->workq, vb);
-
-				FIFO_GET_FRONT(&jobs->workq, &new_workq);
-				blk[chn] = (vb_blk)new_workq;
-				if (old_workq) {
-					vb_release_block((vb_blk)old_workq);
-					old_workq = NULL;
-				}
-				chn_num++;
-				chn_ctx->refresh = false;
-			} else if (!FIFO_EMPTY(&jobs->workq)) {
-				FIFO_GET_FRONT(&jobs->workq, &vb);
-				blk[chn] = (vb_blk)vb;
-				chn_num++;
-			}
-			mutex_unlock(&jobs->lock);
-			continue;
-		} else if (chn_ctx->step) {
-			mutex_lock(&jobs->lock);
-			if (!FIFO_EMPTY(&jobs->waitq) && chn_ctx->step_trigger) {
-				if (!FIFO_EMPTY(&jobs->workq))
-					FIFO_POP(&jobs->workq, &old_workq);
-
-				FIFO_POP(&jobs->waitq, &vb);
-				FIFO_PUSH(&jobs->workq, vb);
-
-				FIFO_GET_FRONT(&jobs->workq, &new_workq);
-				blk[chn] = (vb_blk)new_workq;
-				if (old_workq) {
-					vb_release_block((vb_blk)old_workq);
-					old_workq = NULL;
-				}
-				chn_num++;
-				chn_ctx->step_trigger = false;
-			} else if (!FIFO_EMPTY(&jobs->workq)) {
-				FIFO_GET_FRONT(&jobs->workq, &vb);
-				blk[chn] = (vb_blk)vb;
-				chn_num++;
-			}
-			mutex_unlock(&jobs->lock);
-			continue;
-		}
-
+	if (chn_ctx->pause) {
 		mutex_lock(&jobs->lock);
-		if (FIFO_EMPTY(&jobs->workq) && FIFO_EMPTY(&jobs->waitq)) {
-			mutex_unlock(&jobs->lock);
-			continue;
-		}
-
-		if (!FIFO_EMPTY(&jobs->waitq)) {
+		if (!FIFO_EMPTY(&jobs->waitq) && chn_ctx->refresh) {
 			if (!FIFO_EMPTY(&jobs->workq))
 				FIFO_POP(&jobs->workq, &old_workq);
 
 			FIFO_POP(&jobs->waitq, &vb);
 			FIFO_PUSH(&jobs->workq, vb);
+
+			FIFO_GET_FRONT(&jobs->workq, &new_workq);
+			blk = (vb_blk)new_workq;
+			if (old_workq) {
+				vb_release_block((vb_blk)old_workq);
+				old_workq = NULL;
+			}
+			chn_ctx->refresh = false;
+		} else if (!FIFO_EMPTY(&jobs->workq)) {
+			FIFO_GET_FRONT(&jobs->workq, &vb);
+			blk = (vb_blk)vb;
 		}
 		mutex_unlock(&jobs->lock);
+		return blk;
+	} else if (chn_ctx->step) {
+		mutex_lock(&jobs->lock);
+		if (!FIFO_EMPTY(&jobs->waitq) && chn_ctx->step_trigger) {
+			if (!FIFO_EMPTY(&jobs->workq))
+				FIFO_POP(&jobs->workq, &old_workq);
 
-		FIFO_GET_FRONT(&jobs->workq, &new_workq);
-		blk[chn] = (vb_blk)new_workq;
-		if (old_workq) {
-			chn_ctx->predone_pts = old_workq->buf.pts;
-			mmf_chn.chn_id = chn;
-			if (chn_ctx->chn_attr.depth)
-				vo_snap(mmf_chn, &chn_ctx->chn_jobs, (vb_blk)old_workq);
-			vb_release_block((vb_blk)old_workq);
-			old_workq = NULL;
+			FIFO_POP(&jobs->waitq, &vb);
+			FIFO_PUSH(&jobs->workq, vb);
+
+			FIFO_GET_FRONT(&jobs->workq, &new_workq);
+			blk = (vb_blk)new_workq;
+			if (old_workq) {
+				vb_release_block((vb_blk)old_workq);
+				old_workq = NULL;
+			}
+			chn_ctx->step_trigger = false;
+		} else if (!FIFO_EMPTY(&jobs->workq)) {
+			FIFO_GET_FRONT(&jobs->workq, &vb);
+			blk = (vb_blk)vb;
 		}
-		chn_num++;
+		mutex_unlock(&jobs->lock);
+		return blk;
 	}
 
-	layer_ctx->is_layer_update = false;
+	mutex_lock(&jobs->lock);
+	if (FIFO_EMPTY(&jobs->workq) && FIFO_EMPTY(&jobs->waitq)) {
+		mutex_unlock(&jobs->lock);
+		return VB_INVALID_HANDLE;
+	}
+
+	if (!FIFO_EMPTY(&jobs->waitq)) {
+		if (!FIFO_EMPTY(&jobs->workq))
+			FIFO_POP(&jobs->workq, &old_workq);
+
+		FIFO_POP(&jobs->waitq, &vb);
+		FIFO_PUSH(&jobs->workq, vb);
+		if (!FIFO_EMPTY(&jobs->waitq))
+			next_update = true;
+	}
+	mutex_unlock(&jobs->lock);
+
+	FIFO_GET_FRONT(&jobs->workq, &new_workq);
+	blk = (vb_blk)new_workq;
+	if (old_workq) {
+		chn_ctx->predone_pts = old_workq->buf.pts;
+		mmf_chn.chn_id = chn_id;
+		if (chn_ctx->chn_attr.depth)
+			vo_snap(mmf_chn, &chn_ctx->chn_jobs, (vb_blk)old_workq);
+		vb_release_block((vb_blk)old_workq);
+		old_workq = NULL;
+	}
+
+	if (next_update)
+		layer_ctx->layer_update_mask |= BIT(chn_id);
+	else
+		layer_ctx->layer_update_mask &= ~BIT(chn_id);
+
+	return blk;
+}
+
+static int _vo_get_all_chn_buffers(struct vo_layer_ctx *layer_ctx, vb_blk *blks)
+{
+	vo_chn chn;
+	vb_blk blk;
+	int chn_num = 0;
+
+	for (chn = 0; chn < VO_MAX_CHN_NUM; ++chn) {
+		blk = _vo_get_chn_buffer(layer_ctx, chn);
+		if (blk == VB_INVALID_HANDLE)
+			continue;
+		blks[chn] = blk;
+		chn_num++;
+	}
 
 	return chn_num;
 }
 
-void vo_stitch_wakeup(void *data)
+static void vo_stitch_wakeup(void *data)
 {
 	struct vo_stitch_cb_data *stitch_data = (struct vo_stitch_cb_data *)data;
 
@@ -872,7 +885,7 @@ void vo_stitch_wakeup(void *data)
 	wake_up(&stitch_data->wait);
 }
 
-void vo_sort_chn_priority(int *priority, u32 length, int *index)
+static void vo_sort_chn_priority(int *priority, u32 length, int *index)
 {
 	int i, j, t1, t2;
 
@@ -890,127 +903,98 @@ void vo_sort_chn_priority(int *priority, u32 length, int *index)
 	}
 }
 
-static int layer_process(struct vo_layer_ctx *layer_ctx)
+static int check_stitch_bypass(struct vo_layer_ctx *layer_ctx)
 {
-	int ret = 0;
-	vo_dev dev = layer_ctx->bind_dev_id;
+	vo_chn chn = -1, i;
+	int chn_num = 0;
+
+	for (i = 0; i < VO_MAX_CHN_NUM; ++i) {
+		if (layer_ctx->chn_ctx[i].is_chn_enable) {
+			chn_num++;
+			chn = i;
+		}
+	}
+
+	if (chn_num == 1) {
+		if ((layer_ctx->chn_ctx[chn].chn_attr.rect.width == layer_ctx->layer_attr.disp_rect.width) &&
+			(layer_ctx->chn_ctx[chn].chn_attr.rect.height == layer_ctx->layer_attr.disp_rect.height)) {
+			return chn;
+		}
+	}
+
+	return -1;
+}
+
+static void layer_done_handler(struct vo_layer_ctx *layer_ctx, vb_blk blk)
+{
+	u8 i;
+	struct vb_s *vb;
+	bool is_wbc_match = 0;
+	mmf_chn_s chn = {.mod_id = ID_VO, .dev_id = layer_ctx->bind_dev_id, .chn_id = 0};
+
+	vb = (struct vb_s *)blk;
+	vb->buf.dev_num = layer_ctx->bind_dev_id;
+	vb->buf.frm_num = layer_ctx->done_cnt;
+	layer_ctx->predone_pts = vb->buf.pts;
+
+	//for wbc get layer frame
+	for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
+		if (g_vo_ctx->wbc_ctx[i].is_wbc_enable &&
+			g_vo_ctx->wbc_ctx[i].wbc_src.src_type == VO_WBC_SRC_VIDEO &&
+			g_vo_ctx->wbc_ctx[i].wbc_src.src_id == layer_ctx->bind_dev_id) {
+			if (layer_ctx->layer_attr.depth) {
+				vb_done_handler(chn, CHN_TYPE_OUT, &layer_ctx->layer_jobs, blk);
+				g_vo_ctx->wbc_ctx[i].frame_num++;
+			} else {
+				vb_release_block(blk);
+			}
+			is_wbc_match = true;
+		}
+	}
+
+	//for get screen frame
+	if (!is_wbc_match) {
+		if (layer_ctx->layer_attr.depth)
+			vo_snap(chn, &layer_ctx->layer_jobs, blk);
+		vb_release_block(blk);
+	}
+
+	layer_ctx->done_cnt++;
+
+}
+
+static int draw_frame_buffer(struct vo_layer_ctx *layer_ctx, vb_blk blk_out)
+{
+	int ret, result = -1;
+	u32 chn_num;
+	u8 i, j = 0, n = 0;
 	struct vo_chn_ctx *chn_ctx;
+	struct vo_stitch_cb_data stitch_data;
+	unsigned long timeout = msecs_to_jiffies(WAIT_TIMEOUT_MS);
+	vb_blk blks[VO_MAX_CHN_NUM] = { [0 ... VO_MAX_CHN_NUM - 1] = VB_INVALID_HANDLE };
 	struct vpss_stitch_cfg stitch_cfg;
 	struct stitch_dst_cfg *dst_cfg = &stitch_cfg.dst_cfg;
 	struct stitch_chn_cfg *chn_cfg = NULL;
-	unsigned long timeout = msecs_to_jiffies(WAIT_TIMEOUT_MS);
-	u8 i, n = 0;
-	u32 chn_num;
-	struct vo_stitch_cb_data stitch_data;
-	vb_blk blk_next = VB_INVALID_HANDLE;
-	vb_blk blk_out = VB_INVALID_HANDLE;
-	struct vb_s *vb;
-	size_s out_size = layer_ctx->layer_attr.img_size;
-	vb_blk blks[VO_MAX_CHN_NUM] = { [0 ... VO_MAX_CHN_NUM - 1] = VB_INVALID_HANDLE };
-	struct disp_buffer *disp_buf;
-	unsigned long flags;
-	vb_cal_config_s vb_cal_config;
-	mmf_chn_s chn = {.mod_id = ID_VO, .dev_id = dev, .chn_id = 0};
-	struct timespec64 time;
-	u64 pts;
-	bool is_wbc_match = 0;
-	frame_rate_ctrl_s layer_frame_ctrl;
-	vo_chn_zoom_ratio_e zoom_ratio;
-	rect_s zoom_rect;
-	bool is_need_zoom;
 	int priority[VO_MAX_CHN_NUM] = { 0 };
 	int index[VO_MAX_CHN_NUM] = { 0 };
-	u8 j = 0;
-
-	layer_ctx->frame_index++;
-	layer_ctx->src_frame_num++;
-
-	layer_frame_ctrl.src_frame_rate = layer_ctx->src_frame_rate;
-	layer_frame_ctrl.dst_frame_rate = layer_ctx->layer_attr.frame_rate;
-
-	if ((((layer_ctx->display_pts - layer_ctx->predone_pts) / 1000)
-		> layer_ctx->toleration) && layer_ctx->toleration > 0) {
-		layer_ctx->frame_index = 0;
-	}
-
-	if (!FRC_INVALID(layer_frame_ctrl) && (!vo_frame_ctrl(layer_ctx->frame_index, &layer_frame_ctrl)))
-		layer_ctx->is_drop = true;
-
-	if (layer_ctx->is_drop) {
-		layer_ctx->is_drop = false;
-		return 0;
-	}
-
-	if (!list_empty(&layer_ctx->list_done)) {
-		//get a new vb
-		common_getpicbufferconfig(layer_ctx->layer_attr.img_size.width,
-					  layer_ctx->layer_attr.img_size.height,
-					  layer_ctx->layer_attr.pixformat,
-					  DATA_BITWIDTH_8,
-					  COMPRESS_MODE_NONE, DEFAULT_ALIGN, &vb_cal_config);
-
-		blk_next = vb_get_block_with_id(layer_ctx->vb_pool_id, vb_cal_config.vb_size, ID_VO);
-		if (blk_next == VB_INVALID_HANDLE) {
-			TRACE_VO(DBG_ERR, "get vb block fail.\n");
-			return -1;
-		}
-
-		spin_lock_irqsave(&layer_ctx->list_lock, flags);
-		disp_buf = list_first_entry(&layer_ctx->list_done,
-					    struct disp_buffer, list);
-		list_del_init(&disp_buf->list);
-		spin_unlock_irqrestore(&layer_ctx->list_lock, flags);
-
-		blk_out = disp_buf->blk;
-		disp_buf->blk = blk_next;
-
-		vb = (struct vb_s *)blk_out;
-		vb->buf.dev_num = dev;
-		vb->buf.frm_num = layer_ctx->done_cnt;
-		layer_ctx->predone_pts = vb->buf.pts;
-
-		//for wbc get layer frame
-		for (i = 0; i < VO_MAX_WBC_NUM; ++i) {
-			if (g_vo_ctx->wbc_ctx[i].is_wbc_enable &&
-			    g_vo_ctx->wbc_ctx[i].wbc_src.src_type == VO_WBC_SRC_VIDEO &&
-			    g_vo_ctx->wbc_ctx[i].wbc_src.src_id == layer_ctx->bind_dev_id) {
-				if (layer_ctx->layer_attr.depth) {
-					vb_done_handler(chn, CHN_TYPE_OUT, &layer_ctx->layer_jobs, blk_out);
-					g_vo_ctx->wbc_ctx[i].frame_num++;
-				} else {
-					vb_release_block(blk_out);
-				}
-				is_wbc_match = true;
-			}
-		}
-
-		//for get screen frame
-		if (!is_wbc_match) {
-			if (layer_ctx->layer_attr.depth)
-				vo_snap(chn, &layer_ctx->layer_jobs, blk_out);
-			vb_release_block(blk_out);
-		}
-
-		layer_ctx->done_cnt++;
-
-	} else {
-		TRACE_VO(DBG_ERR, "layer(%d) list_done empty!.\n",
-			 layer_ctx->layer);
-		return -1;
-	}
+	struct vb_s *vb;
+	rect_s zoom_rect;
+	bool is_need_zoom;
+	vo_chn_zoom_ratio_e zoom_ratio;
+	size_s out_size = layer_ctx->layer_attr.img_size;
 
 	mutex_lock(&layer_ctx->layer_lock);
-	chn_num = _vo_get_chn_buffers(layer_ctx, blks);
+	chn_num = _vo_get_all_chn_buffers(layer_ctx, blks);
 	if (!chn_num) {
 		mutex_unlock(&layer_ctx->layer_lock);
-		goto err0;
+		return -1;
 	}
 
 	chn_cfg = vmalloc(sizeof(*chn_cfg) * chn_num);
 	if (!chn_cfg) {
 		TRACE_VO(DBG_ERR, "vmalloc fail.\n");
 		mutex_unlock(&layer_ctx->layer_lock);
-		goto err0;
+		return -1;
 	}
 
 	//Chn priority ctrl
@@ -1226,11 +1210,11 @@ static int layer_process(struct vo_layer_ctx *layer_ctx)
 	}
 	mutex_unlock(&layer_ctx->layer_lock);
 
-	vb = (struct vb_s *)blk_next;
+	vb = (struct vb_s *)blk_out;
 	base_get_frame_info(layer_ctx->layer_attr.pixformat
 			   , out_size
 			   , &vb->buf
-			   , vb_handle2phys_addr(blk_next)
+			   , vb_handle2phys_addr(blk_out)
 			   , DEFAULT_ALIGN);
 
 	dst_cfg->bytesperline[0] = vb->buf.stride[0];
@@ -1264,43 +1248,135 @@ static int layer_process(struct vo_layer_ctx *layer_ctx)
 	ret = _vo_stitch_call_vpss(&stitch_cfg);
 	if (ret) {
 		TRACE_VO(DBG_ERR, "_vo_stitch_call_vpss fail.\n");
-		goto err1;
+		goto exit;
 	}
 
 	ret = wait_event_timeout(stitch_data.wait, stitch_data.flag, timeout);
 	if (ret < 0) {
 		TRACE_VO(DBG_ERR, "-ERESTARTSYS!.\n");
 	} else if (ret == 0) {
-		TRACE_VO(DBG_ERR, "dev(%d) stitch timeout.\n", dev);
+		TRACE_VO(DBG_ERR, "dev(%d) stitch timeout.\n", layer_ctx->bind_dev_id);
 	} else {
+		result = 0;
+	}
 
-		for (i = 0; i < disp_buf->buf.length; i++) {
-			disp_buf->buf.planes[i].addr = vb->buf.phy_addr[i];
-			disp_buf->buf.planes[i].bytesused = vb->buf.stride[i];
+exit:
+	vfree(chn_cfg);
+	return result;
+}
+
+
+static int layer_process(struct vo_layer_ctx *layer_ctx)
+{
+	u8 i;
+	u32 chn_num;
+	u64 pts;
+	int ret = 0, chn_id;
+	vb_blk blk_next = VB_INVALID_HANDLE, blk_out;
+	struct vb_s *vb;
+	struct disp_buffer *disp_buf;
+	unsigned long flags;
+	struct timespec64 time;
+	frame_rate_ctrl_s layer_frame_ctrl;
+	bool is_stitch;
+	vb_blk blks[VO_MAX_CHN_NUM] = { [0 ... VO_MAX_CHN_NUM - 1] = VB_INVALID_HANDLE };
+	vb_cal_config_s vb_cal_config;
+
+	layer_ctx->frame_index++;
+	layer_ctx->src_frame_num++;
+
+	layer_frame_ctrl.src_frame_rate = layer_ctx->src_frame_rate;
+	layer_frame_ctrl.dst_frame_rate = layer_ctx->layer_attr.frame_rate;
+
+	if ((((layer_ctx->display_pts - layer_ctx->predone_pts) / 1000)
+		> layer_ctx->toleration) && layer_ctx->toleration > 0) {
+		layer_ctx->frame_index = 0;
+	}
+
+	if (!FRC_INVALID(layer_frame_ctrl) && (!vo_frame_ctrl(layer_ctx->frame_index, &layer_frame_ctrl)))
+		layer_ctx->is_drop = true;
+
+	if (layer_ctx->is_drop) {
+		layer_ctx->is_drop = false;
+		mutex_lock(&layer_ctx->layer_lock);
+		chn_num = _vo_get_all_chn_buffers(layer_ctx, blks);
+		mutex_unlock(&layer_ctx->layer_lock);
+		return 0;
+	}
+
+	if (list_empty(&layer_ctx->list_done)) {
+		TRACE_VO(DBG_ERR, "layer(%d) list_done empty!.\n", layer_ctx->layer);
+		return -1;
+	}
+
+	chn_id = check_stitch_bypass(layer_ctx);
+	if (chn_id >= 0) {
+		is_stitch = false;
+		blk_next = _vo_get_chn_buffer(layer_ctx, chn_id);
+		if (blk_next == VB_INVALID_HANDLE) {
+			TRACE_VO(DBG_ERR, "_vo_get_chn_buffer fail.\n");
+			return -1;
 		}
+	} else {
+		//get a new vb
+		is_stitch = true;
+		common_getpicbufferconfig(layer_ctx->layer_attr.img_size.width,
+					  layer_ctx->layer_attr.img_size.height,
+					  layer_ctx->layer_attr.pixformat,
+					  DATA_BITWIDTH_8,
+					  COMPRESS_MODE_NONE, DEFAULT_ALIGN, &vb_cal_config);
 
+		blk_next = vb_get_block_with_id(layer_ctx->vb_pool_id, vb_cal_config.vb_size, ID_VO);
+		if (blk_next == VB_INVALID_HANDLE) {
+			TRACE_VO(DBG_ERR, "get vb block fail.\n");
+			return -1;
+		}
+	}
+
+	spin_lock_irqsave(&layer_ctx->list_lock, flags);
+	disp_buf = list_first_entry(&layer_ctx->list_done,
+				    struct disp_buffer, list);
+	list_del_init(&disp_buf->list);
+	spin_unlock_irqrestore(&layer_ctx->list_lock, flags);
+
+	blk_out = disp_buf->blk;
+	disp_buf->blk = blk_next;
+
+	layer_done_handler(layer_ctx, blk_out);
+
+	vb = (struct vb_s *)blk_next;
+
+	if (is_stitch) {
+		ret = draw_frame_buffer(layer_ctx, blk_next);
+		if (ret) {
+			goto err;
+		}
 		ktime_get_ts64(&time);
 		pts = timespec64_to_ns(&time);
 		do_div(pts, 1000);
 		vb->buf.pts = pts;
-
-		spin_lock_irqsave(&layer_ctx->list_lock, flags);
-		list_add_tail(&disp_buf->list, &layer_ctx->list_wait);
-		spin_unlock_irqrestore(&layer_ctx->list_lock, flags);
-		layer_ctx->frame_num++;
-
-		TRACE_VO(DBG_INFO, "layer(%d) add buffer(0x%llx) to wait list.\n",
-			 layer_ctx->layer, vb->phy_addr);
-
-		vfree(chn_cfg);
-
-		return 0;
+	} else {
+		layer_ctx->chn_ctx[chn_id].display_pts = vb->buf.pts;
+		atomic_fetch_add(1, &vb->usr_cnt);
 	}
 
-err1:
-	vfree(chn_cfg);
+	for (i = 0; i < disp_buf->buf.length; i++) {
+		disp_buf->buf.planes[i].addr = vb->buf.phy_addr[i];
+		disp_buf->buf.planes[i].bytesused = vb->buf.stride[i];
+	}
+	disp_buf->buf.planes[0].m.offset = vb->buf.offset_left | (vb->buf.offset_top << 16);
 
-err0:
+	spin_lock_irqsave(&layer_ctx->list_lock, flags);
+	list_add_tail(&disp_buf->list, &layer_ctx->list_wait);
+	spin_unlock_irqrestore(&layer_ctx->list_lock, flags);
+	layer_ctx->frame_num++;
+
+	TRACE_VO(DBG_INFO, "layer(%d) add buffer(0x%llx) to wait list.\n",
+		 layer_ctx->layer, vb->phy_addr);
+
+	return 0;
+
+err:
 	spin_lock_irqsave(&layer_ctx->list_lock, flags);
 	list_add_tail(&disp_buf->list, &layer_ctx->list_done);
 	spin_unlock_irqrestore(&layer_ctx->list_lock, flags);
@@ -1439,12 +1515,12 @@ static void vo_wbc_submit(struct vo_wbc_ctx *wbc_ctx)
 
 	disp_cfg = disp_get_cfg(dev);
 
-	if (disp_cfg[dev].out_csc >= DISP_CSC_601_LIMIT_RGB2YUV &&
-	    disp_cfg[dev].out_csc <= DISP_CSC_709_FULL_RGB2YUV) {
+	if (disp_cfg->out_csc >= DISP_CSC_601_LIMIT_RGB2YUV &&
+	    disp_cfg->out_csc <= DISP_CSC_709_FULL_RGB2YUV) {
 		if (IS_YUV_FMT(odma_cfg->fmt)) {
 			odma_cfg->csc = DISP_CSC_NONE;
 		} else {
-			odma_cfg->csc = disp_cfg[dev].out_csc - 4;
+			odma_cfg->csc = disp_cfg->out_csc - 4;
 		}
 	} else {
 		if (IS_YUV_FMT(odma_cfg->fmt)) {
@@ -1524,7 +1600,7 @@ static int disp_event_handler(void *arg)
 
 		//TRACE_VO(DBG_INFO, "[%d] thread run.\n", layer_ctx->layer);
 		layer_ctx->event = 0;
-		if (layer_ctx->is_layer_update)
+		if (layer_ctx->layer_update_mask)
 			layer_process(layer_ctx);
 	}
 
@@ -1559,7 +1635,9 @@ static int wbc_event_handler(void *arg)
 
 int vo_create_thread(vo_layer layer)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	struct sched_param param;
+#endif
 	char task_name[32];
 	struct vo_layer_ctx *layer_ctx = &g_vo_ctx->layer_ctx[layer];
 
@@ -1572,8 +1650,12 @@ int vo_create_thread(vo_layer layer)
 		return -1;
 	}
 
-	param.sched_priority = MAX_USER_RT_PRIO - 10;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+	param.sched_priority = MAX_RT_PRIO - 10;
 	sched_setscheduler(layer_ctx->thread, SCHED_FIFO, &param);
+#else
+	sched_set_fifo(layer_ctx->thread);
+#endif
 	wake_up_process(layer_ctx->thread);
 
 	TRACE_VO(DBG_INFO, "[layer%d]create thread.\n", layer);
@@ -1597,7 +1679,9 @@ int vo_destroy_thread(vo_layer layer)
 
 int vo_wbc_create_thread(vo_wbc wbc_dev)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	struct sched_param param;
+#endif
 	char task_name[32];
 	struct vo_wbc_ctx *wbc_ctx = &g_vo_ctx->wbc_ctx[wbc_dev];
 
@@ -1610,8 +1694,12 @@ int vo_wbc_create_thread(vo_wbc wbc_dev)
 		return -1;
 	}
 
-	param.sched_priority = MAX_USER_RT_PRIO - 10;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+	param.sched_priority = MAX_RT_PRIO - 10;
 	sched_setscheduler(wbc_ctx->thread, SCHED_FIFO, &param);
+#else
+	sched_set_fifo(wbc_ctx->thread);
+#endif
 	wake_up_process(wbc_ctx->thread);
 
 	TRACE_VO(DBG_INFO, "[wbc_dev%d]create thread.\n", wbc_dev);
@@ -2136,7 +2224,7 @@ int vo_open(struct inode *inode, struct file *file)
 	return ret;
 }
 
-void _vo_sdk_release(struct vo_core_dev *vdev)
+static void _vo_sdk_release(struct vo_core_dev *vdev)
 {
 	int i, j;
 
@@ -2277,7 +2365,7 @@ int vo_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 	return rc;
 }
 
-u64 timespec64_to_us(struct timespec64 *time_spec)
+static u64 timespec64_to_us(struct timespec64 *time_spec)
 {
 	return time_spec->tv_sec * 1000000L + time_spec->tv_nsec / 1000L;
 }
@@ -2319,7 +2407,7 @@ static void ddr_try_retrain(struct vo_core_dev *vdev, u64 cur_ts_us)
 	}
 }
 
-void ddr_retrain(vo_dev dev, union disp_intr intr_status)
+static void ddr_retrain(vo_dev dev, union disp_intr intr_status)
 {
 	#define DISP_FPS_CNT 10
 	#define DISP_FPS_TABLE_CNT 6
@@ -2534,6 +2622,7 @@ static int _vo_init_param(struct vo_ctx *ctx)
 		ctx->layer_ctx[i].layer = i;
 		ctx->layer_ctx[i].display_buflen = 2;
 		ctx->layer_ctx[i].vb_pool_id = VB_INVALID_POOLID;
+		ctx->layer_ctx[i].layer_update_mask = 0;
 
 		spin_lock_init(&ctx->layer_ctx[i].list_lock);
 		INIT_LIST_HEAD(&ctx->layer_ctx[i].list_wait);
@@ -2704,7 +2793,7 @@ int vo_recv_frame(mmf_chn_s chn, vb_blk blk)
 	atomic_long_fetch_or(BIT(chn.mod_id), &vb->mod_ids);
 
 	mutex_lock(&g_vo_ctx->layer_ctx[chn.dev_id].layer_lock);
-	g_vo_ctx->layer_ctx[chn.dev_id].is_layer_update = true;
+	g_vo_ctx->layer_ctx[chn.dev_id].layer_update_mask |= BIT(chn.chn_id);
 	mutex_unlock(&g_vo_ctx->layer_ctx[chn.dev_id].layer_lock);
 
 	TRACE_VO(DBG_INFO, "layer(%d) chn(%d) push vb(0x%llx).\n",

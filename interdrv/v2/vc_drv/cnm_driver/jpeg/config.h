@@ -14,7 +14,7 @@
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(_WIN64) || defined(WIN32) || defined(__MINGW32__)
 #	define PLATFORM_WIN32
-#elif defined(linux) || defined(__linux) || defined(ANDROID)
+#elif defined(linux) || defined(__linux)
 #	define PLATFORM_LINUX
 #else
 #	define PLATFORM_NON_OS

@@ -379,6 +379,7 @@ out_disable_clk:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 static int dw_wdt_drv_remove(struct platform_device *pdev)
 {
 	struct dw_wdt *dw_wdt = platform_get_drvdata(pdev);
@@ -389,6 +390,19 @@ static int dw_wdt_drv_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#else
+static void dw_wdt_drv_remove(struct platform_device *pdev)
+{
+        struct dw_wdt *dw_wdt = platform_get_drvdata(pdev);
+
+        watchdog_unregister_device(&dw_wdt->wdd);
+        reset_control_assert(dw_wdt->rst);
+        clk_disable_unprepare(dw_wdt->clk);
+
+        return;
+}
+
+#endif
 
 #ifdef CONFIG_OF
 static const struct of_device_id dw_wdt_of_match[] = {

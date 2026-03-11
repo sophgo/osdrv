@@ -904,7 +904,8 @@ err_res:
 	return rc;
 }
 
-static int ldc_remove(struct platform_device *pdev)
+
+static void ldc_remove(struct platform_device *pdev)
 {
 	if (ldc_destroy_instance(pdev)) {
 		dev_err(&pdev->dev, "ldc_destroy_instance fail\n");
@@ -916,13 +917,21 @@ static int ldc_remove(struct platform_device *pdev)
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
-		return -EINVAL;
+		return;
 	}
 
 	dev_set_drvdata(&pdev->dev, NULL);
 
-	return 0;
+	return;
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+static int ldc_remove_ex(struct platform_device *pdev)
+{
+    ldc_remove(pdev);
+    return 0;
+}
+#endif
 
 static const struct of_device_id ldc_dt_match[] = {
 	{ .compatible = "cvitek,gdc" },
@@ -997,7 +1006,11 @@ static struct platform_device ldc_pdev = {
 
 static struct platform_driver ldc_driver = {
 	.probe      = ldc_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+	.remove     = ldc_remove_ex,
+#else
 	.remove     = ldc_remove,
+#endif
 	.driver     = {
 		.name		= LDC_DEV_NAME,
 		.owner		= THIS_MODULE,

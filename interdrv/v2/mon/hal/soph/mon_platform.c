@@ -4,9 +4,11 @@
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/reset.h>
-#include <linux/streamline_annotate.h>
-#include <linux/clk.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
+#include <linux/streamline_annotate.h>
+#endif
+#include <linux/clk.h>
 #include <linux/timex.h>
 #include "mon_platform.h"
 

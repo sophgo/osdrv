@@ -65,12 +65,20 @@ static int _isp_proc_show(struct seq_file *m, void *v)
 
 static int _isp_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	struct sop_vi_dev *vdev = (struct sop_vi_dev *)pde_data(inode);
+#else
 	struct sop_vi_dev *vdev = PDE_DATA(inode);
+#endif
 
 	isp_prc_unit.isp_prc_int_flag = 0;
 	vi_event_queue(vdev, VI_EVENT_ISP_PROC_READ, 0);
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, _isp_proc_show, (void *)pde_data(inode));
+#else
 	return single_open(file, _isp_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)

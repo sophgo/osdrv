@@ -17,8 +17,10 @@
 #include <linux/reboot.h>
 #include <linux/cdev.h>
 #include <linux/compat.h>
+#include <linux/version.h>
 
 #include <linux/comm_mipi_tx.h>
+#include "mipi_tx.h"
 #include "proc/mipi_tx_proc.h"
 #include "base_ctx.h"
 #include "disp.h"
@@ -811,7 +813,11 @@ err_res:
 	return rc;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+static void mipi_tx_remove(struct platform_device *pdev)
+#else
 static int mipi_tx_remove(struct platform_device *pdev)
+#endif
 {
 	int devno, i;
 
@@ -840,7 +846,9 @@ static int mipi_tx_remove(struct platform_device *pdev)
 	}
 	dev_set_drvdata(&pdev->dev, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	return 0;
+#endif
 }
 
 #if defined(CONFIG_PM)

@@ -306,6 +306,14 @@ struct dpu_dev_s *dpu_get_dev(void);
 
 struct dpu_handler_ctx_s *dpu_get_handler_ctx(void);
 
+unsigned char dpu_is_busy(void);
+
+int get_dev_info_by_chn(mmf_chn_s chn, enum chn_type_e chn_type);
+
+int check_dpu_id(dpu_grp dpu_grp_id, dpu_chn dpu_chn_id);
+
+int dpu_get_chn_buffer(mmf_chn_s chn, vb_blk *blk,enum chn_type_e eChnType ,int timeout_ms);
+
 #define DPU_GRP_SUPPORT_FMT(fmt) \
 	((fmt == PIXEL_FORMAT_YUV_400))
 

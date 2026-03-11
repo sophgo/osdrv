@@ -148,7 +148,12 @@ static int snsr_i2c_burst_queue(struct i2c_dev *dev, struct isp_i2c_data *i2c)
 	msg->addr = i2c->dev_addr;
 	msg->buf = tx;
 	msg->len = idx;
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	/* In Linux 6.x, I2C_M_WRSTOP may not exist, use default write flags */
+	msg->flags = 0;
+#else
 	msg->flags = I2C_M_WRSTOP;
+#endif
 
 	ctx->addr_bytes = i2c->addr_bytes;
 	ctx->data_bytes = i2c->data_bytes;
@@ -433,20 +438,32 @@ static int snsr_i2c_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+static void snsr_i2c_remove(struct platform_device *pdev)
+#else
 static int snsr_i2c_remove(struct platform_device *pdev)
+#endif
 {
 	struct i2c_dev *dev;
 	int i = 0;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+		return;
+#else
 		return -EINVAL;
+#endif
 	}
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get snsr drvdata");
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+		return;
+#else
 		return 0;
+#endif
 	}
 
 	for (i = 0; i < I2C_MAX_NUM; i++) {
@@ -460,7 +477,11 @@ static int snsr_i2c_remove(struct platform_device *pdev)
 
 	dev_set_drvdata(&pdev->dev, NULL);
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	return;
+#else
 	return 0;
+#endif
 }
 
 static void snsr_i2c_pdev_release(struct device *dev)

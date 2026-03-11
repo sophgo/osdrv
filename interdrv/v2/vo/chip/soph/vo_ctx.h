@@ -78,7 +78,7 @@ struct vo_chn_ctx {
 struct vo_layer_ctx {
 	vo_layer layer;
 	bool is_layer_enable;
-	bool is_layer_update;
+	u64 layer_update_mask;
 	bool is_drop;
 	vo_video_layer_attr_s layer_attr;
 	u32 display_buflen;

@@ -2,7 +2,9 @@
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/compat.h>
-
+#include <linux/vmalloc.h>
+#include <linux/platform_device.h>
+#include <linux/mod_devicetable.h>
 #include "vc_drv.h"
 #include "h265_interface.h"
 #include "jpuconfig.h"
@@ -13,15 +15,12 @@ static const struct of_device_id cvi_vc_drv_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, cvi_vc_drv_match_table);
 
-wait_queue_head_t tVencWaitQueue[VENC_MAX_CHN_NUM];
 static DEFINE_SPINLOCK(vc_spinlock);
 
 uint32_t MaxVencChnNum = VENC_MAX_CHN_NUM;
 module_param(MaxVencChnNum, uint, 0644);
-#ifdef ENABLE_DEC
 uint32_t MaxVdecChnNum = VDEC_MAX_CHN_NUM;
 module_param(MaxVdecChnNum, uint, 0644);
-#endif
 
 struct drv_vc_chn_info
 {
@@ -32,21 +31,18 @@ struct drv_vc_chn_info
     int is_channel_exist;
 };
 
-struct drv_vc_chn_info venc_chn_info[VENC_MAX_CHN_NUM];
-struct drv_vc_chn_info vdec_chn_info[VDEC_MAX_CHN_NUM];
-
+static struct drv_vc_chn_info *venc_chn_info = NULL;
+static struct drv_vc_chn_info *vdec_chn_info = NULL;
+static uint8_t  *jpegEncChnBitMap = NULL;
+static uint8_t  *jpegDecChnBitMap = NULL;
+static struct semaphore *vencSemArry = NULL;
+static struct semaphore *vdecSemArry = NULL;
+wait_queue_head_t *tVencWaitQueue = NULL;
+wait_queue_head_t *tVdecWaitQueue = NULL;
 
 static uint32_t vencChnBitMap = 0;
 static uint64_t vdecChnBitMap = 0;
-static uint8_t  jpegEncChnBitMap[JPEG_MAX_CHN_NUM] = {0};
-static uint8_t  jpegDecChnBitMap[JPEG_MAX_CHN_NUM] = {0};
 static uint32_t jpegChnStart = 64;
-
-wait_queue_head_t tVdecWaitQueue[VDEC_MAX_CHN_NUM];
-static struct semaphore vencSemArry[VENC_MAX_CHN_NUM];
-#ifdef ENABLE_DEC
-static struct semaphore vdecSemArry[VDEC_MAX_CHN_NUM];
-#endif
 struct vc_drv_device *pVcDrvDevice;
 
 struct clk_ctrl_info {
@@ -82,12 +78,8 @@ extern int jpege_proc_init(struct device *dev);
 extern int jpege_proc_deinit(void);
 extern int rc_proc_init(struct device *dev);
 extern int rc_proc_deinit(void);
-
-#ifdef ENABLE_DEC
 extern int vdec_proc_init(struct device *dev);
 extern int vdec_proc_deinit(void);
-#endif
-
 
 #if defined(CONFIG_PM)
 int vpu_drv_suspend(struct platform_device *pdev, pm_message_t state);
@@ -99,9 +91,7 @@ void jpu_clk_disable(int core_idx);
 void jpu_clk_enable(int core_idx);
 static int _vc_drv_open(struct inode *inode, struct file *filp);
 static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg);
-#ifdef ENABLE_DEC
 static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg);
-#endif
 static int _vc_drv_venc_release(struct inode *inode, struct file *filp);
 static int _vc_drv_vdec_release(struct inode *inode, struct file *filp);
 
@@ -110,7 +100,8 @@ static unsigned int _vc_drv_poll(struct file *filp,
 static unsigned int _vdec_drv_poll(struct file *filp,
                     struct poll_table_struct *wait);
 
-
+extern int drv_venc_get_left_streamframes(int VeChn);
+int vdec_get_output_frame_count(vdec_chn VdChn);
 //extern unsigned long vpu_get_interrupt_reason(int coreIdx);
 //extern unsigned long jpu_get_interrupt_flag(int chnIdx);
 
@@ -134,7 +125,7 @@ const struct file_operations _vc_drv_venc_fops = {
     .release = _vc_drv_venc_release,
     .poll = _vc_drv_poll,
 };
-#ifdef ENABLE_DEC
+
 const struct file_operations _vc_drv_vdec_fops = {
     .owner = THIS_MODULE,
     .open = _vc_drv_open,
@@ -145,7 +136,7 @@ const struct file_operations _vc_drv_vdec_fops = {
     .poll = _vdec_drv_poll,
     .release = _vc_drv_vdec_release,
 };
-#endif
+
 static int _vc_drv_open(struct inode *inode, struct file *filp)
 {
 
@@ -162,6 +153,7 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
 
     if(pstChnInfo)
         minor = pstChnInfo->channel_index;
+
     if (cmd == DRV_VC_VCODEC_SET_CHN) {
         if (copy_from_user(&minor, (int *)arg, sizeof(int)) != 0) {
             pr_err("get chn fd failed.\n");
@@ -1405,7 +1397,7 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
     up(&vencSemArry[minor]);
     return s32Ret;
 }
-#ifdef ENABLE_DEC
+
 static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
 {
     int s32Ret = -1;
@@ -1978,9 +1970,6 @@ static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
     up(&vdecSemArry[minor]);
     return s32Ret;
 }
-#endif
-extern int drv_venc_get_left_streamframes(int VeChn);
-int vdec_get_output_frame_count(vdec_chn VdChn);
 
 static unsigned int _vc_drv_poll(struct file *filp,
                     struct poll_table_struct *wait)
@@ -2085,8 +2074,13 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
 {
     int err = 0;
     int i = 0;
+    dev_t subDevice;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
+    vdev->vc_class = class_create(DRV_VC_DRV_CLASS_NAME);
+#else
     vdev->vc_class = class_create(THIS_MODULE, DRV_VC_DRV_CLASS_NAME);
+#endif
     if (IS_ERR(vdev->vc_class)) {
         pr_err("create class failed\n");
         return PTR_ERR(vdev->vc_class);
@@ -2101,30 +2095,29 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
     }
     vdev->s_venc_major = MAJOR(vdev->venc_cdev_id);
     vdev->p_venc_cdev = vzalloc(sizeof(struct cdev));
+    subDevice = MKDEV(vdev->s_venc_major, 0);
 
-    {
-        dev_t subDevice;
-        subDevice = MKDEV(vdev->s_venc_major, 0);
+    /* initialize the device structure and register the device with the kernel */
+    cdev_init(vdev->p_venc_cdev, &_vc_drv_venc_fops);
+    vdev->p_venc_cdev->owner = THIS_MODULE;
 
-        /* initialize the device structure and register the device with the kernel */
-        cdev_init(vdev->p_venc_cdev, &_vc_drv_venc_fops);
-        vdev->p_venc_cdev->owner = THIS_MODULE;
-
-        if ((cdev_add(vdev->p_venc_cdev, subDevice, 1)) < 0) {
-            err = -EBUSY;
-            pr_err("could not allocate chrdev\n");
-            return err;
-        }
-
-        device_create(vdev->vc_class, NULL, subDevice, NULL, "%s",
-                  VC_DRV_ENCODER_DEV_NAME);
-        for( i = 0; i <VENC_MAX_CHN_NUM; i++) {
-            init_waitqueue_head(&tVencWaitQueue[i]);
-            sema_init(&vencSemArry[i], 1);
-        }
-        memset(venc_chn_info, 0, sizeof(venc_chn_info));
+    if ((cdev_add(vdev->p_venc_cdev, subDevice, 1)) < 0) {
+        err = -EBUSY;
+        pr_err("could not allocate chrdev\n");
+        return err;
     }
-#ifdef ENABLE_DEC
+
+    device_create(vdev->vc_class, NULL, subDevice, NULL, "%s",
+                VC_DRV_ENCODER_DEV_NAME);
+    tVencWaitQueue = vzalloc(sizeof(wait_queue_head_t) * VENC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    vencSemArry = vzalloc(sizeof(struct semaphore) * VENC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    venc_chn_info = vzalloc(sizeof(struct drv_vc_chn_info) * VENC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    jpegEncChnBitMap = vzalloc(sizeof(uint8_t) * JPEG_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    for( i = 0; i <VENC_MAX_CHN_NUM; i++) {
+        init_waitqueue_head(&tVencWaitQueue[i]);
+        sema_init(&vencSemArry[i], 1);
+    }
+
     /* get the major number of the character device */
     if ((alloc_chrdev_region(&vdev->vdec_cdev_id, 0, 1,
                  VC_DRV_DECODER_DEV_NAME)) < 0) {
@@ -2134,31 +2127,28 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
     }
     vdev->s_vdec_major = MAJOR(vdev->vdec_cdev_id);
     vdev->p_vdec_cdev = vzalloc(sizeof(struct cdev));
+    subDevice = MKDEV(vdev->s_vdec_major, 0);
 
-    {
-        dev_t subDevice;
+    /* initialize the device structure and register the device with the kernel */
+    cdev_init(vdev->p_vdec_cdev, &_vc_drv_vdec_fops);
+    vdev->p_vdec_cdev->owner = THIS_MODULE;
 
-        subDevice = MKDEV(vdev->s_vdec_major, 0);
-
-        /* initialize the device structure and register the device with the kernel */
-        cdev_init(vdev->p_vdec_cdev, &_vc_drv_vdec_fops);
-        vdev->p_vdec_cdev->owner = THIS_MODULE;
-
-        if ((cdev_add(vdev->p_vdec_cdev, subDevice, 1)) < 0) {
-            err = -EBUSY;
-            pr_err("could not allocate chrdev\n");
-            return err;
-        }
-
-        device_create(vdev->vc_class, NULL, subDevice, NULL, "%s",
-                  VC_DRV_DECODER_DEV_NAME);
-        for (i = 0; i < VDEC_MAX_CHN_NUM; i++) {
-            init_waitqueue_head(&tVdecWaitQueue[i]);
-            sema_init(&vdecSemArry[i], 1);
-        }
-        memset(vdec_chn_info, 0, sizeof(vdec_chn_info));
+    if ((cdev_add(vdev->p_vdec_cdev, subDevice, 1)) < 0) {
+        err = -EBUSY;
+        pr_err("could not allocate chrdev\n");
+        return err;
     }
-#endif
+
+    device_create(vdev->vc_class, NULL, subDevice, NULL, "%s",
+                VC_DRV_DECODER_DEV_NAME);
+    tVdecWaitQueue = vzalloc(sizeof(wait_queue_head_t) * VDEC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    vdecSemArry = vzalloc(sizeof(struct semaphore) * VDEC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    vdec_chn_info = vzalloc(sizeof(struct drv_vc_chn_info) * VDEC_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    jpegDecChnBitMap = vzalloc(sizeof(uint8_t) * JPEG_MAX_CHN_NUM * MAX_NUM_SOPHON_SOC);
+    for (i = 0; i < VDEC_MAX_CHN_NUM; i++) {
+        init_waitqueue_head(&tVdecWaitQueue[i]);
+        sema_init(&vdecSemArry[i], 1);
+    }
 
     return err;
 }
@@ -2183,9 +2173,8 @@ int vc_drv_plat_probe(struct platform_device *pdev)
     return ret;
 }
 
-int vc_drv_plat_remove(struct platform_device *pdev)
+void vc_drv_plat_remove(struct platform_device *pdev)
 {
-    int ret = 0;
     jpeg_platform_exit();
     vpu_drv_platform_exit();
     drv_venc_deinit();
@@ -2200,9 +2189,14 @@ int vc_drv_plat_remove(struct platform_device *pdev)
     codecinst_proc_deinit();
 
     pr_info("%s ok\n", __FUNCTION__);
-    return ret;
 }
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0))
+int vc_drv_plat_remove_ex(struct platform_device *pdev)
+{
+    vc_drv_plat_remove(pdev);
+    return 0;
+}
+#endif
 #if defined(CONFIG_PM)
 int _vc_drv_suspend(struct platform_device *pdev, pm_message_t state)
 {
@@ -2232,7 +2226,11 @@ static struct platform_driver vc_plat_driver = {
         .of_match_table = vc_drv_match_table,
     },
     .probe      = vc_drv_plat_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0))
+    .remove     = vc_drv_plat_remove_ex,
+#else
     .remove     = vc_drv_plat_remove,
+#endif
     #if defined(CONFIG_PM)
     .suspend    = _vc_drv_suspend,
     .resume     = _vc_drv_resume,
@@ -2293,9 +2291,12 @@ void vc_drv_exit(void)
         vfree(vdev->p_venc_cdev);
         unregister_chrdev_region(vdev->s_venc_major, 1);
         vdev->s_venc_major = 0;
+        vfree(tVencWaitQueue);
+        vfree(vencSemArry);
+        vfree(venc_chn_info);
+        vfree(jpegEncChnBitMap);
     }
 
-#ifdef ENABLE_DEC
     if (vdev->s_vdec_major > 0) {
         dev_t subDevice;
 
@@ -2305,9 +2306,12 @@ void vc_drv_exit(void)
         vfree(vdev->p_vdec_cdev);
         unregister_chrdev_region(vdev->s_vdec_major, 1);
         vdev->s_vdec_major = 0;
-
+        vfree(tVdecWaitQueue);
+        vfree(vdecSemArry);
+        vfree(vdec_chn_info);
+        vfree(jpegDecChnBitMap);
     }
-#endif
+
     class_destroy(vdev->vc_class);
     vfree(vdev);
     pVcDrvDevice = NULL;

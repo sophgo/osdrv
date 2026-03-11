@@ -1,11 +1,16 @@
 #ifndef _VPSS_COMMON_H_
 #define _VPSS_COMMON_H_
 
+#include <linux/version.h>
+
 #define VIP_ALIGNMENT 0x40
 #define GOP_ALIGNMENT 0x10
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 #define MIN(a, b) (((a) < (b))?(a):(b))
 #define MAX(a, b) (((a) > (b))?(a):(b))
+#endif
+
 #define UPPER(x, y) (((x) + ((1 << (y)) - 1)) >> (y))   // for alignment
 
 #define VIP_64_ALIGN(x) (((x) + 0x3F) & ~0x3F)   // for 64byte alignment

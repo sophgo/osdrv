@@ -26,12 +26,12 @@ extern unsigned int venc_log_lv;
 #define DRV_VENC_WARN(msg, ...)		\
     do { \
         if (venc_log_lv >= DRV_VENC_MASK_WARN) \
-        pr_warn("[WARN] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[WARN] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 #define DRV_VENC_DBG(msg, ...)	\
     do { \
         if (venc_log_lv >= DRV_VENC_MASK_DBG) \
-        pr_notice("[CFG] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[CFG] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 #define DRV_VENC_INFO(msg, ...)		\
     do { \
@@ -135,7 +135,6 @@ typedef struct _venc_chn_context {
     venc_chn_vars *pChnVars;
     venc_vb_ctx *pVbCtx;
     struct mutex chnMutex;
-    struct mutex chnShmMutex;
     unsigned char bSbSkipFrm;
     unsigned int jpgFrmSkipCnt;
     video_frame_info_s stVideoFrameInfo;
@@ -193,9 +192,9 @@ typedef struct _venc_context {
 #define VCODEC_VDEC_SHARE_MEM_SIZE (0x8000) // 32k
 #define VCODEC_SHARE_MEM_SIZE                                                  \
     (VCODEC_VENC_SHARE_MEM_SIZE + VCODEC_VDEC_SHARE_MEM_SIZE)
-
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
+#endif
 #define FRC_TIME_SCALE 0xFFF0
 #if SOFT_FLOAT
 #define FLOAT_VAL_FRC_TIME_SCALE (0x477ff000)

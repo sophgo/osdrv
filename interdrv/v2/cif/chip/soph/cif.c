@@ -13,6 +13,10 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/defines.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+#include <generated/utsrelease.h>
+#endif
 #if defined(__CV186X__)
 #include "pinctrl-cv186x.h"
 #endif
@@ -132,7 +136,7 @@ static struct cif_dev *file_cif_dev(struct file *file)
 	return container_of(file->private_data, struct cif_dev, miscdev);
 }
 
-const char *_to_string_input_mode(enum input_mode_e input_mode)
+static const char *_to_string_input_mode(enum input_mode_e input_mode)
 {
 	switch (input_mode) {
 	case INPUT_MODE_MIPI:
@@ -160,7 +164,7 @@ const char *_to_string_input_mode(enum input_mode_e input_mode)
 	}
 }
 
-const char *_to_string_mac_clk(enum rx_mac_clk_e mac_clk)
+static const char *_to_string_mac_clk(enum rx_mac_clk_e mac_clk)
 {
 	switch (mac_clk) {
 	case RX_MAC_CLK_150M:
@@ -182,7 +186,7 @@ const char *_to_string_mac_clk(enum rx_mac_clk_e mac_clk)
 	}
 }
 
-const char *_to_string_cmd(unsigned int cmd)
+static const char *_to_string_cmd(unsigned int cmd)
 {
 	switch (cmd) {
 	case MIPI_SET_DEV_ATTR:
@@ -221,7 +225,7 @@ const char *_to_string_cmd(unsigned int cmd)
 	return "unknown";
 }
 
-const char *_to_string_raw_data_type(enum raw_data_type_e raw_data_type)
+static const char *_to_string_raw_data_type(enum raw_data_type_e raw_data_type)
 {
 	switch (raw_data_type) {
 	case RAW_DATA_8BIT:
@@ -239,7 +243,7 @@ const char *_to_string_raw_data_type(enum raw_data_type_e raw_data_type)
 	}
 }
 
-const char *_to_string_mipi_wdr_mode(enum mipi_wdr_mode_e wdr)
+static const char *_to_string_mipi_wdr_mode(enum mipi_wdr_mode_e wdr)
 {
 	switch (wdr) {
 	case MIPI_WDR_MODE_NONE:
@@ -257,7 +261,7 @@ const char *_to_string_mipi_wdr_mode(enum mipi_wdr_mode_e wdr)
 	}
 }
 
-const char *_to_string_wdr_mode(enum wdr_mode_e wdr)
+static const char *_to_string_wdr_mode(enum wdr_mode_e wdr)
 {
 	switch (wdr) {
 	case CIF_WDR_MODE_NONE:
@@ -275,7 +279,7 @@ const char *_to_string_wdr_mode(enum wdr_mode_e wdr)
 	}
 }
 
-const char *_to_string_lvds_sync_mode(enum lvds_sync_mode_e mode)
+static const char *_to_string_lvds_sync_mode(enum lvds_sync_mode_e mode)
 {
 	switch (mode) {
 	case LVDS_SYNC_MODE_SOF:
@@ -287,7 +291,7 @@ const char *_to_string_lvds_sync_mode(enum lvds_sync_mode_e mode)
 	}
 }
 
-const char *_to_string_bit_endian(enum lvds_bit_endian endian)
+static const char *_to_string_bit_endian(enum lvds_bit_endian endian)
 {
 	switch (endian) {
 	case LVDS_ENDIAN_LITTLE:
@@ -299,7 +303,7 @@ const char *_to_string_bit_endian(enum lvds_bit_endian endian)
 	}
 }
 
-const char *_to_string_lvds_vsync_type(enum lvds_vsync_type_e type)
+static const char *_to_string_lvds_vsync_type(enum lvds_vsync_type_e type)
 {
 	switch (type) {
 	case LVDS_VSYNC_NORMAL:
@@ -313,7 +317,7 @@ const char *_to_string_lvds_vsync_type(enum lvds_vsync_type_e type)
 	}
 }
 
-const char *_to_string_lvds_fid_type(enum lvds_fid_type_e type)
+static const char *_to_string_lvds_fid_type(enum lvds_fid_type_e type)
 {
 	switch (type) {
 	case LVDS_FID_NONE:
@@ -325,7 +329,7 @@ const char *_to_string_lvds_fid_type(enum lvds_fid_type_e type)
 	}
 }
 
-const char *_to_string_mclk(enum cam_pll_freq_e freq)
+static const char *_to_string_mclk(enum cam_pll_freq_e freq)
 {
 	switch (freq) {
 	case CAMPLL_FREQ_NONE:
@@ -345,7 +349,7 @@ const char *_to_string_mclk(enum cam_pll_freq_e freq)
 	}
 }
 
-const char *_to_string_csi_decode(enum csi_decode_fmt_e fmt)
+static const char *_to_string_csi_decode(enum csi_decode_fmt_e fmt)
 {
 	switch (fmt) {
 	case DEC_FMT_YUV422_8:
@@ -363,7 +367,7 @@ const char *_to_string_csi_decode(enum csi_decode_fmt_e fmt)
 	}
 }
 
-const char *_to_string_dlane_state(enum mipi_dlane_state_e state)
+static const char *_to_string_dlane_state(enum mipi_dlane_state_e state)
 {
 	switch (state) {
 	case HS_IDLE:
@@ -385,7 +389,7 @@ const char *_to_string_dlane_state(enum mipi_dlane_state_e state)
 	}
 }
 
-const char *_to_string_deskew_state(enum mipi_deskew_state_e state)
+static const char *_to_string_deskew_state(enum mipi_deskew_state_e state)
 {
 	switch (state) {
 	case DESKEW_IDLE:
@@ -897,9 +901,7 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 		} else if (clk_port == 1) {
 			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
-			if (max_port == 3 && min_port == 2) {
-				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
-			}
+			cif_set_clk_dir(ctx, CIF_CLK_P22P3);
 		} else if (clk_port == 3) {
 			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 		} else if (clk_port == 4) {
@@ -2823,7 +2825,7 @@ const struct cam_pll_s cam_pll_setting[CAMPLL_FREQ_NUM] = {
 	},
 };
 
-void write_value_range(u32 *data, unsigned int start_bit, unsigned int end_bit, unsigned int value)
+static void write_value_range(u32 *data, unsigned int start_bit, unsigned int end_bit, unsigned int value)
 {
 	unsigned int num_bits;
 	unsigned int max_value;
@@ -3957,8 +3959,13 @@ static int proc_cif_show(struct seq_file *m, void *v)
 	struct cif_dev *dev = (struct cif_dev *)m->private;
 	int i;
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	seq_printf(m, "\nModule: [MIPI_RX], Build Time[%s]\n",
+			UTS_RELEASE);
+#else
 	seq_printf(m, "\nModule: [MIPI_RX], Build Time[%s]\n",
 			UTS_VERSION);
+#endif
 	seq_puts(m, "\n------------Combo DEV ATTR--------------\n");
 	for (i = 0; i < MAX_LINK_NUM; i++)
 		if (dev->link[i].is_on)
@@ -4146,7 +4153,11 @@ static int dbg_hdler(struct cif_dev *dev, char const *input)
 
 static ssize_t cif_proc_write(struct file *file, const char __user *user_buf, size_t count, loff_t *ppos)
 {
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	struct cif_dev *dev = pde_data(file_inode(file));
+#else
 	struct cif_dev *dev = PDE_DATA(file_inode(file));
+#endif
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 	char txt_buff[MAX_CIF_PROC_BUF];
 
@@ -4164,7 +4175,11 @@ static ssize_t cif_proc_write(struct file *file, const char __user *user_buf, si
 
 static int proc_cif_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	struct cif_dev *dev = pde_data(inode);
+#else
 	struct cif_dev *dev = PDE_DATA(inode);
+#endif
 
 	return single_open(file, proc_cif_show, dev);
 }
@@ -4229,13 +4244,21 @@ static int cif_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+static void cif_remove(struct platform_device *pdev)
+#else
 static int cif_remove(struct platform_device *pdev)
+#endif
 {
 	struct cif_dev *dev;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+		return;
+#else
 		return -EINVAL;
+#endif
 	}
 
 	/* rm cif_cb */
@@ -4245,7 +4268,11 @@ static int cif_remove(struct platform_device *pdev)
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get cif drvdata");
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+		return;
+#else
 		return 0;
+#endif
 	}
 
 	misc_deregister(&dev->miscdev);
@@ -4254,7 +4281,11 @@ static int cif_remove(struct platform_device *pdev)
 #ifdef CONFIG_PROC_FS
 	proc_remove(cif_proc_entry);
 #endif
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	return;
+#else
 	return 0;
+#endif
 }
 
 static int cif_suspend(struct platform_device *pdev, pm_message_t state)

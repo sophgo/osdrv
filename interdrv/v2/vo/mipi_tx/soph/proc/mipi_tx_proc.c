@@ -1,4 +1,5 @@
 #include <linux/version.h>
+#include <linux/utsname.h>
 #include "mipi_tx_proc.h"
 #include "../mipi_tx.h"
 
@@ -60,7 +61,11 @@ static int mipi_tx_proc_show(struct seq_file *m, void *v)
 		phy_data_rate = phy_data_rate % 10 ? phy_data_rate / 10 + 1 : phy_data_rate / 10;
 	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+	seq_printf(m, "\nModule: [MIPI_TX], Build Time[%s]\n", utsname()->version);
+#else
 	seq_printf(m, "\nModule: [MIPI_TX], Build Time[%s]\n", UTS_VERSION);
+#endif
 	// MIPI_Tx DEV CONFIG
 	seq_printf(m, "\n------MIPI_Tx%d DEV CONFIG----------------------------------------\n",
 		   mipi_tx_proc_ctx.devno);
@@ -128,7 +133,11 @@ static int mipi_tx_proc_open(struct inode *inode, struct file *file)
 		mipi_tx_devno = 1;
 	}
 
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, mipi_tx_proc_show, pde_data(inode));
+#else
 	return single_open(file, mipi_tx_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

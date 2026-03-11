@@ -13,7 +13,6 @@
 #include <linux/poll.h>
 #include <linux/sched/signal.h>
 #include <linux/slab.h>
-#include <linux/streamline_annotate.h>
 #include <linux/version.h>
 #if (KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE)
 #include <uapi/linux/sched/types.h>
@@ -27,6 +26,7 @@
 #include <snsr_i2c.h>
 #include <vi_defines.h>
 #include <vi_sdk_layer.h>
+#include <base_cb.h>
 #include <reg_vi_sys.h>
 
 #include <vi_raw_dump.h>
@@ -41,6 +41,8 @@
 // fixed cmd from bmtpu driver
 #define BMDEV_SEND_API	      _IOW('p', 0x20, unsigned long)
 #define BMDEV_THREAD_SYNC_API _IOW('p', 0x21, unsigned long)
+
+typedef void (*vi_timer_cb)(void *data);
 
 enum sop_isp_state {
 	ISP_STATE_IDLE,
@@ -176,6 +178,7 @@ struct vi_event_k {
 
 struct _isp_event_q {
 	struct list_head	list;
+	__u32				count;
 } event_q;
 
 struct _vi_buffer {
@@ -1610,9 +1613,7 @@ void _isp_fe_be_raw_dump_cfg(struct sop_vi_dev *vdev,
 			     const enum sop_isp_raw raw_num,
 			     const u8 chn_num);
 void isp_post_tasklet(unsigned long data);
-static void _vi_sw_init(struct sop_vi_dev *vdev);
 #ifndef FPGA_PORTING
-static int _vi_clk_ctrl(struct sop_vi_dev *vdev, u8 enable);
 #endif
 static inline void _post_rgbmap_update(struct isp_ctx *ctx, const enum sop_isp_raw raw_num, const u32 frm_num);
 void _postraw_outbuf_enq(struct sop_vi_dev *vdev,
@@ -1620,14 +1621,26 @@ void _postraw_outbuf_enq(struct sop_vi_dev *vdev,
 					const enum sop_isp_fe_chn_num chn_num);
 void isp_fill_rgbmap(struct isp_ctx *ctx, enum sop_isp_raw raw_num);
 
-static int _vi_preraw_thread(void *arg);
-static int _vi_vblank_handler_thread(void *arg);
-static int _vi_err_handler_thread(void *arg);
-static int _vi_event_handler_thread(void *arg);
 static void _splt_hw_enque(struct sop_vi_dev *vdev, const enum sop_isp_raw raw_num);
 static inline void _vi_wake_up_tpu_th(struct sop_vi_dev *vdev,
 				      const enum sop_isp_raw raw_num,
 				      const enum ai_isp_type_e type);
+
+/* Public function prototypes */
+struct sop_isp_buf *sop_isp_rdy_buf_next(struct sop_vi_dev *vdev, const u8 raw_num, const u8 chn_num);
+int sop_isp_rdy_buf_empty(struct sop_vi_dev *vdev, const u8 raw_num, const u8 chn_num);
+int vi_open(struct inode *inode, struct file *file);
+int vi_release(struct inode *inode, struct file *file);
+int vi_mmap(struct file *file, struct vm_area_struct *vma);
+unsigned int vi_poll(struct file *file, struct poll_table_struct *wait);
+long vi_ioctl(struct file *file, u_int cmd, u_long arg);
+int vi_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg);
+void vi_irq_handler(struct sop_vi_dev *vdev);
+int vi_create_instance(struct platform_device *pdev);
+int vi_destroy_instance(struct platform_device *pdev);
+void vi_suspend(struct sop_vi_dev *vdev);
+void vi_resume(struct sop_vi_dev *vdev);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,8 +1,12 @@
 #ifndef _CMDQ_H_
 #define _CMDQ_H_
 
-#include <stdbool.h>
-//#include <common.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    #include <stdbool.h>
+#else
+    #include <linux/types.h>
+#endif
 
 enum {
 	CMDQ_MODE_SDMA,

@@ -540,6 +540,22 @@ s32 mpi_ive_ann_mlp_predict(ive_handle *ive_handle,
 s32 mpi_ive_query(ive_handle IveHandle, bool *pbFinish,
 			  bool bBlock);
 
+s32 ive_hw_equalize_hist(struct ive_device *ndev,
+				ive_src_image_s *pstSrc,
+				ive_dst_image_s *pstDst,
+				ive_equalize_hist_ctrl_s *pstEqualizeHistCtrl,
+				bool instant);
+
+void cmdq_adma_package(struct cmdq_adma *item, u64 addr, u32 size,
+		bool is_link, bool is_end);
+
+
+void cmdq_engine(cmdq_c *ive_cmdq_c, uintptr_t tbl_addr, u16 apb_base,
+		bool is_hw_restart, bool is_adma, u16 cnt, s32 dev_id);
+
+void cmdq_set_package(struct cmdq_set_reg *set, u32 addr, u32 data);
+
+
 #ifdef __cplusplus
 }
 #endif

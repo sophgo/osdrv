@@ -14,7 +14,7 @@
 
 #include <linux/fs.h>
 #include <linux/types.h>
-
+#include "jpuconfig.h"
 #define JDI_IOCTL_MAGIC  'J'
 
 #define JDI_IOCTL_ALLOCATE_PHYSICAL_MEMORY          _IO(JDI_IOCTL_MAGIC, 0)
@@ -54,4 +54,61 @@ typedef struct jpudrv_intr_info_t {
     unsigned int    inst_idx;
     unsigned int    core_idx;
 } jpudrv_intr_info_t;
+
+#define MAX_JPU_STAT_WIN_SIZE  10
+typedef struct {
+    uint64_t jpu_working_time_in_ms[MAX_NUM_JPU_CORE];
+    uint64_t jpu_total_time_in_ms[MAX_NUM_JPU_CORE];
+    uint64_t jpu_stat_cycles[MAX_NUM_JPU_CORE];
+    int jpu_working_array[MAX_NUM_JPU_CORE][MAX_JPU_STAT_WIN_SIZE];
+    int jpu_status_index[MAX_NUM_JPU_CORE];
+    int jpu_instant_usage[MAX_NUM_JPU_CORE];
+    int jpu_instant_count[MAX_NUM_JPU_CORE];
+    uint64_t jpu_laster_time[MAX_NUM_JPU_CORE];
+} jpu_statistic_info_t;
+
+/* Structure representing JPU instance statistics */
+typedef struct jpu_instance_stats {
+    int core_id;             // Core identifier
+    int instance_id;         // Instance identifier
+
+    enum { DEC = 1, ENC } state;// Current state (1: decoding, 2: encoding)
+    int width;               // Frame width
+    int height;              // Frame height
+
+    unsigned long long dec_nr;          // Total decoded frames
+    unsigned long long dec_err_nr;      // Total decoding errors
+    unsigned long long enc_nr;          // Total encoded frames
+    unsigned long long enc_err_nr;      // Total encoding errors
+    int last_dec_err;                  // Last enc error code
+    int last_enc_err;                  // Last enc error code
+
+    int fps;                 // Calculated frames per second
+    u64 last_fps_ts;
+    int fps_counter;
+    u64 last_frame_ts;
+} jpu_inst_info_t;
+uint64_t jpu_get_current_time(void);
+void jpu_clear_stat_info(int coreIdx);
+int jpu_get_register_info(int core_idx, jpudrv_buffer_t *arg);
+int jpu_reset(int core_idx);
+int jpu_wait_interrupt(jpudrv_intr_info_t *arg);
+int jpu_free_memory(jpudrv_buffer_t *arg);
+int jpu_alloc_memory(jpudrv_buffer_t *arg);
+int jpu_invalidate_cache(jpudrv_buffer_t *arg);
+int jpu_flush_cache(jpudrv_buffer_t *arg);
+int jpu_core_release_resource(int id);
+int jpu_core_request_resource(int timeout);
+int jpu_open_device(void);
+int jpu_get_instancepool(jpudrv_buffer_t* arg);
+int jpu_open_instance(jpudrv_inst_info_t *instInfo);
+int jpu_close_instance(jpudrv_inst_info_t *instInfo);
+int jpu_set_clock_gate(int core_idx, int *enable);
+uint32_t jpu_get_extension_address(int core_idx);
+void jpu_set_extension_address(int core_idx, uint32_t addr);
+void jpu_sw_top_reset(int core_idx);
+void jpu_lock(void);
+void jpu_unlock(void);
+
+extern jpu_statistic_info_t s_jpu_usage_info;
 #endif

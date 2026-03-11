@@ -4,14 +4,16 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
+#include <linux/version.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/kthread.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#if (KERNEL_VERSION(6, 0, 0) > LINUX_VERSION_CODE)
 #include <linux/streamline_annotate.h>
-#include <linux/version.h>
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 #include <uapi/linux/sched/types.h>
 #endif

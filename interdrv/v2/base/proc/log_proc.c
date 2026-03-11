@@ -15,6 +15,8 @@
 
 static void *shared_mem;
 static const char *const MOD_STRING[] = FOREACH_MOD(GENERATE_STRING);
+int log_proc_init(struct proc_dir_entry *_proc_dir, void *shm);
+int log_proc_remove(struct proc_dir_entry *_proc_dir);
 /*************************************************************************
  *	Log proc functions
  *************************************************************************/

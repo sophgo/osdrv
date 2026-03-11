@@ -78,8 +78,8 @@ static void _show_sys_status(struct seq_file *m)
 	bindnodes = bind_nodes;
 
 	seq_printf(m, "\nSys commit version:%s\n", GIT_OSDRV_COMMIT_HASH);
-	seq_printf(m, "\nModule: [SYS], Version[%s], Build Time[%s]\n",
-				mmfversion->version, UTS_VERSION);
+	seq_printf(m, "\nModule: [SYS], Version[%s]\n",
+				mmfversion->version);
 	seq_puts(m, "-----BIND RELATION TABLE-----------------------------------------------------------------------------------------------------------\n");
 
 	seq_printf(m, "%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s%-10s\n",

@@ -46,6 +46,22 @@ static RetCode CheckDecInstanceValidity(CodecInst* pCodecInst)
     return RETCODE_SUCCESS;//ProductVpuDecCheckCapability(pCodecInst);
 }
 
+Int32 CheckTopAddr(Uint32 coreIdx, Uint64 addr, Uint32 size)
+{
+    int ext_addr = vdi_get_ddr_map(coreIdx);
+    int top_addr1, top_addr2;
+
+    if(!addr)
+        return -1;
+
+    top_addr1 = addr >> 32 & 0xffff;
+    top_addr2 = (addr + size - 1) >> 32 & 0xffff;
+
+    if(ext_addr == top_addr1 && ext_addr == top_addr2)
+        return 1;
+
+    return 0;
+}
 
 Int32 VPU_IsInit(Uint32 coreIdx)
 {
@@ -2873,7 +2889,8 @@ RetCode VPU_EncStartOneFrame(
         return RETCODE_FAILURE;
     }
 
-    pEncInfo->ptsMap[param->srcIdx] = (pEncInfo->openParam.enablePTS == TRUE) ? GetTimestamp(handle) : param->pts;
+    if (param->srcIdx >= 0 && param->srcIdx < 32)
+        pEncInfo->ptsMap[param->srcIdx] = (pEncInfo->openParam.enablePTS == TRUE) ? GetTimestamp(handle) : param->pts;
 
     if (GetPendingInst(pCodecInst->coreIdx)) {
         LeaveLock(pCodecInst->coreIdx);
@@ -3590,23 +3607,21 @@ PhysicalAddress VPU_MapToAddr40Bit(int coreIdx, unsigned int Addr)
     return RealAddr;
 }
 
+static int instance_count [MAX_NUM_VPU_CORE] = {0};
 int VPU_DecRequestCore(void)
 {
     int i;
     int core_idx;
     int min_instance = MAX_NUM_INSTANCE;
-    int instance_count [MAX_NUM_VPU_CORE];
 
     mutex_lock(&__vdi_init_mutex);
     for (i=1; i<MAX_NUM_VPU_CORE; i++) {
-        instance_count[i] = vdi_get_instance_count(i);
         if (instance_count[i] <= min_instance) {
             min_instance = instance_count[i];
             core_idx = i;
         }
     }
-
-    vdi_request_instance(core_idx);
+    instance_count[core_idx]++;
     mutex_unlock(&__vdi_init_mutex);
 
     return core_idx;
@@ -3615,9 +3630,9 @@ int VPU_DecRequestCore(void)
 int VPU_DecReleaseCore(unsigned int core_idx)
 {
     mutex_lock(&__vdi_init_mutex);
-    vdi_release_instance(core_idx);
+    if (instance_count[core_idx] > 0)
+        instance_count[core_idx]--;
     mutex_unlock(&__vdi_init_mutex);
 
     return 0;
 }
-

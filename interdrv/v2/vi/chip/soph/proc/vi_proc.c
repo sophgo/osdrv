@@ -339,12 +339,25 @@ static int _vi_proc_show(struct seq_file *m, void *v)
 		}
 	}
 
+	seq_puts(m, "\n-------------------------------VI HW STATUS------------------------------------\n");
+	seq_puts(m, "\tDevID\tDutyRatio\n");
+	for (i = 0; i < VI_MAX_DEV_NUM; i++) {
+		if (vi_proc_ctx->is_dev_enable[i]) {
+
+			seq_printf(m, "\t%3d\t%5d\n", i, vdev->vi_core_status.duty_ratio);
+		}
+	}
+
 	return 0;
 }
 
 static int _vi_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, _vi_proc_show, pde_data(inode));
+#else
 	return single_open(file, _vi_proc_show, PDE_DATA(inode));
+#endif
 }
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 static const struct proc_ops _vi_proc_fops = {

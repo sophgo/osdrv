@@ -40,12 +40,12 @@ extern uint32_t vdec_log_lv;
 #define DRV_VDEC_WARN(msg, ...)	\
     do {    \
         if (vdec_log_lv & DRV_VDEC_MASK_WARN) \
-        pr_warn("[WARN] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[WARN] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 #define DRV_VDEC_DISP(msg, ...)	\
     do {    \
         if (vdec_log_lv & DRV_VDEC_MASK_DISP) \
-        pr_notice("[DISP] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[DISP] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 #define DRV_VDEC_INFO(msg, ...)	\
     do {    \
@@ -65,12 +65,12 @@ extern uint32_t vdec_log_lv;
 #define DRV_VDEC_TRACE(msg, ...)	\
     do {    \
         if (vdec_log_lv & DRV_VDEC_MASK_TRACE) \
-        pr_debug("[TRACE] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[TRACE] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 #define DRV_VDEC_PERF(msg, ...)		\
     do { \
         if (vdec_log_lv & DRV_VDEC_MASK_PERF) \
-        pr_notice("[PERF] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
+        pr_info("[PERF] %s = %d, "msg, __func__, __LINE__, ## __VA_ARGS__); \
     } while (0)
 
 #define DRV_TRACE_VDEC(level, fmt, ...)                                           \
@@ -83,15 +83,6 @@ typedef struct _vdec_chn_context {
     vdec_chn_attr_s ChnAttr;
     vdec_chn_param_s ChnParam;
     vdec_chn_status_s stStatus;
-    video_frame_info_s *VideoFrameArray;
-    unsigned int VideoFrameArrayNum;
-    unsigned char display_queue[DISPLAY_QUEUE_SIZE];
-    unsigned int w_idx;
-    unsigned int r_idx;
-    unsigned int seqNum;
-    struct mutex display_queue_lock;
-    struct mutex status_lock;
-    struct mutex chnShmMutex;
     void *pHandle;
     unsigned char bHasVbPool;
     vdec_chn_pool_s vbPool;

@@ -79,7 +79,7 @@ void stitch_enable_dev_clk(bool en)
 	}
 }
 
-int stitch_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
+static int stitch_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	struct stitch_dev *vdev = (struct stitch_dev *)dev;
 	int rc = -1;
@@ -443,7 +443,7 @@ err_dev:
 	return rc;
 }
 
-static int stitch_remove(struct platform_device *pdev)
+static void stitch_remove(struct platform_device *pdev)
 {
 	struct stitch_dev *dev;
 
@@ -451,13 +451,14 @@ static int stitch_remove(struct platform_device *pdev)
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
-		return -EINVAL;
+		// return -EINVAL;
+		return;
 	}
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get stitch drvdata");
-		return -EINVAL;
+		return;
 	}
 
 	stitch_dev_deinit(dev);
@@ -469,7 +470,7 @@ static int stitch_remove(struct platform_device *pdev)
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get stitch drvdata");
-		return -EINVAL;
+		return;
 	}
 
 	stitch_proc_remove(dev);
@@ -477,8 +478,16 @@ static int stitch_remove(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, NULL);
 	g_stitch_dev = NULL;
 
-	return 0;
+	return;
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+static int stitch_remove_ex(struct platform_device *pdev)
+{
+    stitch_remove(pdev);
+    return 0;
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 int stitch_suspend(struct device *dev)
@@ -544,7 +553,11 @@ static struct platform_device stitch_pdev = {
 
 static struct platform_driver stitch_pdrv = {
 	.probe      = stitch_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+	.remove     = stitch_remove_ex,
+#else
 	.remove     = stitch_remove,
+#endif
 	.driver     = {
 		.name		= "stitch",
 		.owner		= THIS_MODULE,

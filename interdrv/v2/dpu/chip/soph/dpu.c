@@ -4,6 +4,7 @@
 #include <linux/vmalloc.h>
 #include <linux/clk.h>
 #include <linux/mm.h>
+#include <linux/version.h>
 #include <uapi/linux/sched/types.h>
 
 #include <linux/comm_video.h>
@@ -21,9 +22,8 @@
 
 #include <linux/kernel.h>
 
-#define IDLE_TIMEOUT_MS      30000
-#define EOF_WAIT_TIMEOUT_MS  10000
-#define HW_WAIT_TIMEOUT_MS  35
+#define IDLE_TIMEOUT_MS      10000
+#define EOF_WAIT_TIMEOUT_MS  1000
 
 #define CTX_EVENT_WKUP       0x0001
 #define CTX_EVENT_EOF        0x0002
@@ -33,7 +33,6 @@
 #define ALIGN_16                 16
 #define ALIGN_32                 32
 #define ALIGN_64                 64
-extern int hw_wait_time;
 static unsigned long long reg_base;
 static unsigned long long reg_base_sgbm_ld1_dma;
 static unsigned long long reg_base_sgbm_ld2_dma;
@@ -141,7 +140,7 @@ static unsigned int get_mask(unsigned int src,unsigned int bits ,unsigned int st
     return ((((1 << bits) - 1) << start_lsb) & src) >> start_lsb;
 }
 
-int dpu_fill_videoframe2buffer(mmf_chn_s chn, const video_frame_info_s *video_frame_info,
+static int dpu_fill_videoframe2buffer(mmf_chn_s chn, const video_frame_info_s *video_frame_info,
 	struct video_buffer *buf)
 {
 	unsigned int plane_size;
@@ -214,7 +213,7 @@ int dpu_fill_videoframe2buffer(mmf_chn_s chn, const video_frame_info_s *video_fr
 	return SUCCESS;
 }
 
-void register_sgbm_ld1_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H, \
+static void register_sgbm_ld1_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H, \
 							unsigned int SGBM_LEFT_IMG_ADDR,unsigned long long dmaBaseAddr, unsigned long long regBaseAddr)
 {
     //unsigned int addr =DPU_ALIGN(SGBM_LEFT_IMG_ADDR,ADDR_ALIGN);
@@ -256,7 +255,7 @@ void register_sgbm_ld1_ld(unsigned int seg_len, unsigned int seg_num,unsigned in
 
 }
 
-void register_sgbm_ld2_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H,\
+static void register_sgbm_ld2_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H,\
 						    unsigned int SGBM_RIGHT_IMG_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr)
 {
 	unsigned int stride;
@@ -285,7 +284,7 @@ void register_sgbm_ld2_ld(unsigned int seg_len, unsigned int seg_num,unsigned in
     write_reg(dmaBaseAddr + DMA_STRIDE_OFS, stride);
 }
 
-void register_sgbm_bf_st_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H, \
+static void register_sgbm_bf_st_ld(unsigned int seg_len, unsigned int seg_num,unsigned int SRAM_DPU_BASE_H, \
 								unsigned int SGBM_BTCOST_ST_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr)
 {
 	unsigned int reg_20 ;
@@ -331,7 +330,7 @@ void register_sgbm_bf_st_ld(unsigned int seg_len, unsigned int seg_num,unsigned 
 
 }
 
-void register_sgbm_median_st_ld(unsigned int seg_len, unsigned int seg_num,unsigned int chooseDma,unsigned int SRAM_DPU_BASE_H, \
+static void register_sgbm_median_st_ld(unsigned int seg_len, unsigned int seg_num,unsigned int chooseDma,unsigned int SRAM_DPU_BASE_H, \
 									unsigned int SGBM_MEDIAN_ST_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr)
 {
 	unsigned int reg_38 ;
@@ -393,7 +392,7 @@ void register_sgbm_median_st_ld(unsigned int seg_len, unsigned int seg_num,unsig
 
 
 //rdma--read from bottom to top
-void register_fgs_chfh_ld(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
+static void register_fgs_chfh_ld(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
 							unsigned int FGS_CHFH_LD_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr){
     //reg_write_mask(dmaBaseAddr + SYS_CONTROL_OFS, REG_ENABLE_INV_MASK, reg_enable_inv);
 	unsigned int reg_44 ;
@@ -451,7 +450,7 @@ void register_fgs_chfh_ld(unsigned int seg_len, unsigned int seg_num, unsigned i
 }
 
 //rdma
-void register_fgs_gx_ld(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
+static void register_fgs_gx_ld(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
 						unsigned int FGS_GX_LD_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr){
     //unsigned int addr =DPU_ALIGN(FGS_GX_LD_ADDR,ADDR_ALIGN);
 	unsigned int reg_50 ;
@@ -498,7 +497,7 @@ void register_fgs_gx_ld(unsigned int seg_len, unsigned int seg_num, unsigned int
 }
 
 //wdma
-void register_fgs_chfh_st(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
+static void register_fgs_chfh_st(unsigned int seg_len, unsigned int seg_num, unsigned int SRAM_DPU_BASE_H, \
 							unsigned int FGS_CHFH_ST_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr){
     //unsigned int addr =DPU_ALIGN(FGS_CHFH_ST_ADDR,ADDR_ALIGN);
 	unsigned int stride;
@@ -528,7 +527,7 @@ void register_fgs_chfh_st(unsigned int seg_len, unsigned int seg_num, unsigned i
 }
 
 //wdma
-void register_fgs_ux_st(unsigned int seg_len, unsigned int seg_num,unsigned int chooseChn, unsigned int SRAM_DPU_BASE_H,\
+static void register_fgs_ux_st(unsigned int seg_len, unsigned int seg_num,unsigned int chooseChn, unsigned int SRAM_DPU_BASE_H,\
 							unsigned int FGS_UX_ST_ADDR,unsigned long long dmaBaseAddr,unsigned long long regBaseAddr)
 {
     //unsigned int addr =DPU_ALIGN(FGS_UX_ST_ADDR,ADDR_ALIGN);
@@ -676,7 +675,7 @@ int check_dpu_id(dpu_grp dpu_grp_id, dpu_chn dpu_chn_id)
 	return ret;
 }
 
-void dpu_notify_wkup_evt(unsigned char dpu_dev_id)
+static void dpu_notify_wkup_evt(unsigned char dpu_dev_id)
 {
 	if (dpu_dev_id >= DPU_IP_NUM) {
 		TRACE_DPU(DBG_ERR, "invalid dev(%d)\n", dpu_dev_id);
@@ -739,7 +738,7 @@ void dpu_notify_isr_evt(void)
 // 	return SUCCESS;
 // }
 
-int32_t _vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs, vb_blk blk)
+static int32_t _vb_qbuf(mmf_chn_s chn, enum chn_type_e chn_type, struct vb_jobs_t *jobs, vb_blk blk)
 {
 	struct vb_s *vb = (struct vb_s *)blk;
 	int ret = SUCCESS;
@@ -1981,7 +1980,7 @@ unsigned char dpu_intr_status(void)
 	return intr_status;
 }
 
-void dpu_sel_intr(unsigned int intr_type)
+static void dpu_sel_intr(unsigned int intr_type)
 {
 	TRACE_DPU(DBG_INFO,"dpu_sel_intr(%d)\n",intr_type);
     reg_write_mask(reg_base+DPU_REG_6C_OFS,((1 << 8)-1) << 24,intr_type<< 24);
@@ -2030,7 +2029,7 @@ struct dpu_handler_ctx_s *dpu_get_handler_ctx(void)
 	return handler_ctx;
 }
 
-int dpu_check_param(dpu_grp grp)
+static int dpu_check_param(dpu_grp grp)
 {
 
 	unsigned int width;
@@ -2108,7 +2107,7 @@ int dpu_check_param(dpu_grp grp)
 	return SUCCESS;
 }
 
-int dpu_reg_config(dpu_grp grp)
+static int dpu_reg_config(dpu_grp grp)
 {
 	int ret;
 	TRACE_DPU(DBG_INFO, " dpu_reg_config          +\n");
@@ -2443,7 +2442,7 @@ int dpu_reg_config(dpu_grp grp)
 	return SUCCESS;
 }
 
-void dpu_write_sgbm_all_reg(void)
+static void dpu_write_sgbm_all_reg(void)
 {
 	unsigned int reg_04;
 	unsigned int reg_08;
@@ -2494,7 +2493,7 @@ void dpu_write_sgbm_all_reg(void)
     TRACE_DPU(DBG_INFO,"[Write] Write dpu sgbm Reg Done ...\n");
 }
 
-void dpu_write_fgs_all_reg(void)
+static void dpu_write_fgs_all_reg(void)
 {
 	unsigned int reg_70;
     TRACE_DPU(DBG_INFO,"[Write] Write dpu fgs Reg configurations ...\n");
@@ -2640,8 +2639,8 @@ static void frame_uv_init(vb_blk blk)
 	memset(base_v, 128, vb->buf.length[2]);
 
 	//if cache
-	//base_ion_cache_flush(vb->buf.phy_addr[1], base_u, vb->buf.length[1]);
-	//base_ion_cache_flush(vb->buf.phy_addr[2], base_v, vb->buf.length[2]);
+	base_ion_cache_flush(vb->buf.phy_addr[1], base_u, vb->buf.length[1]);
+	base_ion_cache_flush(vb->buf.phy_addr[2], base_v, vb->buf.length[2]);
 }
 
 static void _dpu_fill_buffer(mmf_chn_s chn, struct vb_s *grp_vb_in,
@@ -3130,7 +3129,7 @@ static void dpu_handle_offline(struct dpu_handler_ctx_s *ctx)
 		if (ctx->events & CTX_EVENT_EOF) {
 			dpu_handle_frame_done(ctx);
 		} else {
-			if (duration64 > (hw_wait_time-2)) {
+			if (duration64 > EOF_WAIT_TIMEOUT_MS) {
 				/* timeout */
 				TRACE_DPU(DBG_INFO, "ctx[%d] event timeout on grp(%d)\n",
 						ctx->dpu_dev_id, working_grp);
@@ -3168,7 +3167,6 @@ static int dpu_event_handler(void *arg)
 	int i, ret;
 	unsigned long idle_timeout = msecs_to_jiffies(IDLE_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(EOF_WAIT_TIMEOUT_MS);
-	unsigned long hw_timeout = msecs_to_jiffies(hw_wait_time);
 	static struct timespec64 pre_time = {0};
 
 	ktime_get_ts64(&pre_time);
@@ -3267,7 +3265,7 @@ static int dpu_event_handler(void *arg)
 		TRACE_DPU(DBG_INFO, "dpu_dev->bbusy(%d) \n",dpu_dev->bbusy);
 		TRACE_DPU(DBG_INFO, "dpu_handler_is_idle(%d) \n",dpu_handler_is_idle());
 		/* Adjust timeout */
-		timeout = dpu_handler_is_idle() ? idle_timeout : ((handler_ctx[0].working_mask == 1) ? hw_timeout:eof_timeout);
+		timeout = dpu_handler_is_idle() ? idle_timeout : eof_timeout;
 		if(!dpu_enable_handler_ctx(&handler_ctx[0])){
 			handler_ctx[0].working_grp = DPU_MAX_GRP_NUM;
 			handler_ctx[0].working_mask = 0;
@@ -3276,7 +3274,6 @@ static int dpu_event_handler(void *arg)
 		TRACE_DPU(DBG_INFO, "timeout(%ld) \n",timeout);
 		TRACE_DPU(DBG_INFO, "idle_timeout(%ld) \n",idle_timeout);
 		TRACE_DPU(DBG_INFO, "eof_timeout(%ld) \n",eof_timeout);
-		TRACE_DPU(DBG_INFO, "hw_timeout(%ld) \n",hw_timeout);
 
 	}
 	TRACE_DPU(DBG_INFO, "dpu_event_handler           -\n");
@@ -3284,11 +3281,21 @@ static int dpu_event_handler(void *arg)
 }
 
 
-void dpu_start_handler(struct dpu_dev_s *dpu_dev)
+static void dpu_start_handler(struct dpu_dev_s *dpu_dev)
 {
 	int ret;
 	unsigned char dpu_dev_id;
-	struct sched_param tsk;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 10,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 10,
+    };
+#endif
+
 	//TRACE_DPU(DBG_INFO, "dpu_start_handler          +\n");
 	memset(&dpu_dev->run_time_info,0,sizeof(dpu_dev->run_time_info));
 	dpu_dev->run_time_info.cnt_per_sec = 0;
@@ -3323,17 +3330,18 @@ void dpu_start_handler(struct dpu_dev_s *dpu_dev)
 	}
 
 	// Same as sched_set_fifo in linux 5.x
-	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
-
 	dpu_dev->thread = kthread_run(dpu_event_handler, dpu_dev,
 		"cvitask_dpu_hdl");
 	if (IS_ERR(dpu_dev->thread)) {
 		pr_err("failed to create dpu kthread, dpu_dev_id=%d\n", dpu_dev_id);
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	ret = sched_setscheduler(dpu_dev->thread, SCHED_FIFO, &tsk);
 	if (ret)
 		pr_warn("dpu thread priority update failed: %d\n", ret);
+#else
+	sched_setattr_nocheck(dpu_dev->thread, &tsk);
+#endif
 }
 
 int dpu_get_handle_info(struct dpu_dev_s *dpu_wdev, struct file *file,
@@ -3969,7 +3977,7 @@ void dpu_check_reg_read(void)
     TRACE_DPU(DBG_INFO,"[Print]Print dpu Reg Done ...\n");
 }
 
-void dpu_write_reg_init(void)
+static void dpu_write_reg_init(void)
 {
     dpu_reg.reg_dpu_enable = 1;
     dpu_reg.reg_dpu_sgbm_enable = 1;

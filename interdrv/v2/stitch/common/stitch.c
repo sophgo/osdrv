@@ -1628,7 +1628,7 @@ static unsigned char stitch_destroy_chn_vbq(stitch_grp grp_id)
 	return 0;
 }
 
-int stitch_grp_qbuf(mmf_chn_s chn, vb_blk blk) {
+static int stitch_grp_qbuf(mmf_chn_s chn, vb_blk blk) {
 	stitch_grp grp_id;
 	stitch_src_idx src_idx;
 	struct grp_work *work;
@@ -2414,7 +2414,6 @@ int stitch_detach_vb_pool(stitch_grp grp_id)
 int stitch_thread_init(void)
 {
 	int ret;
-	struct sched_param tsk;
 
 	stitch_init();
 	init_waitqueue_head(&evt_hdl_ctx.wait);
@@ -2427,8 +2426,16 @@ int stitch_thread_init(void)
 	spin_lock_init(&evt_hdl_ctx.lock);
 	sema_init(&evt_hdl_ctx.sem_2nd, 0);
 
-	// Same as sched_set_fifo in linux 5.x
-	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 10,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 10,
+    };
+#endif
 
 	evt_hdl_ctx.thread = kthread_run(stitch_event_handler_th, &evt_hdl_ctx, "stitch_event_handler_th");
 	if (IS_ERR(evt_hdl_ctx.thread)) {
@@ -2437,9 +2444,13 @@ int stitch_thread_init(void)
 		goto kthread_fail;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	ret = sched_setscheduler(evt_hdl_ctx.thread, SCHED_FIFO, &tsk);
 	if (ret)
 		pr_warn("stitch thread priority update failed: %d\n", ret);
+#else
+	sched_setattr_nocheck(evt_hdl_ctx.thread, &tsk);
+#endif
 
 	evt_hdl_ctx.workqueue = create_singlethread_workqueue("stitch_workqueue");
 	if (!evt_hdl_ctx.workqueue) {

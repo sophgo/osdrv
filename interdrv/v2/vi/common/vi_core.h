@@ -20,7 +20,6 @@
 #include <linux/pm_qos.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
-#include <linux/streamline_annotate.h>
 #include <linux/version.h>
 #if (KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE)
 #include <uapi/linux/sched/types.h>

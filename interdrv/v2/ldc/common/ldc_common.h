@@ -130,7 +130,7 @@ struct ldc_job {
 	gdc_identity_attr_s identity;
 	bool use_cmdq;
 	char coreid;
-	wait_queue_head_t job_done_wq;
+	struct semaphore job_done_sem; // Changed from wait_queue_head_t to semaphore
 	bool job_done_evt;
 	enum ldc_job_devs_type devs_type; // job dev type
 	int proc_idx;

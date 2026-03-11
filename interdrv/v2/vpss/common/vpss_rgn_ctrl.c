@@ -11,6 +11,7 @@
 #include "vpss_core.h"
 #include "scaler.h"
 #include "vpss_ctx.h"
+#include "vpss_rgn_ctrl.h"
 
 
 s32 vpss_get_rgn_hdls(vpss_grp vpss_grp, vpss_chn vpss_chn, u32 layer,
@@ -205,7 +206,7 @@ s32 vpss_get_rgn_ow_addr(vpss_grp vpss_grp, vpss_chn vpss_chn, u32 layer,
 	return 0;
 }
 
-s32 vpss_set_rgn_lut_cfg(vpss_grp vpss_grp, vpss_chn vpss_chn, struct rgn_lut_cfg *cfg)
+s32 vpss_set_rgn_lut_cfg(vpss_grp vpss_grp, vpss_chn vpss_chn, struct rgn_lut_cfg *cfg) 
 {
 	s32 ret;
 	struct vpss_ctx **vpss_ctx = vpss_get_ctx();
@@ -225,4 +226,3 @@ s32 vpss_set_rgn_lut_cfg(vpss_grp vpss_grp, vpss_chn vpss_chn, struct rgn_lut_cf
 
 	return 0;
 }
-

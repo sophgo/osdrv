@@ -59,7 +59,7 @@ SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 
 # prepare ko list
 
-KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc motor
+KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
 
 ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
 	KO_LIST += vi snsr_i2c cif vpss ldc vo mipi_tx rgn ive 2d_engine dpu stitch spacc
@@ -218,8 +218,8 @@ stitch: base
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 # osdrv/extdrv
-tp:
-	$(call MAKE_EXT_KO, extdrv/${@})
+#tp:
+#	$(call MAKE_EXT_KO, extdrv/${@})
 
 wireless:
 	@$(call MAKE_EXT_KO, extdrv/${@})
@@ -233,8 +233,11 @@ gyro_i2c:
 ms9132:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
-motor:
+motionsensor:
 	@$(call MAKE_EXT_KO, extdrv/${@})
+
+#motor:
+#	@$(call MAKE_EXT_KO, extdrv/${@})
 
 cp_ext_wireless:
 	find extdrv/wireless -name '*.ko' -print -exec cp {} $(INSTALL_DIR)/3rd/ \;;

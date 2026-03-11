@@ -1,5 +1,8 @@
 #include <vip/vi_drv.h>
 
+#define PATGEN65FPS 0xE6CE04 // set patgen 60fps for ISP_PRERAW0
+#define PATGEN_PRERAW0_VTT_BASE 0x349 // vtt base value for ISP_PRERAW0 (4k 60fps)
+
 /*******************************************************************************
  *	FE IPs config
  ******************************************************************************/
@@ -32,9 +35,9 @@ static void _patgen_config_timing(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 		ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, vtt, 0x17FF);
 		ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, htt, 0x17FF);
 	} else {
-		if (raw_num == ISP_PRERAW0) { //raw_num0 4k 20fps
-			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, vtt, 0x15FF);
-			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, htt, 0x1FFF);
+		if (raw_num == ISP_PRERAW0) { //raw_num0 4k 60fps
+			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, vtt, PATGEN_PRERAW0_VTT_BASE + pat_height);
+			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, htt, PATGEN65FPS/(PATGEN_PRERAW0_VTT_BASE + pat_height));
 		} else { //raw_num3 4k 20fps
 			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, vtt, 0x14FF);
 			ISP_WR_BITS(csibdg, reg_isp_csi_bdg_t, csi_tgen_tt_size, htt, 0x15FF);
