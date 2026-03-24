@@ -928,11 +928,29 @@ void sclr_top_vo_mux_sel(int vo_sel, int vo_mux)
 }
 EXPORT_SYMBOL_GPL(sclr_top_vo_mux_sel);
 
+void sclr_disp_set_mcu_disable(u8 mode)
+{
+	_reg_write(reg_base + REG_SCL_DISP_MCU_HW_AUTO, mode?0xa:0x1a);
+}
+EXPORT_SYMBOL_GPL(sclr_disp_set_mcu_disable);
+
 void sclr_disp_set_mcu_en(u8 mode)
 {
 	_reg_write(reg_base + REG_SCL_DISP_MCU_HW_AUTO, mode?0x9:0x19);
 }
 EXPORT_SYMBOL_GPL(sclr_disp_set_mcu_en);
+
+void sclr_disp_set_srgb_en(bool enable)
+{
+	_reg_write_mask(reg_base + REG_SCL_DISP_SRGB_CTRL, BIT(0), enable ? 1 : 0);
+}
+EXPORT_SYMBOL_GPL(sclr_disp_set_srgb_en);
+
+void sclr_disp_set_srgb_4x(bool is_4x)
+{
+	_reg_write_mask(reg_base + REG_SCL_DISP_SRGB_CTRL, BIT(1), is_4x ? 1 : 0);
+}
+EXPORT_SYMBOL_GPL(sclr_disp_set_srgb_4x);
 
 /**
  * sclr_init - update sclr's scaling coef
@@ -3667,6 +3685,8 @@ void sclr_disp_set_intf(enum sclr_vo_intf intf)
 		sclr_disp_mux_sel(SCLR_VO_SEL_DISABLE);
 	} else if (intf == SCLR_VO_INTF_LVDS) {
 		sclr_disp_mux_sel(SCLR_VO_SEL_DISABLE);
+	} else if (intf == SCLR_VO_INTF_SERIAL_RGB){
+		sclr_disp_mux_sel(SCLR_VO_SEL_SERIAL_RGB);
 	}
 }
 EXPORT_SYMBOL_GPL(sclr_disp_set_intf);

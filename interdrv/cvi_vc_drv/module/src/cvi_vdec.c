@@ -728,6 +728,8 @@ static int vdec_event_handler(CVI_VOID *data)
 	MMF_CHN_S chn = {.enModId = CVI_ID_VDEC, .s32DevId = 0, .s32ChnId = 0};
 	struct vb_s *vb;
 
+	CVI_VDEC_INFO("thread %d enter\n", VdecChn);
+
 	if (pChnHandle == NULL)
 		return CVI_ERR_VDEC_NULL_PTR;
 
@@ -743,11 +745,12 @@ static int vdec_event_handler(CVI_VOID *data)
 	memset(pBindFrmQueue, 0, sizeof(VDEC_BIND_FRM_S) * MAX_VDEC_FRM_NUM);
 
 	while (!kthread_should_stop()) {
-		if (IF_WANNA_DISABLE_BIND_MODE()) {
+		if (pChnHandle == NULL) {
+			CVI_VDEC_WARN("vdec_event_handler: channel %d destroyed, exiting\n", VdecChn);
 			break;
 		}
-		//Check if frame free
 
+		//Check if frame free
 		for (i = 0; i < MAX_VDEC_FRM_NUM; i++) {
 			if (pBindFrmQueue[i].bIsFrmOutput == true) {
 				vb_inquireUserCnt(pBindFrmQueue[i].vbBLK, &u32Cnt);
@@ -759,12 +762,21 @@ static int vdec_event_handler(CVI_VOID *data)
 			}
 		}
 
-		s32Ret = CVI_VDEC_GetFrame(VdecChn, &stVFrame, -1);
+		while (((s32Ret = SEMA_TIMEWAIT(&pChnHandle->sem_getframe,
+						usecs_to_jiffies(1000 * 1000))) != 0)) {
+			// check if frame available
+			if (pChnHandle->stStatus.u32LeftPics > 0 || IF_WANNA_DISABLE_BIND_MODE())
+				break;
 
+			CVI_VDEC_INFO("sema wait timeout, chn %d, ret %d\n", VdecChn, s32Ret);
+			continue;
+		}
+
+		s32Ret = CVI_VDEC_GetFrame(VdecChn, &stVFrame, 100);
 		if (s32Ret == CVI_SUCCESS) {
 			if (_cvi_vdec_FindBlkInfo(pChnHandle, stVFrame.stVFrame.u64PhyAddr[0], &vbBLK, &frmIdx)
 				== false) {
-				return CVI_NULL;
+				continue;
 			}
 			vb = (struct vb_s *)vbBLK;
 
@@ -790,9 +802,16 @@ static int vdec_event_handler(CVI_VOID *data)
 	}
 
 	if (pBindFrmQueue != NULL) {
+		for (i = 0; i < MAX_VDEC_FRM_NUM; i++) {
+			if (pBindFrmQueue[i].bIsFrmOutput == true) {
+				CVI_VDEC_ReleaseFrame(VdecChn, &(pBindFrmQueue[i].stFrameInfo));
+				pBindFrmQueue[i].bIsFrmOutput = false;
+			}
+		}
 		MEM_FREE(pBindFrmQueue);
 	}
 
+	CVI_VDEC_INFO("thread %d exit\n", VdecChn);
 	return CVI_SUCCESS;
 }
 
@@ -903,6 +922,7 @@ CVI_S32 CVI_VDEC_DestroyChn(VDEC_CHN VdChn)
 	CVI_S32 s32Ret = CVI_SUCCESS;
 	struct cvi_vdec_vb_ctx *pVbCtx = NULL;
 	vdec_chn_context *pChnHandle = NULL;
+	struct task_struct *thread_to_stop = NULL;
 
 	CVI_VDEC_API("\n");
 
@@ -916,9 +936,27 @@ CVI_S32 CVI_VDEC_DestroyChn(VDEC_CHN VdChn)
 	pVbCtx = pChnHandle->pVbCtx;
 
 	if (IF_WANNA_DISABLE_BIND_MODE()) {
-		kthread_stop(pVbCtx->thread);
-		pVbCtx->thread = NULL;
-		pVbCtx->currBindMode = CVI_FALSE;
+		SEMA_POST(&pChnHandle->sem_getframe);
+		thread_to_stop = pVbCtx->thread;
+		if (thread_to_stop && !IS_ERR(thread_to_stop)) {
+			CVI_VDEC_INFO("Stopping vdec thread for chn %d\n", VdChn);
+			// Signal the thread to stop by changing the bind mode flag
+			// The thread will check IF_WANNA_DISABLE_BIND_MODE() and exit gracefully
+			pVbCtx->enable_bind_mode = CVI_FALSE;
+
+			// Wait for thread to exit completely
+			// kthread_stop() is synchronous and waits for thread function to return
+			s32Ret = kthread_stop(thread_to_stop);
+			if (s32Ret < 0) {
+				CVI_VDEC_WARN("kthread_stop returned %d for chn %d\n", s32Ret, VdChn);
+			}
+
+			pVbCtx->thread = NULL;
+			pVbCtx->currBindMode = CVI_FALSE;
+			CVI_VDEC_INFO("vdec thread stopped for chn %d\n", VdChn);
+		}
+
+		SEMA_DESTROY(&pChnHandle->sem_getframe);
 	}
 
 	if (pChnHandle->ChnAttr.enType == PT_H264 ||
@@ -1088,9 +1126,12 @@ CVI_S32 CVI_VDEC_SendStream(VDEC_CHN VdChn, const VDEC_STREAM_S *pstStream,
 		struct sched_param param = {
 			.sched_priority = 95,
 		};
+
+		SEMA_INIT(&pChnHandle->sem_getframe, 0, 0);
+
 		pVbCtx->currBindMode = CVI_TRUE;
 		pVbCtx->thread = kthread_run(vdec_event_handler,
-				(CVI_VOID *) pChnHandle, "vdec_handler%d", VdChn);
+				(CVI_VOID *) pChnHandle, "cvitask_vdec_%d", VdChn);
 		sched_setscheduler(pVbCtx->thread, SCHED_RR, &param);
 	}
 
@@ -1270,6 +1311,11 @@ CVI_S32 CVI_VDEC_SendStream(VDEC_CHN VdChn, const VDEC_STREAM_S *pstStream,
 			}
 			pChnHandle->stStatus.u32LeftPics++;
 			cviVdec_Mutex_Unlock(&pChnHandle->status_lock);
+
+			// Notify vdec_event_handler to get frame
+			if (pVbCtx->currBindMode == CVI_TRUE) {
+				SEMA_POST(&pChnHandle->sem_getframe);
+			}
 		} else {
 			s32Ret = cviVdec_Mutex_Lock(
 				&pChnHandle->display_queue_lock,
@@ -1892,7 +1938,7 @@ CVI_S32 CVI_VDEC_GetFrame(VDEC_CHN VdChn, VIDEO_FRAME_INFO_S *pstFrameInfo,
 	       sizeof(VIDEO_FRAME_INFO_S));
 
 	if (pChnHandle->stStatus.u32LeftPics <= 0) {
-		CVI_VDEC_ERR("u32LeftPics %d\n",
+		CVI_VDEC_WARN("u32LeftPics %d\n",
 			     pChnHandle->stStatus.u32LeftPics);
 		return CVI_ERR_VDEC_BUF_EMPTY;
 	}

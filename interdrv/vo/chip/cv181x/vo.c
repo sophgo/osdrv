@@ -462,6 +462,7 @@ int vo_set_interface(struct cvi_vo_dev *vdev, struct cvi_disp_intf_cfg *cfg)
 		_disp_ctrlpin_set(cfg->mcu_cfg.lcd_power_gpio_num, cfg->mcu_cfg.lcd_power_avtive);
 		_disp_ctrlpin_set(cfg->mcu_cfg.backlight_gpio_num, cfg->mcu_cfg.backlight_avtive);
 		_disp_resetpin_set(cfg->mcu_cfg.reset_gpio_num, cfg->mcu_cfg.reset_avtive);
+		sclr_disp_set_mcu_disable(cfg->mcu_cfg.mode);
 		sclr_disp_mux_sel(SCLR_VO_SEL_HW_MCU);
 		sclr_disp_set_intf(SCLR_VO_INTF_HW_MCU);
 		//enable clk_bt
@@ -498,6 +499,14 @@ int vo_set_interface(struct cvi_vo_dev *vdev, struct cvi_disp_intf_cfg *cfg)
 
 		//enable clk_bt
 		clk_prepare_enable(vdev->clk_bt);
+		// Adjust pclk to adapt to the high-precision conversion IC.
+		if (cfg->bt_cfg.pixelclock == 13513) {
+			cfg->bt_cfg.pixelclock = 13500;
+			CVI_TRACE_VO(CVI_DBG_INFO, "pixelclock(13513 khz) before adjustment, pixelclock(13500 khz) after adjustment.\n");
+		} else if (cfg->bt_cfg.pixelclock == 27027) {
+			cfg->bt_cfg.pixelclock = 27000;
+			CVI_TRACE_VO(CVI_DBG_INFO, "pixelclock(27027 khz) before adjustment, pixelclock(27000 khz) after adjustment.\n");
+		}
 
 		if (cfg->bt_cfg.mode == BT_MODE_1120) {
 			dphy_dsi_set_pll(cfg->bt_cfg.pixelclock, 4, 24);
@@ -521,6 +530,24 @@ int vo_set_interface(struct cvi_vo_dev *vdev, struct cvi_disp_intf_cfg *cfg)
 		sync.b.eav_vld = 0x9d;
 		sync.b.eav_blk = 0xb6;
 		sclr_bt_set(enc, sync);
+	} else if (cfg->intf_type == CVI_VIP_DISP_INTF_SERIAL_RGB) {
+		sclr_disp_set_intf(SCLR_VO_INTF_SERIAL_RGB);
+		if (cfg->srgb_cfg.mode == SRGB_MODE_3X) {
+			dphy_dsi_set_pll(cfg->srgb_cfg.pixelclock * 3, 4, 24);
+			vip_sys_clk_setting(0x10060);
+		} else if (cfg->srgb_cfg.mode == SRGB_MODE_4X) {
+			dphy_dsi_set_pll(cfg->srgb_cfg.pixelclock * 4, 4, 24);
+			vip_sys_clk_setting(0x10080);
+		}
+
+		sclr_disp_mux_sel(SCLR_VO_SEL_SERIAL_RGB);
+		_disp_sel_remux(cfg->srgb_cfg.pins.d_pins, cfg->srgb_cfg.pins.pin_num);
+		sclr_disp_set_srgb_en(true);
+		if (cfg->srgb_cfg.mode == SRGB_MODE_3X) {
+			sclr_disp_set_srgb_4x(false);
+		} else if (cfg->srgb_cfg.mode == SRGB_MODE_4X) {
+			sclr_disp_set_srgb_4x(true);
+		}
 	} else {
 		CVI_TRACE_VO(CVI_DBG_ERR, "invalid disp-intf(%d)\n", cfg->intf_type);
 		return rc;
@@ -1836,6 +1863,7 @@ static long _vo_s_ctrl(struct cvi_vo_dev *vdev, struct vo_ext_control *p)
 			_disp_ctrlpin_set(cfg->mcu_cfg.lcd_power_gpio_num, cfg->mcu_cfg.lcd_power_avtive);
 			_disp_ctrlpin_set(cfg->mcu_cfg.backlight_gpio_num, cfg->mcu_cfg.backlight_avtive);
 			_disp_resetpin_set(cfg->mcu_cfg.reset_gpio_num, cfg->mcu_cfg.reset_avtive);
+			sclr_disp_set_mcu_disable(cfg->mcu_cfg.mode);
 			sclr_disp_mux_sel(SCLR_VO_SEL_HW_MCU);
 			sclr_disp_set_intf(SCLR_VO_INTF_HW_MCU);
 			//enable clk_bt

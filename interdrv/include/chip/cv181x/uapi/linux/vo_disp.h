@@ -14,6 +14,7 @@ enum cvi_disp_intf {
 	CVI_VIP_DISP_INTF_I80,
 	CVI_VIP_DISP_INTF_HW_MCU,
 	CVI_VIP_DISP_INTF_LVDS,
+	CVI_VIP_DISP_INTF_SERIAL_RGB,
 	CVI_VIP_DISP_INTF_MAX,
 };
 
@@ -218,6 +219,17 @@ struct cvi_bt_intf_cfg {
 	struct vo_pins pins;
 };
 
+enum SRGB_MODE {
+	SRGB_MODE_3X = 0,
+	SRGB_MODE_4X,
+	SRGB_MODE_MAX,
+};
+struct cvi_srgb_intf_cfg {
+	__u32 pixelclock;
+	enum SRGB_MODE mode;
+	struct vo_pins pins;
+};
+
 struct cvi_i80_instr {
 	__u8	delay;
 	__u8  data_type;
@@ -255,6 +267,7 @@ struct cvi_disp_intf_cfg {
 		struct cvi_lvds_intf_cfg lvds_cfg;
 		struct cvi_bt_intf_cfg bt_cfg;
 		struct cvi_hw_mcu_intf_cfg mcu_cfg;
+		struct cvi_srgb_intf_cfg srgb_cfg;
 	};
 };
 

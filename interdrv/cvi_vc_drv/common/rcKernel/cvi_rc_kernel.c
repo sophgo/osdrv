@@ -423,14 +423,18 @@ void cviRcKernel_setBitrateAndFrameRate(stRcKernelInfo *info, int targetBitrate,
 	int maxIPicBitByIPRatio, maxIPicBitByMinPBudget;
 	RC_Float fPicAvgBit, targetBpp;
 
-	CVI_VCOM_FLOAT("targetBitrate = %d, frameRate = %f\n",
-			targetBitrate, getFloat(frameRate));
-
 	if (targetBitrate > 0) {
 		info->targetBitrate = targetBitrate;
 	}
+
 	if (CVI_FLOAT_GT(frameRate, FLOAT_VAL_0)) {
-		info->framerate = CVI_FLOAT_TO_INT(frameRate);
+		int newFrameRate = CVI_FLOAT_TO_INT(frameRate);
+		if (info->framerate != newFrameRate && info->framerate > 0) {
+			info->framerate = newFrameRate;
+			info->statTime = (info->intraPeriod / info->framerate) ?
+				(info->intraPeriod / info->framerate) : info->statTime;
+		}
+
 		info->statFrameNum = MAX(info->statTime * info->framerate, info->framerate);
 
 		if (info->intraPeriod > 0 && info->framerate >= info->intraPeriod) {
@@ -440,6 +444,7 @@ void cviRcKernel_setBitrateAndFrameRate(stRcKernelInfo *info, int targetBitrate,
 			info->statBitrate = info->targetBitrate * info->statTime;
 		}
 	}
+
 	// picture bit allocation param init
 	fPicAvgBit = CVI_FLOAT_DIV(INT_TO_CVI_FLOAT(info->targetBitrate), frameRate);
 	info->picAvgBit = CVI_FLOAT_TO_INT(fPicAvgBit);
@@ -602,6 +607,7 @@ void cviRcKernel_init(stRcKernelInfo *info, stRcKernelCfg *cfg)
 	info->lastPredictIQp = 0;
 	info->requestIdr = 0;
 	info->bitCompensationIdr = 0;
+	info->framerate = CVI_FLOAT_TO_INT(cfg->framerate);
 
 	cviRcKernel_setMinMaxQp(info, cfg->minIQp, cfg->maxIQp, 1);
 	cviRcKernel_setMinMaxQp(info, cfg->minQp, cfg->maxQp, 0);

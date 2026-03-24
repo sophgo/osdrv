@@ -38,6 +38,7 @@ typedef struct _vdec_chn_context {
 	VIDEO_FRAME_INFO_S stVideoFrameInfo;
 	VCODEC_PERF_FPS_S stFPS;
 	CVI_U32 u32VBSize;
+	struct semaphore sem_getframe;
 } vdec_chn_context;
 
 typedef struct _vdec_context {

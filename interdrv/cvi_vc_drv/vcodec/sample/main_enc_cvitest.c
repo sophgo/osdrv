@@ -1720,8 +1720,29 @@ static void cviPicParamChangeCtrl(EncHandle handle, TestEncConfig *pEncConfig,
 	if (encParam->is_i_period &&
 	    (pEncOP->frameRateInfo !=
 	     cviEncRc_GetParam(pRcInfo, E_FRAMERATE))) {
+		int frameRateDiv = 1, frameRateRes = 1;
+		int framerate = 1;
+
 		cviEncRc_SetParam(pRcInfo, pEncOP, E_FRAMERATE);
+		cviEncRc_SetParam(&handle->rcInfo, pEncOP, E_BITRATE);
 		rateChangeCmd = TRUE;
+
+		frameRateDiv = (pEncOP->frameRateInfo >> 16) + 1;
+		frameRateRes = pEncOP->frameRateInfo & 0xFFFF;
+		framerate = frameRateRes / frameRateDiv;
+
+		// update vui info
+		if (pEncOP->bitstreamFormat == STD_AVC) {
+			cviH264Vui *pVui = &pEncConfig->cviEc.h264Vui;
+			if (pVui->timing_info.timing_info_present_flag) {
+				pVui->timing_info.time_scale = pVui->timing_info.num_units_in_tick * framerate * 2;
+			}
+		} else {
+			cviH265Vui *pVui = &pEncConfig->cviEc.h265Vui;
+			if (pVui->timing_info.timing_info_present_flag) {
+				pVui->timing_info.time_scale = pVui->timing_info.num_units_in_tick * framerate;
+			}
+		}
 	}
 
 	// bitrate/framerate change handle

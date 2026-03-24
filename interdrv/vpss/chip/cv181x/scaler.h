@@ -1025,6 +1025,7 @@ enum sclr_vo_intf {
 	SCLR_VO_INTF_BT1120,
 	SCLR_VO_INTF_MIPI,
 	SCLR_VO_INTF_LVDS,
+	SCLR_VO_INTF_SERIAL_RGB,
 	SCLR_VO_INTF_MAX,
 };
 
@@ -1106,6 +1107,10 @@ void sclr_disp_mux_sel(enum sclr_vo_sel sel);
 void sclr_disp_bt_en(u8 vo_intf);
 int hw_mcu_cmd_send(void *cmds, int size);
 void sclr_disp_set_mcu_en(u8 mode);
+void sclr_disp_set_mcu_disable(u8 mode);
+
+void sclr_disp_set_srgb_en(bool enable);
+void sclr_disp_set_srgb_4x(bool is_4x);
 
 void sclr_init(u8 inst);
 void sclr_reg_shadow_sel(u8 inst, bool read_shadow);

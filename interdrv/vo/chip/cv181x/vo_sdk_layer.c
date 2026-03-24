@@ -690,7 +690,21 @@ CVI_S32 vo_set_pub_attr(VO_DEV VoDev, VO_PUB_ATTR_S *pstPubAttr)
 			kfree(cfg);
 			return CVI_FAILURE;
 		}
-	} else {
+	} else if (pstPubAttr->enIntfType == VO_INTF_3SERIAL_RGB){
+		cfg->intf_type = CVI_VIP_DISP_INTF_SERIAL_RGB;
+		cfg->srgb_cfg.mode = SRGB_MODE_3X;
+		tmp = dv_timings->bt.pixelclock;
+		do_div(tmp, 1000);
+		cfg->srgb_cfg.pixelclock = tmp;
+		memcpy(&cfg->srgb_cfg.pins, &pstPubAttr->stBtAttr.pins, sizeof(struct vo_pins));
+		if (vo_set_interface(gvdev, cfg) != 0){
+			CVI_TRACE_VO(CVI_DBG_ERR, "VO SERIAL_RGB configure failured.\n");
+			kfree(dv_timings);
+			kfree(cfg);
+			return CVI_FAILURE;
+		}
+
+	}else {
 		CVI_TRACE_VO(CVI_DBG_ERR, "VO invalid INTF type(0x%x)\n", pstPubAttr->enIntfType);
 		kfree(dv_timings);
 		kfree(cfg);
