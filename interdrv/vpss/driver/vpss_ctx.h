@@ -171,11 +171,6 @@ struct vpss_ctx {
 	struct vpss_handler_ctx hdl_ctx;
 	bool grp_used[VPSS_MAX_GRP_NUM];
 	vpss_mod_param_s mod_param;
-	u64 sb_phy_addr;
-	u32 sb_width;
-	u32 sb_height;
-	u32 sb_buf_line;
-	u32 sb_buffer_size;
 	osal_mutex lock;
 };
 

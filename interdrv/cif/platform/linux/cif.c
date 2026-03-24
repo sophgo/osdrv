@@ -42,10 +42,6 @@ static unsigned int max_mac_clk = 900;
 module_param(max_mac_clk, uint, 0644);
 MODULE_PARM_DESC(max_mac_clk, "max mac clk");
 
-#ifndef FPGA_TESTING
-static void __iomem *mclk_enable;
-#endif
-
 const struct sync_code_s default_sync_code = {
 	.norm_bk_sav = 0xAB0,
 	.norm_bk_eav = 0xB60,
@@ -1779,121 +1775,57 @@ int cif_set_lvds_fp_vs(struct cif_dev *dev, struct vsync_gen_s *vs)
 	return 0;
 }
 
- /*
- src_sel =
-	0: 1300M --- cam0_pll_clk_src
-	1: 1188M --- disppll_clk_src
-	2: 1200M --- mpll_clk_src
-	3: 300M --- mipimpll_d3_clk_src
- */
 const struct cam_pll_s cam_pll_setting[CAMPLL_FREQ_NUM] = {
 	[CAMPLL_FREQ_37P125M] = {
-		.div_val_sel = 1,
-		.src_sel = 1,
-		.div_val = 32,
+		.clk_rate_val = 37125000,
 	},
 	[CAMPLL_FREQ_25M] = {
-		.div_val_sel = 1,
-		.src_sel = 0,
-		.div_val = 52,
+		.clk_rate_val = 25000000,
 	},
 	[CAMPLL_FREQ_27M] = {
-		.div_val_sel = 1,
-		.src_sel = 1,
-		.div_val = 44,
+		.clk_rate_val = 27000000,
 	},
 	[CAMPLL_FREQ_24M] = {
-		.div_val_sel = 1,
-		.src_sel = 2,
-		.div_val = 50
+		.clk_rate_val = 24000000,
 	},
 	[CAMPLL_FREQ_26M] = {
-		.div_val_sel = 1,
-		.src_sel = 0,
-		.div_val = 50,
+		.clk_rate_val = 26000000,
 	},
 };
 
 int _cif_enable_snsr_clk(struct device *dev, struct cif_dev *cdev, uint32_t devno, uint8_t on)
 {
 #ifndef FPGA_TESTING
-	u32 clk_div;
-
-	if (snsr_mclk[0] > CAMPLL_FREQ_NONE && snsr_mclk[0] < CAMPLL_FREQ_NUM) {
-		if (on) {
-			if (!cdev->clk_cam[0].is_on) {
-				dev_err(dev, "start set snsr_mclk[0]\n");
-				mclk_enable = ioremap(CIF_MCLK_GEN_BASE + CIF_MCLK_GROUP0_PLL, sizeof(u32));
-				if (!mclk_enable) {
-					dev_err(dev, "Failed to map snsr_mclk[0] register\n");
-					return -ENOMEM;
+	unsigned long clk_s, clk_r;
+	int i, ret;
+	for (i = 0; i < 3; i++) {
+		if (snsr_mclk[i] > CAMPLL_FREQ_NONE && snsr_mclk[i] < CAMPLL_FREQ_NUM) {
+			if (on) {
+				if (!cdev->clk_cam[i].is_on) {
+					dev_err(dev, "start set snsr_mclk[%d]\n", i);
+					ret = clk_set_rate(cdev->clk_cam[i].clk_o, cam_pll_setting[snsr_mclk[i]].clk_rate_val);
+					if (ret != 0 ) {
+						dev_err(dev, "set clock failed!\n");
+						return ret;
+					}
+					ret = clk_prepare_enable(cdev->clk_cam[i].clk_o);
+					if (ret != 0 ) {
+						dev_err(dev, "cam%d clock gate enable failed!\n", i);
+						return ret;
+					}
+					clk_r = clk_get_rate(cdev->clk_cam[i].clk_o);
+					clk_s = cam_pll_setting[snsr_mclk[i]].clk_rate_val;
+					dev_err(dev, "Requested clock value: %lu Hz, actual clock value: %lu Hz.\n",clk_s, clk_r);
+					cdev->clk_cam[i].is_on = 1;
 				}
-				clk_div = readl(mclk_enable);
-				write_value_range(&clk_div, 16, 21, cam_pll_setting[snsr_mclk[0]].div_val);
-				write_value_range(&clk_div, 8, 9, cam_pll_setting[snsr_mclk[0]].src_sel);
-				write_value_range(&clk_div, 0, 0, cam_pll_setting[snsr_mclk[0]].div_val_sel);
-				write_value_range(&clk_div, 4, 4, 0);
-				writel(clk_div, mclk_enable);
-				iounmap(mclk_enable);
-				cdev->clk_cam[0].is_on = 1;
-			}
-		} else {
-			if (cdev->clk_cam[0].is_on) {
-				cdev->clk_cam[0].is_on = 0;
+			} else {
+				if (cdev->clk_cam[i].is_on) {
+					clk_disable_unprepare(cdev->clk_cam[i].clk_o);
+					cdev->clk_cam[i].is_on = 0;
+				}
 			}
 		}
-	}
 
-	if (snsr_mclk[1] > CAMPLL_FREQ_NONE && snsr_mclk[1] < CAMPLL_FREQ_NUM) {
-		dev_err(dev, "start set snsr_mclk[1]\n");
-		if (on) {
-			if (!cdev->clk_cam[1].is_on) {
-				dev_err(dev, "start set snsr_mclk[1]\n");
-				mclk_enable = ioremap(CIF_MCLK_GEN_BASE + CIF_MCLK_GROUP1_PLL, sizeof(u32));
-				if (!mclk_enable) {
-					dev_err(dev, "Failed to map snsr_mclk[1] register\n");
-					return -ENOMEM;
-				}
-				clk_div = readl(mclk_enable);
-				write_value_range(&clk_div, 16, 21, cam_pll_setting[snsr_mclk[1]].div_val);
-				write_value_range(&clk_div, 8, 9, cam_pll_setting[snsr_mclk[1]].src_sel);
-				write_value_range(&clk_div, 0, 0, cam_pll_setting[snsr_mclk[1]].div_val_sel);
-				write_value_range(&clk_div, 4, 4, 0);
-				writel(clk_div, mclk_enable);
-				iounmap(mclk_enable);
-				cdev->clk_cam[1].is_on = 1;
-			}
-		} else {
-			if (cdev->clk_cam[1].is_on) {
-				cdev->clk_cam[1].is_on = 0;
-			}
-		}
-	}
-
-	if (snsr_mclk[2] > CAMPLL_FREQ_NONE && snsr_mclk[2] < CAMPLL_FREQ_NUM) {
-		dev_err(dev, "start set snsr_mclk[2]\n");
-		if (on) {
-			if (!cdev->clk_cam[2].is_on) {
-				dev_err(dev, "start set snsr_mclk[2]\n");
-				mclk_enable = ioremap(CIF_MCLK_GEN_BASE + CIF_MCLK_GROUP2_PLL, sizeof(u32));
-				if (!mclk_enable) {
-					dev_err(dev, "Failed to map snsr_mclk[2] register\n");
-					return -ENOMEM;
-				}
-				clk_div = readl(mclk_enable);
-				write_value_range(&clk_div, 16, 21, cam_pll_setting[snsr_mclk[2]].div_val);
-				write_value_range(&clk_div, 8, 9, cam_pll_setting[snsr_mclk[2]].src_sel);
-				write_value_range(&clk_div, 0, 0, cam_pll_setting[snsr_mclk[2]].div_val_sel);
-				write_value_range(&clk_div, 4, 4, 0);
-				writel(clk_div, mclk_enable);
-				iounmap(mclk_enable);
-				cdev->clk_cam[2].is_on = 1;
-			}
-		} else {
-			if (cdev->clk_cam[2].is_on) {
-				cdev->clk_cam[2].is_on = 0;
-			}
-		}
 	}
 
 #endif

@@ -58,6 +58,12 @@ struct _rgn_get_ow_addr_cb_param {
 	__u32 layer;
 	__u64 addr;
 };
+struct _rgn_clr_ow_addr_cb_param {
+	mmf_chn_s chn;
+	rgn_handle handle;
+	__u32 layer;
+	__u8 ow_inst;
+};
 
 #ifdef __cplusplus
 }

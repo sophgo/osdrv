@@ -1836,6 +1836,39 @@ void sclr_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 }
 
 /**
+ * sclr_gop_ow_clr_addr - clear GOP's OSD-window DRAM address
+ *
+ * Clears/invalidates the DRAM address associated with a specific OSD window
+ * (OW) of a GOP scaler instance and layer. After this call the specified OW
+ * will no longer reference the previously configured DRAM address until a new
+ * address is programmed.
+ *
+ * @param inst: (0~3) the GOP scaler instance to configure.
+ *              0..3 correspond to scaler instances on the SCL block.
+ * @param layer: (0~1) layer index: 0 => layer0 (gop0), 1 => layer1 (gop1).
+ * @param ow_inst: (0~7) the OSD-window instance to clear.
+ */
+void sclr_gop_ow_clr_addr(u8 inst, u8 layer, u8 ow_inst)
+{
+	if (ow_inst >= SCL_MAX_GOP_OW_INST)
+		return;
+
+	if (inst < SCL_MAX_INST) {
+		if (layer == 0) {
+			_reg_write(reg_base + REG_SCL_GOP0_ADDR_L(inst, ow_inst), 0x0);
+			_reg_write(reg_base + REG_SCL_GOP0_ADDR_H(inst, ow_inst), 0x0);
+		} else if (layer == 1) {
+			_reg_write(reg_base + REG_SCL_GOP1_ADDR_L(inst, ow_inst), 0x0);
+			_reg_write(reg_base + REG_SCL_GOP1_ADDR_H(inst, ow_inst), 0x0);
+		} else {
+			TRACE_VPSS(DBG_WARN, "[sc%d] only 0 or 1 layer, no such layer(%d).\n",
+				inst, layer);
+			return;
+		}
+	}
+}
+
+/**
  * sclr_gop_fb_set_cfg - setup fontbox
  *
  * @param inst: (0~3), the instance of gop which want to be configured.

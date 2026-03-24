@@ -405,6 +405,7 @@ struct _csi_cfg {
 	u32			drop_frm_cnt;
 	u32			rx_frm_cnt;
 	u32			rx_ref_frm_num;
+	u32			reset_frm;
 
 	struct vi_rect		crop[ISP_FE_CHN_MAX];
 	struct vi_rect		rawdump_crop[ISP_FE_CHN_MAX];
@@ -576,5 +577,6 @@ struct isp_ctx {
 u32 _is_fe_post_offline(struct isp_ctx *ctx);
 u32 _is_fe_post_slice(struct isp_ctx *ctx);
 u32 _is_all_online(struct isp_ctx *ctx);
+u32 _is_post_sc_online(struct isp_ctx *ctx, uint8_t pipe);
 
 #endif

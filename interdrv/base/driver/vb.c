@@ -839,6 +839,11 @@ int32_t vb_release_block(vb_blk blk)
 		osal_atomic_set(&vb->mod_ids, 0);
 		FIFO_PUSH(&pool->freelist, vb);
 		++pool->free_blk_cnt;
+		if (pool->free_blk_cnt > pool->blk_cnt) {
+			TRACE_BASE(DBG_ERR, "Fatal error, vb->phy_addr(%#llx) release.\n", vb->phy_addr);
+			osal_mutex_unlock(&pool->lock);
+			return ERR_VB_NOT_PERM;
+		}
 		osal_mutex_unlock(&pool->lock);
 
 		osal_mutex_lock(&pool->reqq_lock);

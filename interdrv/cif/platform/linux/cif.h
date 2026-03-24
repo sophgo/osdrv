@@ -38,9 +38,7 @@ struct cif_attr_s;
 extern int snsr_mclk[MAX_CAM_CLK_NUM];
 
 struct cam_pll_s {
-	unsigned int	div_val_sel;
-	unsigned int	src_sel;
-	unsigned int	div_val;
+	unsigned long	clk_rate_val; //clock rate (Hz)
 };
 
 struct csi_status {

@@ -67,6 +67,7 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 		core = device->core_list[i];
 
 		core->chn_idx = i;
+		core->vc_sbm_done = 0;
 		if (cfg->chn_cfg[i].sb_cfg.sb_mode)
 			core->is_sbm = 1;
 		else
@@ -187,6 +188,7 @@ int vpss_hal_init(struct vpss_hal_ctx *hal_ctx)
 	hal_ctx->cmdq_buf.cmdq_phy_addr = 0;
 	hal_ctx->cmdq_buf.cmdq_vir_addr = NULL;
 	hal_ctx->cmdq_buf.cmdq_buf_size = 0;
+	hal_ctx->online_dev = NULL;
 	hal_ctx->is_suspend = 0;
 
 	return 0;
@@ -364,7 +366,6 @@ int vpss_hal_online_run(struct vpss_online_cb *param, struct vpss_hal_ctx *hal_c
 	struct vpss_job *work_job = NULL;
 	struct vpss_job *job_item;
 	struct vpss_device *device;
-	struct vpss_cores *cores = osal_container_of(hal_ctx, struct vpss_cores, hal_ctx);
 
 	if (param->snr_num >= VPSS_ONLINE_NUM) {
 		TRACE_VPSS(DBG_WARN, "param->snr_num(%d) err.\n", param->snr_num);
@@ -374,10 +375,17 @@ int vpss_hal_online_run(struct vpss_online_cb *param, struct vpss_hal_ctx *hal_c
 	TRACE_VPSS(DBG_INFO, "online trigger vpss, snr_num(%d).\n", param->snr_num);
 
 	osal_spin_lock_irqsave(&hal_ctx->task_lock, &flags);
-
 	if (hal_ctx->is_suspend) {
-		osal_spin_unlock_irqrestore(&hal_ctx->task_lock, &flags);
-		return -1;
+		goto err0;
+	}
+	if (!hal_ctx->online_dev) {
+		TRACE_VPSS(DBG_ERR, "No online vpss device.\n");
+		goto err0;
+	}
+	device = hal_ctx->online_dev;
+	if (osal_atomic_read(&device->state) != VPSS_IDLE) {
+		device->isp_triggered = true;
+		goto err0;
 	}
 
 	osal_list_for_each_entry(job_item, &hal_ctx->job_online_queue, list) {
@@ -393,6 +401,11 @@ int vpss_hal_online_run(struct vpss_online_cb *param, struct vpss_hal_ctx *hal_c
 	}
 
 	osal_spin_lock_irqsave(&work_job->lock, &flags_job);
+	if (work_job->dev_id >= VPSS_DEVICE_NUM) {
+		TRACE_VPSS(DBG_ERR, "Grp(%d), dev_id error.\n", work_job->grp_id);
+		goto err1;
+	}
+
 	for (i = 0; i < VPSS_MAX_CHN_NUM; i++) {
 		if (!work_job->cfg.chn_enable[i])
 			continue;
@@ -409,16 +422,6 @@ int vpss_hal_online_run(struct vpss_online_cb *param, struct vpss_hal_ctx *hal_c
 		}
 	}
 	osal_memcpy(&work_job->online_param, param, sizeof(struct vpss_online_cb));
-
-	if (work_job->dev_id >= VPSS_DEVICE_NUM) {
-		TRACE_VPSS(DBG_ERR, "Grp(%d), dev_id error.\n", work_job->grp_id);
-		goto err1;
-	}
-	device = &cores->device[work_job->dev_id];
-	if (!device->is_online) {
-		TRACE_VPSS(DBG_ERR, "device(%d) offline, Please use the correct device number.\n", work_job->dev_id);
-		goto err1;
-	}
 
 	ret = job_try_schedule(work_job, device);
 	if (ret) {

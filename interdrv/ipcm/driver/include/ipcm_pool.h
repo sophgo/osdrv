@@ -34,8 +34,9 @@
 #define __IPCM_POOL__
 
 #include "ipcm_common.h"
+#ifdef __riscv
 #include "cvi_board_memmap.h"
-
+#endif
 #ifdef IPCM_INFO_REC
 extern void pool_buff_release_hook(u32 pos);
 #define POOL_BUF_RLS_HOOK(pos) pool_buff_release_hook(pos)
@@ -51,12 +52,14 @@ extern void pool_buff_release_hook(u32 pos);
 #define RTC_SRAM_SIZE 0x6000        // RTC SRAM size
 
 #define TPU_SRAM_IPCM_BASE		0xE000000
+#ifdef __riscv
 #define IPCM_POOL_ADDR  CVIMMAP_SHARE_MEM_ADDR
 #define IPCM_POOL_SIZE  CVIMMAP_SHARE_MEM_SIZE
 #define IPCM_RTOS_ADDR  CVIMMAP_RTOS_ION_ADDR
 #define IPCM_RTOS_SIZE  CVIMMAP_RTOS_ION_SIZE
 #define IPCM_LOG_ADDR  CVIMMAP_RTOS_LOG_ADDR
 #define IPCM_LOG_SIZE  CVIMMAP_RTOS_LOG_SIZE
+#endif
 
 #define MAX_BLOCK_RANGE_NUM 8       // Maximum number of block size ranges
 #define MAX_BLOCK_FLAG_SIZE 128     // Maximum block flag array size

@@ -140,6 +140,7 @@ int driver_cif_init(void)
 
 	cif_set_base_addr(0, (uint32_t *)SENSOR_MAC0_BASE, (uint32_t *)DPHY_TOP_BASE);
 	cif_set_base_addr(1, (uint32_t *)SENSOR_MAC1_BASE, (uint32_t *)DPHY_TOP_BASE);
+	cif_set_base_addr(2, (uint32_t *)SENSOR_MAC2_BASE, (uint32_t *)DPHY_TOP_BASE);
 
 	g_cif_pdev->max_mac_clk = 900;
 

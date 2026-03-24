@@ -39,11 +39,11 @@ extern u32 patgen_vblanking;
 	} while (0)
 
 enum vi_msg_pri {
-	VI_ERR		= 0x1,
-	VI_WARN		= 0x2,
-	VI_NOTICE	= 0x4,
-	VI_INFO		= 0x8,
-	VI_DBG		= 0x10,
+	VI_ERR		= 1,
+	VI_WARN		= 2,
+	VI_NOTICE	= 3,
+	VI_INFO		= 4,
+	VI_DBG		= 5,
 };
 
 #ifdef __cplusplus

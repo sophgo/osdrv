@@ -103,6 +103,7 @@ struct _isp_raw_num_n {
 struct isp_sof_raw_num_q {
 	struct osal_list_head	list;
 	osal_spinlock		lock;
+	u8			count;
 };
 
 struct _isp_dqbuf_n {
@@ -184,6 +185,7 @@ struct vi_dev {
 	struct isp_buf_q		dqbuf_q;
 	struct isp_sof_raw_num_q	pre_raw_num_q;
 
+	vb_blk				(*vi_dqbuf)(mmf_chn_s mmf_chn, void *data);
 	int				(*vi_qbuf)(mmf_chn_s mmf_chn, void *data);
 	u32				pre_fe_sof_cnt[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];
 	u32				pre_fe_frm_num[ISP_PRERAW_MAX][ISP_FE_CHN_MAX];

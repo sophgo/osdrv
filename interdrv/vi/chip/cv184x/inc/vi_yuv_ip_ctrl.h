@@ -15,6 +15,7 @@ void ispblk_mctf_config(struct isp_ctx *ctx, bool en, u8 test_case);
 
 void ispblk_fbcd_config(struct isp_ctx *ctx, bool en);
 void ispblk_fbce_config(struct isp_ctx *ctx, bool en);
+void ispblk_cnr_dyn_scale_rate(struct isp_ctx *ctx);
 void ispblk_cnr_config(struct isp_ctx *ctx, bool en, bool pfc_en, u8 str_mode, u8 test_case);
 int ispblk_postee_config(struct isp_ctx *ctx, bool en);
 void ispblk_ca_config(struct isp_ctx *ctx, bool en, u8 mode);

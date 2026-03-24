@@ -99,6 +99,11 @@ u32 _is_all_online(struct isp_ctx *ctx)
 	return !ctx->is_offline_postraw && !ctx->is_slice_buf_on; //fe->post
 }
 
+u32 _is_post_sc_online(struct isp_ctx *ctx, uint8_t pipe) //post->sc
+{
+	return !ctx->isp_pipe_cfg[pipe].is_offline_scaler;
+}
+
 /****************************************************************************
  *  inner Interfaces
  ****************************************************************************/
@@ -779,7 +784,8 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_MV:
 	{
 		/*motion vector 16bit * (w / 8) * (h / 4) */
-		len = ((ctx->isp_pipe_cfg[pipe].crop.w + 7) >> 3) << 1;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((w + 7) >> 3) << 1;
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 3) >> 2;
 
 		break;
@@ -788,7 +794,8 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_MO:
 	{
 		/*motion map width 1bit, w (w/16) h (h/16) */
-		len = (((ctx->isp_pipe_cfg[pipe].crop.w + 15) >> 4) + 7) >> 3;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((VI_ALIGN((w + 15) >> 4) + 7) >> 3);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 15) >> 4;
 
 		break;
@@ -825,7 +832,8 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_FCB:
 	{
 		/*fast conbuf 8bit * w/16 * h/16*/
-		len = (ctx->isp_pipe_cfg[pipe].crop.w + 15) >> 4;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((w + 15) >> 4);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 15) >> 4;
 
 		break;
@@ -833,7 +841,8 @@ int ispblk_dma_buf_get_size(struct isp_ctx *ctx, const uint8_t pipe, int dmaid)
 	case ISP_BLK_ID_DMA_CTL_TNR_ST_MSP:
 	{
 		/*2bit * w/4 * h/4*/
-		len = (((ctx->isp_pipe_cfg[pipe].crop.w + 3) >> 2) + 3) >> 2;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((VI_ALIGN((w + 3) >> 2) + 3) >> 2);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 3) >> 2;
 
 		break;
@@ -1050,7 +1059,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 			len = fbc_cfg.c_bs_size;
 			num = 1;
 		} else {
-			len = (((((ctx->isp_pipe_cfg[pipe].crop.w) << 3) + 127) >> 7) << 7) >> 3;
+			w = ctx->isp_pipe_cfg[pipe].crop.w;
+			len = ((((w << 3) + 127) >> 7) << 7) >> 3;
 			num = (ctx->isp_pipe_cfg[pipe].crop.h >> 1);
 		}
 		stride = len;
@@ -1066,7 +1076,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 			len = fbc_cfg.y_bs_size;
 			num = 1;
 		} else {
-			len = (((((ctx->isp_pipe_cfg[pipe].crop.w) << 3) + 127) >> 7) << 7) >> 3;
+			w = ctx->isp_pipe_cfg[pipe].crop.w;
+			len = ((((w << 3) + 127) >> 7) << 7) >> 3;
 			num = ctx->isp_pipe_cfg[pipe].crop.h;
 		}
 		stride = len;
@@ -1077,7 +1088,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_MV:
 	{
 		/*motion vector 16bit * (w / 8) * (h / 4) */
-		len = ((ctx->isp_pipe_cfg[pipe].crop.w + 7) >> 3) << 1;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((w + 7) >> 3) << 1;
 		num = ctx->isp_pipe_cfg[pipe].crop.h >> 2;
 		stride = len;
 
@@ -1087,7 +1099,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_MO:
 	{
 		/*motion map width 1bit, w (w/16) h (h/16) */
-		len = (((ctx->isp_pipe_cfg[pipe].crop.w + 15) >> 4) + 7) >> 3;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((VI_ALIGN((w + 15) >> 4) + 7) >> 3);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 15) >> 4;
 		stride = len;
 
@@ -1153,7 +1166,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 	case ISP_BLK_ID_DMA_CTL_TNR_LD_FCB:
 	{
 		/*fast conbuf 8bit * w/16 * h/16*/
-		len = (ctx->isp_pipe_cfg[pipe].crop.w + 15) >> 4;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((w + 15) >> 4);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 15) >> 4;
 		stride = len;
 
@@ -1162,7 +1176,8 @@ int ispblk_dma_config(struct isp_ctx *ctx, const uint8_t pipe, int dmaid, u64 bu
 	case ISP_BLK_ID_DMA_CTL_TNR_ST_MSP:
 	{
 		/*2bit * w/4 * h/4*/
-		len = (((ctx->isp_pipe_cfg[pipe].crop.w + 3) >> 2) + 3) >> 2;
+		w = ctx->isp_pipe_cfg[pipe].crop.w;
+		len = VI_ALIGN((VI_ALIGN((w + 3) >> 2) + 3) >> 2);
 		num = (ctx->isp_pipe_cfg[pipe].crop.h + 3) >> 2;
 		stride = len;
 
@@ -1629,6 +1644,9 @@ void ispblk_post_cfg_update(struct isp_ctx *ctx)
 	ispblk_rawtop_config(ctx);
 	ispblk_rgbtop_config(ctx);
 	ispblk_yuvtop_config(ctx);
+
+	//always update cnr scale rate
+	ispblk_cnr_dyn_scale_rate(ctx);
 }
 /*
  * Update all YUV related blocks, rewriting by post_tuning

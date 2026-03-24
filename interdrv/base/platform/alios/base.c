@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <aos/cli.h>
 #include <debug/dbg.h>
 #include <time.h>
@@ -12,6 +13,32 @@
 u32 base_log_lv = DBG_WARN;
 uint32_t vb_max_pools = 512;
 uint32_t vb_pool_max_blk = 128;
+
+// External log level variables from other modules
+extern u32 sys_log_lv;
+extern u32 vi_log_lv;
+extern u32 vo_log_lv;
+extern u32 vpss_log_lv;
+extern u32 rgn_log_lv;
+extern u32 ldc_log_lv;
+extern u32 venc_log_lv;
+
+// Log level control structure
+struct log_module_info {
+	const char *name;
+	u32 *log_lv_ptr;
+};
+
+static struct log_module_info log_modules[] = {
+	{"BASE",  &base_log_lv},
+	{"SYS",   &sys_log_lv},
+	{"VI",    &vi_log_lv},
+	{"VO",    &vo_log_lv},
+	{"VPSS",  &vpss_log_lv},
+	{"RGN",   &rgn_log_lv},
+	{"LDC",   &ldc_log_lv},
+	{"VENC",  &venc_log_lv},
+};
 
 static long vb_ctrl(unsigned long arg)
 {
@@ -326,4 +353,76 @@ static void set_base_log_level(int32_t argc, char **argv)
 	}
 }
 
+static void log_lv_control(int32_t argc, char **argv)
+{
+	int level;
+	int module_count = sizeof(log_modules) / sizeof(log_modules[0]);
+	int i;
+	int found = 0;
+
+	// Case 1: proc_log - show all module log levels
+	if (argc == 1) {
+		aos_debug_printf("Module Log Levels:\n");
+		aos_debug_printf("------------------\n");
+		for (i = 0; i < module_count; i++) {
+			aos_debug_printf("%-10s: %d\n", log_modules[i].name, *(log_modules[i].log_lv_ptr));
+		}
+		aos_debug_printf("\nUsage:\n");
+		aos_debug_printf("  proc_log               - Show all module log levels\n");
+		aos_debug_printf("  proc_log ALL <level>   - Set all modules to <level>\n");
+		aos_debug_printf("  proc_log <MOD> <level> - Set specific module to <level>\n");
+		aos_debug_printf("  (Modules: BASE, SYS, VI, VO, VPSS, RGN, LDC, VENC)\n");
+		return;
+	}
+
+	// Case 2: proc_log <module> <level>
+	if (argc >= 3) {
+		level = atoi(argv[2]);
+
+		if (level < DBG_ERR || level > DBG_DEBUG) {
+			aos_debug_printf("Error: log level out of range [%d-%d]\n", DBG_ERR, DBG_DEBUG);
+			aos_debug_printf("  1-ERR, 2-WARN, 3-NOTICE, 4-INFO, 5-DEBUG\n");
+			return;
+		}
+
+		// Check if setting ALL modules
+		if (strncmp(argv[1], "ALL", 3) == 0) {
+			aos_debug_printf("Setting all modules log level to %d\n", level);
+			for (i = 0; i < module_count; i++) {
+				aos_debug_printf("  %-10s: %d -> %d\n",
+					log_modules[i].name,
+					*(log_modules[i].log_lv_ptr),
+					level);
+				*(log_modules[i].log_lv_ptr) = level;
+			}
+			return;
+		}
+
+		// Find and set specific module
+		for (i = 0; i < module_count; i++) {
+			if (strncmp(argv[1], log_modules[i].name, strlen(log_modules[i].name)) == 0) {
+				aos_debug_printf("Setting %s log level: %d -> %d\n",
+					log_modules[i].name,
+					*(log_modules[i].log_lv_ptr),
+					level);
+				*(log_modules[i].log_lv_ptr) = level;
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found) {
+			aos_debug_printf("Error: Module '%s' not found\n", argv[1]);
+			aos_debug_printf("Available modules: BASE, SYS, VI, VO, VPSS, RGN, LDC, VENC\n");
+		}
+	} else {
+		aos_debug_printf("Error: Invalid arguments\n");
+		aos_debug_printf("Usage:\n");
+		aos_debug_printf("  proc_log               - Show all module log levels\n");
+		aos_debug_printf("  proc_log ALL <level>   - Set all modules to <level>\n");
+		aos_debug_printf("  proc_log <MOD> <level> - Set specific module to <level>\n");
+	}
+}
+
 ALIOS_CLI_CMD_REGISTER(set_base_log_level, base_log_lv, set base_log_lv);
+ALIOS_CLI_CMD_REGISTER(log_lv_control, proc_log, unified log level control);

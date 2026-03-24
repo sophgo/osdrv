@@ -204,7 +204,13 @@ void vo_mac_hw_i80_en(unsigned char inst, bool enable)
 
 	hw_mcu_auto.raw = _reg_read(REG_VO_MAC_HW_MCU_AUTO(inst));
 
-	hw_mcu_auto.b.mcu_hw_trig = enable;
+	if (enable) {
+		hw_mcu_auto.b.mcu_hw_stop = 0;
+		hw_mcu_auto.b.mcu_hw_trig = 1;
+	} else {
+		hw_mcu_auto.b.mcu_hw_trig = 0;
+		hw_mcu_auto.b.mcu_hw_stop = 1;
+	}
 
 	_reg_write(REG_VO_MAC_HW_MCU_AUTO(inst), hw_mcu_auto.raw);
 }
@@ -329,8 +335,13 @@ void vo_mac_sel_remux(unsigned char inst, struct vo_d_remap *pins, unsigned int 
 		default:
 		break;
 		}
-		if (pins[i].mux != VO_MUX_BT_CLK)
+
+		if (pins[i].mux == VO_MUX_BT_CLK) {
+			_reg_write_mask(REG_VO_MAC_VO_MUX7(inst), BIT(16), BIT(16));
+			_reg_write_mask(REG_VO_MAC_VO_MUX7(inst), BIT(17), BIT(17));
+		} else {
 			vo_mac_mux_sel(inst, pins[i].sel, pins[i].mux);
+		}
 	}
 }
 osal_module_export(vo_mac_sel_remux);

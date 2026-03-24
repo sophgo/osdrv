@@ -33,6 +33,13 @@ static u32 _init_status = 0;
 
 unsigned long long t_recv;
 
+u32 ipcm_shared_addr;
+u32 ipcm_shared_size;
+u32 rtos_ion_addr;
+u32 rtos_ion_size;
+u32 rtos_log_addr;
+u32 rtos_log_size;
+
 s32 ipcm_release_buff_by_msg(void *msg)
 {
 	if (msg) {
@@ -92,6 +99,7 @@ static s32 _ipcm_send_pre_process(u8 port_id, void *msg)
  *
  * @return Status code (0 on success, negative on error)
  */
+
 s32 ipcm_port_init(void)
 {
     int i = 0;
@@ -101,11 +109,22 @@ s32 ipcm_port_init(void)
 		ipcm_warning("ipcm port has been inited.\n");
 		return 0;
 	}
-
+#ifdef IPCM_POOL_ADDR
 	_port_ctx.pool_mgr_paddr = IPCM_POOL_ADDR;
 	_port_ctx.pool_mgr_capacity = IPCM_POOL_SIZE;
 	_port_ctx.rtos_paddr = IPCM_RTOS_ADDR;
 	_port_ctx.rtos_size =  IPCM_RTOS_SIZE;
+#else
+	_port_ctx.pool_mgr_paddr = ipcm_shared_addr;
+	_port_ctx.pool_mgr_capacity = ipcm_shared_size;
+	_port_ctx.rtos_paddr = rtos_ion_addr;
+	_port_ctx.rtos_size =  rtos_ion_size;
+	if (_port_ctx.pool_mgr_paddr == 0 || _port_ctx.pool_mgr_capacity == 0) {
+		ipcm_err("ipcm shared mem info invalid.paddr:%x size:%x\n",
+			_port_ctx.pool_mgr_paddr, _port_ctx.pool_mgr_capacity);
+		return -EFAULT;
+	}
+#endif
 
 	ipcmpa_sys_cache_invalidate(_port_ctx.pool_mgr_paddr, _port_ctx.pool_mgr_capacity);
 	ret = ipcm_init(_port_ctx.pool_mgr_paddr, _port_ctx.pool_mgr_capacity);
@@ -113,7 +132,7 @@ s32 ipcm_port_init(void)
 		ipcm_err("ipcm_init failed.\n");
 		return ret;
 	}
-	
+
 	if (_port_ctx.rtos_stat_base == NULL) {
 		_port_ctx.rtos_stat_base = ipcmpa_ioremap(RTOS_BOOT_STATUS_REG , 0x4);
 		if(_port_ctx.rtos_stat_base == NULL)
@@ -373,8 +392,13 @@ int ipcm_port_get_rtos_info(unsigned int *rtos_paddr, unsigned int *rtos_size)
  */
 int ipcm_port_get_log_info(unsigned int *log_paddr, unsigned int *log_size)
 {
+#ifdef IPCM_LOG_ADDR
 	*log_paddr = IPCM_LOG_ADDR;
-	*log_size = IPCM_LOG_SIZE;
+	*log_size  = IPCM_LOG_SIZE;
+#else
+	*log_paddr = rtos_log_addr;
+	*log_size = rtos_log_size;
+#endif
 	return 0;
 }
 

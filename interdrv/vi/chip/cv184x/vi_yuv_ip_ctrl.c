@@ -375,30 +375,14 @@ void ispblk_fbce_config(struct isp_ctx *ctx, bool en)
 	ISP_WR_BITS(fbce, reg_fbce_t, reg_00, fbce_en, en);
 }
 
-void ispblk_cnr_config(struct isp_ctx *ctx, bool en, bool pfc_en, u8 str_mode, u8 test_case)
+void ispblk_cnr_dyn_scale_rate(struct isp_ctx *ctx)
 {
 	uintptr_t cnr = ctx->phys_regs[ISP_BLK_ID_CNR];
-	union reg_cnr_cnr_ctrl_hw_only cnr_ctrl_hw;
-	union reg_cnr_cnr_ctrl_sw_hw cnr_ctrl_sw_hw;
 	union reg_cnr_scl_down_ctrl scl_down_ctrl;
 	int pipe = ctx->cfg_info.pipe;
 	u32 cnr_pre_scale_shift = ctx->isp_pipe_cfg[pipe].cnr_pre_scale_shift;
 	u32 cnr_cur_scale_shift = ctx->isp_pipe_cfg[pipe].cnr_cur_scale_shift;
 	int lca_src_w, lca_src_h, lca_sub_w, lca_sub_h, fact;
-
-	cnr_ctrl_hw.raw = ISP_RD_REG(cnr, reg_cnr_t, cnr_ctrl_hw_only);
-	cnr_ctrl_hw.bits.cnr_enable = en;
-	cnr_ctrl_hw.bits.hw_auto_cg_en = 1;
-	ISP_WR_REG(cnr, reg_cnr_t, cnr_ctrl_hw_only, cnr_ctrl_hw.raw);
-
-	cnr_ctrl_sw_hw.raw = ISP_RD_REG(cnr, reg_cnr_t, cnr_ctrl_sw_hw);
-	cnr_ctrl_sw_hw.bits.cnr_cmf_en = en;
-	cnr_ctrl_sw_hw.bits.cnr_lca_enable = en;
-	cnr_ctrl_sw_hw.bits.cnr_ife2_filter_en = en;
-	cnr_ctrl_sw_hw.bits.cnr_chra_en = en;
-	cnr_ctrl_sw_hw.bits.cnr_chra_sat_outbld_en = 0;
-
-	ISP_WR_REG(cnr, reg_cnr_t, cnr_ctrl_sw_hw, cnr_ctrl_sw_hw.raw);
 
 	lca_src_w = ctx->isp_pipe_cfg[pipe].crop.w >> 1;
 	lca_src_h = ctx->isp_pipe_cfg[pipe].crop.h;
@@ -421,6 +405,31 @@ void ispblk_cnr_config(struct isp_ctx *ctx, bool en, bool pfc_en, u8 str_mode, u
 	ISP_WR_REG(cnr, reg_cnr_t, cnr_lca_src_img_size_v, lca_src_h);
 	ISP_WR_REG(cnr, reg_cnr_t, cnr_lca_sub_img_size_h, lca_sub_w);
 	ISP_WR_REG(cnr, reg_cnr_t, cnr_lca_sub_img_size_v, lca_sub_h);
+}
+
+void ispblk_cnr_config(struct isp_ctx *ctx, bool en, bool pfc_en, u8 str_mode, u8 test_case)
+{
+	uintptr_t cnr = ctx->phys_regs[ISP_BLK_ID_CNR];
+	union reg_cnr_cnr_ctrl_hw_only cnr_ctrl_hw;
+	union reg_cnr_cnr_ctrl_sw_hw cnr_ctrl_sw_hw;
+
+	cnr_ctrl_hw.raw = ISP_RD_REG(cnr, reg_cnr_t, cnr_ctrl_hw_only);
+	cnr_ctrl_hw.bits.cnr_enable = en;
+	cnr_ctrl_hw.bits.hw_auto_cg_en = 1;
+	ISP_WR_REG(cnr, reg_cnr_t, cnr_ctrl_hw_only, cnr_ctrl_hw.raw);
+
+	cnr_ctrl_sw_hw.raw = ISP_RD_REG(cnr, reg_cnr_t, cnr_ctrl_sw_hw);
+	cnr_ctrl_sw_hw.bits.cnr_cmf_en = en;
+	cnr_ctrl_sw_hw.bits.cnr_lca_enable = en;
+	cnr_ctrl_sw_hw.bits.cnr_ife2_filter_en = en;
+	cnr_ctrl_sw_hw.bits.cnr_chra_en = en;
+	cnr_ctrl_sw_hw.bits.cnr_chra_sat_outbld_en = 0;
+
+	ISP_WR_REG(cnr, reg_cnr_t, cnr_ctrl_sw_hw, cnr_ctrl_sw_hw.raw);
+
+	if (en) {
+		ispblk_cnr_dyn_scale_rate(ctx);
+	}
 }
 
 int ispblk_postee_config(struct isp_ctx *ctx, bool en)

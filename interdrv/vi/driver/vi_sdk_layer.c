@@ -191,6 +191,28 @@ static int vi_set_dev_bind_info(struct vi_dev *vdev, int dev, vi_dev_bind_pipe_s
 	return 0;
 }
 
+vb_blk vi_sdk_dqbuf(mmf_chn_s mmf_chn, void *data)
+{
+	struct vi_dev *vdev = (struct vi_dev *)data;
+	int pipe = mmf_chn.dev_id;
+	int chn = mmf_chn.chn_id;
+	int ret = 0;
+	vb_blk blk = VB_INVALID_HANDLE;
+
+	if (!vdev) {
+		vi_pr(VI_ERR, "null point\n");
+		return ERR_VI_INVALID_NULL_PTR;
+	}
+
+	ret = vb_dqbuf(mmf_chn, &vdev->vi_jobs[pipe][chn], &blk);
+	if (ret != 0) {
+		vi_pr(VI_DBG, "Can't acquire VB BLK for VI\n");
+		return ERR_VI_NOMEM;
+	}
+
+	return blk;
+}
+
 int vi_sdk_qbuf(mmf_chn_s mmf_chn, void *data)
 {
 	struct vi_dev *vdev = (struct vi_dev *)data;
@@ -255,14 +277,12 @@ int vi_set_bypass_frm(struct vi_dev *vdev, int pipe, u8 bypass_num)
 {
 	int ret = 0;
 	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
-	struct isp_ctx *ctx = &vdev->ctx;
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
 		return ret;
 
 	vi_ctx->bypass_frm[pipe] = bypass_num;
-	ctx->isp_pipe_cfg[pipe].bypass_num = bypass_num;
 
 	vi_pr(VI_INFO, "set pipe(%d) bypass_frm=%d\n", pipe, bypass_num);
 
@@ -1060,16 +1080,16 @@ int vi_enable_chn(struct vi_dev *vdev, int pipe, int chn)
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	u8 num_buffers = 0;
-	u8 create_thread = false;
 	mmf_chn_s mmf_chn = {.mod_id = ID_VI, .dev_id = pipe, .chn_id = chn};
+	vi_vpss_mode_s vi_vpss_mode = vi_ctx->mode;
 
 	if (!ctx->isp_pipe_cfg[pipe].is_enable) {
 		return ERR_VI_FAILED_NOT_ENABLED;
 	}
 
-	if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
-		create_thread = true;
-	}
+	ctx->isp_pipe_cfg[pipe].is_offline_scaler = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_OFFLINE)
+					|| (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_OFFLINE)
+					|| (vi_vpss_mode.mode[pipe] == VI_SLICE_VPSS_OFFLINE);
 
 	mmf_chn.dev_id = pipe;
 
@@ -1097,13 +1117,12 @@ int vi_enable_chn(struct vi_dev *vdev, int pipe, int chn)
 		}
 	}
 
-	if (create_thread) {
-		vdev->vi_qbuf = vi_sdk_qbuf;
-		rc = vi_create_thread(vdev, E_VI_TH_EVENT_HANDLER);
-		if (rc) {
-			vi_pr(VI_ERR, "Failed to create VI_EVENT_HANDLER thread\n");
-			goto ERR_CREATE_THREAD;
-		}
+	vdev->vi_qbuf = vi_sdk_qbuf;
+	vdev->vi_dqbuf = vi_sdk_dqbuf;
+	rc = vi_create_thread(vdev, E_VI_TH_EVENT_HANDLER);
+	if (rc) {
+		vi_pr(VI_ERR, "Failed to create VI_EVENT_HANDLER thread\n");
+		goto ERR_CREATE_THREAD;
 	}
 
 	if (vi_isp_start_streaming(vdev, pipe, chn)) {
@@ -1146,6 +1165,7 @@ int vi_disable_chn(struct vi_dev *vdev, int pipe, int chn)
 		vi_destroy_thread(vdev, E_VI_TH_EVENT_HANDLER);
 		vi_destroy_dbg_thread(vdev);
 		vdev->vi_qbuf = NULL;
+		vdev->vi_dqbuf = NULL;
 	}
 
 	if (vdev->vi_jobs[pipe][chn].inited) {

@@ -138,30 +138,6 @@ static int _notify_vi_motion_resize(vpss_grp grp_id, vpss_chn chn_id, struct vps
 	return base_exe_module_cb(&exe_cb);
 }
 
-void _try_release_sb_buffer(struct vpss_ctx *ctx)
-{
-	int i, j;
-	bool sb_enable = false;
-
-	osal_mutex_lock(&ctx->lock);
-	for (i = 0; i < VPSS_MAX_GRP_NUM; i++) {
-		if (ctx->grp_ctx[i] == NULL)
-			continue;
-		for (j = 0; j < ctx->grp_ctx[i]->chn_max_num; j++) {
-			if (ctx->grp_ctx[i]->chn_ctxs[j].buf_wrap.enable) {
-				sb_enable = true;
-				break;
-			}
-		}
-	}
-
-	if ((!sb_enable) && ctx->sb_phy_addr) {
-		base_ion_free(ctx->sb_phy_addr);
-		ctx->sb_phy_addr = 0;
-	}
-	osal_mutex_unlock(&ctx->lock);
-}
-
 static void _clean_vpss_workq(struct vb_jobs_t *jobs)
 {
 	int i = 0;
@@ -448,6 +424,11 @@ int vpss_destroy_grp(vpss_grp grp_id, struct vpss_cores *cores)
 			grp_ctx->chn_ctxs[chn_id].mesh.paddr = 0;
 			grp_ctx->chn_ctxs[chn_id].mesh.vaddr = 0;
 		}
+
+		if (grp_ctx->chn_ctxs[chn_id].sbm_ctx.phy_addr[0]) {
+			base_ion_free(grp_ctx->chn_ctxs[chn_id].sbm_ctx.phy_addr[0]);
+			grp_ctx->chn_ctxs[chn_id].sbm_ctx.phy_addr[0] = 0;
+		}
 	}
 
 	job_num = grp_ctx->online_from_isp ? VPSS_ONLINE_JOB_NUM : 1;
@@ -465,8 +446,6 @@ int vpss_destroy_grp(vpss_grp grp_id, struct vpss_cores *cores)
 	ctx->grp_ctx[grp_id] = NULL;
 	ctx->grp_used[grp_id] = false;
 	osal_mutex_unlock(&ctx->lock);
-
-	_try_release_sb_buffer(ctx);
 
 	TRACE_VPSS(DBG_INFO, "Grp(%d)\n", grp_id);
 
@@ -909,6 +888,14 @@ int vpss_send_frame(vpss_grp grp_id, const video_frame_info_s *video_frame, int 
 			TRACE_VPSS(DBG_ERR, "Grp(%d) no space for malloc.\n", grp_id);
 			return ERR_VPSS_NOMEM;
 		}
+	} else {
+		unsigned int usr_cnt;
+
+		vb_inquire_user_cnt(blk, &usr_cnt);
+		if (usr_cnt == 0) {
+			TRACE_VPSS(DBG_ERR, "Grp(%d), The released frame cannot be used.\n", grp_id);
+			return ERR_VPSS_NOT_PERM;
+		}
 	}
 
 	if (base_fill_videoframe2buffer(chn, video_frame, &((struct vb_s *)(uintptr_t)blk)->buf) != 0) {
@@ -1140,6 +1127,7 @@ int vpss_disable_chn(vpss_grp grp_id, vpss_chn chn_id, struct vpss_ctx *ctx)
 
 	osal_mutex_lock(&grp_ctx->lock);
 	chn_ctx->is_enabled = false;
+	chn_ctx->is_drop = false;
 	chn_status = &chn_ctx->chn_work_status;
 	chn_status->send_ok = 0;
 	chn_status->prev_time = 0;
@@ -1415,6 +1403,14 @@ int vpss_send_chn_frame(vpss_grp grp_id, vpss_chn chn_id
 		if (blk == VB_INVALID_HANDLE) {
 			TRACE_VPSS(DBG_ERR, "Grp(%d) no space for malloc.\n", grp_id);
 			return ERR_VPSS_NOMEM;
+		}
+	} else {
+		unsigned int usr_cnt;
+
+		vb_inquire_user_cnt(blk, &usr_cnt);
+		if (usr_cnt == 0) {
+			TRACE_VPSS(DBG_ERR, "Grp(%d) Chn(%d), The released frame cannot be used.\n", grp_id, chn_id);
+			return ERR_VPSS_NOT_PERM;
 		}
 	}
 
@@ -2140,8 +2136,11 @@ int vpss_set_chn_bufwrap_attr(vpss_grp grp_id, vpss_chn chn_id,
 		osal_mutex_lock(&grp_ctx->lock);
 		chn_ctx->buf_wrap = *buf_wrap;
 		chn_ctx->is_cfg_changed = true;
+		if (chn_ctx->sbm_ctx.phy_addr[0]) {
+			base_ion_free(chn_ctx->sbm_ctx.phy_addr[0]);
+			chn_ctx->sbm_ctx.phy_addr[0] = 0;
+		}
 		osal_mutex_unlock(&grp_ctx->lock);
-		_try_release_sb_buffer(ctx);
 		return 0;
 	}
 
@@ -2179,36 +2178,13 @@ int vpss_set_chn_bufwrap_attr(vpss_grp grp_id, vpss_chn chn_id,
 			COMPRESS_MODE_NONE, chn_ctx->align, &vb_cal_config);
 		wrap_ion_size = vb_cal_config.vb_size;
 
-		if (ctx->sb_phy_addr == 0) {
-			sprintf(ion_name, "VpssGrp%dChn%dWrapBuf", grp_id, chn_id);
-			ret = base_ion_alloc(&ion_paddr, (void *)&ion_vaddr, (uint8_t *)ion_name, wrap_ion_size, true);
-			if (!ion_paddr) {
-				TRACE_VPSS(DBG_ERR, "allocate wrap buffer failed\n");
-				osal_mutex_unlock(&grp_ctx->lock);
-				osal_mutex_unlock(&ctx->lock);
-				return ERR_VPSS_NOMEM;
-			}
-			ctx->sb_phy_addr = ion_paddr;
-			ctx->sb_width = chn_ctx->chn_attr.width;
-			ctx->sb_height = chn_ctx->chn_attr.height;
-			ctx->sb_buf_line = buf_wrap->buf_line;
-			ctx->sb_buffer_size = buf_wrap->wrap_buffer_size;
-		} else {
-			if ((ctx->sb_width != chn_ctx->chn_attr.width) ||
-				(ctx->sb_height != chn_ctx->chn_attr.height)) {
-				TRACE_VPSS(DBG_ERR, "The resolution is different for sbm.\n");
-				osal_mutex_unlock(&grp_ctx->lock);
-				osal_mutex_unlock(&ctx->lock);
-				return ERR_VPSS_NOT_PERM;
-			}
-			if ((ctx->sb_buf_line != buf_wrap->buf_line) ||
-				(ctx->sb_buffer_size != buf_wrap->wrap_buffer_size)) {
-				TRACE_VPSS(DBG_ERR, "The config is different for sbm.\n");
-				osal_mutex_unlock(&grp_ctx->lock);
-				osal_mutex_unlock(&ctx->lock);
-				return ERR_VPSS_NOT_PERM;
-			}
-			ion_paddr = ctx->sb_phy_addr;
+		sprintf(ion_name, "VpssGrp%dChn%dWrapBuf", grp_id, chn_id);
+		ret = base_ion_alloc(&ion_paddr, (void *)&ion_vaddr, (uint8_t *)ion_name, wrap_ion_size, true);
+		if (!ion_paddr) {
+			TRACE_VPSS(DBG_ERR, "allocate wrap buffer failed\n");
+			osal_mutex_unlock(&grp_ctx->lock);
+			osal_mutex_unlock(&ctx->lock);
+			return ERR_VPSS_NOMEM;
 		}
 
 		mem_base = ion_paddr;

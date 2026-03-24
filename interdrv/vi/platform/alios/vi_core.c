@@ -19,7 +19,7 @@
 
 /* control vi log level
  */
-u32 vi_log_lv = VI_ERR | VI_WARN | VI_NOTICE | VI_INFO;
+u32 vi_log_lv = VI_WARN;
 u32 patgen_vblanking = 112;
 
 /*csi_be->clk_sys_3, clk_raw->clk_sys_1, clk_isp_top->clk_sys_1*/

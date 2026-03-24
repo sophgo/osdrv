@@ -1676,6 +1676,7 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s *pchn)
 	unsigned int proc_idx;
 	int ret_tmp;
 	unsigned char i;
+	struct _rgn_clr_ow_addr_cb_param cb_param;
 
 	ret_tmp = check_rgn_handle(&ctx, handle);
 	if (ret_tmp != 0)
@@ -1689,6 +1690,21 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s *pchn)
 	}
 
 	osal_mutex_lock(&g_rgnlock);
+
+	cb_param.chn = ctx->chn;
+	cb_param.handle = handle;
+	if (ctx->canvas_info[ctx->canvas_idx].compressed) {
+		cb_param.layer = RGN_ODEC_LAYER_VPSS;
+	} else {
+		cb_param.layer = RGN_NORMAL_LAYER_VPSS;
+	}
+
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_INST, &cb_param) != 0) {
+			TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_INST is failed\n");
+		}
+	}
+
 	ret = _rgn_update_hw(ctx, RGN_OP_REMOVE);
 	if (ret == 0) {
 		ctx->chn.mod_id = rgn_prc_ctx[proc_idx].chn.mod_id = ID_BASE;
@@ -1710,6 +1726,12 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s *pchn)
 	} else {
 		if (ctx->canvas_info[0].phy_addr)
 			base_ion_free(ctx->canvas_info[0].phy_addr);
+	}
+
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_CLR_RGN_OW_ADDR, &cb_param) != 0) {
+			TRACE_RGN(RGN_ERR, "VPSS_CB_CLR_RGN_OW_ADDR is failed\n");
+		}
 	}
 
 	osal_mutex_unlock(&g_rgnlock);

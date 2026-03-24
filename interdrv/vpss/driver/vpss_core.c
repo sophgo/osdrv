@@ -9,6 +9,7 @@
 #include "vpss_sdk_layer.h"
 #include "vpss.h"
 #include "bind.h"
+#include "vi_sys.h"
 
 #define VPSS_TIMEOUT_US (1000000)
 
@@ -19,19 +20,6 @@ static int _vpss_set_vivpss_mode(struct vpss_cores *cores, const vi_vpss_mode_s 
 
 	return 0;
 }
-
-int _vpss_call_vi_reset(void)
-{
-	struct base_exe_m_cb exe_cb;
-
-	exe_cb.callee = E_MODULE_VI;
-	exe_cb.caller = E_MODULE_VPSS;
-	exe_cb.cmd_id = VI_CB_RESET_ISP;
-	exe_cb.data   = NULL;
-
-	return base_exe_module_cb(&exe_cb);
-}
-
 
 static int vpss_online_err_cb(u8 snr_num, struct vpss_cores *cores)
 {
@@ -159,9 +147,16 @@ static int vpss_reset_sbm(struct vpss_cores *cores)
 	return 0;
 }
 
-static int _vpss_set_vc_sbm_ready(int venc_chn, struct vpss_cores *cores)
+static int _vpss_set_vc_sbm_done(int venc_chn, struct vpss_cores *cores)
 {
-	cores->core[0].vc_ready = 1;
+	int vpss_sbm_index = 0;
+
+	TRACE_VPSS(DBG_DEBUG, "vc frame done.\n");
+
+	vpss_ip_reset(vpss_sbm_index, true, false);
+	cores->core[vpss_sbm_index].vc_sbm_done = 1;
+	osal_atomic_cmpxchg(&cores->core[vpss_sbm_index].state, VPSS_RUNNING, VPSS_END);
+	vpss_hal_job_finish((struct vpss_device *)cores->core[vpss_sbm_index].device);
 	return 0;
 }
 
@@ -335,6 +330,36 @@ static int _vpss_core_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 		break;
 	}
 
+	case VPSS_CB_CLR_RGN_OW_ADDR:
+	{
+		struct _rgn_clr_ow_addr_cb_param *attr = (struct _rgn_clr_ow_addr_cb_param *)arg;
+		vpss_grp vpss_grp = attr->chn.dev_id;
+		vpss_chn vpss_chn = attr->chn.chn_id;
+		u32 layer = attr->layer;
+		u8 dev_idx = _vpss_get_dev_idx(vpss_grp, vpss_chn, cores);
+
+		if (dev_idx > 1)
+			layer = 0;
+
+		rc = vpss_clr_rgn_ow_addr(vpss_grp, vpss_chn, layer, attr->ow_inst, &cores->ctx, dev_idx);
+		break;
+	}
+
+	case VPSS_CB_GET_RGN_OW_INST:
+	{
+		struct _rgn_clr_ow_addr_cb_param *attr = (struct _rgn_clr_ow_addr_cb_param *)arg;
+		vpss_grp vpss_grp = attr->chn.dev_id;
+		vpss_chn vpss_chn = attr->chn.chn_id;
+		u32 layer = attr->layer;
+		u8 dev_idx = _vpss_get_dev_idx(vpss_grp, vpss_chn, cores);
+
+		if (dev_idx > 1)
+			layer = 0;
+
+		rc = vpss_get_rgn_ow_inst(vpss_grp, vpss_chn, layer, attr->handle, &cores->ctx, &attr->ow_inst);
+		break;
+	}
+
 	case VPSS_CB_GET_CHN_SIZE:
 	{
 		struct _rgn_chn_size_cb_param *attr = (struct _rgn_chn_size_cb_param *)arg;
@@ -437,7 +462,7 @@ static int _vpss_core_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 	{
 		int *venc_chn = (int *)arg;
 
-		rc = _vpss_set_vc_sbm_ready(*venc_chn, cores);
+		rc = _vpss_set_vc_sbm_done(*venc_chn, cores);
 		break;
 	}
 
@@ -477,12 +502,14 @@ static void _vpss_timer_core_update(struct vpss_cores *cores, unsigned int durat
 static void _vpss_timer_callback(unsigned long data)
 {
 	int i;
-	unsigned long flags;
+	unsigned long flags, flags2;
 	unsigned int diff_us;
+	bool is_timeout = false;
 	osal_timeval now;
 	static osal_timeval prev_time = {0, 0};
 	struct vpss_cores *cores = (struct vpss_cores *)osal_timer_get_private_data((void *)data);
 
+	osal_spin_lock_irqsave(&cores->lock, &flags2);
 	osal_gettimeofday(&now);
 
 	diff_us = get_diff_in_us(prev_time, now);
@@ -498,27 +525,26 @@ static void _vpss_timer_callback(unsigned long data)
 			if (diff_us > VPSS_TIMEOUT_US) {
 				vpss_hal_reset(cores->device[i].job, &cores->hal_ctx);
 				cores->device[i].job = NULL;
-
-				osal_spin_unlock_irqrestore(&cores->device[i].dev_lock, &flags);
-				if (cores->device[i].is_online) {
-					_vpss_call_vi_reset();
-				} else {
-					vpss_hal_try_schedule(&cores->hal_ctx);
-				}
-				osal_spin_lock_irqsave(&cores->device[i].dev_lock, &flags);
-				TRACE_VPSS(DBG_NOTICE, "device-%d %s timeout...\n",
-					i, cores->device[i].is_online ? "online" : "offline");
+				is_timeout = true;
+				TRACE_VPSS(DBG_NOTICE, "device-%d timeout...\n", cores->device[i].id);
 			}
 		}
 		osal_spin_unlock_irqrestore(&cores->device[i].dev_lock, &flags);
 	}
 	prev_time = now;
+	osal_spin_unlock_irqrestore(&cores->lock, &flags2);
+
+	if (is_timeout)
+		vpss_hal_try_schedule(&cores->hal_ctx);
 
 	osal_timer_mod(&cores->timer, 1000);
 }
 
 void vpss_core_set_mode(struct vpss_cores *cores, const vpss_mode_s *vpss_mode)
 {
+	struct vpss_core *core = NULL;
+	int i;
+
 	//device
 	cores->vpss_mode = *vpss_mode;
 
@@ -552,6 +578,25 @@ void vpss_core_set_mode(struct vpss_cores *cores, const vpss_mode_s *vpss_mode)
 		cores->core[1].device = &cores->device[1];
 		cores->core[2].device = &cores->device[1];
 		cores->core[3].device = &cores->device[0];
+	}
+
+	if (cores->device[0].is_online && cores->device[1].is_online) {
+		TRACE_VPSS(DBG_ERR, "Error,two device online.\n");
+		return;
+	}
+
+	if (cores->device[0].is_online)
+		cores->hal_ctx.online_dev = &cores->device[0];
+	else if (cores->device[1].is_online)
+		cores->hal_ctx.online_dev = &cores->device[1];
+	else
+		cores->hal_ctx.online_dev = NULL;
+
+	if (cores->hal_ctx.online_dev) {
+		for (i = 0; i < cores->hal_ctx.online_dev->core_num; i++) {
+			core = cores->hal_ctx.online_dev->core_list[i];
+			vi_sys_set_offline((enum vi_sys_axi_bus)core->vpss_type, false);
+		}
 	}
 }
 
@@ -658,7 +703,12 @@ static void vpss_irq_handler(struct vpss_core *core)
 	struct vpss_device *device = (struct vpss_device *)core->device;
 
 	core->int_cnt++;
-	osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
+	if (core->is_sbm) {
+		if (core->vc_sbm_done)
+			osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
+	} else {
+		osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
+	}
 
 	vpss_hal_job_finish(device);
 }

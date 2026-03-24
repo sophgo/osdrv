@@ -64,8 +64,8 @@ typedef struct _PoolHead {
 	u32 len; //data len
 } PoolHead;
 
-static u32 s_region_paddr = IPCM_POOL_ADDR;
-static u32 s_region_size = IPCM_POOL_SIZE;
+static u32 s_region_paddr;
+static u32 s_region_size;
 
 PoolManager *s_pmgr = NULL;
 static void wait_block_release(POOLHANDLE handle)

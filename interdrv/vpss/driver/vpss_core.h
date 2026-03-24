@@ -20,7 +20,7 @@ struct vpss_core {
 	u8 is_master;
 	u8 is_sbm;
 	u8 reset_sbm;
-	u8 vc_ready;
+	u8 vc_sbm_done;
 	u8 chn_idx;
 	u8 tile_mode;
 	u32 checksum;

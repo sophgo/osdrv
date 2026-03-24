@@ -8,6 +8,7 @@
 #define DPHY_TOP_BASE		(0x0A0A6000)
 #define SENSOR_MAC0_BASE	(0x0A0A0000)
 #define SENSOR_MAC1_BASE	(0x0A0A2000)
+#define SENSOR_MAC2_BASE	(0x0A0A4000)
 
 
 int driver_cif_init(void);

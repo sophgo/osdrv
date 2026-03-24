@@ -13,6 +13,10 @@ s32 vpss_set_rgn_mosaic_cfg(vpss_grp grp_id, vpss_chn chn_id,
 		struct rgn_mosaic_cfg *cfg, struct vpss_ctx *ctx);
 s32 vpss_get_rgn_ow_addr(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
 		rgn_handle handle, u64 *addr, struct vpss_ctx *ctx, u8 dev_idx);
+s32 vpss_clr_rgn_ow_addr(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
+		u8 ow_inst, struct vpss_ctx *ctx, u8 dev_idx);
+s32 vpss_get_rgn_ow_inst(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
+		rgn_handle handle, struct vpss_ctx *ctx, u8 *ow_inst);
 s32 vpss_set_rgn_lut_cfg(vpss_grp grp_id, vpss_chn chn_id,
 		struct rgn_lut_cfg *cfg, struct vpss_ctx *ctx);
 

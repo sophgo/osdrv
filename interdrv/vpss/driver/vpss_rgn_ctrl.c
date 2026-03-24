@@ -215,6 +215,56 @@ s32 vpss_get_rgn_ow_addr(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
 	return 0;
 }
 
+
+s32 vpss_clr_rgn_ow_addr(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
+		u8 ow_inst, struct vpss_ctx *ctx, u8 dev_idx)
+{
+	s32 ret;
+	struct vpss_grp_ctx *grp_ctx;
+
+	grp_ctx = ctx->grp_ctx[grp_id];
+
+	ret = check_vpss_id(grp_id, chn_id, ctx);
+	if (ret != 0)
+		return ret;
+
+	osal_mutex_lock(&grp_ctx->lock);
+	vpss_clr_gop_addr(dev_idx, layer, ow_inst);
+	osal_mutex_unlock(&grp_ctx->lock);
+
+	return 0;
+}
+
+s32 vpss_get_rgn_ow_inst(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
+		rgn_handle handle, struct vpss_ctx *ctx, u8 *ow_inst)
+{
+	s32 ret, i;
+	struct vpss_grp_ctx *grp_ctx;
+	struct vpss_chn_ctx *chn_ctx;
+
+	grp_ctx = ctx->grp_ctx[grp_id];
+	chn_ctx = &grp_ctx->chn_ctxs[chn_id];
+
+	ret = check_vpss_id(grp_id, chn_id, ctx);
+	if (ret != 0)
+		return ret;
+
+	osal_mutex_lock(&grp_ctx->lock);
+	for (i = 0; i < RGN_MAX_NUM_VPSS; ++i) {
+		if (chn_ctx->rgn_handle[layer][i] == handle) {
+			*ow_inst = i;
+			break;
+		}
+	}
+	if (i == RGN_MAX_NUM_VPSS) {
+		osal_mutex_unlock(&grp_ctx->lock);
+		return -1;
+	}
+	osal_mutex_unlock(&grp_ctx->lock);
+
+	return 0;
+}
+
 s32 vpss_set_rgn_lut_cfg(vpss_grp grp_id, vpss_chn chn_id,
 		struct rgn_lut_cfg *cfg, struct vpss_ctx *ctx)
 {

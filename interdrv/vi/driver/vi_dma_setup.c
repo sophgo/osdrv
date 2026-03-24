@@ -397,7 +397,6 @@ static void _vi_rgb_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 	for (; fe_chn <= fe_max; fe_chn++) {
 		fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
 		for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
-
 			bufaddr = _mempool_get_addr(mempool);
 			bufsize = ispblk_dma_buf_get_size(ctx, raw_num, fe_dma_id);
 			_mempool_pop(mempool, bufsize);

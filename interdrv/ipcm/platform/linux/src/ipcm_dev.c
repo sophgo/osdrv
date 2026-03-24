@@ -49,6 +49,13 @@ typedef struct _ipcm_dev_ctx {
 	u8 test_case;
 } ipcm_dev_ctx;
 
+extern u32 ipcm_shared_addr;
+extern u32 ipcm_shared_size;
+extern u32 rtos_ion_addr;
+extern u32 rtos_ion_size;
+extern u32 rtos_log_addr;
+extern u32 rtos_log_size;
+
 static ipcm_dev_ctx s_ctx = {};
 
 #ifdef IPCM_INFO_REC
@@ -329,6 +336,18 @@ static int ipcm_dev_probe(struct platform_device *pdev)
 	}
 
 	mailbox_irq = platform_get_irq_byname(pdev, "mailbox");
+
+	ret = of_property_read_u32(pdev->dev.of_node, "shared_addr", &ipcm_shared_addr)
+	| of_property_read_u32(pdev->dev.of_node, "shared_size", &ipcm_shared_size)
+	| of_property_read_u32(pdev->dev.of_node, "rtos_ion_addr", &rtos_ion_addr)
+	| of_property_read_u32(pdev->dev.of_node, "rtos_ion_size", &rtos_ion_size)
+	| of_property_read_u32(pdev->dev.of_node, "rtos_log_addr", &rtos_log_addr)
+	| of_property_read_u32(pdev->dev.of_node, "rtos_log_size", &rtos_log_size);
+
+	if (ret) {
+		ipcm_err("of property failed ret:%d.\n", ret);
+		return ret;
+	}
 
 	ret = ipcm_port_init();
 	if (ret) {

@@ -36,7 +36,7 @@
 
 /* control vi log level
  */
-u32 vi_log_lv = VI_ERR | VI_WARN | VI_NOTICE | VI_INFO | VI_DBG;
+u32 vi_log_lv = VI_WARN;
 osal_module_param(vi_log_lv, int, 0644);
 
 /* vblanking period */

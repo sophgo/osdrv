@@ -285,19 +285,15 @@ static inline bool is_bypass_frame(const struct vi_dev *vdev, const u8 pipe)
 static void _vi_update_yuvtop_out_cfg(struct vi_dev *vdev, uint8_t pipe)
 {
 	struct isp_ctx *ctx = &vdev->ctx;
-	bool is_bypass = false;
+	bool is_bypass = is_bypass_frame(vdev, pipe);
+	bool is_offline_scaler = ctx->isp_pipe_cfg[pipe].is_offline_scaler;
+	bool dma_enable = is_bypass || is_offline_scaler;
 
-	is_bypass = is_bypass_frame(vdev, pipe);
+	// for online scaler: enable output when not bypassing, for offline scaler: always disable
+	ispblk_yuvtop_out_config(ctx, !is_offline_scaler && !is_bypass);
 
-	//for online sc
-	if (!ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
-		ispblk_yuvtop_out_config(ctx, !is_bypass);
-	}
-
-	ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y,
-				is_bypass || ctx->isp_pipe_cfg[pipe].is_offline_scaler, is_bypass);
-	ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C,
-				is_bypass || ctx->isp_pipe_cfg[pipe].is_offline_scaler, is_bypass);
+	ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_Y, dma_enable, is_bypass);
+	ispblk_dma_enable(ctx, ISP_BLK_ID_DMA_CTL_YUV_CROP_C, dma_enable, is_bypass);
 
 	vi_pr(VI_DBG, "pipe(%d) postraw_frm_num=%d, bypass_num=%d, is_bypass=%d\n",
 		pipe, vdev->postraw_frame_number[pipe], ctx->isp_pipe_cfg[pipe].bypass_num, is_bypass);
@@ -485,6 +481,7 @@ static void _clear_drop_frm_info(
 	ctx->isp_csi_cfg[raw_num].drop_frm_cnt = 0;
 	ctx->isp_csi_cfg[raw_num].drop_ref_frm_num = 0;
 	ctx->isp_csi_cfg[raw_num].is_drop_next_frame = false;
+	ctx->isp_csi_cfg[raw_num].reset_frm = vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0];
 }
 
 static void _isp_crop_update_chk(
@@ -752,23 +749,40 @@ static inline void _vi_clear_mmap_fbc_ring_base(struct vi_dev *vdev, const u8 pi
 static inline void _vi_wake_up_preraw_th(struct vi_dev *vdev, const enum sop_isp_raw raw_num)
 {
 	unsigned long flags;
-	struct _isp_raw_num_n *n;
+	struct _isp_raw_num_n *n = NULL;
 	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
 	enum E_VI_TH th_id = E_VI_TH_PRERAW;
 
-	n = osal_kzalloc(sizeof(*n), OSAL_GFP_ATOMIC);
-	if (n == NULL) {
-		vi_pr(VI_ERR, "pre_raw_num_q kmalloc size(%zu) fail\n", sizeof(*n));
-		return;
-	}
-	n->raw_num = raw_num;
-
 	osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
+
+	if (raw_num_q->count < VI_MAX_LIST_NUM) {
+		n = osal_kzalloc(sizeof(*n), OSAL_GFP_ATOMIC);
+		if (n) {
+			raw_num_q->count++;
+		} else {
+			vi_pr(VI_ERR, "pre_raw_num_q osal_kzalloc size(%zu) fail\n", sizeof(*n));
+			goto unlock;
+		}
+	} else if (!osal_list_empty(&raw_num_q->list)) {
+		n = osal_list_first_entry(&raw_num_q->list, struct _isp_raw_num_n, list);
+		osal_list_del_init(&n->list);
+	}
+
+	if (!n) {
+		vi_pr(VI_ERR, "Failed to get raw_num node\n");
+		goto unlock;
+	}
+
+	n->raw_num = raw_num;
 	osal_list_add_tail(&n->list, &raw_num_q->list);
+
+unlock:
 	osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
-	osal_atomic_set(&vdev->vi_th[th_id].flag, ISP_PRERAW_MAX);
-	osal_wait_wakeup(&vdev->vi_th[th_id].wq);
+	if (n) {
+		osal_atomic_set(&vdev->vi_th[th_id].flag, ISP_PRERAW_MAX);
+		osal_wait_wakeup(&vdev->vi_th[th_id].wq);
+	}
 }
 
 void vi_event_queue(struct vi_dev *vdev, const u32 type, const u32 frm_num)
@@ -1537,10 +1551,16 @@ static int _pre_fe_outbuf_enque(
 
 	if (osal_atomic_read(&vdev->raw_dump[raw_num].raw_dump_en[chn_num]) == RAWDUMP_START) {
 		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-			// For staggered sensor, dump raw only when both channels are ready
+			/*
+			 * case 1: dump raw before csi recive image, dump raw directly
+			 * case 2: dump raw after csi recive image, dump raw next frame, make sure the same frame is dumped by checking frm num,
+			 * For staggered sensor, dump raw only when both channels are ready,
+			 * replace dma addr with raw dump buf addr at the same time to make sure the same frame is dumped.
+			 */
 			if (vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0] == vdev->pre_fe_frm_num[raw_num][ISP_FE_CH1]) {
 				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH0], RAWDUMP_PREPARE);
 				osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[ISP_FE_CH1], RAWDUMP_PREPARE);
+				is_dump_raw = (ctx->isp_csi_cfg[raw_num].reset_frm == vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]);
 			}
 		} else { //for linear sensor, dump raw directly
 			osal_atomic_set(&vdev->raw_dump[raw_num].raw_dump_en[chn_num], RAWDUMP_PREPARE);
@@ -1556,7 +1576,7 @@ static int _pre_fe_outbuf_enque(
 	if (is_dump_raw) {
 		fe_out_q = &vdev->raw_dump[raw_num].buf_q[chn_num];
 
-		vi_pr(VI_DBG, "pre_fe raw_dump cfg start\n");
+		vi_pr(VI_DBG, "pre_fe raw_dump cfg ch_%d start\n", chn_num);
 
 		b = isp_buf_next(fe_out_q);
 		if (b == NULL) {
@@ -1791,6 +1811,7 @@ static void postraw_update_sw_param(struct vi_dev *vdev, const u8 pipe)
 	ctx->isp_pipe_cfg[pipe].is_offline_scaler = (vi_vpss_mode.mode[pipe] == VI_ONLINE_VPSS_OFFLINE)
 						|| (vi_vpss_mode.mode[pipe] == VI_OFFLINE_VPSS_OFFLINE)
 						|| (vi_vpss_mode.mode[pipe] == VI_SLICE_VPSS_OFFLINE);
+	ctx->isp_pipe_cfg[pipe].bypass_num = vi_ctx->bypass_frm[pipe];
 
 }
 
@@ -2256,6 +2277,9 @@ static void _post_hw_enque(
 			}
 		}
 
+		ispblk_cnr_dyn_scale_rate(ctx);
+		_post_cnr_update(ctx, pipe);
+
 		if (ctx->isp_pipe_cfg[pipe].first_frm_rst) {
 			ctx->isp_pipe_cfg[pipe].first_frm_rst = false;
 			isp_first_frm_reset(ctx, true, false);
@@ -2452,7 +2476,7 @@ static void _vi_timeout_chk(struct vi_dev *vdev)
 	}
 }
 
-static void _vi_update_chn_real_frame_rate(vi_chn_status_s *vi_chn_status)
+static void _vi_update_chn_real_frame_rate(vi_chn_status_s *vi_chn_status, uint32_t sequence)
 {
 	u64 duration, cur_time;
 	osal_timeval osal_tv;
@@ -2466,6 +2490,10 @@ static void _vi_update_chn_real_frame_rate(vi_chn_status_s *vi_chn_status)
 		vi_chn_status->frame_num = 0;
 		vi_chn_status->prev_time = cur_time;
 	}
+
+	vi_chn_status->int_cnt++;
+	vi_chn_status->frame_num++;
+	vi_chn_status->recv_pic = sequence;
 
 	vi_pr(VI_DBG, "FrameRate=%d\n", vi_chn_status->frame_rate);
 }
@@ -2529,6 +2557,75 @@ static int vi_ldc_handle_op(struct vi_dev *vdev, mmf_chn_s *mmf_chn, vb_blk blk)
 	return -1;
 }
 
+static void vi_handle_online_frm_done(struct vi_dev *vdev, struct _vi_buffer *b)
+{
+	uint8_t pipe = b->pipe_id;
+	uint8_t chn = b->chn_id;
+	struct isp_buf_q *qbuf_q = &vdev->qbuf_q[pipe][chn];
+
+	if (sop_isp_rdy_buf_empty(qbuf_q))
+		return;
+
+	while (!sop_isp_rdy_buf_empty(qbuf_q)) {
+		//clean ready buffer
+		sop_isp_rdy_buf_remove(qbuf_q);
+	}
+
+	base_mod_jobs_clear(&vdev->vi_jobs[pipe][chn]);
+}
+
+static void vi_handle_offline_frm_done(struct vi_dev *vdev, struct _vi_buffer *b)
+{
+	struct vb_s *vb = NULL;
+	struct isp_ctx *ctx = &vdev->ctx;
+	uint8_t pipe = b->pipe_id;
+	uint8_t chn = b->chn_id;
+	vb_blk blk = VB_INVALID_HANDLE;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	mmf_chn_s mmf_chn = {.mod_id = ID_VI, .dev_id = pipe, .chn_id = chn};
+
+	if (ctx->isp_pipe_cfg[pipe].bypass_num >= b->sequence) {
+		//Release buffer if bypass_frm is not zero
+		vi_pr(VI_DBG, "skip vb\n");
+		return;
+	}
+
+	blk = vdev->vi_dqbuf(mmf_chn, vdev);
+	if (blk == VB_INVALID_HANDLE) {
+		vi_pr(VI_ERR, "pipe(%d) chn(%d) can't get vb-blk.\n", pipe, chn);
+		return;
+	}
+
+	vb = (struct vb_s *)(uintptr_t)blk;
+
+	vb->buf.dev_num = pipe;
+	vb->buf.frm_num = b->sequence;
+	vb->buf.pts = (uint64_t)b->tv.tv_sec * 1000000 +  b->tv.tv_usec;
+
+	vi_pr(VI_DBG, "dqbuf(%#llx) cnt(%d) pipe=%d chn=%d, skip_frm(%d) frm_num=%d\n",
+			(unsigned long long)vb->phy_addr, osal_atomic_read(&vb->usr_cnt), pipe,
+			chn, ctx->isp_pipe_cfg[pipe].bypass_num, b->sequence);
+
+	if (vi_ldc_handle_op(vdev, &mmf_chn, blk) != 0) {
+		vb_done_handler(mmf_chn, CHN_TYPE_OUT, &vdev->vi_jobs[pipe][chn], blk);
+	}
+
+	if (!(vi_ctx->is_chn_enable[pipe][chn]))
+		return;
+
+	if (vdev->vi_qbuf(mmf_chn, vdev) != 0) {
+		vb_pool poolid = VB_INVALID_POOLID;
+
+		if (vi_ctx->chn_attr[pipe][chn].bind_vb_pool == VB_INVALID_POOLID)
+			poolid = find_vb_pool(vi_ctx->blk_size[pipe][chn]);
+		else
+			poolid = vi_ctx->chn_attr[pipe][chn].bind_vb_pool;
+
+		if (poolid != VB_INVALID_POOLID)
+			vb_acquire_block(vdev->vi_qbuf, mmf_chn, poolid, vdev);
+	}
+}
+
 static int _vi_event_handler_thread(void *arg)
 {
 	struct vi_dev *vdev = (struct vi_dev *)arg;
@@ -2536,17 +2633,11 @@ static int _vi_event_handler_thread(void *arg)
 	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
 	int ret = 0;
 	enum E_VI_TH th_id = E_VI_TH_EVENT_HANDLER;
-	mmf_chn_s chn = {.mod_id = ID_VI, .dev_id = 0, .chn_id = 0};
-	int pipe_id, chn_id;
-	osal_timeval time[2];
-	u32 sum = 0, duration, duration_max = 0, duration_min = 1000 * 1000;
-	u8 count = 0;
+	int pipe, chn;
+	struct _vi_buffer b;
 	uint32_t flag = 0;
 
 	while (!osal_atomic_read(&vdev->vi_th[th_id].exit_flag)) {
-		_vi_update_chn_real_frame_rate(&vi_ctx->chn_status[chn.dev_id][chn.chn_id]);
-		osal_gettimeofday(&time[0]);
-
 		ret = osal_wait_timeout_uninterruptible(&vdev->vi_th[th_id].wq,
 					vi_event_thread_wait_cond_func,
 					vdev,
@@ -2568,78 +2659,21 @@ static int _vi_event_handler_thread(void *arg)
 			}
 			continue;
 		} else {
-			struct _vi_buffer b;
-			vb_blk blk = 0;
-			struct vb_s *vb = NULL;
-
-			//DQbuf from list.
 			if (vi_dqbuf(&vdev->dqbuf_q, &b)) {
 				vi_pr(VI_DBG, "illegal wakeup raw_num[%d]\n", flag);
 				continue;
 			}
 
-			chn.dev_id = pipe_id = b.pipe_id;
-			chn.chn_id = chn_id = b.chn_id;
-			ret = vb_dqbuf(chn, &vdev->vi_jobs[pipe_id][chn_id], &blk);
-			if (ret) {
-				if (blk == VB_INVALID_HANDLE)
-					vi_pr(VI_ERR, "pipe(%d) chn(%d) can't get vb-blk.\n", pipe_id, chn_id);
-				continue;
+			pipe = b.pipe_id;
+			chn = b.chn_id;
+
+			_vi_update_chn_real_frame_rate(&vi_ctx->chn_status[pipe][chn], b.sequence);
+
+			if (!_is_post_sc_online(ctx, pipe)) {
+				vi_handle_offline_frm_done(vdev, &b);
+			} else {
+				vi_handle_online_frm_done(vdev, &b);
 			}
-
-			vb = (struct vb_s *)(uintptr_t)blk;
-
-			vb->buf.dev_num = b.pipe_id;
-			vb->buf.frm_num = b.sequence;
-			vb->buf.pts = (uint64_t)b.tv.tv_sec * 1000000 + b.tv.tv_usec;
-
-			vi_ctx->chn_status[pipe_id][chn_id].int_cnt++;
-			vi_ctx->chn_status[pipe_id][chn_id].frame_num++;
-			vi_ctx->chn_status[pipe_id][chn_id].recv_pic = b.sequence;
-
-			vi_pr(VI_DBG, "dqbuf(%#llx) cnt(%d) pipe_id=%d chn_id=%d, skip_frm(%d) frm_num=%d\n",
-					(unsigned long long)vb->phy_addr, osal_atomic_read(&vb->usr_cnt), pipe_id,
-					chn_id, vi_ctx->bypass_frm[pipe_id], b.sequence);
-
-			if (ctx->isp_pipe_cfg[pipe_id].bypass_num >= b.sequence) {
-				//Release buffer if bypass_frm is not zero
-				vi_pr(VI_DBG, "skip vb\n");
-				vb_release_block(blk);
-				goto QBUF;
-			}
-
-			if (vi_ldc_handle_op(vdev, &chn, blk) != 0) {
-				vb_done_handler(chn, CHN_TYPE_OUT, &vdev->vi_jobs[pipe_id][chn_id], blk);
-			}
-
-QBUF:
-			if (!(vi_ctx->is_chn_enable[pipe_id][chn_id]))
-				continue;
-
-			if (vdev->vi_qbuf(chn, vdev) != 0) {
-				vb_pool poolid = VB_INVALID_POOLID;
-
-				if (vi_ctx->chn_attr[pipe_id][chn_id].bind_vb_pool == VB_INVALID_POOLID)
-					poolid = find_vb_pool(vi_ctx->blk_size[pipe_id][chn_id]);
-				else
-					poolid = vi_ctx->chn_attr[pipe_id][chn_id].bind_vb_pool;
-
-				if (poolid != VB_INVALID_POOLID)
-					vb_acquire_block(vdev->vi_qbuf, chn, poolid, vdev);
-			}
-		}
-
-		osal_gettimeofday(&time[1]);
-		duration = get_diff_in_us(time[0], time[1]);
-		duration_max = MAX(duration, duration_max);
-		duration_min = MIN(duration, duration_min);
-		sum += duration;
-		if (++count == 100) {
-			vi_pr(VI_DBG, "VI duration(ms): average(%d), max(%d) min(%d)\n"
-				, sum / count / 1000, duration_max / 1000, duration_min / 1000);
-			count = 0;
-			sum = duration_max = 0;
-			duration_min = 1000 * 1000;
 		}
 	}
 
@@ -3296,8 +3330,9 @@ static int _vi_preraw_thread(void *arg)
 		osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
 		osal_list_for_each_safe(pos, temp, &raw_num_q->list) {
 			n[enq_num] = osal_list_entry(pos, struct _isp_raw_num_n, list);
-			if (++enq_num >= VI_MAX_LIST_NUM || n[enq_num] == NULL)
+			if (enq_num + 1 >= VI_MAX_LIST_NUM || n[enq_num] == NULL)
 				break;
+			enq_num++;
 		}
 		osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
@@ -3308,6 +3343,7 @@ static int _vi_preraw_thread(void *arg)
 
 			osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
 			osal_list_del_init(&n[i]->list);
+			--raw_num_q->count;
 			osal_kfree(n[i]);
 			osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
@@ -4032,6 +4068,8 @@ static void _isp_postraw_done_handler(struct vi_dev *vdev)
 		//Change post done flag to be true
 		if (_is_fe_post_slice(ctx))
 			osal_atomic_set(&ctx->is_post_done, 1);
+
+		osal_gettimeofday(&ctx->isp_pipe_cfg[pipe].tv);
 	}
 
 	osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
@@ -4057,16 +4095,17 @@ static void _isp_postraw_done_handler(struct vi_dev *vdev)
 		vi_event_queue(vdev, VI_EVENT_POST0_EOF + pipe, vdev->postraw_frame_number[pipe]);
 	}
 
-	if (ctx->isp_pipe_cfg[pipe].is_offline_scaler && ctx->isp_pipe_cfg[pipe].chn_enable) {
-		//bypass mode
-		if (vdev->postraw_frame_number[pipe] <= ctx->isp_pipe_cfg[pipe].bypass_num)
-			return;
-
-		sop_isp_rdy_buf_remove(&vdev->qbuf_q[pipe][chn_num]);
-		sop_isp_dqbuf_list(vdev, vdev->postraw_frame_number[pipe],
-				   pipe, chn_num,
-				   ctx->isp_pipe_cfg[pipe].tv);
+	if (ctx->isp_pipe_cfg[pipe].chn_enable) {
+		sop_isp_dqbuf_list(vdev, vdev->postraw_frame_number[pipe], pipe, chn_num, ctx->isp_pipe_cfg[pipe].tv);
 		_vi_wake_up_event_th(vdev, pipe);
+
+		if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
+			//bypass mode
+			if (vdev->postraw_frame_number[pipe] <= ctx->isp_pipe_cfg[pipe].bypass_num)
+				return;
+
+			sop_isp_rdy_buf_remove(&vdev->qbuf_q[pipe][chn_num]);
+		}
 	}
 }
 
@@ -4343,6 +4382,92 @@ int vi_update_ldc_mesh(struct vi_dev *vdev,
 	return 0;
 }
 
+static int vi_queue_setup(struct vi_dev *vdev, uint8_t pipe)
+{
+	int ret = 0, i = 0, j = 0;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+	mmf_chn_s mmf_chn = {.mod_id = ID_VI, .dev_id = pipe, .chn_id = VI_CHN0};
+	int num_buffers = vi_ctx->chn_attr[pipe][VI_CHN0].single_vb ? 1 : VI_CHN_0_BUF;
+	vb_blk blk = VB_INVALID_HANDLE;
+
+	for (i = 0; i < num_buffers; i++) {
+		ret = vdev->vi_qbuf(mmf_chn, vdev);
+		if (ret) {
+			vi_pr(VI_ERR, "Pipe(%d) Chn(%d) qbuf failed when switch post sc mode\n", pipe, VI_CHN0);
+			goto release_buf;
+		}
+	}
+
+	return ret;
+
+release_buf:
+	for (j = 0; j < i; j++) {
+		blk = vdev->vi_dqbuf(mmf_chn, vdev);
+		if (blk != VB_INVALID_HANDLE) {
+			vb_release_block(blk);
+			sop_isp_rdy_buf_remove(&vdev->qbuf_q[pipe][VI_CHN0]);
+		}
+	}
+
+	return ret;
+}
+
+static int _vi_cb_set_vivpss_mode(struct vi_dev *vdev, vi_vpss_mode_s *vi_vpss_mode)
+{
+	int ret = 0;
+	uint8_t pipe = 0;
+	bool vi_online = false;
+	bool vi_slice = false;
+	bool vi_online2sc = false;
+	struct isp_ctx *ctx = &vdev->ctx;
+	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
+
+	vi_online = (vi_vpss_mode->mode[0] == VI_ONLINE_VPSS_ONLINE) ||
+			(vi_vpss_mode->mode[0] == VI_ONLINE_VPSS_OFFLINE);
+
+	vi_slice = (vi_vpss_mode->mode[0] == VI_SLICE_VPSS_ONLINE) ||
+			(vi_vpss_mode->mode[0] == VI_SLICE_VPSS_OFFLINE);
+
+	//only first setting need set vi mode, others just update online/offline postraw flag
+	if (!osal_atomic_read(&vdev->stream.isp_init)) {
+		vi_ctx->mode = *vi_vpss_mode;
+		ctx->is_offline_postraw = !vi_online;
+		ctx->is_slice_buf_on = vi_slice;
+
+		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++)
+			postraw_update_sw_param(vdev, pipe);
+
+		if (vi_online) {
+			vi_sys_set_offline(VI_SYS_AXI_BUS_ISP_RAW, false);
+			vi_sys_set_offline(VI_SYS_AXI_BUS_ISP_YUV, false);
+		}
+
+		return ret;
+	}
+
+	//check whether need to switch post sc mode
+	//if onlineSc to offlineSc, need to setup qbuf, otherwise will release buf in vi_event_handler
+	for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++) {
+		if (!ctx->isp_pipe_cfg[pipe].is_enable)
+			continue;
+		vi_online2sc = (vi_vpss_mode->mode[pipe] == VI_OFFLINE_VPSS_ONLINE) ||
+				(vi_vpss_mode->mode[pipe] == VI_SLICE_VPSS_ONLINE)
+				|| (vi_vpss_mode->mode[pipe] == VI_ONLINE_VPSS_ONLINE);
+		if (_is_post_sc_online(ctx, pipe) && !vi_online2sc) { //onlineSc to offlineSc
+			ret = vi_queue_setup(vdev, pipe);
+			if (ret) {
+				vi_pr(VI_ERR, "Pipe(%d) setup qbuf failed when switch post sc mode\n", pipe);
+				return ret;
+			}
+		}
+		vi_ctx->mode = *vi_vpss_mode;
+	}
+
+	vi_pr(VI_DBG, "set vi_online:%d, is_offline_postraw=%d\n", vi_online, ctx->is_offline_postraw);
+
+	return ret;
+}
+
 int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 {
 	struct vi_dev *vdev = (struct vi_dev *)dev;
@@ -4373,32 +4498,10 @@ int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 	case VI_CB_SET_VIVPSSMODE:
 	{
 		vi_vpss_mode_s vi_vpss_mode;
-		u8 vi_online = 0;
-		u8 vi_slice = 0;
-		u8 pipe = 0;
 
 		osal_memcpy(&vi_vpss_mode, arg, sizeof(vi_vpss_mode_s));
 
-		vi_online = (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_ONLINE) ||
-			    (vi_vpss_mode.mode[0] == VI_ONLINE_VPSS_OFFLINE);
-
-		vi_slice = (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_ONLINE) ||
-			    (vi_vpss_mode.mode[0] == VI_SLICE_VPSS_OFFLINE);
-
-		vi_ctx->mode = vi_vpss_mode;
-		rc = 0;
-
-		if (osal_atomic_read(&vi_ctx->total_dev_num))
-			break;
-
-		ctx->is_offline_postraw = !vi_online;
-		ctx->is_slice_buf_on = vi_slice;
-
-		for (pipe = 0; pipe < VI_MAX_PIPE_NUM; pipe++)
-			postraw_update_sw_param(vdev, pipe);
-
-		vi_pr(VI_DBG, "Caller_Mod(%d) set vi_online:%d, is_offline_postraw=%d\n",
-				caller, vi_online, ctx->is_offline_postraw);
+		rc = _vi_cb_set_vivpss_mode(vdev, &vi_vpss_mode);
 
 		break;
 	}
@@ -4631,6 +4734,7 @@ static int clean_misc_resources(struct vi_dev *vdev)
 		osal_list_del_init(&raw_n->list);
 		osal_kfree(raw_n);
 	}
+	raw_num_q->count = 0;
 	osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 
 	for (i = 0; i < ISP_RAW_PATH_MAX; i++) {
@@ -4786,6 +4890,8 @@ int vi_csi_stop_streaming(struct vi_dev *vdev, uint8_t raw_num)
 	int j = 0;
 	uint8_t i;
 	bool is_all_idle = true;
+	struct _isp_raw_num_n *raw_n = NULL, *raw_tmp = NULL;
+	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
 
 	if (ctx->is_rawreplay) {
 		vi_pr(VI_INFO, "raw replay, skip clean csi resources\n");
@@ -4866,6 +4972,16 @@ clean_resources:
 
 	if (is_all_idle) {
 		clean_misc_resources(vdev);
+	} else {
+		osal_spin_lock_irqsave(&raw_num_q->lock, &flags);
+		osal_list_for_each_entry_safe(raw_n, raw_tmp, &raw_num_q->list, list) {
+			if (raw_n->raw_num == raw_num) {
+				osal_list_del_init(&raw_n->list);
+				--raw_num_q->count;
+				osal_kfree(raw_n);
+			}
+		}
+		osal_spin_unlock_irqrestore(&raw_num_q->lock, &flags);
 	}
 
 	vi_pr(VI_INFO, "raw_num(%d) stop streaming\n", raw_num);
@@ -5224,6 +5340,7 @@ static void _vi_init_param(struct vi_dev *vdev)
 	OSAL_INIT_LIST_HEAD(&vdev->pre_raw_num_q.list);
 	OSAL_INIT_LIST_HEAD(&vdev->dqbuf_q.list);
 	OSAL_INIT_LIST_HEAD(&vdev->event_q.list);
+	vdev->pre_raw_num_q.count = 0;
 	vdev->event_q.count = 0;
 
 	osal_spin_lock_init(&vdev->pre_raw_num_q.lock);

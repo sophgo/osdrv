@@ -840,6 +840,7 @@ int sclr_gop_update_16LUT(u8 inst, u8 layer, u8 index, u16 data);
 void sclr_gop_fb_set_cfg(u8 inst, u8 layer, u8 fb_inst, struct sclr_gop_fb_cfg *cfg);
 u32 sclr_gop_fb_get_record(u8 inst, u8 layer, u8 fb_inst);
 void sclr_gop_ow_get_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr);
+void sclr_gop_ow_clr_addr(u8 inst, u8 layer, u8 ow_inst);
 
 void sclr_pri_set_cfg(u8 inst, struct sclr_privacy_cfg *cfg);
 void sclr_gop_odec_set_cfg_from_oenc(u8 inst, u8 layer, struct sclr_gop_odec_cfg *odec_cfg);

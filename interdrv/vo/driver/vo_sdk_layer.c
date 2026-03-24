@@ -515,6 +515,7 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 			}
 		}
 		dphy_dsi_lane_en(dev, true, data_en, false);
+		vo_mac_sel_pinmux(dev, cfg->intf_type, &cfg->lvds_cfg);
 
 		disp_set_intf(dev, VO_DISP_INTF_LVDS);
 
@@ -598,7 +599,7 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 		vo_mac_set_sel_type(dev, bt_mode);
 
 		// to do
-		// _disp_sel_pinmux(dev, cfg->intf_type, &cfg->bt_cfg);
+		vo_mac_sel_pinmux(dev, cfg->intf_type, &cfg->bt_cfg);
 
 		enc.raw = 0;
 		enc.b.fmt_sel  = fmt_sel;
@@ -613,6 +614,7 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 		vo_mac_bt_set(dev, enc, sync);
 		vo_mac_bt_en(dev);
 	} else if (cfg->intf_type == VO_DISP_INTF_HW_I80) {
+		vo_mac_hw_i80_en(dev, false);
 		disp_set_intf(dev, VO_DISP_INTF_HW_I80);
 		vo_mac_set_i80_if(dev, false, cfg->mcu_cfg.mode);
 		if (cfg->mcu_cfg.mode == MCU_MODE_RGB565) {
@@ -748,6 +750,12 @@ static int vo_set_pub_attr(vo_dev dev, vo_pub_attr_s *pub_attr)
 			TRACE_VO(DBG_ERR, "VO INTF configure failured.\n");
 			return -1;
 		}
+	} else if (pub_attr->intf_type == VO_INTF_LVDS) {
+		cfg.intf_type = VO_DISP_INTF_LVDS;
+		TRACE_VO(DBG_INFO, "lvds should be setup by vo_set_lvds_param.\n");
+	} else if (pub_attr->intf_type == VO_INTF_BT656 ||
+				pub_attr->intf_type == VO_INTF_BT1120) {
+		TRACE_VO(DBG_INFO, "BT should be setup by vo_set_bt_param.\n");
 	} else {
 		TRACE_VO(DBG_ERR, "VO invalid INTF type(0x%x)\n", pub_attr->intf_type);
 		return ERR_VO_ILLEGAL_PARAM;
@@ -883,9 +891,7 @@ static int vo_set_lvds_param(vo_dev dev, vo_lvds_attr_s *lvds_param)
 		cfg.lvds_cfg.serial_msb_first = lvds_param->data_big_endian;
 		cfg.lvds_cfg.even_odd_link_swap = 0;
 		cfg.lvds_cfg.enable = 1;
-
-		osal_div_u64(dv_timings.bt.pixelclock, 1000);
-		cfg.lvds_cfg.pixelclock = dv_timings.bt.pixelclock;
+		cfg.lvds_cfg.pixelclock = osal_div_u64(dv_timings.bt.pixelclock, 1000);
 
 		for (i = 0; i < VO_LVDS_LANE_MAX; ++i) {
 			cfg.lvds_cfg.lane_id[i] = lvds_param->lane_id[i];
@@ -950,6 +956,15 @@ static int vo_set_bt_param(vo_dev dev, vo_bt_attr_s *bt_param)
 					   dev_ctx->pub_attr.sync_info.hact +
 					   dev_ctx->pub_attr.sync_info.hfb +
 					   dev_ctx->pub_attr.sync_info.hpw);
+
+		// Adjust pclk to adapt to the high-precision conversion IC.
+		if(dv_timings.bt.pixelclock == 27027000) {
+			dv_timings.bt.pixelclock = 27000000;
+			TRACE_VO(DBG_INFO, "pixelclock(27027000 hz) before adjustment, pixelclock(27000000 hz) after adjustment.\n");
+		} else if (dv_timings.bt.pixelclock == 54054000) {
+			dv_timings.bt.pixelclock = 54000000;
+			TRACE_VO(DBG_INFO, "pixelclock(54054000hz) before adjustment, pixelclock(54000000hz) after adjustment.\n");
+		}
 	} else if (dev_ctx->pub_attr.intf_sync < VO_OUTPUT_USER) {
 		dv_timings.bt.pixelclock = sync_info[dev_ctx->pub_attr.intf_sync].frame_rate *
 					   (sync_info[dev_ctx->pub_attr.intf_sync].vbb +
@@ -969,8 +984,7 @@ static int vo_set_bt_param(vo_dev dev, vo_bt_attr_s *bt_param)
 		cfg.bt_cfg.bt_clk_inv = bt_param->bt_clk_inv;
 		cfg.bt_cfg.bt_vs_inv = bt_param->bt_vs_inv;
 		cfg.bt_cfg.bt_hs_inv = bt_param->bt_hs_inv;
-		osal_div_u64(dv_timings.bt.pixelclock, 1000);
-		cfg.bt_cfg.pixelclock = dv_timings.bt.pixelclock;
+		cfg.bt_cfg.pixelclock = osal_div_u64(dv_timings.bt.pixelclock, 1000);
 		cfg.bt_cfg.pins.pin_num = bt_param->pin_num;
 		osal_memcpy(&cfg.bt_cfg.pins.d_pins, bt_param->d_pins, sizeof(bt_param->d_pins));
 
@@ -1464,6 +1478,14 @@ static int vo_send_frame(vo_layer layer, vo_chn chn, video_frame_info_s *video_f
 		TRACE_VO(DBG_ERR, "layer(%d) chn(%d) Invalid phy-addr(%llx). Can't locate vb_blk.\n",
 			 layer, chn, video_frame->video_frame.phyaddr[0]);
 		return ERR_VO_ILLEGAL_PARAM;
+	} else {
+		unsigned int usr_cnt;
+
+		vb_inquire_user_cnt(blk, &usr_cnt);
+		if (usr_cnt == 0) {
+			TRACE_VO(DBG_ERR, "layer(%d) chn(%d), The released frame cannot be used.\n", layer, chn);
+			return ERR_VO_NOT_SUPPORT;
+		}
 	}
 
 	if (base_fill_videoframe2buffer(mmf_chn, video_frame, &((struct vb_s *)(uintptr_t)blk)->buf) != 0) {

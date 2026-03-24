@@ -1079,6 +1079,11 @@ void vpss_get_gop_addr(u8 inst, u8 layer, u8 ow_inst, u64 *addr)
 	sclr_gop_ow_get_addr(inst, layer, ow_inst, addr);
 }
 
+void vpss_clr_gop_addr(u8 inst, u8 layer, u8 ow_inst)
+{
+	sclr_gop_ow_clr_addr(inst, layer, ow_inst);
+}
+
 void vpss_get_sbm_pos(u8 inst, int *y_pos, int *uv_pos) {
 	sclr_get_sb_write_pos(inst, y_pos, uv_pos);
 }

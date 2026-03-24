@@ -210,6 +210,7 @@ static int vpss_online_qbuf(mmf_chn_s chn, void *data)
 	int ret;
 	struct vpss_job *job = (struct vpss_job *)data;
 	vb_blk blk;
+	struct vb_s *vb;
 	struct vpss_grp_ctx *grp_ctx = (struct vpss_grp_ctx *)job->data;
 	vpss_grp grp_id = chn.dev_id;
 	vpss_chn chn_id = chn.chn_id;
@@ -228,8 +229,9 @@ static int vpss_online_qbuf(mmf_chn_s chn, void *data)
 		TRACE_VPSS(DBG_ERR, "Grp(%d) Chn(%d) Can't acquire VB BLK for VPSS\n", grp_id, chn_id);
 		return -1;
 	}
+	vb = (struct vb_s *)(uintptr_t)blk;
 
-	TRACE_VPSS(DBG_NOTICE, "Grp(%d) Chn(%d) acquire VB BLK\n", grp_id, chn_id);
+	TRACE_VPSS(DBG_NOTICE, "Grp(%d) Chn(%d) get vb: phy-addr(%#llx)\n", grp_id, chn_id, vb->phy_addr);
 	return vpss_qbuf(chn, NULL, blk, grp_ctx, job);
 }
 
@@ -1701,6 +1703,7 @@ int vpss_grp_qbuf(mmf_chn_s chn, vb_blk blk, void *data)
 	struct vpss_ctx *ctx = (struct vpss_ctx *)data;
 	vpss_grp grp_id = chn.dev_id;
 	struct vpss_grp_ctx *grp_ctx;
+	struct vb_s *vb = (struct vb_s *)(uintptr_t)blk;
 
 	ret = check_vpss_grp_valid(grp_id);
 	if (ret != 0)
@@ -1731,7 +1734,7 @@ int vpss_grp_qbuf(mmf_chn_s chn, vb_blk blk, void *data)
 	}
 	grp_ctx->grp_work_status.frc_recv_cnt++;
 
-	TRACE_VPSS(DBG_INFO, "Grp(%d) qbuf, blk(%llx)\n", grp_id, blk);
+	TRACE_VPSS(DBG_INFO, "Grp(%d) qbuf, phy-addr(%#llx)\n", grp_id, vb->phy_addr);
 
 	ret = vb_qbuf(chn, CHN_TYPE_IN, &grp_ctx->vb_jobs.ins, blk);
 	if (ret != 0) {
@@ -1773,11 +1776,6 @@ void vpss_ctx_param_init(struct vpss_ctx *ctx)
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		ctx->grp_used[i] = false;
 	}
-	ctx->sb_phy_addr = 0;
-	ctx->sb_width = 0;
-	ctx->sb_height = 0;
-	ctx->sb_buf_line = 0;
-	ctx->sb_buffer_size = 0;
 	osal_mutex_unlock(&ctx->lock);
 }
 
