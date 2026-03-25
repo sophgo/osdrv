@@ -156,6 +156,7 @@ typedef struct encoder_handle
     int extra_free_buf_cnt;
     struct list_head extra_buf_queue;
     struct list_head extra_free_buf_queue;
+    struct mutex extra_buf_lock; /* protect extra_buf_queue / extra_free_buf_queue */
 
     // extern buf
     unsigned int bs_buf_size;
@@ -921,6 +922,7 @@ static void venc_release_exten_buf(void *handle)
     drv_venc_extra_buf_info *pst_extra_buf_info = NULL, *temp_extra_buf_info = NULL;
     vpu_buffer_t vb_buffer;
 
+    mutex_lock(&pst_handle->extra_buf_lock);
     if (pst_handle->extra_buf_cnt > 0) {
         list_for_each_entry_safe(pst_extra_buf_info, temp_extra_buf_info
                                     , &pst_handle->extra_buf_queue, list) {
@@ -948,6 +950,7 @@ static void venc_release_exten_buf(void *handle)
             }
         }
     }
+    mutex_unlock(&pst_handle->extra_buf_lock);
 }
 
 static int venc_process_frame_done(void* handle, int async_mode)
@@ -1049,6 +1052,7 @@ static int venc_process_frame_done(void* handle, int async_mode)
         }
 
         // check extra_free_buf_queue
+        mutex_lock(&pst_handle->extra_buf_lock);
         if (pst_handle->extra_free_buf_cnt > 0) {
             list_for_each_entry_safe(pst_extra_free_buf, temp_extra_buf_info, &pst_handle->extra_free_buf_queue, list) {
                 if (pst_extra_free_buf && pst_extra_free_buf->extra_vb_buffer.phys_addr > 0) {
@@ -1063,6 +1067,7 @@ static int venc_process_frame_done(void* handle, int async_mode)
                 }
             }
         }
+        mutex_unlock(&pst_handle->extra_buf_lock);
 
         if (pst_extra_buf_info->bs_size > 0) {
             VLOG(INFO, "pre encoded size:%d, bs encoded:%d\n", pst_extra_buf_info->bs_size, output_info.bitstreamSize);
@@ -1087,8 +1092,10 @@ static int venc_process_frame_done(void* handle, int async_mode)
 
             pst_extra_free_buf = osal_calloc(1, sizeof(drv_venc_extra_buf_info));
             osal_memcpy(&pst_extra_free_buf->extra_vb_buffer, &pst_extra_buf_info->extra_vb_buffer, sizeof(vpu_buffer_t));
+            mutex_lock(&pst_handle->extra_buf_lock);
             list_add_tail(&pst_extra_free_buf->list, &pst_handle->extra_buf_queue);
             pst_handle->extra_buf_cnt += 1;
+            mutex_unlock(&pst_handle->extra_buf_lock);
 
             pst_extra_buf_info->bs_size = 0;
             Queue_Enqueue(pst_handle->free_stream_buffer, &output_info.bitstreamBuffer);
@@ -1293,6 +1300,7 @@ reinit:
     INIT_LIST_HEAD(&pst_handle->extra_buf_queue);
     INIT_LIST_HEAD(&pst_handle->extra_free_buf_queue);
     pst_handle->extra_buf_cnt = 0;
+    mutex_init(&pst_handle->extra_buf_lock);
 
     pst_handle->enable_ext_rc = 1;
     return pst_handle;
@@ -1308,6 +1316,7 @@ int internal_venc_close(void *handle)
     if (pst_handle->thread_handle != NULL) {
         pst_handle->stop_thread = 1;
         osal_thread_join(pst_handle->thread_handle, NULL);
+        pst_handle->thread_handle = NULL;
     }
 
     Queue_Destroy(pst_handle->stream_packs);
@@ -1338,6 +1347,7 @@ int venc_op_stop(void *handle, void *arg)
     if (pst_handle->thread_handle != NULL) {
         pst_handle->stop_thread = 1;
         osal_thread_join(pst_handle->thread_handle, NULL);
+        pst_handle->thread_handle = NULL;
     }
 
     while (VPU_EncClose(pst_handle->handle) == RETCODE_VPU_STILL_RUNNING) {
@@ -2021,6 +2031,7 @@ int internal_venc_release_stream(void *handle, stPack *pstPack, unsigned int pac
             }
         } else {
             extra_buf_flag = 0;
+            mutex_lock(&pst_handle->extra_buf_lock);
             if (pst_handle->extra_buf_cnt > 0) {
                 // release extra bitstream buf into extra_free_buf_queue
                 list_for_each_entry_safe(extra_buf_info, n, &pst_handle->extra_buf_queue, list) {
@@ -2033,6 +2044,7 @@ int internal_venc_release_stream(void *handle, stPack *pstPack, unsigned int pac
                     }
                 }
             }
+            mutex_unlock(&pst_handle->extra_buf_lock);
 
             if (0 == extra_buf_flag) {
                 Queue_Enqueue(pst_handle->free_stream_buffer, &pstPack[i].u64PhyAddr);
@@ -2102,6 +2114,7 @@ int venc_op_start(void *handle, void *arg)
 
     ret = VPU_GetProductInfo(pst_handle->core_idx, &product_attr);
     if (ret != RETCODE_SUCCESS) {
+        VLOG(ERR, "Failed to VPU_GetProductInfo(ret:%d)\n", ret);
         return ret;
     }
 
@@ -2116,7 +2129,6 @@ int venc_op_start(void *handle, void *arg)
     if (pst_handle->enc_param.rotationAngle) {
         VPU_EncGiveCommand(pst_handle->handle, ENABLE_ROTATION, 0);
         VPU_EncGiveCommand(pst_handle->handle, SET_ROTATION_ANGLE, &pst_handle->enc_param.rotationAngle);
-
     }
 
     if (pst_handle->enc_param.mirrorDirection) {

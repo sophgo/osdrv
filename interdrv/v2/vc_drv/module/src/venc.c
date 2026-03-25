@@ -3345,8 +3345,11 @@ int drv_venc_stop_recvframe(venc_chn VeChn)
         SEMA_POST(&pChnVars->sem_release);
         pChnHandle->bChnEnable = 0;
         SEMA_POST(&pVbCtx->vb_jobs.sem);
-        kthread_stop(pVbCtx->thread);
-        pVbCtx->thread = NULL;
+        if (pVbCtx->thread) {
+            kthread_stop(pVbCtx->thread);
+            pVbCtx->thread = NULL;
+        }
+
         pVbCtx->currBindMode = 0;
         SEMA_POST(&pChnVars->sem_send);
         DRV_VENC_INFO("venc_event_handler end\n");
