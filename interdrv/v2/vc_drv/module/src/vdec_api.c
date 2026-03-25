@@ -743,7 +743,7 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
             sec_axi_info.u.wave.useBitEnable   = TRUE;
         }
         VPU_DecGiveCommand(pst_handle->handle, SET_SEC_AXI, &sec_axi_info);
-        vdi_update_resolution(pst_handle->core_idx, pst_handle->channel_index, pst_handle->seq_info->picWidth, pst_handle->seq_info->picHeight);
+        vdi_update_resolution(pst_handle->core_idx, pst_handle->handle->instIndex, pst_handle->seq_info->picWidth, pst_handle->seq_info->picHeight);
         if(pst_handle->frameBufFlag == 1)
         {
             if(height_from_user != 0 && width_from_user != 0 && (height_from_user != pst_handle->seq_info->picHeight || width_from_user != pst_handle->seq_info->picWidth)){
@@ -781,7 +781,7 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
     } else if (ret & (1<<INT_WAVE5_DEC_PIC)) {
         ret = VPU_DecGetOutputInfo(pst_handle->handle, pst_handle->output_info);
         if (ret != RETCODE_SUCCESS) {
-            vdi_update_channel_frames(pst_handle->core_idx, pst_handle->channel_index, ENCODE_FAIL, 1);
+            vdi_update_channel_frames(pst_handle->core_idx, pst_handle->handle->instIndex, ENCODE_FAIL, 1);
             return ret;
         }
 
@@ -1409,7 +1409,7 @@ int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms)
             }
         }
     }
-    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->channel_index, IN_FRAME, 1);
+    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->handle->instIndex, IN_FRAME, 1);
     if (pst_handle->is_bind_mode)
         fill_vbbuffer(pst_handle);
 
@@ -1419,7 +1419,7 @@ int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms)
 int get_user_pic(void *pHandle, DispFrameCfg *pdfc)
 {
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
-    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->channel_index, OUT_FRAME, 1);
+    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->handle->instIndex, OUT_FRAME, 1);
     memcpy(pdfc, &pst_handle->usr_pic, sizeof(DispFrameCfg));
 
     return 0;
@@ -1501,7 +1501,7 @@ int get_codec_pic(void *pHandle, DispFrameCfg *pdfc)
     pdfc->seqenceNo = frame_info->seqenceno;
     pdfc->interlacedFrame = frame_info->interlaced_frame;
     pdfc->decHwTime = frame_info->decode_hwtime;
-    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->channel_index, OUT_FRAME, 1);
+    vdi_update_channel_frames(pst_handle->core_idx, pst_handle->handle->instIndex, OUT_FRAME, 1);
     return 0;
 }
 
