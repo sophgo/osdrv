@@ -638,15 +638,6 @@ static void h264e_set_initcfg_ubr(InitEncConfig *pInitEncCfg,
 
 static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
 {
-    int h264naluType[] = {
-        H264E_NALU_ISLICE,
-        H264E_NALU_PSLICE,
-        H264E_NALU_BSLICE,
-        H264E_NALU_IDRSLICE,
-        H264E_NALU_SPS,
-        H264E_NALU_PPS,
-        H264E_NALU_SEI,
-    };
     int naluType;
 #ifndef PLATFORM_SOC
     unsigned char tmp[8] = {0};
@@ -656,6 +647,32 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
         return -1;
     }
 
+    if (NalType < NAL_I || NalType >= NAL_MAX) {
+        DRV_VENC_ERR("NalType = %d\n", NalType);
+        return -1;
+    }
+
+    /* For frame data packs (I/P/B/IDR), use encoder-reported NalType
+     * directly. DMA bitstream buffers are reused and stale CPU cache
+     * can cause P-frame pu8Addr[4] to read as IDR (0x65).
+     */
+    if (NalType <= NAL_IDR) {
+        switch (NalType) {
+        case NAL_I:   ppack->DataType.enH264EType = H264E_NALU_ISLICE; break;
+        case NAL_P:   ppack->DataType.enH264EType = H264E_NALU_PSLICE; break;
+        case NAL_B:   ppack->DataType.enH264EType = H264E_NALU_BSLICE; break;
+        case NAL_IDR: ppack->DataType.enH264EType = H264E_NALU_IDRSLICE; break;
+        default:      ppack->DataType.enH264EType = H264E_NALU_ISLICE; break;
+        }
+        DRV_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
+        return 0;
+    }
+
+    /* For non-frame packs (SPS/PPS/SEI), parse the actual NALU header
+     * to precisely distinguish the type. These buffers are either CPU-
+     * allocated (SEI) or explicitly cache-invalidated (header cache),
+     * so the data is reliable.
+     */
     if (!ppack->pu8Addr) {
         DRV_VENC_ERR("ppack->pu8Addr is NULL\n");
         return -1;
@@ -664,19 +681,20 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
 #ifdef PLATFORM_SOC
     naluType = ppack->pu8Addr[4] & 0x1f;
 #else
-	VpuReadMem(0, ppack->u64PhyAddr, tmp, 8, VDI_128BIT_LITTLE_ENDIAN);
+    VpuReadMem(0, ppack->u64PhyAddr, tmp, 8, VDI_128BIT_LITTLE_ENDIAN);
     naluType = tmp[4] & 0x1f;
 #endif
 
-    if (NalType < NAL_I || NalType >= NAL_MAX) {
-        DRV_VENC_ERR("NalType = %d\n", NalType);
-        return -1;
+    switch (naluType) {
+    case 7:  ppack->DataType.enH264EType = H264E_NALU_SPS; break;
+    case 8:  ppack->DataType.enH264EType = H264E_NALU_PPS; break;
+    case 6:  ppack->DataType.enH264EType = H264E_NALU_SEI; break;
+    case 5:  ppack->DataType.enH264EType = H264E_NALU_IDRSLICE; break;
+    default:
+        DRV_VENC_WARN("unexpected H264 naluType=%d, NalType=%d\n", naluType, NalType);
+        ppack->DataType.enH264EType = H264E_NALU_SPS;
+        break;
     }
-
-    if (naluType == H264_NALU_TYPE_IDR)
-        ppack->DataType.enH264EType = H264E_NALU_IDRSLICE;
-    else
-        ppack->DataType.enH264EType = h264naluType[NalType];
 
     DRV_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
     return 0;
@@ -788,16 +806,6 @@ static void h265e_set_initcfg_ubr(InitEncConfig *pInitEncCfg,
 
 static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
 {
-    int h265naluType[] = {
-        H265E_NALU_ISLICE,
-        H265E_NALU_PSLICE,
-        H265E_NALU_BSLICE,
-        H265E_NALU_IDRSLICE,
-        H265E_NALU_SPS,
-        H265E_NALU_PPS,
-        H265E_NALU_SEI,
-        H265E_NALU_VPS,
-    };
     int naluType;
 #ifndef PLATFORM_SOC
     unsigned char tmp[8] = {0};
@@ -807,6 +815,32 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
         return -1;
     }
 
+    if (NalType < NAL_I || NalType >= NAL_MAX) {
+        DRV_VENC_ERR("NalType = %d\n", NalType);
+        return -1;
+    }
+
+    /* For frame data packs (I/P/B/IDR), use encoder-reported NalType
+     * directly. DMA bitstream buffers are reused and stale CPU cache
+     * can cause frame type misidentification.
+     */
+    if (NalType <= NAL_IDR) {
+        switch (NalType) {
+        case NAL_I:   ppack->DataType.enH265EType = H265E_NALU_ISLICE; break;
+        case NAL_P:   ppack->DataType.enH265EType = H265E_NALU_PSLICE; break;
+        case NAL_B:   ppack->DataType.enH265EType = H265E_NALU_BSLICE; break;
+        case NAL_IDR: ppack->DataType.enH265EType = H265E_NALU_IDRSLICE; break;
+        default:      ppack->DataType.enH265EType = H265E_NALU_ISLICE; break;
+        }
+        DRV_VENC_DBG("enH265EType = %d\n", ppack->DataType.enH265EType);
+        return 0;
+    }
+
+    /* For non-frame packs (VPS/SPS/PPS/SEI), parse the actual NALU header
+     * to precisely distinguish the type. These buffers are either CPU-
+     * allocated (SEI) or explicitly cache-invalidated (header cache),
+     * so the data is reliable.
+     */
     if (!ppack->pu8Addr) {
         DRV_VENC_ERR("ppack->pu8Addr is NULL\n");
         return -1;
@@ -819,16 +853,19 @@ static int h265e_map_nalu_type(venc_pack_s *ppack, int NalType)
     naluType = (tmp[4] & 0x7f) >> 1;
 #endif
 
-    if (NalType < NAL_I || NalType >= NAL_MAX) {
-        DRV_VENC_ERR("NalType = %d\n", NalType);
-        return -1;
+    switch (naluType) {
+    case 32: ppack->DataType.enH265EType = H265E_NALU_VPS; break;
+    case 33: ppack->DataType.enH265EType = H265E_NALU_SPS; break;
+    case 34: ppack->DataType.enH265EType = H265E_NALU_PPS; break;
+    case 39:
+    case 40: ppack->DataType.enH265EType = H265E_NALU_SEI; break;
+    case 19:
+    case 20: ppack->DataType.enH265EType = H265E_NALU_IDRSLICE; break;
+    default:
+        DRV_VENC_WARN("unexpected H265 naluType=%d, NalType=%d\n", naluType, NalType);
+        ppack->DataType.enH265EType = H265E_NALU_VPS;
+        break;
     }
-
-    if (naluType == H265_NALU_TYPE_W_RADL ||
-        naluType == H265_NALU_TYPE_N_LP)
-        ppack->DataType.enH265EType = H265E_NALU_IDRSLICE;
-    else
-        ppack->DataType.enH265EType = h265naluType[NalType];
 
     DRV_VENC_DBG("enH265EType = %d\n", ppack->DataType.enH265EType);
     return 0;

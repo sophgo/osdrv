@@ -950,7 +950,17 @@ static void venc_release_exten_buf(void *handle)
             }
         }
     }
-    mutex_unlock(&pst_handle->extra_buf_lock);
+}
+
+static int pic_type_to_nal_type(int picType)
+{
+    switch (picType) {
+    case PIC_TYPE_I:   return NAL_I;
+    case PIC_TYPE_P:   return NAL_P;
+    case PIC_TYPE_B:   return NAL_B;
+    case PIC_TYPE_IDR: return NAL_IDR;
+    default:           return NAL_I;
+    }
 }
 
 static int venc_process_frame_done(void* handle, int async_mode)
@@ -1106,7 +1116,12 @@ static int venc_process_frame_done(void* handle, int async_mode)
         }
 
         encode_pack.encSrcIdx = output_info.encSrcIdx;
-        encode_pack.NalType = output_info.picType;
+        if (output_info.reconFrameIndex == RECON_IDX_FLAG_HEADER_ONLY) {
+            encode_pack.NalType =
+                (pst_handle->open_param.bitstreamFormat == STD_HEVC) ? NAL_VPS : NAL_SPS;
+        } else {
+            encode_pack.NalType = pic_type_to_nal_type(output_info.picType);
+        }
         encode_pack.need_free = FALSE;
         encode_pack.u64PTS = output_info.pts;
         encode_pack.u64DTS =
