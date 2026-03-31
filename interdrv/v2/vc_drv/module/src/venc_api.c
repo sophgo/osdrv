@@ -29,6 +29,7 @@ static DEFINE_MUTEX(__venc_init_mutex);
 
 #define MAX_SRC_BUFFER_NUM 32
 #define MAX_RETRY_TIMES 5
+#define MAX_STOP_RETRY 50  // 50 * 100us = ~5ms timeout
 
 #define VENC_HEADER_BUF_SIZE (1024*1024)
 #define VENC_DEFAULT_BISTREAM_SIZE (4*1024*1024)
@@ -1166,14 +1167,21 @@ static int thread_wait_interrupt(void *param)
     int ret;
     int retry_times = 0;
     int int_reason = 0;
+    int stop_retry = 0;
 
     VLOG(INFO, "start\n");
 
     while (1) {
-        if (pst_handle->stop_thread) {
+        if (pst_handle->stop_thread || kthread_should_stop()) {
             VPU_EncGiveCommand(pst_handle->handle, ENC_GET_QUEUE_STATUS, &queue_status);
             if (!queue_status.instanceQueueCount && queue_status.reportQueueEmpty)
                 break;
+
+            if (++stop_retry > MAX_STOP_RETRY) {
+                VLOG(ERR, "force stop thread, queue:%d, report_empty:%d\n",
+                    queue_status.instanceQueueCount, queue_status.reportQueueEmpty);
+                break;
+            }
         }
 
         retry_times = 0;
@@ -1194,6 +1202,7 @@ static int thread_wait_interrupt(void *param)
 
             if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
                 venc_process_frame_done(pst_handle, VENC_ASYNC_TRUE);
+                stop_retry = 0;  // reset on progress: only force-stop when no interrupt arrives
             }
 
             if (int_reason & (1 << INT_WAVE5_BSBUF_FULL)) {

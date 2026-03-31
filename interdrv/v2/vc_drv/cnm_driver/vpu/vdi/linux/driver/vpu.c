@@ -1266,7 +1266,9 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
     VLOG(TRACE, "[VPUDRV] inst_index(%d), s_interrupt_flag(%d), reason(0x%08lx)\n", intr_inst_index, s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index], dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index]);
     info->intr_reason = dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index];
-    s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
+    if (kfifo_is_empty(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index])) {
+        s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
+    }
     dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
 
     if (info->intr_reason & (1<<INT_WAVE5_DEC_PIC)) {
