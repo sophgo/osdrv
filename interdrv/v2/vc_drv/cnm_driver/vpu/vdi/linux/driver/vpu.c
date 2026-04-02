@@ -90,6 +90,7 @@
 
 #define IS_BIT_SET(x, i) ((i) >= 0 && (i) < MAX_NUM_INSTANCE ? ((x) >> (i)) & 1ULL : 0)
 #define SET_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) |= (1ULL << (i)); } while (0)
+#define CLEAR_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) &= ~(1ULL << (i)); } while (0)
 
 typedef struct vpu_drv_context_t {
     struct fasync_struct *async_queue;
@@ -237,7 +238,7 @@ typedef struct vpu_statistic_info {
     uint64_t vpu_stat_cycles[MAX_NUM_VPU_CORE];
     int vpu_working_array[MAX_NUM_VPU_CORE][MAX_VPU_STAT_WIN_SIZE];
     int vpu_stat_enable[MAX_NUM_VPU_CORE];
-    uint32_t vdec_channel_flag[MAX_NUM_VPU_CORE];
+    uint32_t vpu_channel_flag[MAX_NUM_VPU_CORE];
     channel_info vpu_channel_info[MAX_NUM_VPU_CORE][MAX_NUM_INSTANCE];
 }vpu_statistic_info_t;
 
@@ -363,7 +364,7 @@ void vpu_update_resolution(int coreIdx, int instance, int width, int height)
 {
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_height = height;
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_width = width;
-    SET_BIT(s_vpu_usage_info.vdec_channel_flag[coreIdx], instance);
+    SET_BIT(s_vpu_usage_info.vpu_channel_flag[coreIdx], instance);
 
 }
 
@@ -402,7 +403,7 @@ void vpu_clear_stat_info(int coreIdx)
     s_vpu_usage_info.vpu_total_time_in_ms[coreIdx] = 0;
     s_vpu_usage_info.vpu_status_index[coreIdx] = 0;
     s_vpu_usage_info.vpu_instant_usage[coreIdx] = 0;
-    s_vpu_usage_info.vdec_channel_flag[coreIdx] = 0;
+    s_vpu_usage_info.vpu_channel_flag[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_working_array[coreIdx], 0, MAX_VPU_STAT_WIN_SIZE*sizeof(int));
     s_vpu_usage_info.vpu_stat_enable[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_channel_info[coreIdx], 0, MAX_NUM_INSTANCE * sizeof(channel_info));
@@ -990,6 +991,8 @@ long vpu_close_instance(vpudrv_inst_info_t *inst_info)
         if (vil->inst_idx == inst_info->inst_idx && vil->core_idx == inst_info->core_idx) {
             s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]--; /* flag just for that vpu is in opened or closed */
             inst_info->inst_open_count = s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]; /* counting the current open instance number */
+            memset(&s_vpu_usage_info.vpu_channel_info[vil->core_idx][vil->inst_idx], 0, sizeof(channel_info));
+            CLEAR_BIT(s_vpu_usage_info.vpu_channel_flag[vil->core_idx], vil->inst_idx);
             list_del(&vil->list);
             kfree(vil);
             // dev->crst_cxt[inst_info->core_idx].instcall[inst_info->inst_idx] = 0;
@@ -1492,11 +1495,14 @@ static int vpuinfo_show(struct seq_file *m, void *v)
         s_vpu_usage_info.vpu_instant_usage[i], s_vpu_usage_info.vpu_total_time_in_ms[i]?(s_vpu_usage_info.vpu_working_time_in_ms[i]*100/s_vpu_usage_info.vpu_total_time_in_ms[i]):0,
         s_vpu_usage_info.vpu_realtime_fps[i], atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
 
-    for (j = 0; j < s_vpu_usage_info.vpu_open_ref_count[i]; j++) {
-        channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
-        success_not_get = info.in_frame - info.out_frame - info.frames_fail;
-        seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
-                    j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
+    // encoder
+    for (j = 0; j < MAX_NUM_INSTANCE; j++) {
+        if (IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], j)) {
+            channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
+            success_not_get = info.frames_not_get;
+            seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
+                        j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
+        }
     }
 
     // decoder
@@ -1508,7 +1514,7 @@ static int vpuinfo_show(struct seq_file *m, void *v)
 
 
         for(vdec_chn_idx = 0, vdec_instance_num = 0; vdec_chn_idx < MAX_NUM_INSTANCE; vdec_chn_idx++) {
-            if(IS_BIT_SET(s_vpu_usage_info.vdec_channel_flag[i], vdec_chn_idx)) {
+            if(IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], vdec_chn_idx)) {
                 channel_info info = s_vpu_usage_info.vpu_channel_info[i][vdec_chn_idx];
                 success_not_get = info.in_frame - info.out_frame - info.frames_fail;
                 seq_printf(m, "\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n", \
