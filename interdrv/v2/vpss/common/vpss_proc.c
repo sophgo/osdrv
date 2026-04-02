@@ -464,8 +464,8 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	ktime_get_ts64(&ts);
 
 	seq_puts(m, "\n-------------------------------VPSS HW STATUS-----------------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%10s%10s\n",
-		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime");
+	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s\n",
+		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime", "TimeoutCnt");
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		int state = atomic_read(&dev->vpss_cores[i].state);
 
@@ -479,14 +479,15 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 		else if (state == VIP_ONLINE)
 			strncpy(c, "Online", sizeof(c));
 
-		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d\n",
+		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d%10d\n",
 			"#",
 			i,
 			vpss_name[i],
 			c,
 			dev->vpss_cores[i].start_cnt,
 			dev->vpss_cores[i].int_cnt,
-			dev->vpss_cores[i].hw_duration);
+			dev->vpss_cores[i].hw_duration,
+			dev->vpss_cores[i].timeout_cnt);
 	}
 
 	seq_puts(m, "\n-------------------------------VPSS INPUT INFO-------------------------\n");

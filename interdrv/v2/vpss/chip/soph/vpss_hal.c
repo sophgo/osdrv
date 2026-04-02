@@ -692,19 +692,23 @@ int vpss_hal_remove_job(struct vpss_job *job)
 				if (!(job->vpss_dev_mask & BIT(i)))
 					continue;
 				vpss_stauts(i);
+				vpss_dev->vpss_cores[i].timeout_cnt++;
 				// BIT(10) always reset; BIT(11) never reset
 				// VPSS2 and VPSS3 need binding reset, manual set BIT(13) can reset
 				if(((BIT(10) & work_mask) ||
+					(IS_POWER_OF_TWO((work_mask & 0xf0))) ||
 					(!reset_time[i] && !(BIT(11) & work_mask))) &&
 					(i != VPSS_V2 || (BIT(13) & work_mask))) {
 					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
-					TRACE_VPSS(DBG_INFO, "core(%d) ready.\n", i);
+					TRACE_VPSS(DBG_DEBUG, "core(%d) ready.\n", i);
 					reset_time[i] = 1000;
 				} else {
 					work_mask &= (~BIT(i));
 					avail_mask &= (~BIT(i));
 					vpss_dev->vpss_cores[i].job = NULL;
-					TRACE_VPSS(DBG_WARN, "core(%d) mask.\n", i);
+					atomic_set(&vpss_dev->vpss_cores[i].state, VIP_IDLE);
+					reset_time[i] = 0;
+					TRACE_VPSS(DBG_DEBUG, "core(%d) mask.\n", i);
 				}
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
 					__clk_is_enabled(vpss_dev->vpss_cores[i].clk_vpss))
