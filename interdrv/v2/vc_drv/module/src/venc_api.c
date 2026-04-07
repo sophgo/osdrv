@@ -29,7 +29,9 @@ static DEFINE_MUTEX(__venc_init_mutex);
 
 #define MAX_SRC_BUFFER_NUM 32
 #define MAX_RETRY_TIMES 5
-#define MAX_STOP_RETRY 50  // 50 * 100us = ~5ms timeout
+#define MAX_STOP_RETRY 50  // 50 * 100ms = ~5s timeout
+#define MAX_STOP_TIMEOUT_MS 5000  // absolute timeout for thread exit
+#define MAX_HEADER_RETRY 100  // max retries for ENC_PUT_VIDEO_HEADER queueing
 
 #define VENC_HEADER_BUF_SIZE (1024*1024)
 #define VENC_DEFAULT_BISTREAM_SIZE (4*1024*1024)
@@ -632,7 +634,7 @@ static int venc_check_idr_period(void *handle)
     return isIframe;
 }
 
-static void venc_picparam_change_ctrl(void *handle, EncParam *encParam, BOOL* p_header_update)
+static int venc_picparam_change_ctrl(void *handle, EncParam *encParam, BOOL* p_header_update)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -677,6 +679,10 @@ static void venc_picparam_change_ctrl(void *handle, EncParam *encParam, BOOL* p_
     if (rateChangeCmd) {
         changeParam.enable_option = enable_option;
         ret = VPU_EncGiveCommand(pst_handle->handle, ENC_SET_PARA_CHANGE, &changeParam);
+        if (ret == RETCODE_QUEUEING_FAILURE) {
+            VLOG(WARN, "ENC_SET_PARA_CHANGE queue full, skip param change\n");
+            return ret;
+        }
     }
 
     if (pst_ext_param->enable_idr == FALSE && pst_handle->frame_idx != 0) {
@@ -703,10 +709,15 @@ static void venc_picparam_change_ctrl(void *handle, EncParam *encParam, BOOL* p_
             changeParam.maxQpI = CLIP3(0, 51, maxQp + deltaQp);
             changeParam.minQpI = CLIP3(0, 51, minQp);
             changeParam.hvsMaxDeltaQp = deltaQp;
-            VPU_EncGiveCommand(pst_handle->handle, ENC_SET_PARA_CHANGE, &changeParam);
+            ret = VPU_EncGiveCommand(pst_handle->handle, ENC_SET_PARA_CHANGE, &changeParam);
+            if (ret == RETCODE_QUEUEING_FAILURE) {
+                VLOG(WARN, "ENC_SET_PARA_CHANGE(AVBR) queue full, skip\n");
+                return ret;
+            }
         }
     }
 #endif
+    return 0;
 }
 
 static int venc_insert_userdata_segment(Queue *psp, Uint8 *pUserData,
@@ -1059,6 +1070,13 @@ static int venc_process_frame_done(void* handle, int async_mode)
             pst_handle->chn_venc_info.dropCnt++;
             Queue_Enqueue(pst_handle->free_stream_buffer, &output_info.bitstreamBuffer);
             VLOG(ERR, "bitstream queue is full!\n");
+            if (output_info.encSrcIdx >= 0 && output_info.encSrcIdx < MAX_SRC_BUFFER_NUM) {
+                release_frame_idx(pst_handle, output_info.encSrcIdx);
+            }
+            if (async_mode) {
+                complete(&pst_handle->semGetStreamCmd);
+            }
+            wake_up(&tVencWaitQueue[pst_handle->channel_index]);
             return -1;
         }
 
@@ -1167,18 +1185,21 @@ static int thread_wait_interrupt(void *param)
     int ret;
     int retry_times = 0;
     int int_reason = 0;
-    int stop_retry = 0;
+    unsigned long stop_deadline = 0;
 
     VLOG(INFO, "start\n");
 
     while (1) {
         if (pst_handle->stop_thread || kthread_should_stop()) {
+            if (!stop_deadline)
+                stop_deadline = jiffies + msecs_to_jiffies(MAX_STOP_TIMEOUT_MS);
+
             VPU_EncGiveCommand(pst_handle->handle, ENC_GET_QUEUE_STATUS, &queue_status);
             if (!queue_status.instanceQueueCount && queue_status.reportQueueEmpty)
                 break;
 
-            if (++stop_retry > MAX_STOP_RETRY) {
-                VLOG(ERR, "force stop thread, queue:%d, report_empty:%d\n",
+            if (time_after(jiffies, stop_deadline)) {
+                VLOG(ERR, "force stop thread timeout, queue:%d, report_empty:%d\n",
                     queue_status.instanceQueueCount, queue_status.reportQueueEmpty);
                 break;
             }
@@ -1202,7 +1223,6 @@ static int thread_wait_interrupt(void *param)
 
             if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
                 venc_process_frame_done(pst_handle, VENC_ASYNC_TRUE);
-                stop_retry = 0;  // reset on progress: only force-stop when no interrupt arrives
             }
 
             if (int_reason & (1 << INT_WAVE5_BSBUF_FULL)) {
@@ -1485,9 +1505,16 @@ int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wai
 
     do {
         ret = VPU_EncGiveCommand(pst_handle->handle, ENC_PUT_VIDEO_HEADER, pst_enc_param);
-        osal_msleep(1);
+        if (ret == RETCODE_QUEUEING_FAILURE) {
+            if (++retry_times > MAX_HEADER_RETRY) {
+                VLOG(ERR, "ENC_PUT_VIDEO_HEADER queue full after %d retries\n", retry_times);
+                return RETCODE_QUEUEING_FAILURE;
+            }
+            osal_msleep(10);
+        }
     } while (ret == RETCODE_QUEUEING_FAILURE);
 
+    retry_times = 0;
     if (ret != RETCODE_SUCCESS) {
         VLOG(ERR, "Failed ENC_PUT_VIDEO_HEADER(ret:%d)\n", ret);
         return ret;
@@ -1859,7 +1886,12 @@ int internal_venc_enc_one_pic(void *handle, EncOnePicCfg *pPicCfg, int s32MilliS
     enc_param.picMotionLevel = pPicCfg->picMotionLevel;
 
     // check param change
-    venc_picparam_change_ctrl(pst_handle, &enc_param, &is_header_update);
+    ret = venc_picparam_change_ctrl(pst_handle, &enc_param, &is_header_update);
+    if (ret == RETCODE_QUEUEING_FAILURE) {
+        VLOG(WARN, "param change queue full, chn:%d\n", pst_handle->channel_index);
+        return RETCODE_QUEUEING_FAILURE;
+    }
+
     if (pst_handle->frame_idx == 0) {
         is_header_update = TRUE;
     }
@@ -1887,6 +1919,9 @@ int internal_venc_enc_one_pic(void *handle, EncOnePicCfg *pPicCfg, int s32MilliS
             VLOG(ERR, "Failed ENC_PUT_VIDEO_HEADER(ret:%d)\n", ret);
             return ret;
         }
+        // Mark header as encoded to prevent redundant re-submission
+        // when VPU_EncStartOneFrame fails and frame_idx stays at 0
+        pst_handle->header_encoded = 1;
     }
 
     ret = venc_build_enc_param(pst_handle, pPicCfg, &src_buffer, &enc_param);
