@@ -593,7 +593,6 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
     vdi_info_t *vdi;
     vpudrv_buffer_t vdb;
     int i;
-    Uint8*  zero;
 #ifdef PLATFORM_SOC
     unsigned long offset;
 #endif
@@ -624,14 +623,11 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
         return -1;
     }
 
-    zero = (Uint8*)osal_malloc(len);
-    osal_memset((void*)zero, 0x00, len);
-
 #ifdef PLATFORM_SOC
     offset = addr - (unsigned long)vdb.phys_addr;
-    osal_memcpy((void *)((unsigned long)vdb.virt_addr+offset), zero, len);
+    osal_memset((void *)((unsigned long)vdb.virt_addr+offset), 0, len);
 #else
-    pcie_memcpy_s2d(addr, zero, len);
+    osal_memset((void *)addr, 0, len);
 #endif
 
     if (vdb.is_cached) {
@@ -639,7 +635,6 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
     }
-    osal_free(zero);
 
     return len;
 }
@@ -649,7 +644,6 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
     vdi_info_t *vdi;
     vpudrv_buffer_t vdb;
     int i;
-    Uint8*  zero;
 #ifdef PLATFORM_SOC
     unsigned long offset;
 #endif
@@ -680,14 +674,11 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
         return -1;
     }
 
-    zero = (Uint8*)osal_malloc(len);
-    osal_memset((void*)zero, data, len);
-
 #ifdef PLATFORM_SOC
     offset = addr - (unsigned long)vdb.phys_addr;
-    osal_memcpy((void *)((unsigned long)vdb.virt_addr+offset), zero, len);
+    osal_memset((void *)((unsigned long)vdb.virt_addr+offset), 0, len);
 #else
-	pcie_memcpy_s2d(addr, zero, len);
+    osal_memset((void *)addr, 0, len);
 #endif
 
     if (vdb.is_cached) {
@@ -695,7 +686,6 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
     }
-    osal_free(zero);
 
     return len;
 }
