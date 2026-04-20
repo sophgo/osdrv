@@ -2,6 +2,7 @@
 #define _CIF_H_
 
 #include <linux/miscdevice.h>
+#include <linux/of_gpio.h>
 #include "drv/cif_drv.h"
 #include "linux/comm_cif.h"
 
@@ -33,7 +34,7 @@ struct link {
 	unsigned int			crop_top;
 	unsigned int			distance_fp;
 	int				snsr_rst_pin;
-	enum of_gpio_flags		snsr_rst_pol;
+	unsigned int			snsr_rst_pol;	/* of_gpio_flags */
 	union {
 		struct csi_status	sts_csi;
 		struct lvds_status	sts_lvds;

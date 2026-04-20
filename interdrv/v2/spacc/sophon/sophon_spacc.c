@@ -146,12 +146,8 @@ static int cvi_spacc_base64(u32 customer_code, u32 action, struct cvi_spacc_priv
 	phys_addr_t value_phys;
 
 	value_phys = virt_to_phys(spacc_private->buffer);
-	//for gcc 9.3.0
-	arch_sync_dma_for_device(value_phys, spacc_private->data_size,
-				 DMA_TO_DEVICE);
-#if 0
-	__dma_map_area(phys_to_virt(value_phys), g_spacc_dev.data_size, DMA_TO_DEVICE);
-#endif
+
+	arch_sync_dma_for_device(value_phys, spacc_private->data_size, DMA_TO_DEVICE);
 
 	arm_smccc_smc(OPTEE_SMC_CALL_CV_BASE64, (unsigned long)value_phys,
 		      spacc_private->data_size, (unsigned long)value_phys,
@@ -165,12 +161,10 @@ static int cvi_spacc_base64_inner(struct cvi_spacc_base64_inner *b64)
 {
 	struct arm_smccc_res res = { 0 };
 	arch_sync_dma_for_device(b64->src, b64->len, DMA_TO_DEVICE);
-	// __dma_map_area(phys_to_virt(b64->src), b64->len, DMA_TO_DEVICE);
-
 	arm_smccc_smc(OPTEE_SMC_CALL_CV_BASE64, b64->src, b64->len, b64->dst,
 		      b64->customer_code, b64->action, 0, 0, &res);
+
 	arch_sync_dma_for_device(b64->dst, res.a0, DMA_FROM_DEVICE);
-	// __dma_map_area(phys_to_virt(b64->dst), res.a0, DMA_FROM_DEVICE);
 	pr_debug("res a0 : %lu\n", res.a0);
 
 	return res.a0;
@@ -206,8 +200,8 @@ static int spacc_aes(phys_addr_t src_phys, uint32_t len, phys_addr_t key_phys,
 {
 	struct arm_smccc_res res = { 0 };
 	uint64_t arg = 0;
-	arch_sync_dma_for_device(src_phys, len, DMA_TO_DEVICE);
 
+	arch_sync_dma_for_device(src_phys, len, DMA_TO_DEVICE);
 	arg = (u8)config->mode | ((u8)config->key_mode << 2) |
 	      ((u8)config->action << 4) | ((u8)config->otp << 5);
 	arm_smccc_smc(OPTEE_SMC_CALL_CV_AES, (unsigned long)src_phys,
@@ -224,6 +218,7 @@ static int spacc_sm4(phys_addr_t src_phys, uint32_t len, phys_addr_t key_phys,
 {
 	struct arm_smccc_res res = { 0 };
 	uint64_t arg = 0;
+
 	arch_sync_dma_for_device(src_phys, len, DMA_TO_DEVICE);
 	arg = (u8)config->mode | ((u8)config->key_mode << 2) |
 	      ((u8)config->action << 4) | ((u8)config->otp << 5);
@@ -241,6 +236,7 @@ static int spacc_des(phys_addr_t src_phys, uint32_t len, phys_addr_t key_phys,
 		     spacc_des_config_s *config, int tdes)
 {
 	struct arm_smccc_res res = { 0 };
+
 	arch_sync_dma_for_device(src_phys, len, DMA_TO_DEVICE);
 	arm_smccc_smc(tdes ? OPTEE_SMC_CALL_CV_TDES : OPTEE_SMC_CALL_CV_DES,
 		      (unsigned long)src_phys, len, (unsigned long)src_phys,
@@ -259,14 +255,14 @@ static int spacc_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 	mutex_init(&spacc_private->lock);
-    spacc_private->used_size = 0;
-    spacc_private->read_size = 0;
-    spacc_private->buffer = NULL;
-    spacc_private->buffer_size = 0;
-    spacc_private->dma_handle = 0;
-    spacc_private->data_size = 0;
-    
-    file->private_data = spacc_private;
+	spacc_private->used_size = 0;
+	spacc_private->read_size = 0;
+	spacc_private->buffer = NULL;
+	spacc_private->buffer_size = 0;
+	spacc_private->dma_handle = 0;
+	spacc_private->data_size = 0;
+
+	file->private_data = spacc_private;
 	return 0;
 }
 
@@ -339,14 +335,14 @@ static int spacc_release(struct inode *inode, struct file *file)
 {
 	struct cvi_spacc_private *spacc_private;
     
-    if (!file || !file->private_data)
-        return -EINVAL;
+	if (!file || !file->private_data)
+		return -EINVAL;
         
-    spacc_private = file->private_data;
-    mutex_destroy(&spacc_private->lock);
-    cvi_spacc_free_pool(spacc_private);
-    kfree(spacc_private);
-    file->private_data = NULL;
+	spacc_private = file->private_data;
+	mutex_destroy(&spacc_private->lock);
+	cvi_spacc_free_pool(spacc_private);
+	kfree(spacc_private);
+	file->private_data = NULL;
 
 	return 0;
 }
@@ -423,9 +419,9 @@ static int handle_src_phys(struct cvi_spacc_private *spacc_private,
 			   uint32_t *len)
 {
 	if (!spacc_private->buffer || spacc_private->used_size == 0) {
-        printk(KERN_ERR "Memory pool is empty or uninitialized\n");
-        return -EINVAL;
-    }
+		printk(KERN_ERR "Memory pool is empty or uninitialized\n");
+		return -EINVAL;
+	}
 	*src_phys = virt_to_phys(spacc_private->buffer);
 	*len = spacc_private->used_size;
 	return 0;
@@ -434,8 +430,8 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct cvi_spacc_private *spacc_private = filp->private_data;
 	struct cvi_spacc *spacc = container_of(filp->f_inode->i_cdev, struct cvi_spacc, cdev);
-    struct device *dev = spacc->dev;
-    int ret = 0;
+	struct device *dev = spacc->dev;
+	int ret = 0;
 	void *key_kernel_addr = NULL;
 	void *iv_kernel_addr = NULL;
 	if(!spacc_private) {
@@ -539,49 +535,42 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		phys_addr_t src_phys;
 		uint32_t len;
 		uint64_t key_len = 0;
-
 		ret = copy_from_user((unsigned char *)&config,
 				     (unsigned char *)arg, sizeof(config));
 		if (ret != 0) {
-            dev_err(dev, "copy_from_user config failed, ret: %d\n", ret);
-            break;
-        }
-
-        ret = handle_src_phys(spacc_private, &config, &src_phys, &len);
-        if (ret != 0) {
-            dev_err(dev, "handle_src_phys failed, ret: %d\n", ret);
-            break;
-        }
-
-        ret = handle_key_iv(&config, &key_kernel_addr, &iv_kernel_addr,
-                    &key_len);
-        if (ret != 0) {
-            dev_err(dev, "handle_key_iv failed, ret: %d\n", ret);
-            break;
-        }
-
-        if(key_kernel_addr)
+			dev_err(dev, "copy_from_user config failed, ret: %d\n", ret);
+			break;
+		}
+		ret = handle_src_phys(spacc_private, &config, &src_phys, &len);
+		if (ret != 0) {
+			dev_err(dev, "handle_src_phys failed, ret: %d\n", ret);
+			break;
+		}
+		ret = handle_key_iv(&config, &key_kernel_addr, &iv_kernel_addr, &key_len);
+		if (ret != 0) {
+			dev_err(dev, "handle_key_iv failed, ret: %d\n", ret);
+			break;
+		}
+		if (key_kernel_addr)
 			arch_sync_dma_for_device(virt_to_phys(key_kernel_addr), key_len, DMA_TO_DEVICE);
-		if(iv_kernel_addr)
+		if (iv_kernel_addr)
 			arch_sync_dma_for_device(virt_to_phys(iv_kernel_addr), 16, DMA_TO_DEVICE);
+		ret = spacc_aes(src_phys, len,
+				key_kernel_addr ? virt_to_phys(key_kernel_addr) : 0,
+				key_len,
+				iv_kernel_addr ? virt_to_phys(iv_kernel_addr) : 0,
+				&config);
+		if (ret < 0) {
+			dev_err(dev, "spacc_aes failed, ret: %d\n", ret);
+			break;
+		}
+		if (ret > 0) {
+			arch_sync_dma_for_device(src_phys, ret, DMA_FROM_DEVICE);
+			spacc_private->used_size = ret;
+			spacc_private->read_size = 0;
+		}
 
-        ret = spacc_aes(src_phys, len, 
-                       key_kernel_addr ? virt_to_phys(key_kernel_addr) : 0,
-                       key_len, 
-                       iv_kernel_addr ? virt_to_phys(iv_kernel_addr) : 0, 
-                       &config);
-        if (ret < 0) {
-            dev_err(dev, "spacc_aes failed, ret: %d\n", ret);
-            break;
-        }
-
-        if (ret > 0) {
-            arch_sync_dma_for_device(src_phys, ret, DMA_FROM_DEVICE);
-            spacc_private->used_size = ret;
-            spacc_private->read_size = 0;
-        }
-
-        break;
+		break;
 	}
 	case IOCTL_SPACC_SM4_ACTION: {
 		spacc_sm4_config_s config = { 0 };
@@ -635,7 +624,7 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		spacc_des_config_s config = { 0 };
 		phys_addr_t src_phys;
 		int key_len = 16;
-		
+
 		if (spacc_private->used_size == 0) {
 			dev_err(dev, "spacc_dev->used_size : %d\n", spacc_private->used_size);
 			ret = -EINVAL;
@@ -699,7 +688,7 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		spacc_tdes_config_s config = { 0 };
 		phys_addr_t src_phys;
 		int key_len = 24;
-		
+
 		if (spacc_private->used_size == 0) {
 			dev_err(dev, "spacc_dev->used_size : %d\n", spacc_private->used_size);
 			ret = -EINVAL;
@@ -714,14 +703,14 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 
 		src_phys = virt_to_phys(spacc_private->buffer);
-		
+
 		key_kernel_addr = kmalloc(key_len, GFP_KERNEL);
 		if (!key_kernel_addr) {
 			dev_err(dev, "kmalloc for key failed\n");
 			ret = -ENOMEM;
 			break;
 		}
-		
+
 		if (copy_from_user(key_kernel_addr, config.key, key_len) != 0) {
 			dev_err(dev, "copy_from_user key failed\n");
 			ret = -EFAULT;
@@ -735,7 +724,7 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				ret = -ENOMEM;
 				break;
 			}
-			
+
 			if (copy_from_user(iv_kernel_addr, config.iv, 16) != 0) {
 				dev_err(dev, "copy_from_user iv failed\n");
 				ret = -EFAULT;
@@ -798,16 +787,16 @@ static long spacc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	}
 	
-    if (key_kernel_addr) {
-        kfree(key_kernel_addr);
-        key_kernel_addr = NULL;
-    }
-    if (iv_kernel_addr) {
-        kfree(iv_kernel_addr);
-        iv_kernel_addr = NULL;
-    }
-    mutex_unlock(&spacc_private->lock);
-    return ret;
+	if (key_kernel_addr) {
+		kfree(key_kernel_addr);
+		key_kernel_addr = NULL;
+	}
+	if (iv_kernel_addr) {
+		kfree(iv_kernel_addr);
+		iv_kernel_addr = NULL;
+	}
+	mutex_unlock(&spacc_private->lock);
+	return ret;
 }
 
 #ifdef CONFIG_COMPAT
@@ -861,7 +850,11 @@ static int cvitek_spacc_drv_probe(struct platform_device *pdev)
 		goto failed_cdev;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	spacc->spacc_class = class_create(THIS_MODULE, DEVICE_NAME);
+#else
+	spacc->spacc_class = class_create(DEVICE_NAME);
+#endif
 	if (IS_ERR(spacc->spacc_class)) {
 		dev_err(dev, "Failed to create class\n");
 		ret = PTR_ERR(spacc->spacc_class);
@@ -889,20 +882,33 @@ failed_cdev:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 static int cvitek_spacc_drv_remove(struct platform_device *pdev)
+#else
+static void cvitek_spacc_drv_remove(struct platform_device *pdev)
+#endif
 {
 	struct cvi_spacc *spacc = platform_get_drvdata(pdev);
 	
 	if (!spacc)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		return -EINVAL;
 	
+#else
+		return;
+#endif
+
 	device_destroy(spacc->spacc_class, spacc->tdev);
 	class_destroy(spacc->spacc_class);
-    cdev_del(&spacc->cdev);
-    unregister_chrdev_region(spacc->tdev, 1);
-    platform_set_drvdata(pdev, NULL);
-
+	cdev_del(&spacc->cdev);
+	unregister_chrdev_region(spacc->tdev, 1);
+	platform_set_drvdata(pdev, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	return 0;
+#else
+	return;
+#endif
+
 }
 
 #ifdef CONFIG_OF

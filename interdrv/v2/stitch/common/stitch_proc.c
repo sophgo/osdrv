@@ -1,6 +1,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
+#include <linux/utsname.h>
 
 #include "common.h"
 #include <comm_stitch.h>
@@ -304,7 +305,7 @@ static void _update_status_to_string(enum stitch_update_status updatstate, char 
 	}
 }
 
-int stitch_ctx_proc_show(struct seq_file *m, void *v)
+static int stitch_ctx_proc_show(struct seq_file *m, void *v)
 {
 	int i, j;
 	char str1[32];
@@ -320,7 +321,11 @@ int stitch_ctx_proc_show(struct seq_file *m, void *v)
 	unsigned char is_started;
 
 	// Module Param
-	seq_printf(m, "\nModule: [STITCH], Build Time[%s]\n", UTS_VERSION);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    seq_printf(m, "\nModule: [STITCH], Build Time[%s]\n", UTS_VERSION);
+#else
+    seq_printf(m, "\nModule: [STITCH], Build Time[%s]\n", utsname()->version);
+#endif
 	seq_printf(m, "IP_NUM: %d\tGRP_NUM: %d\tGRP_ID: ", STITCH_IP_NUM, stitch_grp_num);
 
 	for (j = 0; j < STITCH_MAX_GRP_NUM; j++) {
@@ -503,7 +508,11 @@ static ssize_t stitch_proc_write(struct file *file, const char __user *user_buf,
 
 static int stitch_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, stitch_proc_show, PDE_DATA(inode));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    return single_open(file, stitch_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, stitch_proc_show, pde_data(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

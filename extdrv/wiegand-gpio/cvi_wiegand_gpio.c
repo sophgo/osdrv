@@ -542,7 +542,12 @@ static int cvi_wiegand_register_cdev(struct cvi_wiegand_device *ndev)
 {
 	int ret;
 
+/* class_create API changed in Linux 6.12: removed THIS_MODULE parameter */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	wiegand_class = class_create(THIS_MODULE, CVI_WIEGAND_CLASS_NAME);
+#else
+	wiegand_class = class_create(CVI_WIEGAND_CLASS_NAME);
+#endif
 	if (IS_ERR(wiegand_class)) {
 		pr_err("create class failed\n");
 		return PTR_ERR(wiegand_class);

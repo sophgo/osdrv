@@ -6,7 +6,7 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 
-
+#include "jpulog.h"
 typedef struct jpuvdrv_core_list_t {
     int id;
     bool is_used;
@@ -92,7 +92,7 @@ int jpu_core_init_resources(unsigned int core_num) {
     for (i = 0; i < s_max_num_core; i++) {
         res = kzalloc(sizeof(*res), GFP_KERNEL);
         if (!res) {
-            printk(KERN_ERR "Failed to allocate memory for resource\n");
+            JLOG(ERR, "Failed to allocate memory for resource\n");
             return -ENOMEM;
         }
 

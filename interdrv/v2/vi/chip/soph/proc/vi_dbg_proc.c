@@ -565,7 +565,11 @@ static ssize_t vi_dbg_proc_write(struct file *file, const char __user *user_buf,
 
 static int vi_dbg_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, vi_dbg_proc_show, (void *)pde_data(inode));
+#else
 	return single_open(file, vi_dbg_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)

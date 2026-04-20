@@ -31,7 +31,7 @@ u8 fc_vsd_vendor_payload(hdmi_tx_dev_t *dev, const u8 * data, unsigned short len
 	return 0;
 }
 
-void fc_spd_vendor_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short length)
+static void fc_spd_vendor_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short length)
 {
 	unsigned short i = 0;
 	for (i = 0; i < length; i++) {
@@ -39,7 +39,7 @@ void fc_spd_vendor_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short leng
 	}
 }
 
-void fc_spd_product_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short length)
+static void fc_spd_product_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short length)
 {
 	unsigned short i = 0;
 	for (i = 0; i < length; i++) {
@@ -47,7 +47,7 @@ void fc_spd_product_name(hdmi_tx_dev_t *dev, const u8 * data, unsigned short len
 	}
 }
 
-void fc_spd_source_device_info(hdmi_tx_dev_t *dev, u8 code)
+static void fc_spd_source_device_info(hdmi_tx_dev_t *dev, u8 code)
 {
 	dev_write(FC_SPDDEVICEINF, code);
 }
@@ -100,38 +100,38 @@ void fc_video_hdcp_keepout(hdmi_tx_dev_t *dev, u8 bit)
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HDCP_KEEPOUT_MASK, 0);
 }
 
-void fc_video_vsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_vsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_VSYNC_IN_POLARITY_MASK, bit);
 }
 
-void fc_video_hsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_hsync_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_HSYNC_IN_POLARITY_MASK, bit);
 }
 
-void fc_video_data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_DE_IN_POLARITY_MASK, bit);
 }
 
-void fc_video_dvi_or_hdmi(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_dvi_or_hdmi(hdmi_tx_dev_t *dev, u8 bit)
 {
 	/* 1: HDMI; 0: DVI */
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_DVI_MODEZ_MASK, bit);
 }
 
-void fc_video_vblank_osc(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_vblank_osc(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_R_V_BLANK_IN_OSC_MASK, bit);
 }
 
-void fc_video_interlaced(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_video_interlaced(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_INVIDCONF, FC_INVIDCONF_IN_I_P_MASK, bit);
 }
 
-void fc_video_hactive(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_hactive(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 12-bit width */
 
@@ -140,7 +140,7 @@ void fc_video_hactive(hdmi_tx_dev_t *dev, u16 value)
 					FC_INHACTIV1_H_IN_ACTIV_12_MASK, (u8)(value >> 8));
 }
 
-void fc_video_hblank(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_hblank(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 10-bit width */
 	dev_write((FC_INHBLANK0), (u8) (value));
@@ -148,7 +148,7 @@ void fc_video_hblank(hdmi_tx_dev_t *dev, u16 value)
 					FC_INHBLANK1_H_IN_BLANK_12_MASK, (u8)(value >> 8));
 }
 
-void fc_video_vactive(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_vactive(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 11-bit width */
 	dev_write((FC_INVACTIV0), (u8) (value));
@@ -156,13 +156,13 @@ void fc_video_vactive(hdmi_tx_dev_t *dev, u16 value)
 					FC_INVACTIV1_V_IN_ACTIV_12_11_MASK, (u8)(value >> 8));
 }
 
-void fc_video_vblank(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_vblank(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 8-bit width */
 	dev_write((FC_INVBLANK), (u8) (value));
 }
 
-void fc_video_hsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_hsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 11-bit width */
 	dev_write((FC_HSYNCINDELAY0), (u8) (value));
@@ -170,25 +170,25 @@ void fc_video_hsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
 					FC_HSYNCINDELAY1_H_IN_DELAY_12_MASK, (u8)(value >> 8));
 }
 
-void fc_video_hsync_pulse_width(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_hsync_pulse_width(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 9-bit width */
 	dev_write((FC_HSYNCINWIDTH0), (u8) (value));
 	dev_write_mask(FC_HSYNCINWIDTH1, FC_HSYNCINWIDTH1_H_IN_WIDTH_MASK, (u8)(value >> 8));
 }
 
-void fc_video_vsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_vsync_edge_delay(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 8-bit width */
 	dev_write((FC_VSYNCINDELAY), (u8) (value));
 }
 
-void fc_video_vsync_pulse_width(hdmi_tx_dev_t *dev, u16 value)
+static void fc_video_vsync_pulse_width(hdmi_tx_dev_t *dev, u16 value)
 {
 	dev_write_mask(FC_VSYNCINWIDTH, FC_VSYNCINWIDTH_V_IN_WIDTH_MASK, (u8)(value));
 }
 
-void fc_video_refresh_rate(hdmi_tx_dev_t *dev, u32 value)
+static void __maybe_unused fc_video_refresh_rate(hdmi_tx_dev_t *dev, u32 value)
 {
 	/* 20-bit width */
 
@@ -197,22 +197,22 @@ void fc_video_refresh_rate(hdmi_tx_dev_t *dev, u32 value)
 	dev_write_mask(FC_INFREQ2, FC_INFREQ2_INFREQ_MASK, (u8)(value >> 16));
 }
 
-void fc_video_control_period_min_duration(hdmi_tx_dev_t *dev, u8 value)
+static void fc_video_control_period_min_duration(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write((FC_CTRLDUR), value);
 }
 
-void fc_video_extended_control_period_min_duration(hdmi_tx_dev_t *dev, u8 value)
+static void fc_video_extended_control_period_min_duration(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write((FC_EXCTRLDUR), value);
 }
 
-void fc_video_extended_control_period_max_spacing(hdmi_tx_dev_t *dev, u8 value)
+static void fc_video_extended_control_period_max_spacing(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write((FC_EXCTRLSPAC), value);
 }
 
-void fc_video_preamble_filter(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
+static void fc_video_preamble_filter(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 {
 	if (channel == 0)
 		dev_write((FC_CH0PREAM), value);
@@ -224,7 +224,7 @@ void fc_video_preamble_filter(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_video_pixel_repetition_input(hdmi_tx_dev_t *dev, u8 value)
+static void fc_video_pixel_repetition_input(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_PRCONF, FC_PRCONF_INCOMING_PR_FACTOR_MASK, value);
 }
@@ -302,27 +302,27 @@ int fc_video_config(hdmi_tx_dev_t *dev, video_params_t *video)
 	return 0;
 }
 
-void fc_packets_queue_priority_high(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_packets_queue_priority_high(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_CTRLQHIGH, FC_CTRLQHIGH_ONHIGHATTENDED_MASK, value);
 }
 
-void fc_packets_queue_priority_low(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_packets_queue_priority_low(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_CTRLQLOW, FC_CTRLQLOW_ONLOWATTENDED_MASK, value);
 }
 
-void fc_packets_metadata_frame_interpolation(hdmi_tx_dev_t *dev, u8 value)
+static void fc_packets_metadata_frame_interpolation(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_DATAUTO1, FC_DATAUTO1_AUTO_FRAME_INTERPOLATION_MASK, value);
 }
 
-void fc_packets_metadata_frames_per_packet(hdmi_tx_dev_t *dev, u8 value)
+static void fc_packets_metadata_frames_per_packet(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_DATAUTO2, FC_DATAUTO2_AUTO_FRAME_PACKETS_MASK, value);
 }
 
-void fc_packets_metadata_line_spacing(hdmi_tx_dev_t *dev, u8 value)
+static void fc_packets_metadata_line_spacing(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_DATAUTO2, FC_DATAUTO2_AUTO_LINE_SPACING_MASK, value);
 }
@@ -389,27 +389,27 @@ void fc_isrc_isrc2_codes(hdmi_tx_dev_t *dev, u8 * codes, u8 length)
 		dev_write(FC_ISCR2_0 - c, codes[c]);
 }
 
-void fc_gamut_profile(hdmi_tx_dev_t *dev, u8 profile)
+static void fc_gamut_profile(hdmi_tx_dev_t *dev, u8 profile)
 {
 	dev_write_mask(FC_GMD_HB,FC_GMD_HB_GMDGBD_PROFILE_MASK, profile);
 }
 
-void fc_gamut_affected_seq_no(hdmi_tx_dev_t *dev, u8 no)
+static void fc_gamut_affected_seq_no(hdmi_tx_dev_t *dev, u8 no)
 {
 	dev_write_mask(FC_GMD_HB, FC_GMD_HB_GMDAFFECTED_GAMUT_SEQ_NUM_MASK, no);
 }
 
-void fc_gamut_packets_per_frame(hdmi_tx_dev_t *dev, u8 packets)
+static void fc_gamut_packets_per_frame(hdmi_tx_dev_t *dev, u8 packets)
 {
 	dev_write_mask(FC_GMD_CONF, FC_GMD_CONF_GMDPACKETSINFRAME_MASK, packets);
 }
 
-void fc_gamut_packet_line_spacing(hdmi_tx_dev_t *dev, u8 lineSpacing)
+static void fc_gamut_packet_line_spacing(hdmi_tx_dev_t *dev, u8 lineSpacing)
 {
 	dev_write_mask(FC_GMD_CONF, FC_GMD_CONF_GMDPACKETLINESPACING_MASK, lineSpacing);
 }
 
-void fc_gamut_content(hdmi_tx_dev_t *dev, const u8 * content, u8 length)
+static void fc_gamut_content(hdmi_tx_dev_t *dev, const u8 * content, u8 length)
 {
 	u8 i = 0;
 	if (length > (FC_GMD_PB_SIZE)) {
@@ -428,22 +428,22 @@ void fc_gamut_enable_tx(hdmi_tx_dev_t *dev, u8 enable)
 	dev_write_mask(FC_GMD_EN, FC_GMD_EN_GMDENABLETX_MASK, enable);
 }
 
-void fc_gamut_update_packet(hdmi_tx_dev_t *dev)
+static void fc_gamut_update_packet(hdmi_tx_dev_t *dev)
 {
 	dev_write_mask(FC_GMD_UP, FC_GMD_UP_GMDUPDATEPACKET_MASK, 1);
 }
 
-u8 fc_gamut_current_seq_no(hdmi_tx_dev_t *dev)
+static u8 fc_gamut_current_seq_no(hdmi_tx_dev_t *dev)
 {
 	return (u8)(dev_read(FC_GMD_STAT) & 0xF);
 }
 
-u8 fc_gamut_packet_seq(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused fc_gamut_packet_seq(hdmi_tx_dev_t *dev)
 {
 	return (u8)(((dev_read(FC_GMD_STAT)) >> 4) & 0x3);
 }
 
-u8 fc_gamut_no_current_gbd(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused fc_gamut_no_current_gbd(hdmi_tx_dev_t *dev)
 {
 	return (u8)(((dev_read(FC_GMD_STAT)) >> 7) & 0x1);
 }
@@ -466,12 +466,12 @@ void fc_gamut_packet_config(hdmi_tx_dev_t *dev, const u8 * gbd_content, u8 lengt
 	fc_gamut_update_packet(dev); /* set next_field to 1 */
 }
 
-void fc_force_audio(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_force_audio(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_DBGFORCE, FC_DBGFORCE_FORCEAUDIO_MASK, bit);
 }
 
-void fc_force_video(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_force_video(hdmi_tx_dev_t *dev, u8 bit)
 {
 	/* avoid glitches */
 	if (bit != 0) {
@@ -493,68 +493,68 @@ void fc_force_output(hdmi_tx_dev_t *dev, int enable)
 	fc_force_video(dev, (u8)enable);
 }
 
-void fc_rgb_ycc(hdmi_tx_dev_t *dev, u8 type)
+static void fc_rgb_ycc(hdmi_tx_dev_t *dev, u8 type)
 {
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_RGC_YCC_INDICATION_MASK, type);
 }
 
-void fc_scan_info(hdmi_tx_dev_t *dev, u8 left)
+static void fc_scan_info(hdmi_tx_dev_t *dev, u8 left)
 {
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_SCAN_INFORMATION_MASK, left);
 }
 
-void fc_colorimetry(hdmi_tx_dev_t *dev, unsigned csc_itu)
+static void fc_colorimetry(hdmi_tx_dev_t *dev, unsigned csc_itu)
 {
 	dev_write_mask(FC_AVICONF1, FC_AVICONF1_COLORIMETRY_MASK, csc_itu);
 }
 
-void fc_pic_aspect_ratio(hdmi_tx_dev_t *dev, u8 ar)
+static void fc_pic_aspect_ratio(hdmi_tx_dev_t *dev, u8 ar)
 {
 	dev_write_mask(FC_AVICONF1, FC_AVICONF1_PICTURE_ASPECT_RATIO_MASK, ar);
 }
 
-void fc_acctive_aspect_ratio_valid(hdmi_tx_dev_t *dev, u8 valid)
+static void fc_acctive_aspect_ratio_valid(hdmi_tx_dev_t *dev, u8 valid)
 {
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_ACTIVE_FORMAT_PRESENT_MASK, valid);
 }
 
-void fc_active_format_aspect_ratio(hdmi_tx_dev_t *dev, u8 left)
+static void fc_active_format_aspect_ratio(hdmi_tx_dev_t *dev, u8 left)
 {
 	dev_write_mask(FC_AVICONF1, FC_AVICONF1_ACTIVE_ASPECT_RATIO_MASK, left);
 }
 
-void fc_is_it_content(hdmi_tx_dev_t *dev, u8 it)
+static void fc_is_it_content(hdmi_tx_dev_t *dev, u8 it)
 {
 	dev_write_mask(FC_AVICONF2, FC_AVICONF2_IT_CONTENT_MASK, (it ? 1 : 0));
 }
 
-void fc_extended_colorimetry(hdmi_tx_dev_t *dev, u8 ext_color)
+static void fc_extended_colorimetry(hdmi_tx_dev_t *dev, u8 ext_color)
 {
 	dev_write_mask(FC_AVICONF2, FC_AVICONF2_EXTENDED_COLORIMETRY_MASK, ext_color);
 	dev_write_mask(FC_AVICONF1, FC_AVICONF1_COLORIMETRY_MASK, 0x3);
 }
 
-void fc_quantization_range(hdmi_tx_dev_t *dev, u8 range)
+static void fc_quantization_range(hdmi_tx_dev_t *dev, u8 range)
 {
 	dev_write_mask(FC_AVICONF2, FC_AVICONF2_QUANTIZATION_RANGE_MASK, range);
 }
 
-void fc_non_uniform_pic_scaling(hdmi_tx_dev_t *dev, u8 scale)
+static void fc_non_uniform_pic_scaling(hdmi_tx_dev_t *dev, u8 scale)
 {
 	dev_write_mask(FC_AVICONF2, FC_AVICONF2_NON_UNIFORM_PICTURE_SCALING_MASK, scale);
 }
 
-void fc_video_code(hdmi_tx_dev_t *dev, u8 code)
+static void fc_video_code(hdmi_tx_dev_t *dev, u8 code)
 {
 	dev_write(FC_AVIVID, code);
 }
 
-void fc_horizontal_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
+static void fc_horizontal_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
 {
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_BAR_INFORMATION_MASK & 0x8, (validity ? 1 : 0));
 }
 
-void fc_horizontal_bars(hdmi_tx_dev_t *dev, u16 end_top, u16 start_bottom)
+static void fc_horizontal_bars(hdmi_tx_dev_t *dev, u16 end_top, u16 start_bottom)
 {
 	dev_write(FC_AVIETB0, (u8) (end_top));
 	dev_write(FC_AVIETB1, (u8) (end_top >> 8));
@@ -562,12 +562,12 @@ void fc_horizontal_bars(hdmi_tx_dev_t *dev, u16 end_top, u16 start_bottom)
 	dev_write(FC_AVISBB1, (u8) (start_bottom >> 8));
 }
 
-void fc_vertical_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
+static void fc_vertical_bars_valid(hdmi_tx_dev_t *dev, u8 validity)
 {
 	dev_write_mask(FC_AVICONF0, FC_AVICONF0_BAR_INFORMATION_MASK & 0x4, (validity ? 1 : 0));
 }
 
-void fc_vertical_bars(hdmi_tx_dev_t *dev, u16 end_left, u16 start_right)
+static void fc_vertical_bars(hdmi_tx_dev_t *dev, u16 end_left, u16 start_right)
 {
 	dev_write(FC_AVIELB0, (u8) (end_left));
 	dev_write(FC_AVIELB1, (u8) (end_left >> 8));
@@ -575,12 +575,12 @@ void fc_vertical_bars(hdmi_tx_dev_t *dev, u16 end_left, u16 start_right)
 	dev_write(FC_AVISRB1, (u8) (start_right >> 8));
 }
 
-void fc_out_pixel_repetition(hdmi_tx_dev_t *dev, u8 pr)
+static void fc_out_pixel_repetition(hdmi_tx_dev_t *dev, u8 pr)
 {
 	dev_write_mask(FC_PRCONF, FC_PRCONF_OUTPUT_PR_FACTOR_MASK, pr);
 }
 
-u32 fc_get_info_frame_satus(hdmi_tx_dev_t *dev)
+static u32 fc_get_info_frame_satus(hdmi_tx_dev_t *dev)
 {
 	return dev_read(FC_AVICONF0);
 }
@@ -687,17 +687,17 @@ void fc_avi_config(hdmi_tx_dev_t *dev, video_params_t *video_params)
 	fc_out_pixel_repetition(dev, (video_params->mpixel_repetition_factor + 1) - 1);
 }
 
-void fc_packet_sample_flat(hdmi_tx_dev_t *dev, u8 value)
+static void fc_packet_sample_flat(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCONF, FC_AUDSCONF_AUD_PACKET_SAMPFLT_MASK, value);
 }
 
-void fc_packet_layout(hdmi_tx_dev_t *dev, u8 bit)
+static void fc_packet_layout(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_AUDSCONF, FC_AUDSCONF_AUD_PACKET_LAYOUT_MASK, bit);
 }
 
-void fc_validity_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
+static void fc_validity_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 {
 	if (channel < 4)
 		dev_write_mask(FC_AUDSV, (1 << (4 + channel)), bit);
@@ -705,7 +705,7 @@ void fc_validity_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 		pr_err("invalid channel number");
 }
 
-void fc_validity_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
+static void fc_validity_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 {
 	if (channel < 4)
 		dev_write_mask(FC_AUDSV, (1 << channel), bit);
@@ -713,7 +713,7 @@ void fc_validity_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_user_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
+static void fc_user_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 {
 	if (channel < 4)
 		dev_write_mask(FC_AUDSU, (1 << (4 + channel)), bit);
@@ -721,7 +721,7 @@ void fc_user_right(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_user_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
+static void fc_user_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 {
 	if (channel < 4)
 		dev_write_mask(FC_AUDSU, (1 << channel), bit);
@@ -729,32 +729,32 @@ void fc_user_left(hdmi_tx_dev_t *dev, u8 bit, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_iec_cgms_a(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_iec_cgms_a(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL0, FC_AUDSCHNL0_OIEC_CGMSA_MASK, value);
 }
 
-void fc_iec_copyright(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused fc_iec_copyright(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(FC_AUDSCHNL0, FC_AUDSCHNL0_OIEC_COPYRIGHT_MASK, bit);
 }
 
-void fc_iec_category_code(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_iec_category_code(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write( FC_AUDSCHNL1, value);
 }
 
-void fc_iec_pcm_mode(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_iec_pcm_mode(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL2, FC_AUDSCHNL2_OIEC_PCMAUDIOMODE_MASK, value);
 }
 
-void fc_iec_source(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused fc_iec_source(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL2, FC_AUDSCHNL2_OIEC_SOURCENUMBER_MASK, value);
 }
 
-void fc_iec_channel_right(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
+static void fc_iec_channel_right(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 {
 	if (channel == 0)
 		dev_write_mask(FC_AUDSCHNL3, FC_AUDSCHNL3_OIEC_CHANNELNUMCR0_MASK, value);
@@ -768,7 +768,7 @@ void fc_iec_channel_right(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_iec_channel_left(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
+static void fc_iec_channel_left(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 {
 	if (channel == 0)
 		dev_write_mask(FC_AUDSCHNL5, FC_AUDSCHNL5_OIEC_CHANNELNUMCL0_MASK, value);
@@ -782,22 +782,22 @@ void fc_iec_channel_left(hdmi_tx_dev_t *dev, u8 value, unsigned channel)
 		pr_err("invalid channel number: %d", channel);
 }
 
-void fc_iec_clock_accuracy(hdmi_tx_dev_t *dev, u8 value)
+static void fc_iec_clock_accuracy(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL7, FC_AUDSCHNL7_OIEC_CLKACCURACY_MASK, value);
 }
 
-void fc_iec_sampling_freq(hdmi_tx_dev_t *dev, u8 value)
+static void fc_iec_sampling_freq(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL7, FC_AUDSCHNL7_OIEC_SAMPFREQ_MASK, value);
 }
 
-void fc_iec_original_sampling_freq(hdmi_tx_dev_t *dev, u8 value)
+static void fc_iec_original_sampling_freq(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL8, FC_AUDSCHNL8_OIEC_ORIGSAMPFREQ_MASK, value);
 }
 
-void fc_iec_word_length(hdmi_tx_dev_t *dev, u8 value)
+static void fc_iec_word_length(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(FC_AUDSCHNL8, FC_AUDSCHNL8_OIEC_WORDLENGTH_MASK, value);
 }
@@ -866,39 +866,39 @@ void fc_audio_unmute(hdmi_tx_dev_t *dev)
 	fc_packet_sample_flat(dev, 0);
 }
 
-void fc_channel_count(hdmi_tx_dev_t *dev, u8 no_ofchannels)
+static void fc_channel_count(hdmi_tx_dev_t *dev, u8 no_ofchannels)
 {
 	pr_debug("noOfChannels:%d\n", no_ofchannels);
 	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CC_MASK, no_ofchannels);
 }
 
-void fc_sample_freq(hdmi_tx_dev_t *dev, u8 sf)
+static void fc_sample_freq(hdmi_tx_dev_t *dev, u8 sf)
 {
 	dev_write_mask(FC_AUDICONF1, FC_AUDICONF1_SF_MASK, sf);
 }
 
-void fc_allocate_channels(hdmi_tx_dev_t *dev, u8 ca)
+static void fc_allocate_channels(hdmi_tx_dev_t *dev, u8 ca)
 {
 	pr_debug("allocation channel:%d\n", ca);
 	dev_write(FC_AUDICONF2, ca);
 }
 
-void fc_level_shift_value(hdmi_tx_dev_t *dev, u8 lsv)
+static void fc_level_shift_value(hdmi_tx_dev_t *dev, u8 lsv)
 {
 	dev_write_mask(FC_AUDICONF3, FC_AUDICONF3_LSV_MASK, lsv);
 }
 
-void fc_down_mix_inhibit(hdmi_tx_dev_t *dev, u8 prohibited)
+static void fc_down_mix_inhibit(hdmi_tx_dev_t *dev, u8 prohibited)
 {
 	dev_write_mask(FC_AUDICONF3, FC_AUDICONF3_DM_INH_MASK, (prohibited ? 1 : 0));
 }
 
-void fc_coding_type(hdmi_tx_dev_t *dev, u8 coding_type)
+static void fc_coding_type(hdmi_tx_dev_t *dev, u8 coding_type)
 {
 	dev_write_mask(FC_AUDICONF0, FC_AUDICONF0_CT_MASK, coding_type);
 }
 
-void fc_sampling_size(hdmi_tx_dev_t *dev, u8 ss)
+static void fc_sampling_size(hdmi_tx_dev_t *dev, u8 ss)
 {
 	dev_write_mask(FC_AUDICONF1, FC_AUDICONF1_SS_MASK, ss);
 }
@@ -969,108 +969,108 @@ void fc_acp_type_dependent_fields(hdmi_tx_dev_t *dev, u8 * fields, u8 fields_len
 		dev_write(FC_ACP1 - c, fields[c]);
 }
 
-void csc_interpolation(hdmi_tx_dev_t *dev, u8 value)
+static void csc_interpolation(hdmi_tx_dev_t *dev, u8 value)
 {
 	/* 2-bit width */
 	dev_write_mask(CSC_CFG, CSC_CFG_INTMODE_MASK, value);
 }
 
-void csc_decimation(hdmi_tx_dev_t *dev, u8 value)
+static void csc_decimation(hdmi_tx_dev_t *dev, u8 value)
 {
 	/* 2-bit width */
 	dev_write_mask(CSC_CFG, CSC_CFG_DECMODE_MASK, value);
 }
 
-void csc_color_depth(hdmi_tx_dev_t *dev, u8 value)
+static void csc_color_depth(hdmi_tx_dev_t *dev, u8 value)
 {
 	/* 4-bit width */
 	dev_write_mask(CSC_SCALE, CSC_SCALE_CSC_COLOR_DEPTH_MASK, value);
 }
 
-void csc_scale_factor(hdmi_tx_dev_t *dev, u8 value)
+static void csc_scale_factor(hdmi_tx_dev_t *dev, u8 value)
 {
 	/* 2-bit width */
 	dev_write_mask(CSC_SCALE, CSC_SCALE_CSCSCALE_MASK, value);
 }
 
-void csc_coefficient_a1(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_a1(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_A1_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_A1_MSB, CSC_COEF_A1_MSB_CSC_COEF_A1_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_a2(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_a2(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_A2_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_A2_MSB, CSC_COEF_A2_MSB_CSC_COEF_A2_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_a3(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_a3(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_A3_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_A3_MSB, CSC_COEF_A3_MSB_CSC_COEF_A3_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_a4(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_a4(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_A4_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_A4_MSB, CSC_COEF_A4_MSB_CSC_COEF_A4_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_b1(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_b1(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_B1_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_B1_MSB, CSC_COEF_B1_MSB_CSC_COEF_B1_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_b2(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_b2(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_B2_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_B2_MSB, CSC_COEF_B2_MSB_CSC_COEF_B2_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_b3(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_b3(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_B3_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_B3_MSB, CSC_COEF_B3_MSB_CSC_COEF_B3_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_b4(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_b4(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_B4_LSB, (u8)(value));
 	dev_write_mask(CSC_COEF_B4_MSB, CSC_COEF_B4_MSB_CSC_COEF_B4_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_c1(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_c1(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_C1_LSB, (u8) (value));
 	dev_write_mask(CSC_COEF_C1_MSB, CSC_COEF_C1_MSB_CSC_COEF_C1_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_c2(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_c2(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_C2_LSB, (u8) (value));
 	dev_write_mask(CSC_COEF_C2_MSB, CSC_COEF_C2_MSB_CSC_COEF_C2_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_c3(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_c3(hdmi_tx_dev_t *dev, u16 value)
 {
 	/* 15-bit width */
 	dev_write(CSC_COEF_C3_LSB, (u8) (value));
 	dev_write_mask(CSC_COEF_C3_MSB, CSC_COEF_C3_MSB_CSC_COEF_C3_MSB_MASK, (u8)(value >> 8));
 }
 
-void csc_coefficient_c4(hdmi_tx_dev_t *dev, u16 value)
+static void csc_coefficient_c4(hdmi_tx_dev_t *dev, u16 value)
 {
 	dev_write(CSC_COEF_C4_LSB, (u8) (value));
 	dev_write_mask(CSC_COEF_C4_MSB, CSC_COEF_C4_MSB_CSC_COEF_C4_MSB_MASK, (u8)(value >> 8));

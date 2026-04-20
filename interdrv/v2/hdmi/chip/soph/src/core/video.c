@@ -485,24 +485,24 @@ char * get_encoding_string(encoding_t encoding)
 	return "Undefined";
 }
 
-void hal_video_sampler_internal_data_enable_generator(hdmi_tx_dev_t *dev, u8 bit)
+static void hal_video_sampler_internal_data_enable_generator(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(TX_INVID0, TX_INVID0_INTERNAL_DE_GENERATOR_MASK, (bit ? 1 : 0));
 }
 
-void hal_video_sampler_video_mapping(hdmi_tx_dev_t *dev, u8 value)
+static void hal_video_sampler_video_mapping(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(TX_INVID0, TX_INVID0_VIDEO_MAPPING_MASK, value);
 }
 
-void hal_video_sampler_stuffing_gy(hdmi_tx_dev_t *dev, u16 value)
+static void hal_video_sampler_stuffing_gy(hdmi_tx_dev_t *dev, u16 value)
 {
 	dev_write((TX_GYDATA0), (u8) (value >> 0));
 	dev_write((TX_GYDATA1), (u8) (value >> 8));
 	dev_write_mask(TX_INSTUFFING, TX_INSTUFFING_GYDATA_STUFFING_MASK, 1);
 }
 
-void hal_video_sampler_stuffing_rcr(hdmi_tx_dev_t *dev, u16 value)
+static void hal_video_sampler_stuffing_rcr(hdmi_tx_dev_t *dev, u16 value)
 {
 
 	dev_write((TX_RCRDATA0), (u8) (value >> 0));
@@ -510,7 +510,7 @@ void hal_video_sampler_stuffing_rcr(hdmi_tx_dev_t *dev, u16 value)
 	dev_write_mask(TX_INSTUFFING, TX_INSTUFFING_RCRDATA_STUFFING_MASK, 1);
 }
 
-void hal_video_sampler_stuffing_bcb(hdmi_tx_dev_t *dev, u16 value)
+static void hal_video_sampler_stuffing_bcb(hdmi_tx_dev_t *dev, u16 value)
 {
 	dev_write((TX_BCBDATA0), (u8) (value >> 0));
 	dev_write((TX_BCBDATA1), (u8) (value >> 8));

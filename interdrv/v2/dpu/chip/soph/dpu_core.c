@@ -13,6 +13,8 @@
 #include <base_ctx.h>
 #include <linux/pm.h>
 #include <linux/compat.h>
+#include <linux/of.h>
+// #include <linux/of_device.h>
 //#include <vi_sys.h>
 
 #include "../../common/dpu_debug.h"
@@ -30,15 +32,13 @@
 
 unsigned int dpu_log_lv = DBG_WARN/*DBG_INFO*/;
 
-int hw_wait_time = 33;
 //static atomic_t open_count = ATOMIC_INIT(0);
 
 static const char *const CLK_DPU_NAME = "clk_dpu";
 
 module_param(dpu_log_lv, int, 0644);
-module_param(hw_wait_time, int, 0644);
 extern bool __clk_is_enabled(struct clk *clk);
-int dpu_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
+static int dpu_core_cb(void *dev, enum enum_modules_id caller, unsigned int cmd, void *arg)
 {
 	return 0;
 }
@@ -165,7 +165,7 @@ static int _register_dev(struct dpu_dev_s *wdev)
  *	General functions
  *************************************************************************/
 //done
-int dpu_create_instance(struct platform_device *pdev)
+static int dpu_create_instance(struct platform_device *pdev)
 {
 	int i, rc = 0;
 	struct dpu_dev_s *wdev;
@@ -223,7 +223,7 @@ err_dev:
 }
 
 //done
-int dpu_destroy_instance(struct platform_device *pdev)
+static int dpu_destroy_instance(struct platform_device *pdev)
 {
 	struct dpu_dev_s *wdev;
 
@@ -386,7 +386,7 @@ err_dev:
  * @pdev: Pointer of platform device.
  */
 //done
-static int dpu_remove(struct platform_device *pdev)
+static void dpu_remove(struct platform_device *pdev)
 {
 	struct dpu_dev_s *wdev;
 
@@ -399,19 +399,28 @@ static int dpu_remove(struct platform_device *pdev)
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
-		return -EINVAL;
+		// return -EINVAL;
+		return;
 	}
 
 	wdev = dev_get_drvdata(&pdev->dev);
 	if (!wdev) {
 		dev_err(&pdev->dev, "Can not get vip drvdata");
-		return 0;
+		return;
 	}
 
 	dev_set_drvdata(&pdev->dev, NULL);
 
-	return 0;
+	return;
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+static int dpu_remove_ex(struct platform_device *pdev)
+{
+    dpu_remove(pdev);
+    return 0;
+}
+#endif
 
 //done
 static const struct of_device_id dpu_dt_match[] = {
@@ -485,7 +494,11 @@ static SIMPLE_DEV_PM_OPS(dpu_pm_ops, dpu_suspend, dpu_resume);
 //done
 static struct platform_driver dpu_driver = {
 	.probe      = dpu_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+	.remove     = dpu_remove_ex,
+#else
 	.remove     = dpu_remove,
+#endif
 	.driver     = {
 	.name		= "soph-dpu",
 	.owner		= THIS_MODULE,

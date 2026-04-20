@@ -63,10 +63,6 @@ static int cvi_rtc_read_time(struct device *dev, struct rtc_time *tm)
 
 	sec = readl(info->rtc_base + CVI_RTC_SEC_CNTR_VALUE);
 
- 	if (sec < 0x30000000) {
-		dev_err(NULL, "RTC sec less than 0x30000000 (1995-07-10 00:12:48)\n");
-	}
-
 	spin_unlock_irqrestore(&info->cvi_rtc_lock, sl_irq_flags);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -77,7 +73,7 @@ static int cvi_rtc_read_time(struct device *dev, struct rtc_time *tm)
 
 	dev_vdbg(dev, "%s %lu\n", __func__, sec);
 
-	dev_notice(dev, "time read as %lu. %d/%d/%d %d:%02u:%02u\n",
+	dev_dbg(dev, "time read as %lu. %d/%d/%d %d:%02u:%02u\n",
 		sec,
 		tm->tm_mon + 1,
 		tm->tm_mday,
@@ -109,7 +105,7 @@ static int cvi_rtc_set_time(struct device *dev, struct rtc_time *tm)
 #endif
 	dev_vdbg(dev, "%s %lu\n", __func__, sec);
 
-	dev_notice(dev, "time set to %lu. %d/%d/%d %d:%02u:%02u\n",
+	dev_dbg(dev, "time set to %lu. %d/%d/%d %d:%02u:%02u\n",
 		sec,
 		tm->tm_mon+1,
 		tm->tm_mday,
@@ -442,6 +438,8 @@ disable_clk:
 	return ret;
 }
 
+/* platform_driver.remove return type changed from int to void in Linux 6.12 */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int cvi_rtc_remove(struct platform_device *pdev)
 {
 	struct cvi_rtc_info *info = platform_get_drvdata(pdev);
@@ -450,9 +448,19 @@ static int cvi_rtc_remove(struct platform_device *pdev)
 #if defined(CVI_RTC_HANDLE_IRQ)
 	cancel_delayed_work(&info->cvi_rtc_work);
 #endif
-
 	return 0;
 }
+#else
+static void cvi_rtc_remove(struct platform_device *pdev)
+{
+	struct cvi_rtc_info *info = platform_get_drvdata(pdev);
+
+	//clk_disable_unprepare(info->clk);
+#if defined(CVI_RTC_HANDLE_IRQ)
+	cancel_delayed_work(&info->cvi_rtc_work);
+#endif
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int cvi_rtc_suspend(struct device *dev)

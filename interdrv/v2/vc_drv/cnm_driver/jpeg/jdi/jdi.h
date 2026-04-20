@@ -30,9 +30,9 @@
 #include <linux/pid.h>
 #include <linux/types.h>
 
-#include "../jpuapi/jpuconfig.h"
-#include "mm.h"
+#include "jpuconfig.h"
 #include "jputypes.h"
+#include "jpu.h"
 
 #define MAX_JPU_BUFFER_POOL 512
 #define JpuWriteInstReg(CORE, INST_IDX, ADDR, DATA)         jdi_write_register(CORE, ((unsigned long)(INST_IDX * NPT_REG_SIZE) + ADDR), DATA)
@@ -66,7 +66,6 @@ typedef struct jpu_instance_pool_t {
     Int32           jpu_instance_num;
     BOOL            instance_pool_inited;
     void*           instPendingInst[MAX_JPEG_NUM_INSTANCE];
-    jpeg_mm_t       vmem;
 } jpu_instance_pool_t;
 
 typedef enum {
@@ -125,6 +124,7 @@ void jdi_log(int core_idx, int cmd, int step, int inst);
 void jdi_delay_us(unsigned int us);
 void jdi_release_core(int coreidx);
 int jdi_request_core(int timeout);
+void jpu_update_stat_cycles(int coreIdx, int hwCycles);
 
 #define ACLK_MAX                    300
 #define ACLK_MIN                    16

@@ -219,7 +219,7 @@ static int _cdma_2d_copy(struct cdma_2d_param *param)
 
 
 
-int _cdma_push_job(struct cdma_job *job)
+static int _cdma_push_job(struct cdma_job *job)
 {
 	unsigned long flags;
 
@@ -231,7 +231,7 @@ int _cdma_push_job(struct cdma_job *job)
 	return 0;
 }
 
-void _cdma_try_schedule(void)
+static void _cdma_try_schedule(void)
 {
 	struct cdma_job *job = NULL;
 	unsigned long flags;
@@ -289,7 +289,7 @@ static void cdma_job_finish(void)
 	_cdma_try_schedule();
 }
 
-int _cdma_copy(enum cdma_job_type job_type, void *param)
+static int _cdma_copy(enum cdma_job_type job_type, void *param)
 {
 	struct cdma_job *job;
 	int ret = 0;

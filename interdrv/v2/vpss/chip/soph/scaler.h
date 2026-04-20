@@ -923,5 +923,7 @@ int vpss_online_check_irq_handler(int timeout);
 int vpss_dwa_online_multi(int w, int h, enum sclr_format fmt_in, u64 *dst_addr);
 int vpss_dwa_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fmt_in, u64 dst_addr);
 int vpss_stitch_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fmt_out, u64 src_addr);
+int sclr_img_validate_cb_cfg(struct sclr_img_in_sb_cfg *cfg);
+bool sclr_img_reg_shadow_mask(u8 inst, bool mask);
 
 #endif  //_SCL_H_

@@ -157,7 +157,7 @@ static supported_dtd_t _dtd[] = {
 	{0   ,   {   0, 0, 0, 0,      0,  0,    0,   0,  0,  0,    0,   0, 0,    0,  0, 0, 0,  0,  0, 0}},
 };
 
-int _edid_checksum(u8 * edid)
+static int _edid_checksum(u8 * edid)
 {
 	int i, checksum = 0;
 
@@ -264,7 +264,7 @@ int dtd_parse(hdmi_tx_dev_t *dev, dtd_t * dtd, u8 data[18])
  * @return returns a pointer to the DTD structure or NULL if not supported.
  * If refreshRate=0 then the first (default) parameters are returned for the VIC code.
  */
-dtd_t * get_dtd(u8 code, u32 refresh_rate){
+static dtd_t * get_dtd(u8 code, u32 refresh_rate){
 	int i = 0;
 
 	for(i = 0; _dtd[i].dtd.m_code != 0; i++){

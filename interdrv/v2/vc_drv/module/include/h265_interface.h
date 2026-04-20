@@ -309,6 +309,11 @@ typedef struct _VidChnAttr_ {
     unsigned int u32BitRate; /* RW; Range:[2, 409600]; average bitrate */
 } VidChnAttr;
 
+typedef struct _VidChnRes_ {
+    unsigned int u32PicWidth;
+    unsigned int u32PicHeight;
+} VidChnRes;
+
 typedef struct _FrameLost_ {
     int frameLostMode;
     unsigned int u32EncFrmGaps;
@@ -616,6 +621,8 @@ enum H26X_OP_NUM {
     H26X_OP_SET_EXTERN_BS_BUF,
     H26X_OP_GET_BS_PACKS_NUM,
     H26X_OP_RELEASE_HEADER,
+    H26X_OP_STOP,
+    H26X_OP_SET_CHN_RESOLUTION,
     H26X_OP_MAX,
 };
 
@@ -675,6 +682,8 @@ typedef enum _VEncIoctlOp_ {
     DRV_H26X_OP_SET_EXTERN_BS_BUF       = (H26X_OP_SET_EXTERN_BS_BUF << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_GET_BS_PACKS_NUM        = (H26X_OP_GET_BS_PACKS_NUM << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_RELEASE_HEADER          = (H26X_OP_RELEASE_HEADER << DRV_H26X_OP_SHIFT),
+    DRV_H26X_OP_STOP                    = (H26X_OP_STOP << DRV_H26X_OP_SHIFT),
+    DRV_H26X_OP_SET_CHN_RESOLUTION      = (H26X_OP_SET_CHN_RESOLUTION << DRV_H26X_OP_SHIFT),
     DRV_H26X_OP_MAX                     = (H26X_OP_MAX << DRV_H26X_OP_SHIFT),
 } VEncIoctlOp;
 

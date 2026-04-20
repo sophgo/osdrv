@@ -46,7 +46,7 @@ typedef enum SPACC_KEY_SOURCE {
 typedef struct cvi_spacc_base64 {
 	uint32_t customer_code;
 	uint32_t action; // 0: Decode, 1: Encode
-};
+} cvi_spacc_base64_s;
 
 struct cvi_spacc_base64_inner {
 	uint64_t src;

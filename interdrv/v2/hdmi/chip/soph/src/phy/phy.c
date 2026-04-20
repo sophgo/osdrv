@@ -83,25 +83,25 @@ static struct phy_config phy316_pr[] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 
-void _power_down(hdmi_tx_dev_t *dev, u8 bit)
+static void _power_down(hdmi_tx_dev_t *dev, u8 bit)
 {
 	//TODO: Correct register mask - extract the information from IP-XACT
 	dev_write_mask(PHY_CONF0, PHY_CONF0_SPARES_2_MASK, (bit ? 1 : 0));
 	dev->snps_hdmi_ctrl.phy_power = bit ? TRUE : FALSE;
 }
 
-void _enable_tmds(hdmi_tx_dev_t *dev, u8 bit)
+static void _enable_tmds(hdmi_tx_dev_t *dev, u8 bit)
 {
 	//TODO: Correct register mask - extract the information from IP-XACT
 	dev_write_mask(PHY_CONF0, PHY_CONF0_SPARES_1_MASK, (bit ? 1 : 0));
 }
 
-void _set_pddq(hdmi_tx_dev_t *dev, u8 bit)
+static void _set_pddq(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_CONF0, PHY_CONF0_PDDQ_MASK, (bit ? 1 : 0));
 }
 
-void _tx_power_on(hdmi_tx_dev_t *dev, u8 bit)
+static void _tx_power_on(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_CONF0, PHY_CONF0_TXPWRON_MASK, (bit ? 1 : 0));
 	dev->snps_hdmi_ctrl.phy_power = bit ? TRUE : FALSE;
@@ -113,57 +113,57 @@ void phy_enable_hpd_sense(hdmi_tx_dev_t *dev, u8 bit)
 }
 EXPORT_SYMBOL_GPL(phy_enable_hpd_sense);
 
-void _data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
+static void _data_enable_polarity(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_CONF0, PHY_CONF0_SELDATAENPOL_MASK, (bit ? 1 : 0));
 }
 
-void _interface_control(hdmi_tx_dev_t *dev, u8 bit)
+static void _interface_control(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_CONF0, PHY_CONF0_SELDIPIF_MASK, (bit ? 1 : 0));
 }
 
-void _test_clear(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused _test_clear(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_TST0, PHY_TST0_SPARE_4_MASK, (bit ? 1 : 0));
 }
 
-void _test_enable(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused _test_enable(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_TST0, PHY_TST0_SPARE_3_MASK, (bit ? 1 : 0));
 }
 
-void _test_clock(hdmi_tx_dev_t *dev, u8 bit)
+static void __maybe_unused _test_clock(hdmi_tx_dev_t *dev, u8 bit)
 {
 	dev_write_mask(PHY_TST0, PHY_TST0_SPARE_0_MASK, (bit ? 1 : 0));
 }
 
-void _test_data_in(hdmi_tx_dev_t *dev, u8 data)
+static void __maybe_unused _test_data_in(hdmi_tx_dev_t *dev, u8 data)
 {
 	dev_write((PHY_TST1), data);
 }
 
-u8 _test_data_out(hdmi_tx_dev_t *dev, u32 baseAddr)
+static u8 __maybe_unused _test_data_out(hdmi_tx_dev_t *dev, u32 baseAddr)
 {
 	return dev_read(PHY_TST2);
 }
 
-u8 _interrupt_state(hdmi_tx_dev_t *dev)
+static u8 __maybe_unused _interrupt_state(hdmi_tx_dev_t *dev)
 {
 	return dev_read(PHY_INT0);
 }
 
-u8 _interrupt_mask_status(hdmi_tx_dev_t *dev, u8 mask)
+static u8 __maybe_unused _interrupt_mask_status(hdmi_tx_dev_t *dev, u8 mask)
 {
 	return dev_read(PHY_MASK0) & mask;
 }
 
-void _interrupt_polarity(hdmi_tx_dev_t *dev, u8 bitShift, u8 value)
+static void __maybe_unused _interrupt_polarity(hdmi_tx_dev_t *dev, u8 bitShift, u8 value)
 {
 	dev_write_mask(PHY_POL0, (1 << bitShift), value);
 }
 
-u8 _interrupt_polarity_status(hdmi_tx_dev_t *dev, u8 mask)
+static u8 __maybe_unused _interrupt_polarity_status(hdmi_tx_dev_t *dev, u8 mask)
 {
 	return dev_read(PHY_POL0) & mask;
 }
@@ -468,7 +468,7 @@ int phy_rx_s3_detected(hdmi_tx_dev_t *dev)
 	return !RxS_polarity;
 }
 
-struct phy_config * phy316_get_configs(u32 mpixelclock)
+static struct phy_config * phy316_get_configs(u32 mpixelclock)
 {
 	pr_debug("mpixelclock:%u\n", mpixelclock);
 
@@ -498,7 +498,7 @@ struct phy_config * phy316_get_configs(u32 mpixelclock)
 	return NULL;
 }
 
-struct phy_config * phy316_get_configs_pr(u32 mpixelclock, pixel_repetition_t pixel)
+static struct phy_config * phy316_get_configs_pr(u32 mpixelclock, pixel_repetition_t pixel)
 {
 	int i = 0;
 	while(phy316_pr[i].pixel_clk) {

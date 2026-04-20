@@ -84,7 +84,7 @@ int sad_support24bit(hdmi_tx_dev_t *dev, short_audio_desc_t * sad)
 	return FALSE;
 }
 
-void svd_reset(hdmi_tx_dev_t *dev, short_video_desc_t * svd)
+static void svd_reset(hdmi_tx_dev_t *dev, short_video_desc_t * svd)
 {
 	svd->mnative = FALSE;
 	svd->m_code = 0;

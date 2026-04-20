@@ -2,6 +2,7 @@
 #define _VPSS_DEBUG_H_
 
 #include <linux/debugfs.h>
+#include <linux/version.h>
 
 extern u32 vpss_log_lv;
 

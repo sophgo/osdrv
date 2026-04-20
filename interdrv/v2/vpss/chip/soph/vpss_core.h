@@ -76,6 +76,7 @@ struct vpss_core {
 	u32 checksum;
 	u32 start_cnt;
 	u32 int_cnt;
+	u16 timeout_cnt;
 	void *job;
 };
 

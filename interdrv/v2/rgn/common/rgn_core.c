@@ -119,7 +119,11 @@ err_create_instance:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 static int rgn_remove(struct platform_device *pdev)
+#else
+static void rgn_remove(struct platform_device *pdev)
+#endif
 {
 	struct rgn_dev *rdev = platform_get_drvdata(pdev);
 	int ret = 0;
@@ -140,7 +144,11 @@ static int rgn_remove(struct platform_device *pdev)
 err_destroy_instance:
 	CVI_TRACE_RGN(RGN_INFO, "%s -\n", __func__);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return ret;
+#else
+	return;
+#endif
 }
 
 static const struct of_device_id rgn_dt_match[] = {

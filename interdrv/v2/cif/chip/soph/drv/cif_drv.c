@@ -1161,7 +1161,7 @@ void cif_hdr_manual_config(struct cif_ctx *ctx,
 				     1);
 	}
 }
-EXPORT_SYMBOL_GPL(cif_hdr_manual_config);
+// EXPORT_SYMBOL_GPL(cif_hdr_manual_config);
 
 void cif_hdr_enable(struct cif_ctx *ctx, struct cif_param *param, uint32_t on)
 {
@@ -1344,7 +1344,7 @@ static void sublvds_lane_enable(struct cif_ctx *ctx, uint16_t lane_num)
 	}
 }
 
-void cif_stream_enable(struct cif_ctx *ctx, struct cif_param *param, uint32_t on)
+static void cif_stream_enable(struct cif_ctx *ctx, struct cif_param *param, uint32_t on)
 {
 	uintptr_t mac_top = (ctx->mac_num < CIF_MAC_VI_0) ? ctx->mac_phys_regs[CIF_MAC_BLK_ID_TOP] :
 													ctx->mac_phys_regs[CIF_MAC_VI_BLK_TOP];
@@ -1490,7 +1490,7 @@ void cif_set_rx_bus_config(struct cif_ctx *ctx, enum lane_id_e lane, uint32_t se
 	}
 }
 
-void lane_enable(struct cif_ctx *ctx, enum phy_lane_id_e lane_num)
+static void lane_enable(struct cif_ctx *ctx, enum phy_lane_id_e lane_num)
 {
 	uintptr_t wrap_top = ctx->wrap_phys_regs[CIF_WRAP_BLK_ID_TOP];
 
@@ -1550,7 +1550,7 @@ void set_rx_frist_lane_enable(struct cif_ctx *ctx, int frist_lane_used)
 		if (ctx->mac_num == 0)
 			lane_enable(ctx, CIF_PHY_LANE_0);
 		else if (ctx->mac_num == 3)
-			lane_enable(ctx, CIF_PHY_LANE_6);
+			lane_enable(ctx, CIF_PHY_LANE_9);
 		else if (ctx->mac_num == 4)
 			lane_enable(ctx, CIF_PHY_LANE_12);
 	} else if (ctx->phy_mode == 4) {

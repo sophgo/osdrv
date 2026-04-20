@@ -17,7 +17,7 @@
 /**
  * calculate the fast sped high time counter - round up
  */
-u16 _scl_calc(u16 sfrClock, u16 sclMinTime)
+static u16 _scl_calc(u16 sfrClock, u16 sclMinTime)
 {
 	unsigned long tmp_scl_period = 0;
 	if (((sfrClock * sclMinTime) % I2C_DIV_FACTOR) != 0) {
@@ -30,31 +30,31 @@ u16 _scl_calc(u16 sfrClock, u16 sclMinTime)
 	return (u16)(tmp_scl_period);
 }
 
-void _fast_speed_high_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
+static void _fast_speed_high_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
 {
 	dev_write(I2CM_FS_SCL_HCNT_1_ADDR, (u8) (value >> 8));
 	dev_write(I2CM_FS_SCL_HCNT_0_ADDR, (u8) (value >> 0));
 }
 
-void _fast_speed_low_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
+static void _fast_speed_low_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
 {
 	dev_write(I2CM_FS_SCL_LCNT_1_ADDR, (u8) (value >> 8));
 	dev_write(I2CM_FS_SCL_LCNT_0_ADDR, (u8) (value >> 0));
 }
 
-void _standard_speed_high_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
+static void _standard_speed_high_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
 {
 	dev_write(I2CM_SS_SCL_HCNT_1_ADDR, (u8) (value >> 8));
 	dev_write(I2CM_SS_SCL_HCNT_0_ADDR, (u8) (value >> 0));
 }
 
-void _standard_speed_low_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
+static void _standard_speed_low_clk_ctrl(hdmi_tx_dev_t * dev, u16 value)
 {
 	dev_write(I2CM_SS_SCL_LCNT_1_ADDR, (u8) (value >> 8));
 	dev_write(I2CM_SS_SCL_LCNT_0_ADDR, (u8) (value >> 0));
 }
 
-int _write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 data)
+static int _write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 data)
 {
 	int timeout = I2CDDC_TIMEOUT;
 	u32 status = 0;
@@ -90,7 +90,7 @@ int _write(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 addr, u8 data)
 	return -1;
 }
 
-int _read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr,   u8 * value)
+static int _read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr,   u8 * value)
 {
 	int timeout = I2CDDC_TIMEOUT;
 	u32 status = 0;
@@ -134,7 +134,7 @@ int _read(hdmi_tx_dev_t * dev, u8 i2cAddr, u8 segment, u8 pointer, u8 addr,   u8
 	return -1;
 }
 
-int _read8(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 segment, u8 pointer, u8 addr, u8 * value)
+static int _read8(hdmi_tx_dev_t * dev, u8 i2c_addr, u8 segment, u8 pointer, u8 addr, u8 * value)
 {
 	int timeout = I2CDDC_TIMEOUT;
 	u32 status = 0;

@@ -94,6 +94,7 @@ signed int vpss_set_mod_param(const vpss_mod_param_s *mod_param);
 signed int vpss_get_mod_param(vpss_mod_param_s *mod_param);
 
 signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg);
+vb_blk vb_create_block_vpss(struct vb_s *p, uint64_t phy_addr, void *vir_addr, vb_pool vb_pool, bool is_external);
 
 /* INTERNAL */
 signed int vpss_set_vivpss_mode(const vi_vpss_mode_s *mode);

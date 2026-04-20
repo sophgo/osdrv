@@ -1182,6 +1182,9 @@ JPU_DecSetRdPtr().
         PhysicalAddress addr,
         BOOL updateWrPtr);
 
+    JpgRet JPU_DecSWResetRdWrPtr(
+        JpgDecHandle handle,
+        PhysicalAddress addr);
     // function for encode
 /**
 * @brief

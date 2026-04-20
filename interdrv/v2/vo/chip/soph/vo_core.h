@@ -6,6 +6,7 @@
 	extern "C" {
 #endif
 
+#include <linux/version.h>
 #include <linux/cdev.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
@@ -22,8 +23,9 @@
 #include <linux/pm_qos.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#if (KERNEL_VERSION(6, 0, 0) > LINUX_VERSION_CODE)
 #include <linux/streamline_annotate.h>
-#include <linux/version.h>
+#endif
 #include <linux/delay.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 #include <uapi/linux/sched/types.h>

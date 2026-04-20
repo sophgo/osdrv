@@ -8,6 +8,7 @@
 #include <linux/base_uapi.h>
 #include <queue.h>
 #include "base_debug.h"
+#include "bind.h"
 
 
 #ifndef TAILQ_FOREACH_SAFE

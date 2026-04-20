@@ -7,7 +7,7 @@
 
 #include <linux/delay.h>
 #include <linux/types.h>
-#include <stdbool.h>
+//#include <stdbool.h>
 
 #include <rgn_common.h>
 

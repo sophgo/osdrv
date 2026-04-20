@@ -475,7 +475,7 @@ void disp_odma_set_mem(u8 inst, struct disp_mem *mem)
 	g_odma_cfg[inst].mem = *mem;
 }
 
-void disp_odma_set_csc(u8 inst, enum disp_csc csc)
+static void disp_odma_set_csc(u8 inst, enum disp_csc csc)
 {
 	if (csc == DISP_CSC_NONE) {
 		_reg_write(REG_DISP_ODMA8(inst), 0x0);
@@ -672,7 +672,7 @@ void disp_reg_shadow_sel(u8 inst, bool read_shadow)
  *
  * @param shadow_mask: true(mask); false(unmask)
  */
-void disp_reg_set_shadow_mask(u8 inst, bool shadow_mask)
+static void disp_reg_set_shadow_mask(u8 inst, bool shadow_mask)
 {
 	if (shadow_mask)
 		spin_lock(&disp_mask_spinlock);
@@ -1868,7 +1868,7 @@ enum disp_dsi_mode dsi_get_mode(u8 inst)
  * dsi_clr_mode - let dsi back to idle mode
  *
  */
-void dsi_clr_mode(u8 inst)
+static void dsi_clr_mode(u8 inst)
 {
 	u32 mode = _reg_read(REG_DSI_MAC_EN(inst)) & 0x7;
 
@@ -1926,7 +1926,7 @@ int dsi_chk_mode_done(u8 inst, enum disp_dsi_mode mode)
 }
 EXPORT_SYMBOL_GPL(dsi_chk_mode_done);
 
-int _dsi_chk_and_clean_mode(u8 inst, enum disp_dsi_mode mode)
+static int _dsi_chk_and_clean_mode(u8 inst, enum disp_dsi_mode mode)
 {
 	int i, ret;
 

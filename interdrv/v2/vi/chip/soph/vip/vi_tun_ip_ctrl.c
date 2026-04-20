@@ -1048,7 +1048,7 @@ void ispblk_bnr_tun_cfg(
 	ISP_WO_BITS(bnr, reg_isp_bnr_t, shadow_rd_sel, shadow_rd_sel, 1);
 }
 
-void ispblk_clut_partial_update(
+static void ispblk_clut_partial_update(
 	struct isp_ctx *ctx,
 	struct sop_vip_isp_clut_config *cfg,
 	const enum sop_isp_raw raw_num)

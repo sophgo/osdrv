@@ -58,7 +58,11 @@ static int vo_disp_proc_show(struct seq_file *m, void *v)
 
 static int vo_disp_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, vo_disp_proc_show, pde_data(inode));
+#else
 	return single_open(file, vo_disp_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

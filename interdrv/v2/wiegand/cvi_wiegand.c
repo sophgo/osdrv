@@ -34,6 +34,7 @@
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/version.h>
 #include <linux/compat.h>
 
 #include "cvi_wiegand.h"
@@ -240,7 +241,12 @@ static int cvi_wiegand_rx(struct cvi_wiegand_device *ndev, unsigned long arg, in
 	return 0;
 }
 
+/* Linux 5.10 requires non-static for file_operations, Linux 6.12 requires static */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 ssize_t cvi_wiegand_read(struct file *filp, char *buff, size_t count, loff_t *offp)
+#else
+static ssize_t cvi_wiegand_read(struct file *filp, char *buff, size_t count, loff_t *offp)
+#endif
 {
 	struct cvi_wiegand_device *ndev = filp->private_data;
 
@@ -402,7 +408,12 @@ static const struct file_operations wiegand_fops = {
 #endif
 };
 
+/* Linux 5.10 requires non-static, Linux 6.12 requires static for missing-prototypes */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 int cvi_wiegand_register_cdev(struct cvi_wiegand_device *ndev)
+#else
+static int cvi_wiegand_register_cdev(struct cvi_wiegand_device *ndev)
+#endif
 {
 	cdev_init(&ndev->cdev, &wiegand_fops);
 	ndev->cdev.owner = THIS_MODULE;
@@ -482,6 +493,8 @@ static int cvi_wiegand_probe(struct platform_device *pdev)
 	return 0;
 }
 
+/* platform_driver.remove return type changed from int to void in Linux 6.12 */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int cvi_wiegand_remove(struct platform_device *pdev)
 {
 	struct cvi_wiegand_device *ndev = platform_get_drvdata(pdev);
@@ -491,10 +504,23 @@ static int cvi_wiegand_remove(struct platform_device *pdev)
 	cdev_del(&ndev->cdev);
 
 	platform_set_drvdata(pdev, NULL);
-	pr_debug("=== cvi_wiegand_remove\n");
+	pr_debug("=== %s\n", __func__);
 
 	return 0;
 }
+#else
+static void cvi_wiegand_remove(struct platform_device *pdev)
+{
+	struct cvi_wiegand_device *ndev = platform_get_drvdata(pdev);
+
+	device_destroy(wiegand_class, wiegand_cdev_id);
+
+	cdev_del(&ndev->cdev);
+
+	platform_set_drvdata(pdev, NULL);
+	pr_debug("=== %s\n", __func__);
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int dw_wiegand_suspend(struct device *dev)
@@ -540,7 +566,12 @@ static int __init wgn_init(void)
 {
 	int rc;
 
+/* class_create API changed in Linux 6.12: removed THIS_MODULE parameter */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	wiegand_class = class_create(THIS_MODULE, CVI_WIEGAND_CLASS_NAME);
+#else
+	wiegand_class = class_create(CVI_WIEGAND_CLASS_NAME);
+#endif
 	if (IS_ERR(wiegand_class)) {
 		pr_err("create class failed\n");
 		return PTR_ERR(wiegand_class);

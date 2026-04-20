@@ -221,7 +221,7 @@ static const struct file_operations sys_fops = {
 #endif
 };
 
-int sys_register_misc(struct sys_device *ndev)
+static int sys_register_misc(struct sys_device *ndev)
 {
 	int rc;
 
@@ -333,7 +333,11 @@ static int sys_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 static int sys_remove(struct platform_device *pdev)
+#else
+static void sys_remove(struct platform_device *pdev)
+#endif
 {
 	struct sys_device *ndev = platform_get_drvdata(pdev);
 
@@ -343,7 +347,11 @@ static int sys_remove(struct platform_device *pdev)
 	misc_deregister(&ndev->miscdev);
 	platform_set_drvdata(pdev, NULL);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return 0;
+#else
+	return;
+#endif
 }
 
 static const struct of_device_id sys_match[] = {

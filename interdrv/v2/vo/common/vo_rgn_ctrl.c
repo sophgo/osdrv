@@ -7,6 +7,7 @@
 #include <vo.h>
 #include <vo_cb.h>
 #include "disp.h"
+#include "vo_rgn_ctrl.h"
 
 static u8 _gop_get_bpp(enum disp_gop_format fmt)
 {

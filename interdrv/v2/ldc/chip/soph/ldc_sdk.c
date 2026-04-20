@@ -6,6 +6,7 @@
 #include <linux/mm.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 #include <linux/comm_video.h>
 #include <linux/comm_gdc.h>
@@ -290,7 +291,7 @@ static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job)
 
 	if (job->identity.sync_io) {
 		TRACE_LDC(DBG_INFO, "job[%px] wake endjob\n", job);
-		wake_up(&job->job_done_wq);
+		up(&job->job_done_sem);
 	} else {
 		kfree(job);
 		fasync = ldc_get_dev_fasync();
@@ -1074,6 +1075,7 @@ int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 	atomic_set(&job->task_num, 0);
 	job->identity.sync_io = true;
 	job->devs_type = DEVS_MAX;
+	sema_init(&job->job_done_sem, 0);
 
 	data->handle = (u64)(uintptr_t)job;
 
@@ -1131,19 +1133,16 @@ int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 	//mutex_unlock(&g_io_lock);
 
 	TRACE_LDC(DBG_INFO, "job[%px] name[%s] sync_io=%d\n", job, job->identity.name, job->identity.sync_io);
-
 	if (job->identity.sync_io) {
 		spin_lock_irqsave(&job->lock, flags);
-		init_waitqueue_head(&job->job_done_wq);
 		job->job_done_evt = false;
 		spin_unlock_irqrestore(&job->lock, flags);
 
-		sync_io_ret = wait_event_timeout(job->job_done_wq, job->job_done_evt, timeout);
-		if (sync_io_ret <= 0) {
-			TRACE_LDC(DBG_WARN, "end job[%px] fail,timeout, ret(%d)\n", job, sync_io_ret);
+		sync_io_ret = down_timeout(&job->job_done_sem, timeout);
+		if (sync_io_ret != 0) {
+			TRACE_LDC(DBG_WARN, "end job[%px] fail, timeout, ret(%d)\n", job, sync_io_ret);
 			return -1;
 		}
-
 		kfree(job);
 	}
 
@@ -1807,7 +1806,16 @@ int ldc_detach_vb_pool(struct ldc_vb_pool_cfg *cfg)
  **************************************************************************/
 int ldc_sw_init(struct ldc_vdev *wdev)
 {
-	struct sched_param tsk;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 10,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 10,
+    };
+#endif
 	int ret = 0, i, j, k;
 	unsigned char coreid;
 
@@ -1851,11 +1859,13 @@ int ldc_sw_init(struct ldc_vdev *wdev)
 	}
 
 	// Same as sched_set_fifo in linux 5.x
-	tsk.sched_priority = MAX_USER_RT_PRIO - 10;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	ret = sched_setscheduler(wdev->thread, SCHED_FIFO, &tsk);
 	if (ret)
 		TRACE_LDC(DBG_WARN, "ldc thread priority update failed: %d\n", ret);
-
+#else
+        	sched_setattr_nocheck(wdev->thread, &tsk);
+#endif
 	/*wdev->workqueue = create_singlethread_workqueue("ldc_workqueue");
 	if (!wdev->workqueue) {
 		TRACE_LDC(DBG_ERR, "ldc dev create_workqueue failed.\n");

@@ -4,7 +4,7 @@
  * File name: vip_ldc_proc.c
  * Description: video pipeline graphic distortion correction engine info
  */
-
+#include <linux/utsname.h>
 #include "ldc_proc.h"
 #include "ldc_debug.h"
 #include "base_common.h"
@@ -126,7 +126,11 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 	idx = pldcCtx->job_idx - 1;
 	spin_unlock_irqrestore(&pldcCtx->lock, flags);
 
-	seq_printf(m, "\nModule: [LDC], Build Time[%s]\n", UTS_VERSION);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    seq_printf(m, "\nModule: [LDC], Build Time[%s]\n", UTS_VERSION);
+#else
+    seq_printf(m, "\nModule: [LDC], Build Time[%s]\n", utsname()->version);
+#endif
 
 	if (idx < 0 || idx >= LDC_PROC_JOB_INFO_NUM) {
 		TRACE_LDC(DBG_ERR, "invalid proc job idx[%d], out of range[%d]\n", idx, LDC_PROC_JOB_INFO_NUM);
@@ -312,7 +316,11 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 
 static int ldc_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, ldc_proc_show, PDE_DATA(inode));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    return single_open(file, ldc_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, ldc_proc_show, pde_data(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

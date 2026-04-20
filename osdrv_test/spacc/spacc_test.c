@@ -21,7 +21,7 @@
 
 int testBase64(int argc, char **args)
 {
-	int fd;
+	int fd = -1;
 	unsigned int result_size;
 	int ret;
 	unsigned int pool_size = POOL_SIZE;
@@ -34,13 +34,13 @@ int testBase64(int argc, char **args)
 		return -1;
 	}
 
-	if (ioctl(fd, IOCTL_SPACC_CREATE_POOL, &pool_size)) {
+	if (ioctl(fd, IOCTL_SPACC_CREATE_MEMPOOL, &pool_size)) {
 		printf("ioctl failed\n");
 		return -1;
 	}
 
 	pool_size = 0;
-	ioctl(fd, IOCTL_SPACC_GET_POOL_SIZE, &pool_size);
+	ioctl(fd, IOCTL_SPACC_GET_MEMPOOL_SIZE, &pool_size);
 	printf("pool size: %d\n", pool_size);
 
 	memcpy(buf, "hello", 5);
@@ -106,10 +106,10 @@ int testBase64(int argc, char **args)
 }
 int testAES_CTR(void)
 {
-    int fd;
+    int fd = -1;
     int ret = -1;
     FILE *fp_in = NULL, *fp_out = NULL, *fp_dec = NULL;
-    spacc_exec_config conf;
+    struct spacc_aes_config conf;
     // const size_t BLOCK_SIZE = 4 * 1024 * 1024;  // 4MB block size
     const size_t BLOCK_SIZE = 32 * 1024;  // 32KB block size
 
@@ -147,17 +147,18 @@ int testAES_CTR(void)
     }
 
     // Create memory pool
-    if (ioctl(fd, IOCTL_SPACC_CREATE_POOL, &pool_size)) {
+    if (ioctl(fd, IOCTL_SPACC_CREATE_MEMPOOL, &pool_size)) {
         printf("Failed to create memory pool\n");
         goto cleanup;
     }
 
-    unsigned char key[32] = { 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
-                             0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
-                             0x61, 0x61, 0x61, 0x62, 0x63, 0x64, 0x65,
-                             0x66, 0x67, 0x68, 0x61, 0x61, 0x61, 0x61,
-                             0x61, 0x61, 0x61, 0x61 };
-    
+    unsigned char key[32] = {
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+        0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
+    };
+
     // Base counter/IV for CTR mode
     // unsigned char base_counter[16] = {
     //     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
@@ -175,12 +176,12 @@ int testAES_CTR(void)
     printf("Each block contains %llu AES blocks (16 bytes each)\n", aes_blocks_per_chunk);
 
     printf("encrypt case (CTR mode):============================\n");
-    
+
     // Process each 32KB block
     while (remaining > 0) {
         // Calculate current block size
         size_t current_block = (remaining > BLOCK_SIZE) ? BLOCK_SIZE : remaining;
-        
+
         // Read a block of data
         size_t read_size = fread(buf, 1, current_block, fp_in);
         if (read_size != current_block) {
@@ -190,17 +191,17 @@ int testAES_CTR(void)
 
         // Number of AES blocks processed
         uint64_t aes_blocks_processed = block_counter * aes_blocks_per_chunk;
-        
+
         // Check for counter overflow
         uint64_t max_counter = UINT64_MAX - aes_blocks_per_chunk;
         if (aes_blocks_processed > max_counter) {
             printf("Counter overflow detected! Need to reset encryption state.\n");
             goto cleanup;
         }
-        
+
         // Calculate counter value for current block
         memcpy(current_counter, base_counter, 16);
-        
+
         // Add processed blocks count to counter with carry handling
         uint64_t counter_value = aes_blocks_processed;
         uint8_t carry = 0;
@@ -210,7 +211,7 @@ int testAES_CTR(void)
             carry = sum >> 8;
             counter_value >>= 8;
         }
-        
+
         // If there's still a carry, handle the first 8 bytes
         if (carry) {
             for (int i = 7; i >= 0 && carry; i--) {
@@ -228,12 +229,11 @@ int testAES_CTR(void)
         }
 
         // Configure encryption parameters - using CTR mode
-        memset(&conf, 0, sizeof(spacc_exec_config));
-        conf.algo = ALGO_AES;
-        conf.mode = AES_CTR;  // Use CTR mode
-        conf.key_mode = AES_256BIT;
-        conf.action = ENCRYPTION;  // In CTR mode, encryption and decryption operations are the same
-        conf.otp = USE_DMA_KEY;
+        memset(&conf, 0, sizeof(spacc_aes_config_s));
+        conf.mode = SPACC_ALGO_MODE_CTR;  // Use CTR mode
+        conf.key_mode = SPACC_KEY_SIZE_256BITS;
+        conf.action = SPACC_ACTION_ENCRYPTION;  // In CTR mode, encryption and decryption operations are the same
+        conf.otp = SPACC_KEY_SOURCE_DESCRIPTOR;
         conf.key = (uintptr_t)key;
         conf.iv = (uintptr_t)current_counter;  // Use current block's counter
 
@@ -262,8 +262,8 @@ int testAES_CTR(void)
 
         remaining -= read_size;
         processed += read_size;
-        printf("Encrypted %zu bytes (%.1f%%)\n", processed, 
-               (float)processed * 100 / TOTAL_SIZE);
+        printf("Encrypted %zu bytes (%.1f%%)\n", processed,
+            (float)processed * 100 / TOTAL_SIZE);
 
         // Display counter value for each block
         printf("Block %llu counter: ", block_counter);
@@ -275,8 +275,10 @@ int testAES_CTR(void)
 
     // Close files, prepare for decryption
     fclose(fp_in);
+    fp_in = NULL;
     fclose(fp_out);
-    
+    fp_out = NULL;
+
     printf("decrypt case (CTR mode):============================\n");
 
     // Reset counters
@@ -301,21 +303,21 @@ int testAES_CTR(void)
     // Decryption loop - in CTR mode, encryption and decryption operations are the same
     while (remaining > 0) {
         size_t current_block = (remaining > BLOCK_SIZE) ? BLOCK_SIZE : remaining;
-        
+
         // Read encrypted data
         size_t read_size = fread(buf, 1, current_block, fp_in);
         if (read_size != current_block) {
-            printf("Read error during decrypt: expected %zu, got %zu\n", 
-                   current_block, read_size);
+            printf("Read error during decrypt: expected %zu, got %zu\n",
+                    current_block, read_size);
             goto cleanup;
         }
 
         // Calculate counter value for current block - same as during encryption
         memcpy(current_counter, base_counter, 16);
-        
+
         // Number of AES blocks processed - using same logic as encryption
         uint64_t aes_blocks_processed = block_counter * aes_blocks_per_chunk;
-        
+
         // Add processed blocks count to counter with carry handling
         uint64_t counter_value = aes_blocks_processed;
         uint8_t carry = 0;
@@ -325,7 +327,7 @@ int testAES_CTR(void)
             carry = sum >> 8;
             counter_value >>= 8;
         }
-        
+
         // If there's still a carry, handle the first 8 bytes
         if (carry) {
             for (int i = 7; i >= 0 && carry; i--) {
@@ -343,12 +345,11 @@ int testAES_CTR(void)
         }
 
         // Configure decryption parameters - in CTR mode, encryption and decryption are the same
-        memset(&conf, 0, sizeof(spacc_exec_config));
-        conf.algo = ALGO_AES;
-        conf.mode = AES_CTR;
-        conf.key_mode = AES_256BIT;
-        conf.action = DECRYPT;  // In CTR mode, encryption and decryption operations are the same
-        conf.otp = USE_DMA_KEY;
+        memset(&conf, 0, sizeof(spacc_aes_config_s));
+        conf.mode = SPACC_ALGO_MODE_CTR;
+        conf.key_mode = SPACC_KEY_SIZE_256BITS;
+        conf.action = SPACC_ACTION_DECRYPT;  // In CTR mode, encryption and decryption operations are the same
+        conf.otp = SPACC_KEY_SOURCE_DESCRIPTOR;
         conf.key = (uintptr_t)key;
         conf.iv = (uintptr_t)current_counter;
 
@@ -377,8 +378,8 @@ int testAES_CTR(void)
 
         remaining -= read_size;
         processed += read_size;
-        printf("Decrypted %zu bytes (%.1f%%)\n", processed, 
-               (float)processed * 100 / TOTAL_SIZE);
+        printf("Decrypted %zu bytes (%.1f%%)\n", processed,
+                (float)processed * 100 / TOTAL_SIZE);
 
         // Display counter value for each block
         printf("Block %llu counter: ", block_counter);
@@ -392,11 +393,13 @@ int testAES_CTR(void)
 
     // Verify decryption result
     printf("Verifying decryption result...\n");
-    
+
     // Reopen original and decrypted files for comparison
     fclose(fp_in);
+    fp_in = NULL;
     fclose(fp_out);
-    
+    fp_out = NULL;
+
     fp_in = fopen("100MB.bin", "rb");
     fp_dec = fopen("spacc_dec_ctr.bin", "rb");
     if (!fp_in || !fp_dec) {
@@ -406,34 +409,34 @@ int testAES_CTR(void)
 
     remaining = TOTAL_SIZE;
     processed = 0;
-    
+
     // Verify file contents in chunks
     while (remaining > 0) {
         unsigned char orig_buf[4096];
         unsigned char dec_buf[4096];
-        
-        size_t verify_size = (remaining > sizeof(orig_buf)) ? 
-                            sizeof(orig_buf) : remaining;
-        
+
+        size_t verify_size = (remaining > sizeof(orig_buf)) ?
+                    sizeof(orig_buf) : remaining;
+
         size_t orig_read = fread(orig_buf, 1, verify_size, fp_in);
         size_t dec_read = fread(dec_buf, 1, verify_size, fp_dec);
-        
+
         if (orig_read != dec_read || orig_read != verify_size) {
             printf("Verification failed: size mismatch at offset %zu\n", processed);
             goto cleanup;
         }
-        
+
         if (memcmp(orig_buf, dec_buf, verify_size) != 0) {
             printf("Verification failed: content mismatch at offset %zu\n", processed);
             goto cleanup;
         }
-        
+
         remaining -= verify_size;
         processed += verify_size;
-        
+
         if (processed % (1024*1024) == 0) {  // Show progress every 1MB
-            printf("Verified %zu bytes (%.1f%%)\n", processed, 
-                   (float)processed * 100 / TOTAL_SIZE);
+            printf("Verified %zu bytes (%.1f%%)\n", processed,
+                    (float)processed * 100 / TOTAL_SIZE);
         }
     }
 
@@ -447,17 +450,18 @@ cleanup:
         fclose(fp_out);
     if (fp_dec)
         fclose(fp_dec);
-    free(buf);
     if (fd >= 0)
         close(fd);
+    if (buf)
+        free(buf);
     return ret;
 }
 int testAES_CBC(void)
 {
-    int fd;
+    int fd = -1;
     int ret = -1;  // Set default return value to failure
     FILE *fp_in = NULL, *fp_out = NULL, *fp_dec = NULL;
-    spacc_exec_config conf;
+    spacc_aes_config_s conf;
     const size_t BLOCK_SIZE = 4 * 1024 * 1024;  // 4MB block size
     const size_t TOTAL_SIZE = 100 * 1024 * 1024;  // 100MB total size
     unsigned int pool_size = BLOCK_SIZE;
@@ -492,16 +496,17 @@ int testAES_CBC(void)
     }
 
     // Create memory pool
-    if (ioctl(fd, IOCTL_SPACC_CREATE_POOL, &pool_size)) {
+    if (ioctl(fd, IOCTL_SPACC_CREATE_MEMPOOL, &pool_size)) {
         printf("Failed to create memory pool\n");
         goto cleanup;
     }
 
-    unsigned char key[32] = { 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
-                            0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
-                            0x61, 0x61, 0x61, 0x62, 0x63, 0x64, 0x65,
-                            0x66, 0x67, 0x68, 0x61, 0x61, 0x61, 0x61,
-                            0x61, 0x61, 0x61, 0x61 };
+    unsigned char key[32] = {
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+        0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
+    };
     unsigned char iv[16] = {
         0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
         0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
@@ -511,7 +516,7 @@ int testAES_CBC(void)
     while (remaining > 0) {
         // Calculate current block size
         size_t current_block = (remaining > BLOCK_SIZE) ? BLOCK_SIZE : remaining;
-        
+
         // Read a block of data
         size_t read_size = fread(buf, 1, current_block, fp_in);
         if (read_size != current_block) {
@@ -527,12 +532,11 @@ int testAES_CBC(void)
         }
 
         // Configure encryption parameters
-        memset(&conf, 0, sizeof(spacc_exec_config));
-        conf.algo = ALGO_AES;
-        conf.mode = AES_CBC;
-        conf.key_mode = AES_256BIT;
-        conf.action = ENCRYPTION;
-        conf.otp = USE_DMA_KEY;
+        memset(&conf, 0, sizeof(spacc_aes_config_s));
+        conf.mode = SPACC_ALGO_MODE_CBC;
+        conf.key_mode = SPACC_KEY_SIZE_256BITS;
+        conf.action = SPACC_ACTION_ENCRYPTION;
+        conf.otp = SPACC_KEY_SOURCE_DESCRIPTOR;
         conf.key = (uintptr_t)key;
         conf.iv = (uintptr_t)iv;
 
@@ -563,13 +567,15 @@ int testAES_CBC(void)
 
         remaining -= read_size;
         processed += read_size;
-        printf("Processed %zu bytes (%.1f%%)\n", processed, 
-               (float)processed * 100 / TOTAL_SIZE);
+        printf("Processed %zu bytes (%.1f%%)\n", processed,
+            (float)processed * 100 / TOTAL_SIZE);
     }
 
     // Close files, prepare for decryption
     fclose(fp_in);
+    fp_in = NULL;
     fclose(fp_out);
+    fp_out = NULL;
     printf("decrypt case:============================\n");
 
     // Reset counters
@@ -578,9 +584,10 @@ int testAES_CBC(void)
 
     // Reset IV to initial value
     memcpy(iv, (unsigned char[16]){
-        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
-        0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
-    }, 16);
+            0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+            0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61
+            },
+            16);
 
     // Reopen encrypted file
     fp_in = fopen("spacc_enc.bin", "rb");
@@ -599,12 +606,12 @@ int testAES_CBC(void)
     // Decryption loop
     while (remaining > 0) {
         size_t current_block = (remaining > BLOCK_SIZE) ? BLOCK_SIZE : remaining;
-        
+
         // Read encrypted data
         size_t read_size = fread(buf, 1, current_block, fp_in);
         if (read_size != current_block) {
-            printf("Read error during decrypt: expected %zu, got %zu\n", 
-                   current_block, read_size);
+            printf("Read error during decrypt: expected %zu, got %zu\n",
+            current_block, read_size);
             goto cleanup;
         }
 
@@ -622,12 +629,11 @@ int testAES_CBC(void)
         }
 
         // Configure decryption parameters
-        memset(&conf, 0, sizeof(spacc_exec_config));
-        conf.algo = ALGO_AES;
-        conf.mode = AES_CBC;
-        conf.key_mode = AES_256BIT;
-        conf.action = DECRYPT;
-        conf.otp = USE_DMA_KEY;
+        memset(&conf, 0, sizeof(spacc_aes_config_s));
+        conf.mode = SPACC_ALGO_MODE_CBC;
+        conf.key_mode = SPACC_KEY_SIZE_256BITS;
+        conf.action = SPACC_ACTION_DECRYPT;
+        conf.otp = SPACC_KEY_SOURCE_DESCRIPTOR;
         conf.key = (uintptr_t)key;
         conf.iv = (uintptr_t)iv;
 
@@ -658,19 +664,21 @@ int testAES_CBC(void)
 
         remaining -= read_size;
         processed += read_size;
-        printf("Decrypted %zu bytes (%.1f%%)\n", processed, 
-               (float)processed * 100 / TOTAL_SIZE);
+        printf("Decrypted %zu bytes (%.1f%%)\n", processed,
+                (float)processed * 100 / TOTAL_SIZE);
     }
 
     printf("Decryption completed successfully\n");
 
     // Verify decryption result
     printf("Verifying decryption result...\n");
-    
+
     // Reopen original and decrypted files for comparison
     fclose(fp_in);
+    fp_in = NULL;
     fclose(fp_out);
-    
+    fp_out = NULL;
+
     // Verify decrypted result
     fp_in = fopen("100MB.bin", "rb");
     fp_dec = fopen("spacc_dec.bin", "rb");
@@ -681,34 +689,34 @@ int testAES_CBC(void)
 
     remaining = TOTAL_SIZE;
     processed = 0;
-    
+
     // Verify file contents in chunks
     while (remaining > 0) {
         unsigned char orig_buf[4096];
         unsigned char dec_buf[4096];
-        
-        size_t verify_size = (remaining > sizeof(orig_buf)) ? 
-                            sizeof(orig_buf) : remaining;
-        
+
+        size_t verify_size = (remaining > sizeof(orig_buf)) ?
+                    sizeof(orig_buf) : remaining;
+
         size_t orig_read = fread(orig_buf, 1, verify_size, fp_in);
         size_t dec_read = fread(dec_buf, 1, verify_size, fp_dec);
-        
+
         if (orig_read != dec_read || orig_read != verify_size) {
             printf("Verification failed: size mismatch at offset %zu\n", processed);
             goto cleanup;
         }
-        
+
         if (memcmp(orig_buf, dec_buf, verify_size) != 0) {
             printf("Verification failed: content mismatch at offset %zu\n", processed);
             goto cleanup;
         }
-        
+
         remaining -= verify_size;
         processed += verify_size;
-        
+
         if (processed % (1024*1024) == 0) {  // Show progress every 1MB
-            printf("Verified %zu bytes (%.1f%%)\n", processed, 
-                   (float)processed * 100 / TOTAL_SIZE);
+            printf("Verified %zu bytes (%.1f%%)\n", processed,
+                    (float)processed * 100 / TOTAL_SIZE);
         }
     }
 
@@ -718,10 +726,14 @@ int testAES_CBC(void)
 cleanup:
     if (fp_in)
         fclose(fp_in);
+    if (fp_out)
+        fclose(fp_out);
     if (fp_dec)
         fclose(fp_dec);
-    free(buf);
-    close(fd);
+    if (fd >= 0)
+        close(fd);
+    if (buf)
+        free(buf);
     return ret;
 }
 int main(int argc, char **args)

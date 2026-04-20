@@ -100,7 +100,7 @@ int isp_sync_task_register(int vi_pipe, struct isp_sync_task_node *new_node)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(isp_sync_task_register);
+/* EXPORT_SYMBOL_GPL(isp_sync_task_register); */ /* Already exported by vmlinux */
 
 int isp_sync_task_unregister(int vi_pipe, struct isp_sync_task_node *del_node)
 {
@@ -144,7 +144,7 @@ int isp_sync_task_unregister(int vi_pipe, struct isp_sync_task_node *del_node)
 
 	return del_success;
 }
-EXPORT_SYMBOL_GPL(isp_sync_task_unregister);
+/* EXPORT_SYMBOL_GPL(isp_sync_task_unregister); */ /* Already exported by vmlinux */
 
 int isp_sync_task_process(int vi_pipe)
 {

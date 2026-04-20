@@ -38,16 +38,7 @@ enum {
 };
 
 #define MAX_PRINT_LENGTH 128
-
-#ifdef ANDROID
-    #include <utils/Log.h>
-    #undef LOG_NDEBUG
-    #define LOG_NDEBUG 0
-    #undef LOG_TAG
-    #define LOG_TAG "VPUAPI"
-#endif
-
-#define VLOG(dbg_lv, format, ...)                   LogMsg(dbg_lv, "[%s:%d]"format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define VLOG(dbg_lv, format, ...)           LogMsg(dbg_lv, "[%s:%d]"format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #define VLOG_EX(dbg_lv, format, ...)        LogMsg(dbg_lv, "[%s:%d]"format, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_ENABLE_FILE	SetLogDecor(GetLogDecor()|LOG_HAS_FILE);
@@ -65,18 +56,12 @@ typedef void * osal_file_t;
     #define	SEEK_END	2
 #endif
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(_WIN64) || defined(WIN32) || defined(__MINGW32__)
-#elif defined(linux) || defined(__linux) || defined(ANDROID)
-#else
-
 #ifndef stdout
     #define	stdout	(void * )1
 #endif
 
 #ifndef stderr
     #define	stderr	(void * )1
-#endif
-
 #endif
 
 typedef void*   osal_thread_t;

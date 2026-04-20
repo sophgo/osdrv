@@ -62,7 +62,7 @@ const struct file_operations vo_fops = {
 	.poll = vo_core_poll,
 };
 
-int vo_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
+static int vo_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	return vo_cb(dev, caller, cmd, arg);
 }
@@ -88,7 +88,11 @@ static int vo_core_register_cdev(struct vo_core_dev *dev)
 	struct device *dev_t;
 	int err = 0;
 
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+	dev->vo_class = class_create(VO_CLASS_NAME);
+#else
 	dev->vo_class = class_create(THIS_MODULE, VO_CLASS_NAME);
+#endif
 	if (IS_ERR(dev->vo_class)) {
 		dev_err(dev->dev, "create class failed\n");
 		return PTR_ERR(dev->vo_class);
@@ -312,11 +316,17 @@ vo_create_instance_err:
 	return ret;
 }
 
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
+static void vo_core_remove(struct platform_device *pdev)
+{
+	int ret = 0, i;
+	struct vo_core_dev *dev = dev_get_drvdata(&pdev->dev);
+#else
 static int vo_core_remove(struct platform_device *pdev)
 {
 	int ret = 0, i;
-
 	struct vo_core_dev *dev = dev_get_drvdata(&pdev->dev);
+#endif
 
 	ret = vo_destroy_instance(pdev);
 	if (ret) {
@@ -347,12 +357,13 @@ static int vo_core_remove(struct platform_device *pdev)
 
 err_destroy_instance:
 	TRACE_VO(DBG_INFO, "%s -\n", __func__);
-
+#if (KERNEL_VERSION(5, 18, 0) > LINUX_VERSION_CODE)
 	return ret;
+#endif
 }
 
 #if defined(CONFIG_PM)
-int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
+static int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	int ret = -1;
 	vo_wbc wbc_dev;
@@ -393,7 +404,7 @@ int vo_core_suspend(struct platform_device *pdev, pm_message_t state)
 	return 0;
 }
 
-int vo_core_resume(struct platform_device *pdev)
+static int vo_core_resume(struct platform_device *pdev)
 {
 	int ret = -1;
 	vo_wbc wbc_dev;
@@ -479,3 +490,6 @@ module_platform_driver(vo_core_driver);
 MODULE_AUTHOR("CVITEK Inc.");
 MODULE_DESCRIPTION("Cvitek video output driver");
 MODULE_LICENSE("GPL");
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
+MODULE_IMPORT_NS(DMA_BUF);
+#endif

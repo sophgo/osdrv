@@ -9,7 +9,7 @@
 #include "vpss_platform.h"
 
 
-enum sclr_format user_fmt_to_hw(u32 fmt)
+static enum sclr_format user_fmt_to_hw(u32 fmt)
 {
 	switch (fmt) {
 	case PIXEL_FORMAT_YUV_PLANAR_420:
@@ -68,7 +68,7 @@ enum sclr_format user_fmt_to_hw(u32 fmt)
 	return SCL_FMT_YUV420;
 }
 
-enum sclr_odma_datatype user_fmt_to_datatype(u32 fmt)
+static enum sclr_odma_datatype user_fmt_to_datatype(u32 fmt)
 {
 	switch (fmt) {
 	case PIXEL_FORMAT_FP32_C1:
@@ -93,13 +93,13 @@ enum sclr_odma_datatype user_fmt_to_datatype(u32 fmt)
 	return SCL_DATATYPE_DISABLE;
 }
 
-u8 _gop_get_bpp(enum sclr_gop_format fmt)
+static u8 _gop_get_bpp(enum sclr_gop_format fmt)
 {
 	return (fmt == SCL_GOP_FMT_ARGB8888) ? 4 :
 		(fmt == SCL_GOP_FMT_256LUT) ? 1 : 2;
 }
 
-int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct rgn_cfg *rgn_cfg,
+static int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct rgn_cfg *rgn_cfg,
 	const struct sclr_size *size)
 {
 	struct sclr_gop_cfg *gop_cfg = sclr_gop_get_cfg(inst, layer);
@@ -564,7 +564,7 @@ bool img_down_tile_cfg(u8 dev_idx, u8 is_right)
 	return sclr_down_tile(dev_idx, sc_offset, is_right);
 }
 
-enum sclr_csc get_img_csc(u32 pixelformat)
+static enum sclr_csc get_img_csc(u32 pixelformat)
 {
 	enum sclr_format fmt;
 	enum sclr_csc csc_type;
@@ -581,7 +581,7 @@ enum sclr_csc get_img_csc(u32 pixelformat)
 	return csc_type;
 }
 
-enum sclr_csc get_sc_csc(u32 pixelformat)
+static enum sclr_csc get_sc_csc(u32 pixelformat)
 {
 	enum sclr_format fmt;
 	enum sclr_csc csc_type;

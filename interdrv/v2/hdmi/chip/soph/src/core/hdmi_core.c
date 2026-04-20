@@ -39,8 +39,12 @@ static atomic_t  dev_open_cnt;
 
 #define HDMI_DEV_NAME   "soph-hdmi"
 #define HDMI_CLASS_NAME "soph-hdmi"
+#ifndef MIN
 #define MIN(a, b) (((a) < (b))?(a):(b))
+#endif
+#ifndef MAX
 #define MAX(a, b) (((a) > (b))?(a):(b))
+#endif
 #define DISP1 1
 
 u32 hdmi_log_lv = CVI_DBG_DEBUG/*CVI_DBG_INFO*/;
@@ -48,7 +52,7 @@ module_param(hdmi_log_lv, int, 0644);
 
 const unsigned dtd_size = 0x12;
 
-void _fill_disp_timing(struct disp_timing *timing, dtd_t *mdtd)
+static void _fill_disp_timing(struct disp_timing *timing, dtd_t *mdtd)
 {
 	timing->vtotal = mdtd->m_vactive + mdtd->m_vblanking - 1;
 	timing->htotal = mdtd->m_hactive + mdtd->m_hblanking - 1;
@@ -224,7 +228,7 @@ int edid_tx_supports_cea_code(u32 cea_code){
 	return FALSE;
 }
 
-int edid_parser_cea_ext_reset(hdmi_tx_dev_t *dev, sink_edid_t *edid_ext)
+static int edid_parser_cea_ext_reset(hdmi_tx_dev_t *dev, sink_edid_t *edid_ext)
 {
 	unsigned i = 0;
 	edid_ext->edid_m20sink = FALSE;
@@ -250,7 +254,7 @@ int edid_parser_cea_ext_reset(hdmi_tx_dev_t *dev, sink_edid_t *edid_ext)
 	return TRUE;
 }
 
-void edid_parser_update_ycc420(sink_edid_t *edid_ext, u8 ycc420_all, u8 limited_to_ycc420all)
+static void edid_parser_update_ycc420(sink_edid_t *edid_ext, u8 ycc420_all, u8 limited_to_ycc420all)
 {
 	u16 edid_cnt = 0;
 	for (edid_cnt = 0;edid_cnt < edid_ext->edid_msvd_index;edid_cnt++) {
@@ -271,7 +275,7 @@ void edid_parser_update_ycc420(sink_edid_t *edid_ext, u8 ycc420_all, u8 limited_
 	}
 }
 
-int edid_parser_parse_data_block(hdmi_tx_dev_t *dev, u8 * data, sink_edid_t *edid_ext)
+static int edid_parser_parse_data_block(hdmi_tx_dev_t *dev, u8 * data, sink_edid_t *edid_ext)
 {
 	u8 c = 0;
 	short_audio_desc_t tmp_sad;
@@ -451,7 +455,7 @@ int edid_parser_parse_data_block(hdmi_tx_dev_t *dev, u8 * data, sink_edid_t *edi
 	return length + 1;
 }
 
-int _edid_struture_parser(hdmi_tx_dev_t *dev, struct edid * edid, sink_edid_t * sink)
+static int _edid_struture_parser(hdmi_tx_dev_t *dev, struct edid * edid, sink_edid_t * sink)
 {
 	int i;
 	char * monitor_name;
@@ -493,7 +497,7 @@ int _edid_struture_parser(hdmi_tx_dev_t *dev, struct edid * edid, sink_edid_t * 
 	return TRUE;
 }
 
-int _edid_cea_extension_parser(hdmi_tx_dev_t *dev, u8 * buffer, sink_edid_t * edid_ext)
+static int _edid_cea_extension_parser(hdmi_tx_dev_t *dev, u8 * buffer, sink_edid_t * edid_ext)
 {
 	int i = 0;
 	int c = 0;
@@ -989,7 +993,7 @@ int hdmitx_stop(void)
 	return stop_handler();
 }
 
-irqreturn_t _hdmi_tx_handler(int irq, void *dev_id){
+static irqreturn_t _hdmi_tx_handler(int irq, void *dev_id){
 	struct hdmitx_dev *dev = NULL;
 	u32 hdcp_irq = 0;
 
@@ -1016,7 +1020,7 @@ irqreturn_t _hdmi_tx_handler(int irq, void *dev_id){
 	return IRQ_HANDLED;
 }
 
-irqreturn_t _hdcp_handler(int irq, void *dev_id){
+static irqreturn_t __maybe_unused _hdcp_handler(int irq, void *dev_id){
 	struct hdmitx_dev *dev = NULL;
 
 	if(dev_id == NULL)
@@ -1027,7 +1031,7 @@ irqreturn_t _hdcp_handler(int irq, void *dev_id){
 	return IRQ_HANDLED;
 }
 
-irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
+static irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
 	u32 decode = 0;
 	u32 hdcp_irq = 0;
 	u8 intr_stat;
@@ -1166,7 +1170,7 @@ void print_videoinfo(video_params_t *pvideo)
 	pr_debug("%s\n", pvideo->mhdmi == HDMI ? "HDMI" : "DVI");
 }
 
-int do_reset(void){
+static int do_reset(void){
 	pr_debug("Reset done.");
 
 	irq_mask_all(&ctx->hdmi_tx);
@@ -1186,7 +1190,7 @@ int stop_handler(void){
 	return 0;
 }
 
-int start_handler(void){
+static int start_handler(void){
 	sink_edid_t * sink = NULL;
 
 	// Read sink's EDID
@@ -1513,7 +1517,7 @@ int hdmi_proc_control_cmd(u8 cmd)
 	return 0;
 }
 
-int scdc_support(sink_edid_t *sink_cap)
+static int scdc_support(sink_edid_t *sink_cap)
 {
 	int ret = 0;
 	if (!sink_cap || !sink_cap->edid_mhdmi_forumvsdb.m_valid ||
@@ -1525,7 +1529,7 @@ int scdc_support(sink_edid_t *sink_cap)
 	return ret;
 }
 
-int scdc_enable_scrambling(struct hdmi_tx_ctx *ctx, u8 enable)
+static int scdc_enable_scrambling(struct hdmi_tx_ctx *ctx, u8 enable)
 {
 	hdmi_tx_dev_t *dev;
 	u32 pclk;
@@ -1562,7 +1566,7 @@ int scdc_enable_scrambling(struct hdmi_tx_ctx *ctx, u8 enable)
 	return res;
 }
 
-int scdc_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 size)
+static int scdc_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 size)
 {
 	u8 *data;
 	int i;
@@ -1598,7 +1602,7 @@ int scdc_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 size)
 	return 0;
 }
 
-int scdc_write_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 data)
+static int scdc_write_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 data)
 {
 	if (scdc_support(ctx->mode.sink_cap)) {
 		return -1;
@@ -1626,7 +1630,7 @@ int scdc_write_cmd(struct hdmi_tx_ctx *ctx, u32 addr, u32 data)
 	return 0;
 }
 
-int scdc_get_channel_status(struct hdmi_tx_ctx *ctx)
+static int scdc_get_channel_status(struct hdmi_tx_ctx *ctx)
 {
 	u8 data;
 	u8 er_data[7] = {0};
@@ -1693,7 +1697,7 @@ int hdmi_proc_scdc_cmd(u8 scdc, u32 addr, u32 data)
 	return 0;
 }
 
-int phy_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr)
+static int phy_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr)
 {
 	u32 data = 0;
 
@@ -1718,7 +1722,7 @@ int phy_read_cmd(struct hdmi_tx_ctx *ctx, u32 addr)
 	return 0;
 }
 
-int phy_write_cmd(struct hdmi_tx_ctx *ctx, u16 addr, u32 data)
+static int phy_write_cmd(struct hdmi_tx_ctx *ctx, u16 addr, u32 data)
 {
 	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
 		pr_err("Hot Plug = %s\n", phy_hot_plug_state(&ctx->hdmi_tx) ? "ON" : "OFF");
@@ -1775,7 +1779,7 @@ int get_current_event_id(u32* event_id)
 	return 0;
 }
 
-int hdmitx_open(struct inode *inode, struct file *file)
+static int hdmitx_open(struct inode *inode, struct file *file)
 {
 	s32 ret = 0;
 	struct hdmitx_dev *hdmi_dev;
@@ -1788,7 +1792,7 @@ int hdmitx_open(struct inode *inode, struct file *file)
 	return ret;
 }
 
-int hdmitx_release(struct inode *inode, struct file *file)
+static int hdmitx_release(struct inode *inode, struct file *file)
 {
 	s32 ret = 0;
 
@@ -1830,7 +1834,11 @@ static int hdmitx_register_cdev(struct hdmitx_dev *dev)
 	struct device *dev_t;
 	int err = 0;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
+	dev->hdmi_class = class_create(HDMI_CLASS_NAME);
+#else
 	dev->hdmi_class = class_create(THIS_MODULE, HDMI_CLASS_NAME);
+#endif
 	if (IS_ERR(dev->hdmi_class)) {
 		dev_err(dev->parent_dev, "create class failed\n");
 		return PTR_ERR(dev->hdmi_class);
@@ -1871,7 +1879,7 @@ alloc_chrdev_region_err:
 	return err;
 }
 
-int register_interrupts(struct hdmitx_dev *dev)
+static int register_interrupts(struct hdmitx_dev *dev)
 {
 	int ret = 0;
 
@@ -1884,7 +1892,7 @@ int register_interrupts(struct hdmitx_dev *dev)
 	return ret;
 }
 
-void release_interrupts(struct hdmitx_dev *dev)
+static void release_interrupts(struct hdmitx_dev *dev)
 {
 	int i = 0;
 	for(i = 0; i < (sizeof(dev->irq) / sizeof(dev->irq[0])); i++){
@@ -1894,7 +1902,7 @@ void release_interrupts(struct hdmitx_dev *dev)
 	}
 }
 
-void free_all_mem(void)
+static void free_all_mem(void)
 {
 	if(alloc_list != NULL){
 		while(alloc_list->instance != 0){
@@ -2105,7 +2113,12 @@ free_mem:
 	return error;
 }
 
-static int hdmi_tx_exit(struct platform_device *pdev){
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+static void hdmi_tx_exit(struct platform_device *pdev)
+#else
+static int hdmi_tx_exit(struct platform_device *pdev)
+#endif
+{
 
 	struct hdmitx_dev *dev = platform_get_drvdata(pdev);
 	struct list_head *list;
@@ -2148,7 +2161,9 @@ static int hdmi_tx_exit(struct platform_device *pdev){
 	class_destroy(dev->hdmi_class);
 	dev_set_drvdata(&pdev->dev, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM

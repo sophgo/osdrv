@@ -1,6 +1,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 #include "hdmi_debug.h"
 #include "edid/edid.h"
 #include <linux/comm_hdmi.h>
@@ -57,7 +58,7 @@ static char* _quant_range_to_string(hdmi_rgb_quant_range quant_range, char* str)
 /*************************************************************************
  *	HDMI proc functions
  *************************************************************************/
-int hdmi_ctx_proc_show(struct seq_file *m, void *v)
+static int hdmi_ctx_proc_show(struct seq_file *m, void *v)
 {
 	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
 
@@ -275,7 +276,11 @@ static ssize_t hdmi_proc_write(struct file *file, const char __user *user_buf, s
 
 static int hdmi_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, hdmi_proc_show, pde_data(inode));
+#else
 	return single_open(file, hdmi_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -320,7 +325,7 @@ int hdmi_proc_remove(struct hdmitx_dev *dev)
 /*************************************************************************
  *	HDMI Video Proc functions
  *************************************************************************/
-int hdmi_video_ctx_proc_show(struct seq_file *m, void *v)
+static int hdmi_video_ctx_proc_show(struct seq_file *m, void *v)
 {
 	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
 	char str[30];
@@ -444,7 +449,11 @@ static ssize_t hdmi_video_proc_write(struct file *file, const char __user *user_
 
 static int hdmi_video_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, hdmi_video_proc_show, pde_data(inode));
+#else
 	return single_open(file, hdmi_video_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -490,7 +499,7 @@ int hdmi_video_proc_remove(struct hdmitx_dev *dev)
  *	HDMI Audio Proc functions
  *************************************************************************/
 
-int hdmi_audio_ctx_proc_show(struct seq_file *m, void *v)
+static int hdmi_audio_ctx_proc_show(struct seq_file *m, void *v)
 {
 	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
 	seq_puts(m, "HDMI version: 2.0\n");
@@ -569,7 +578,11 @@ static ssize_t hdmi_audio_proc_write(struct file *file, const char __user *user_
 
 static int hdmi_audio_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, hdmi_audio_proc_show, pde_data(inode));
+#else
 	return single_open(file, hdmi_audio_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
@@ -614,7 +627,7 @@ int hdmi_audio_proc_remove(struct hdmitx_dev *dev)
 /*************************************************************************
  *	HDMI Sink Proc functions
  *************************************************************************/
-int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
+static int hdmi_sink_ctx_proc_show(struct seq_file *m, void *v)
 {
 	struct hdmi_tx_ctx *ctx = get_hdmi_ctx();
 	int i = 0;
@@ -903,7 +916,11 @@ static ssize_t hdmi_sink_proc_write(struct file *file, const char __user *user_b
 
 static int hdmi_sink_proc_open(struct inode *inode, struct file *file)
 {
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, hdmi_sink_proc_show, pde_data(inode));
+#else
 	return single_open(file, hdmi_sink_proc_show, PDE_DATA(inode));
+#endif
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

@@ -3,7 +3,7 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
-
+#include "bind.h"
 #include "vb.h"
 #include "ion.h"
 #include "queue.h"
@@ -24,6 +24,7 @@ static DEFINE_MUTEX(g_get_vb_lock);
 static DEFINE_MUTEX(g_pool_lock);
 static DEFINE_MUTEX(g_hash_lock);
 
+int32_t vb_print_pool(vb_pool poolid);
 DEFINE_HASHTABLE(vb_hash, 8);
 
 #define CHECK_VB_HANDLE_NULL(x)							\

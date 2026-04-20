@@ -184,7 +184,7 @@ void irq_scdc_read_request(hdmi_tx_dev_t *dev, int enable)
 		irq_mask_bit(dev, I2C_DDC, IH_MUTE_I2CM_STAT0_SCDC_READREQ_MASK);
 }
 
-void un_mask_i2c_interrupt(hdmi_tx_dev_t *dev)
+static void __maybe_unused un_mask_i2c_interrupt(hdmi_tx_dev_t *dev)
 {
 	irq_clear_source(dev, I2C_DDC);
 

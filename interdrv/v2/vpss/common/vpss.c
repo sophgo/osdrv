@@ -9,7 +9,9 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <asm/div64.h>
-
+#include <uapi/linux/sched/types.h>
+#include <linux/moduleparam.h>
+#include <linux/version.h>
 #include <base_ctx.h>
 #include <linux/defines.h>
 #include <linux/common.h>
@@ -157,7 +159,7 @@ signed int check_vpss_id(vpss_grp grp_id, vpss_chn chn_id)
 	return ret;
 }
 
-void vpss_notify_wkup_evt(void)
+static void vpss_notify_wkup_evt(void)
 {
 	spin_lock(&g_vpss_hdl_ctx.hdl_lock);
 	g_vpss_hdl_ctx.events |= CTX_EVENT_WKUP;
@@ -165,7 +167,7 @@ void vpss_notify_wkup_evt(void)
 	wake_up_interruptible(&g_vpss_hdl_ctx.wait);
 }
 
-void vpss_wkup_frame_done_handle(void *pdata)
+static void vpss_wkup_frame_done_handle(void *pdata)
 {
 	struct vpss_job *job = container_of(pdata, struct vpss_job, data);
 
@@ -341,7 +343,7 @@ static void _vpss_fill_buffer(vpss_chn chn_id, struct video_buffer *grp_buf,
 	}
 }
 
-void job_fill_buf(struct video_buffer *buf, unsigned long long *addr)
+static void job_fill_buf(struct video_buffer *buf, unsigned long long *addr)
 {
 	unsigned char i;
 
@@ -762,7 +764,7 @@ static void _vpss_over_crop_resize
  * @param chn_id: VPSS Chn to update cfg
  * @param ctx: VPSS ctx which records settings of this grp
  */
-void _vpss_chn_hw_cfg_update(vpss_chn chn_id, struct vpss_ctx *ctx)
+static void _vpss_chn_hw_cfg_update(vpss_chn chn_id, struct vpss_ctx *ctx)
 {
 	unsigned char i;
 	vpss_grp grp_id = ctx->vpss_grp;
@@ -1098,7 +1100,7 @@ void _vpss_chn_hw_cfg_update(vpss_chn chn_id, struct vpss_ctx *ctx)
  * @param ctx: VPSS ctx which records settings of this grp
  * @param grp_hw_cfg: cfg to be updated
  */
-void _vpss_grp_hw_cfg_update(struct vpss_ctx *ctx)
+static void _vpss_grp_hw_cfg_update(struct vpss_ctx *ctx)
 {
 	vpss_grp grp_id = ctx->vpss_grp;
 	vb_cal_config_s vb_cal_config;
@@ -1616,7 +1618,7 @@ err:
 	return -1;
 }
 
-void vpss_handle_online_frame_done(struct vpss_job *job)
+static void vpss_handle_online_frame_done(struct vpss_job *job)
 {
 	struct vpss_ctx *ctx = (struct vpss_ctx *)job->data;
 	vpss_grp working_grp = job->grp_id;
@@ -1921,7 +1923,7 @@ static int vpss_event_handler(void *arg)
 }
 
 
-void _vpss_grp_raram_init(vpss_grp grp_id)
+static void _vpss_grp_raram_init(vpss_grp grp_id)
 {
 	unsigned char i, j, k;
 	proc_amp_ctrl_s ctrl;
@@ -1982,7 +1984,7 @@ static signed int _vpss_update_rotation_mesh(vpss_grp grp_id, vpss_chn chn_id, r
 	return 0;
 }
 
-signed int _vpss_update_ldc_mesh(vpss_grp grp_id, vpss_chn chn_id,
+static signed int _vpss_update_ldc_mesh(vpss_grp grp_id, vpss_chn chn_id,
 	const vpss_ldc_attr_s *ldc_attr, unsigned long long paddr)
 {
 	unsigned long long paddr_old;
@@ -2017,7 +2019,7 @@ signed int _vpss_update_ldc_mesh(vpss_grp grp_id, vpss_chn chn_id,
 	return 0;
 }
 
-signed int _vpss_update_fisheye_mesh(vpss_grp grp_id, vpss_chn chn_id,
+static signed int _vpss_update_fisheye_mesh(vpss_grp grp_id, vpss_chn chn_id,
 	const fisheye_attr_s *fish_eye_attr, rotation_e rotation, unsigned long long paddr)
 {
 	unsigned long long paddr_old;
@@ -4083,7 +4085,7 @@ signed int vpss_trigger_snap_frame(vpss_grp grp_id, vpss_chn chn_id, unsigned in
 	return ret;
 }
 
-void stitch_wakeup(void *data)
+static void stitch_wakeup(void *data)
 {
 	struct vpss_stitch_data *stitch_data = (struct vpss_stitch_data *)data;
 
@@ -4221,7 +4223,7 @@ EXIT:
 	return ret;
 }
 
-signed int video_frame_dmabuf_fd_to_paddr(video_frame_s *video_frame){
+static signed int video_frame_dmabuf_fd_to_paddr(video_frame_s *video_frame){
 	int dmabuf_fd = video_frame->phyaddr[0];
 	int height = video_frame->height;
 	pixel_format_e pixel_format = video_frame->pixel_format;
@@ -4529,8 +4531,17 @@ void register_timer_fun(vpss_timer_cb cb, void *data)
 
 void vpss_init(void)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	int ret;
-	struct sched_param tsk;
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 4,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 4,
+    };
+#endif
 
 	base_register_recv_cb(ID_VPSS, vpss_grp_qbuf);
 
@@ -4541,17 +4552,20 @@ void vpss_init(void)
 	g_vpss_hdl_ctx.events = 0;
 
 	// Same as sched_set_fifo in linux 5.x
-	tsk.sched_priority = MAX_USER_RT_PRIO - 4;
-
+	
 	g_vpss_hdl_ctx.thread = kthread_run(vpss_event_handler, &g_vpss_hdl_ctx,
 		"task_vpss_hdl");
 	if (IS_ERR(g_vpss_hdl_ctx.thread)) {
 		TRACE_VPSS(DBG_ERR, "failed to create vpss kthread\n");
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	ret = sched_setscheduler(g_vpss_hdl_ctx.thread, SCHED_FIFO, &tsk);
 	if (ret)
 		TRACE_VPSS(DBG_WARN, "vpss thread priority update failed: %d\n", ret);
+#else
+	sched_setattr_nocheck(g_vpss_hdl_ctx.thread, &tsk);
+#endif
 
 	g_vpss_workqueue = alloc_workqueue("vpss_workqueue", WQ_HIGHPRI | WQ_UNBOUND |
 						__WQ_LEGACY | WQ_MEM_RECLAIM, 8);
@@ -4647,9 +4661,17 @@ signed int vpss_suspend_handler(void)
 
 signed int vpss_resume_handler(void)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	int ret;
-	struct sched_param tsk;
-
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 4,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 4,
+    };
+#endif
 	if (g_vpss_hdl_ctx.thread) {
 		TRACE_VPSS(DBG_WARN, "resumed\n");
 		return 0;
@@ -4661,13 +4683,15 @@ signed int vpss_resume_handler(void)
 		TRACE_VPSS(DBG_ERR, "failed to create vpss kthread\n");
 		return -1;
 	}
-
-	tsk.sched_priority = MAX_USER_RT_PRIO - 4;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	ret = sched_setscheduler(g_vpss_hdl_ctx.thread, SCHED_FIFO, &tsk);
 	if (ret) {
 		TRACE_VPSS(DBG_WARN, "vpss thread priority update failed: %d\n", ret);
 		return -1;
 	}
+#else
+        sched_setattr_nocheck(g_vpss_hdl_ctx.thread, &tsk);
+#endif
 
 	mutex_lock(&g_vpss_lock);
 	if (atomic_cmpxchg(&g_timer_added,0, 1) == 0)

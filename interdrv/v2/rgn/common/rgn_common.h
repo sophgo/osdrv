@@ -9,9 +9,12 @@
 #include <linux/debugfs.h>
 #include <linux/io.h>
 
-
+#ifndef MIN
 #define MIN(a, b) (((a) < (b))?(a):(b))
+#endif
+#ifndef MAX
 #define MAX(a, b) (((a) > (b))?(a):(b))
+#endif
 #define RGN_64_ALIGN(x) (((x) + 0x3F) & ~0x3F)   // for 64byte alignment
 #define RGN_256_ALIGN(x) (((x) + 0xFF) & ~0xFF)   // for 256byte alignment
 #define RGN_ALIGN(x) (((x) + 0xF) & ~0xF)   // for 16byte alignment

@@ -19,7 +19,7 @@
 
 
 
-
+#define MAX_TILES 9
 #define IVE_DEV_MAX 2
 #define IVE_DEV_USE_MAX 1
 #define IVE_SYNC_IO_WAIT_TIMEOUT_MS (1000*10)
@@ -128,7 +128,7 @@ struct ive_profiling_info {
 	struct timespec time_vld_end;
 #endif
 	uint32_t time_ioctl_diff_us;
-	uint32_t time_vld_diff_us[6];
+	uint32_t time_vld_diff_us[MAX_TILES];
 	uint32_t time_tile_diff_us;
 };
 typedef void (*ive_timer_cb)(void *data);

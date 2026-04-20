@@ -13,7 +13,6 @@
 #include <linux/poll.h>
 #include <linux/sched/signal.h>
 #include <linux/slab.h>
-#include <linux/streamline_annotate.h>
 #include <linux/version.h>
 #include <uapi/linux/sched/types.h>
 #include <vi_tun_cfg.h>

@@ -10,7 +10,7 @@
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 #include <linux/dma-map-ops.h>
 #endif
-
+#include <linux/vmalloc.h>
 #include <linux/defines.h>
 #include <linux/base_uapi.h>
 #include "ion.h"

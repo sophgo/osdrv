@@ -267,7 +267,7 @@ void vi_fill_mlv_info(struct vb_s *blk, u8 dev, struct mlv_i_s *m_lv_i, u8 is_vp
 	}
 }
 
-int vi_set_motion_lv(struct mlv_info_s mlv_i)
+static int vi_set_motion_lv(struct mlv_info_s mlv_i)
 {
 	if (mlv_i.sensor_num >= VI_MAX_DEV_NUM)
 		return -1;
@@ -315,7 +315,7 @@ void vi_fill_dis_info(struct vb_s *blk, u8 dev)
 	}
 }
 
-int vi_set_dis_info(struct dis_info_s dis_i)
+static int vi_set_dis_info(struct dis_info_s dis_i)
 {
 	u32 frm_num = dis_i.frm_num;
 	u8 snr_num = dis_i.sensor_num;
@@ -345,7 +345,7 @@ int vi_set_dis_info(struct dis_info_s dis_i)
 	return 0;
 }
 
-int vi_set_bypass_frm(int pipe, u8 bypass_num)
+static int vi_set_bypass_frm(int pipe, u8 bypass_num)
 {
 	int ret = 0;
 
@@ -358,7 +358,7 @@ int vi_set_bypass_frm(int pipe, u8 bypass_num)
 	return 0;
 }
 
-int vi_set_dev_attr(int vi_dev, const vi_dev_attr_s *dev_attr)
+static int vi_set_dev_attr(int vi_dev, const vi_dev_attr_s *dev_attr)
 {
 	int ret = 0;
 	u32 chn_num = 1;
@@ -396,7 +396,7 @@ int vi_set_dev_attr(int vi_dev, const vi_dev_attr_s *dev_attr)
 	return ret;
 }
 
-int vi_get_dev_attr(int vi_dev, vi_dev_attr_s *dev_attr)
+static int vi_get_dev_attr(int vi_dev, vi_dev_attr_s *dev_attr)
 {
 	int ret = 0;
 
@@ -409,7 +409,7 @@ int vi_get_dev_attr(int vi_dev, vi_dev_attr_s *dev_attr)
 	return ret;
 }
 
-int vi_set_dev_bind_attr(int vi_dev, const vi_dev_bind_pipe_s *dev_bind_attr)
+static int vi_set_dev_bind_attr(int vi_dev, const vi_dev_bind_pipe_s *dev_bind_attr)
 {
 	int ret = 0;
 
@@ -426,7 +426,7 @@ int vi_set_dev_bind_attr(int vi_dev, const vi_dev_bind_pipe_s *dev_bind_attr)
 	return ret;
 }
 
-int vi_get_dev_bind_attr(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
+static int vi_get_dev_bind_attr(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 {
 	int ret = 0;
 
@@ -439,7 +439,7 @@ int vi_get_dev_bind_attr(int vi_dev, vi_dev_bind_pipe_s *dev_bind_attr)
 	return ret;
 }
 
-int vi_set_dev_unbind_attr(int vi_dev)
+static int vi_set_dev_unbind_attr(int vi_dev)
 {
 	struct isp_ctx *ctx = &gvdev->ctx;
 	int raw_num = 0;
@@ -474,7 +474,7 @@ int vi_set_dev_unbind_attr(int vi_dev)
     return ret;
 }
 
-int vi_enable_dev(int vi_dev)
+static int vi_enable_dev(int vi_dev)
 {
 	int ret = 0;
 	int raw_num = ISP_PRERAW0;
@@ -534,7 +534,7 @@ int vi_enable_dev(int vi_dev)
 	return 0;
 }
 
-int vi_disable_dev(int vi_dev)
+static int vi_disable_dev(int vi_dev)
 {
 	int ret = 0;
 	u8 i = 0;
@@ -573,7 +573,7 @@ int vi_disable_dev(int vi_dev)
 	return ret;
 }
 
-int vi_create_pipe(int vi_pipe, vi_pipe_attr_s *pipe_attr)
+static int vi_create_pipe(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
 
@@ -604,7 +604,7 @@ int vi_create_pipe(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 	return 0;
 }
 
-int vi_destroy_pipe(int vi_pipe)
+static int vi_destroy_pipe(int vi_pipe)
 {
 	int ret = 0;
 
@@ -625,7 +625,7 @@ int vi_destroy_pipe(int vi_pipe)
 	return 0;
 }
 
-int vi_start_pipe(int vi_pipe)
+static int vi_start_pipe(int vi_pipe)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -648,7 +648,7 @@ int vi_start_pipe(int vi_pipe)
 	return ret;
 }
 
-int vi_set_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
+static int vi_set_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 {
 	int ret = 0;
 	vb_cal_config_s vb_cal_config;
@@ -687,7 +687,7 @@ int vi_set_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 	return ret;
 }
 
-int vi_get_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
+static int vi_get_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 {
 	int ret = 0;
 
@@ -704,7 +704,7 @@ int vi_get_chn_attr(int vi_pipe, int vi_chn, vi_chn_attr_s *chn_attr)
 	return ret;
 }
 
-int vi_set_dev_timing_attr(int vi_dev, const vi_dev_timing_attr_s *timing_attr)
+static int vi_set_dev_timing_attr(int vi_dev, const vi_dev_timing_attr_s *timing_attr)
 {
 	int ret = 0;
 
@@ -729,7 +729,7 @@ int vi_set_dev_timing_attr(int vi_dev, const vi_dev_timing_attr_s *timing_attr)
 	return ret;
 }
 
-int vi_get_dev_timing_attr(int vi_dev, vi_dev_timing_attr_s *timing_attr)
+static int vi_get_dev_timing_attr(int vi_dev, vi_dev_timing_attr_s *timing_attr)
 {
 	int ret = 0;
 
@@ -751,7 +751,7 @@ int vi_get_dev_timing_attr(int vi_dev, vi_dev_timing_attr_s *timing_attr)
 	return ret;
 }
 
-int vi_get_pipe_status(int vi_pipe, vi_pipe_status_s *pipe_status)
+static int vi_get_pipe_status(int vi_pipe, vi_pipe_status_s *pipe_status)
 {
 	int ret = 0;
 
@@ -770,7 +770,7 @@ int vi_get_pipe_status(int vi_pipe, vi_pipe_status_s *pipe_status)
 	return ret;
 }
 
-int vi_get_chn_status(int vi_chn, vi_chn_status_s *pipe_status)
+static int vi_get_chn_status(int vi_chn, vi_chn_status_s *pipe_status)
 {
 	int ret = 0;
 
@@ -787,7 +787,7 @@ int vi_get_chn_status(int vi_chn, vi_chn_status_s *pipe_status)
 	return ret;
 }
 
-int vi_set_pipe_frame_source(int vi_pipe, const vi_pipe_frame_source_e source)
+static int vi_set_pipe_frame_source(int vi_pipe, const vi_pipe_frame_source_e source)
 {
 	int ret = 0;
 
@@ -808,7 +808,7 @@ int vi_set_pipe_frame_source(int vi_pipe, const vi_pipe_frame_source_e source)
 	return ret;
 }
 
-int vi_get_pipe_frame_source(int vi_pipe, vi_pipe_frame_source_e *psource)
+static int vi_get_pipe_frame_source(int vi_pipe, vi_pipe_frame_source_e *psource)
 {
 	int ret = 0;
 
@@ -821,7 +821,7 @@ int vi_get_pipe_frame_source(int vi_pipe, vi_pipe_frame_source_e *psource)
 	return ret;
 }
 
-int vi_send_pipe_raw(int vi_pipe, const video_frame_info_s *pvideo_frame)
+static int vi_send_pipe_raw(int vi_pipe, const video_frame_info_s *pvideo_frame)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -906,7 +906,7 @@ int vi_send_pipe_raw(int vi_pipe, const video_frame_info_s *pvideo_frame)
 	return ret;
 }
 
-int vi_enable_chn(int vi_chn)
+static int vi_enable_chn(int vi_chn)
 {
 	int rc = 0, i = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -1044,7 +1044,7 @@ int vi_disable_chn(int vi_chn)
 	return rc;
 }
 
-int vi_sdk_enable_chn(int vi_pipe, int vi_chn)
+static int vi_sdk_enable_chn(int vi_pipe, int vi_chn)
 {
 	int ret = 0;
 
@@ -1079,7 +1079,7 @@ int vi_sdk_enable_chn(int vi_pipe, int vi_chn)
 	return 0;
 }
 
-int vi_sdk_disable_chn(int vi_pipe, int vi_chn)
+static int vi_sdk_disable_chn(int vi_pipe, int vi_chn)
 {
 	int ret = 0;
 	u8  i = 0;
@@ -1121,7 +1121,7 @@ int vi_sdk_disable_chn(int vi_pipe, int vi_chn)
 	return 0;
 }
 
-int vi_get_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info, int millisec)
+static int vi_get_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info, int millisec)
 {
 	vb_blk blk;
 	struct vb_s *vb;
@@ -1186,7 +1186,7 @@ int vi_get_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info, in
 	return ret;
 }
 
-int vi_release_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info)
+static int vi_release_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info)
 {
 	vb_blk blk;
 	int ret = 0;
@@ -1223,7 +1223,7 @@ int vi_release_chn_frame(int vi_pipe, int vi_chn, video_frame_info_s *frame_info
 	return 0;
 }
 
-int vi_set_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
+static int vi_set_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
 	struct isp_ctx *ctx = &gvdev->ctx;
 	struct vi_rect crop;
@@ -1284,7 +1284,7 @@ int vi_set_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 	return 0;
 }
 
-int vi_get_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
+static int vi_get_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 {
 	int ret = 0;
 
@@ -1306,7 +1306,7 @@ int vi_get_chn_crop(int vi_pipe, int vi_chn, vi_crop_info_s *chn_crop)
 }
 
 //TODO need refactor
-int vi_set_pipe_crop(int vi_pipe, crop_info_s *crop_info)
+static int vi_set_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 {
 	int ret = 0;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -1358,7 +1358,7 @@ int vi_set_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 	return 0;
 }
 
-int vi_get_pipe_crop(int vi_pipe, crop_info_s *crop_info)
+static int vi_get_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 {
 	int ret = 0;
 
@@ -1375,7 +1375,7 @@ int vi_get_pipe_crop(int vi_pipe, crop_info_s *crop_info)
 	return 0;
 }
 
-int vi_set_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
+static int vi_set_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
 
@@ -1392,7 +1392,7 @@ int vi_set_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 	return 0;
 }
 
-int vi_get_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
+static int vi_get_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 {
 	int ret = 0;
 
@@ -1415,7 +1415,7 @@ int vi_get_pipe_attr(int vi_pipe, vi_pipe_attr_s *pipe_attr)
 	return 0;
 }
 
-int vi_set_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
+static int vi_set_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 {
 	int ret = 0;
 
@@ -1432,7 +1432,7 @@ int vi_set_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 	return 0;
 }
 
-int vi_get_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
+static int vi_get_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 {
 	int ret = 0;
 
@@ -1449,7 +1449,7 @@ int vi_get_pipe_dump_attr(int vi_pipe, vi_dump_attr_s *dump_attr)
 	return 0;
 }
 
-int vi_get_pipe_frame(int vi_pipe, video_frame_info_s *frame_info, int millisec)
+static int vi_get_pipe_frame(int vi_pipe, video_frame_info_s *frame_info, int millisec)
 {
 	int ret;
 	struct sop_vip_isp_raw_blk dump[2];
@@ -1661,7 +1661,7 @@ int vi_get_pipe_frame(int vi_pipe, video_frame_info_s *frame_info, int millisec)
 	return 0;
 }
 
-int vi_release_pipe_frame(int vi_pipe, video_frame_info_s *frame_info)
+static int vi_release_pipe_frame(int vi_pipe, video_frame_info_s *frame_info)
 {
 	u8 i = 0;
 	int ret = 0;
@@ -1687,7 +1687,7 @@ int vi_release_pipe_frame(int vi_pipe, video_frame_info_s *frame_info)
 	return 0;
 }
 
-int vi_get_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info, int millisec)
+static int vi_get_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info, int millisec)
 {
 	int ret;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -1749,7 +1749,7 @@ int vi_get_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info, int milli
 	return 0;
 }
 
-int vi_put_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info)
+static int vi_put_smooth_rawdump(int vi_pipe, video_frame_info_s *frame_info)
 {
 	int ret;
 	struct isp_ctx *ctx = &gvdev->ctx;
@@ -1826,7 +1826,7 @@ static int _vi_update_ldc_mesh(vpss_chn vi_chn, const vi_ldc_attr_s *ldc_attr, u
 	return 0;
 }
 
-int vi_set_chn_rotation(int vi_pipe, int vi_chn, rotation_e rotation)
+static int vi_set_chn_rotation(int vi_pipe, int vi_chn, rotation_e rotation)
 {
 	int ret = 0;
 
@@ -1847,7 +1847,7 @@ int vi_set_chn_rotation(int vi_pipe, int vi_chn, rotation_e rotation)
 	return _vi_update_rotation_mesh(vi_chn, rotation);
 }
 
-int vi_get_chn_rotation(int vi_pipe, int vi_chn, rotation_e *rotation)
+static int vi_get_chn_rotation(int vi_pipe, int vi_chn, rotation_e *rotation)
 {
 	int ret = 0;
 
@@ -1868,13 +1868,13 @@ int vi_get_chn_rotation(int vi_pipe, int vi_chn, rotation_e *rotation)
 	return ret;
 }
 
-int vi_set_chn_ldc_attr(int vi_chn, const vi_ldc_attr_s *ldc_attr, u64 mesh_addr)
+static int vi_set_chn_ldc_attr(int vi_chn, const vi_ldc_attr_s *ldc_attr, u64 mesh_addr)
 {
 	vi_pr(VI_DBG, "Chn(%d) mesh base(0x%llx)\n", vi_chn, (unsigned long long)mesh_addr);
 	return _vi_update_ldc_mesh(vi_chn, ldc_attr, mesh_addr);
 }
 
-int vi_get_chn_ldc_attr(int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
+static int vi_get_chn_ldc_attr(int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
 {
 	int ret = 0;
 
@@ -1893,7 +1893,7 @@ int vi_get_chn_ldc_attr(int vi_pipe, int vi_chn, struct vi_chn_ldc_cfg *cfg)
 	return ret;
 }
 
-int vi_set_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
+static int vi_set_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
 	int ret = 0;
 
@@ -1915,7 +1915,7 @@ int vi_set_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cf
 	return ret;
 }
 
-int vi_get_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
+static int vi_get_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cfg *cfg)
 {
 	int ret = 0;
 
@@ -1937,7 +1937,7 @@ int vi_get_chn_flip_mirror(int vi_pipe, int vi_chn, struct vi_chn_flip_mirror_cf
 	return ret;
 }
 
-int vi_attach_vb_pool(int vi_pipe, int vi_chn, vb_pool vbp)
+static int vi_attach_vb_pool(int vi_pipe, int vi_chn, vb_pool vbp)
 {
 	int ret = 0;
 
@@ -1956,7 +1956,7 @@ int vi_attach_vb_pool(int vi_pipe, int vi_chn, vb_pool vbp)
 	return 0;
 }
 
-int vi_detach_vb_pool(int vi_pipe, int vi_chn)
+static int vi_detach_vb_pool(int vi_pipe, int vi_chn)
 {
 	int ret = 0;
 

@@ -1307,7 +1307,8 @@ typedef enum {
  * @brief  This is an enumeration type for representing product IDs.
  */
 typedef enum {
-    PRODUCT_ID_980=0,
+    PRODUCT_ID_NONE=0,
+    PRODUCT_ID_980,
     PRODUCT_ID_960,
     PRODUCT_ID_521,
     PRODUCT_ID_511,
@@ -1315,7 +1316,6 @@ typedef enum {
     PRODUCT_ID_617,
     PRODUCT_ID_627,
     PRODUCT_ID_637,
-    PRODUCT_ID_NONE,
 } ProductId;
 
 #define PRODUCT_ID_W5_SERIES(x)     (x == PRODUCT_ID_521 || x == PRODUCT_ID_511 || x == PRODUCT_ID_517)
@@ -7150,6 +7150,7 @@ RetCode VPU_EncSetWrPtr(
 PhysicalAddress VPU_MapToAddr40Bit(int coreIdx, unsigned int Addr);
 int VPU_DecRequestCore(void);
 int VPU_DecReleaseCore(unsigned int core_idx);
+Int32 CheckTopAddr(Uint32 coreIdx, Uint64 addr, Uint32 size);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/kthread.h>
+#include <linux/version.h>
 #include <uapi/linux/sched/types.h>
 
 #include "vpss_hal.h"
@@ -453,7 +454,7 @@ static void vpss_hal_reset(u32 vpss_dev_mask, bool is_online)
 	spin_unlock_irqrestore(&vpss_dev->lock, flags);
 }
 
-int hal_try_schedule(void)
+static int hal_try_schedule(void)
 {
 	struct vpss_job *job = NULL;
 	unsigned long flags, flags_job;
@@ -533,8 +534,16 @@ int vpss_hal_try_schedule(void)
 int vpss_hal_init(struct vpss_device *dev)
 {
 	int i, ret;
-	struct sched_param tsk;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+    struct sched_param tsk = {
+        .sched_priority = MAX_USER_RT_PRIO - 4,
+    };
+#else
+    const struct sched_attr tsk = {
+        .sched_policy = SCHED_RR,
+        .sched_priority = MAX_RT_PRIO - 4,
+    };
+#endif
 	vpss_dev = dev;
 	init_waitqueue_head(&task_ctx.wait);
 	spin_lock_init(&task_ctx.task_lock);
@@ -558,11 +567,14 @@ int vpss_hal_init(struct vpss_device *dev)
 			"vpss_task_schedule");
 		if (IS_ERR(task_ctx.thread))
 			TRACE_VPSS(DBG_ERR, "failed to create vpss kthread\n");
-
-		tsk.sched_priority = MAX_USER_RT_PRIO - 4;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 		ret = sched_setscheduler(task_ctx.thread, SCHED_FIFO, &tsk);
-		if (ret)
+		if (ret) {
 			TRACE_VPSS(DBG_WARN, "vpss schedule thread priority update failed: %d\n", ret);
+		}
+#else
+        	sched_setattr_nocheck(task_ctx.thread, &tsk);
+#endif
 	}
 
 	return 0;
@@ -680,19 +692,23 @@ int vpss_hal_remove_job(struct vpss_job *job)
 				if (!(job->vpss_dev_mask & BIT(i)))
 					continue;
 				vpss_stauts(i);
+				vpss_dev->vpss_cores[i].timeout_cnt++;
 				// BIT(10) always reset; BIT(11) never reset
 				// VPSS2 and VPSS3 need binding reset, manual set BIT(13) can reset
 				if(((BIT(10) & work_mask) ||
+					(IS_POWER_OF_TWO((work_mask & 0xf0))) ||
 					(!reset_time[i] && !(BIT(11) & work_mask))) &&
 					(i != VPSS_V2 || (BIT(13) & work_mask))) {
 					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
-					TRACE_VPSS(DBG_INFO, "core(%d) ready.\n", i);
+					TRACE_VPSS(DBG_DEBUG, "core(%d) ready.\n", i);
 					reset_time[i] = 1000;
 				} else {
 					work_mask &= (~BIT(i));
 					avail_mask &= (~BIT(i));
 					vpss_dev->vpss_cores[i].job = NULL;
-					TRACE_VPSS(DBG_WARN, "core(%d) mask.\n", i);
+					atomic_set(&vpss_dev->vpss_cores[i].state, VIP_IDLE);
+					reset_time[i] = 0;
+					TRACE_VPSS(DBG_DEBUG, "core(%d) mask.\n", i);
 				}
 				if (vpss_dev->vpss_cores[i].clk_vpss &&
 					__clk_is_enabled(vpss_dev->vpss_cores[i].clk_vpss))

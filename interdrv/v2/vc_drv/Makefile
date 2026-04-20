@@ -13,15 +13,11 @@ COMMON_DRV_HEADER := -I$(PWD)/../include/common/uapi 			\
 					-I$(PWD)/../include/chip/soph/kapi 			\
 					-I$(PWD)/../base/
 
-JPU_INC := -I$(PWD)/cnm_driver/jpeg/jpuapi \
+JPU_INC :=  -I$(PWD)/cnm_driver/jpeg/jpuapi \
 			-I$(PWD)/cnm_driver/jpeg/jdi \
 			-I$(PWD)/cnm_driver/jpeg/sample \
 			-I$(PWD)/cnm_driver/jpeg/sample/helper \
-			-I$(PWD)/cnm_driver/jpu/bmjpuapi/inc \
-			-I$(PWD)/cnm_driver/jpu \
-			-I$(PWD)/cnm_driver/jpu/jpuapi \
-			-I$(PWD)/cnm_driver/jpu/jdi \
-			-I$(PWD)/cnm_driver/jpu/include
+			-I$(PWD)/cnm_driver/jpeg/jdi/linux/driver
 
 
 VPU_INC := -I$(PWD)/cnm_driver/vpu			\
@@ -76,7 +72,6 @@ VPU_SOURCES = cnm_driver/vpu/vdi/linux/vdi.c \
 
 JPU_SOURCES =	cnm_driver/jpeg/jpuapi/jpuapi.c 	\
 				cnm_driver/jpeg/jpuapi/jpuapifunc.c	\
-				cnm_driver/jpeg/jdi/mm.c			\
 				cnm_driver/jpeg/jdi/linux/jdi.c		\
 				cnm_driver/jpeg/jdi/linux/driver/jpu_core_res.c	\
 				cnm_driver/jpeg/jdi/linux/driver/jpeg.c	\
@@ -97,7 +92,7 @@ KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 
 ccflags-y += $(VC_DRV_HEADER) -DUSE_KERNEL_MODE -DKERNEL_MODE -DENABLE_DEC -DMJPEG_INTERFACE_API -DCNM_WAVE_SERIES
 ccflags-y += -DPLATFORM_SOC -DVC_SUPPORT_CLOCK_CONTROL
-
+ccflags-y += -Werror -Wno-missing-prototypes -Wno-missing-declarations
 ccflags-y += -DRV_TEST
 ifeq ($(CONFIG_TOOLCHAIN_GLIBC_ARM64_V1131), y)
 ccflags-y += -mno-outline-atomics

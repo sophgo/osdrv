@@ -45,10 +45,10 @@ static const char *const ive_clk_name[IVE_DEV_MAX][2] = {
 
 
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
-uint32_t get_duration_us(const struct timespec64 *start,
+static uint32_t get_duration_us(const struct timespec64 *start,
 				const struct timespec64 *end)
 #else
-uint32_t get_duration_us(const struct timespec *start,
+static uint32_t get_duration_us(const struct timespec *start,
 				const struct timespec *end)
 #endif
 {
@@ -143,7 +143,7 @@ static const struct file_operations ive_fops = {
 #endif
 };
 
-void register_timer_fun(ive_timer_cb cb, void *data)
+static void register_timer_fun(ive_timer_cb cb, void *data)
 {
 	g_core_cb = cb;
 	g_core_data = data;
@@ -156,7 +156,7 @@ static void start_ioctl_time(struct ive_profiling_info *pinfo, char *name)
 	if (g_enable_usage_profiling) {
 		strcpy(pinfo->op_name, name);
 		pinfo->time_ioctl_diff_us = 0;
-		for (i = 0; i < 6; i++) {
+		for (i = 0; i < MAX_TILES; i++) {
 			pinfo->time_vld_diff_us[i] = 0;
 		}
 		pinfo->time_tile_diff_us = 0;
@@ -197,7 +197,7 @@ void start_vld_time(int optype, struct ive_dev_core* core)
 
 void stop_vld_time(int optype, int tile_num, struct ive_dev_core* core)
 {
-	if (tile_num > 6)
+	if (tile_num > MAX_TILES)
 		return;
 	if (g_enable_usage_profiling && optype < MOD_ALL &&
 		optype >= MOD_BYP &&
@@ -218,7 +218,7 @@ void stop_vld_time(int optype, int tile_num, struct ive_dev_core* core)
 	core->hw_duration_total += core->hw_duration;
 }
 
-void ive_timer_core_update(void *data)
+static void ive_timer_core_update(void *data)
 {
 
 	int i;
@@ -327,11 +327,11 @@ static int ive_proc_show(struct seq_file *m, void *v)
 	int i = 0, tile = 0;
 	struct ive_device *ndev= (struct ive_device *)m->private;
 	if (g_enable_usage_profiling) {
-		char const *row_name[] = {"op name", "start(s)", "ioctl(us)",
-							"tile0(us)", "tile1(us)", "tile2(us)", "tile3(us)",
-							"tile4(us)", "tile5(us)", "tileSum(us)"};
-		int row_space[] = { -15, 10, 10, 10, 10, 10, 10, 10, 10, 10};
-		int table[] = { 20, 21, 22, 23, 24, 3, 2, 25, 26, 27,
+        char const *row_name[] = {"op name", "start(s)", "ioctl(us)",
+                    "tile0(us)", "tile1(us)", "tile2(us)", "tile3(us)",
+                    "tile4(us)", "tile5(us)", "tile6(us)", "tile7(us)", "tile8(us)", "tileSum(us)"};
+		int row_space[] = { -15, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
+        int table[] = { 20, 21, 22, 23, 24, 3, 2, 25, 26, 27,
 						28, 31, 33, 35, 1, 29, 30, 4, 6, 7,
 						8, 9, 10, 11, 15, 16, 17, 19, 18, 36,
 						12, 34, 13, 14, 32, 5};
@@ -345,41 +345,35 @@ static int ive_proc_show(struct seq_file *m, void *v)
 		row_space[8], row_name[8], row_space[9], row_name[9]);
 
 		for (i = 0; i < 36; i++) {
-			uint32_t second_vld_time[6] = {0};
+			uint32_t second_vld_time[MAX_TILES] = {0};
 			uint32_t second_tile_time = 0;
 			uint32_t id = table[i];
 
 			if (strlen(g_time_infos[id].op_name) > 0) {
 				if (id == 10) {
-					for (tile = 0; tile < 6; tile++) {
+					for (tile = 0; tile < MAX_TILES; tile++) {
 						second_vld_time[tile] = g_time_infos[5].time_vld_diff_us[tile];
 					}
 					second_tile_time = g_time_infos[5].time_tile_diff_us;
 				} else if (id == 5) {
 					continue;
 				}
-				seq_printf(
-					m, "%*s| %*lld| %*u| %*d| %*d| %*d| %*d| %*d| %*d| %*d\n",
-					row_space[0],
-					g_time_infos[id].op_name,
-					row_space[1],
-					g_time_infos[id].time_ioctl_start.tv_sec,
-					row_space[2],
-					g_time_infos[id].time_ioctl_diff_us,
-					row_space[3],
-					g_time_infos[id].time_vld_diff_us[0] + second_vld_time[0],
-					row_space[4],
-					g_time_infos[id].time_vld_diff_us[1] + second_vld_time[1],
-					row_space[5],
-					g_time_infos[id].time_vld_diff_us[2] + second_vld_time[2],
-					row_space[6],
-					g_time_infos[id].time_vld_diff_us[3] + second_vld_time[3],
-					row_space[7],
-					g_time_infos[id].time_vld_diff_us[4] + second_vld_time[4],
-					row_space[8],
-					g_time_infos[id].time_vld_diff_us[5] + second_vld_time[5],
-					row_space[9],
-					g_time_infos[id].time_tile_diff_us + second_tile_time);
+                seq_printf(
+                    m, "%*s| %*lld| %*u| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d\n",
+                    row_space[0], g_time_infos[id].op_name,
+                    row_space[1], g_time_infos[id].time_ioctl_start.tv_sec,
+                    row_space[2], g_time_infos[id].time_ioctl_diff_us,
+                    row_space[3], g_time_infos[id].time_vld_diff_us[0] + second_vld_time[0],
+                    row_space[4], g_time_infos[id].time_vld_diff_us[1] + second_vld_time[1],
+                    row_space[5], g_time_infos[id].time_vld_diff_us[2] + second_vld_time[2],
+                    row_space[6], g_time_infos[id].time_vld_diff_us[3] + second_vld_time[3],
+                    row_space[7], g_time_infos[id].time_vld_diff_us[4] + second_vld_time[4],
+                    row_space[8], g_time_infos[id].time_vld_diff_us[5] + second_vld_time[5],
+                    row_space[9], g_time_infos[id].time_vld_diff_us[6] + second_vld_time[6],
+                    row_space[10], g_time_infos[id].time_vld_diff_us[7] + second_vld_time[7],
+                    row_space[11], g_time_infos[id].time_vld_diff_us[8] + second_vld_time[8],
+                    row_space[12], g_time_infos[id].time_tile_diff_us + second_tile_time
+                );
 			}
 		}
 		seq_printf(m, "[IVE CORE 0] duty_ratio = %d%%\n", ndev->core[DEV_IVE_0].duty_ratio);
@@ -451,7 +445,11 @@ static ssize_t ive_proc_write(struct file *file, const char __user *user_buf,
 
 static int ive_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, ive_proc_show, PDE_DATA(inode));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+    return single_open(file, ive_proc_show, PDE_DATA(inode));
+#else
+	return single_open(file, ive_proc_show, pde_data(inode));
+#endif
 }
 
 #ifdef CONFIG_COMPAT
@@ -700,11 +698,15 @@ static int ive_close(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-int ive_register_cdev(struct ive_device *ndev)
+static int ive_register_cdev(struct ive_device *ndev)
 {
 	int ret;
 	// Create device to /sys/class/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	class_id = class_create(THIS_MODULE, IVE_CLASS_NAME);
+#else
+	class_id = class_create(IVE_CLASS_NAME);
+#endif
 	if (IS_ERR(class_id)) {
 		pr_err("[IVE] create class failed\n");
 		return PTR_ERR(class_id);
@@ -1352,7 +1354,7 @@ static int ive_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int ive_remove(struct platform_device *pdev)
+static void ive_remove(struct platform_device *pdev)
 {
 	// Get drvdata(global variables)
 	struct ive_device *ndev = platform_get_drvdata(pdev);
@@ -1374,8 +1376,16 @@ static int ive_remove(struct platform_device *pdev)
 
 	// remove ive proc
 	remove_proc_entry(IVE_PROC_NAME, NULL);
-	return 0;
+	return;
 }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+static int ive_remove_ex(struct platform_device *pdev)
+{
+    ive_remove(pdev);
+    return 0;
+}
+#endif
 
 static const struct of_device_id ive_match[] = {
 	{ .compatible = "cvitek,ive" },
@@ -1385,7 +1395,11 @@ MODULE_DEVICE_TABLE(of, ive_match);
 
 static struct platform_driver ive_driver = {
 	.probe = ive_probe,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
+	.remove = ive_remove_ex,
+#else
 	.remove = ive_remove,
+#endif
 	.suspend = ive_suspend,
 	.resume = ive_resume,
 	.driver = {

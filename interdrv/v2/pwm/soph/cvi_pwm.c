@@ -11,6 +11,8 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/version.h>
+#include <linux/device.h>
+#include <linux/overflow.h>
 
 #define REG_HLPERIOD		0x0
 #define REG_PERIOD		0x4
@@ -54,6 +56,8 @@ struct cv_pwm_channel {
  * @tclk0:		external clock 0 (can be ERR_PTR if not present)
  * @tclk1:		external clock 1 (can be ERR_PTR if not present)
  */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+/* Linux 5.10: chip is first member */
 struct cv_pwm_chip {
 	struct pwm_chip chip;
 	void __iomem *base;
@@ -62,12 +66,38 @@ struct cv_pwm_chip {
 	bool no_polarity;
 	uint32_t pwm_saved_regs[PWM_REG_NUM];
 };
+#else
+/* Linux 6.12: private data follows pwm_chip (allocated by devm_pwmchip_alloc) */
+struct cv_pwm_chip_priv {
+	struct pwm_chip *chip; /* Back pointer to pwm_chip */
+	void __iomem *base;
+	struct clk *base_clk;
+	u8 polarity_mask;
+	bool no_polarity;
+	uint32_t pwm_saved_regs[PWM_REG_NUM];
+	/* Channel private data - allocated on request, freed on free */
+	struct cv_pwm_channel *channels[];
+};
+#endif
 
+/* Unified type for both Linux versions */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+/* Linux 5.10: cv_pwm_chip is struct cv_pwm_chip */
+typedef struct cv_pwm_chip cv_pwm_chip;
 static inline
-struct cv_pwm_chip *to_cv_pwm_chip(struct pwm_chip *chip)
+cv_pwm_chip *to_cv_pwm_chip(struct pwm_chip *chip)
 {
 	return container_of(chip, struct cv_pwm_chip, chip);
 }
+#else
+/* Linux 6.12: cv_pwm_chip is struct cv_pwm_chip_priv */
+typedef struct cv_pwm_chip_priv cv_pwm_chip;
+static inline
+cv_pwm_chip *to_cv_pwm_chip(struct pwm_chip *chip)
+{
+	return pwmchip_get_drvdata(chip);
+}
+#endif
 
 static int check_vddc_pwm(void)
 {
@@ -88,32 +118,71 @@ static int check_vddc_pwm(void)
 
 static int pwm_cv_request(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
+	struct cv_pwm_channel *channel;
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	/* Linux 5.10: use pwm->pwm instead of hwpwm */
 	if (pwm_dev->pwm == VDDC_PWM_ID && check_vddc_pwm())
 		return -EBUSY;
+#else
+	/* Linux 6.12: use hwpwm */
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
 
-	struct cv_pwm_channel *channel;
+	if (pwm_dev->hwpwm == VDDC_PWM_ID && check_vddc_pwm())
+		return -EBUSY;
+
+	/* Check channel count */
+	if (pwm_dev->hwpwm >= chip->npwm)
+		return -EINVAL;
+#endif
 
 	channel = kzalloc(sizeof(*channel), GFP_KERNEL);
 	if (!channel)
 		return -ENOMEM;
 
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	return pwm_set_chip_data(pwm_dev, channel);
+#else
+	our_chip->channels[pwm_dev->hwpwm] = channel;
+	return 0;
+#endif
 }
 
 static void pwm_cv_free(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
 
 	pwm_set_chip_data(pwm_dev, NULL);
 	kfree(channel);
+#else
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+
+	/* Check channel count before accessing */
+	if (pwm_dev->hwpwm < chip->npwm) {
+		kfree(our_chip->channels[pwm_dev->hwpwm]);
+		our_chip->channels[pwm_dev->hwpwm] = NULL;
+	}
+#endif
 }
 
 static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 			     int duty_ns, int period_ns)
 {
-	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
-	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	struct cv_pwm_channel *channel;
 	u64 cycles;
+
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	channel = pwm_get_chip_data(pwm_dev);
+#else
+	/* Check channel count */
+	if (pwm_dev->hwpwm >= chip->npwm)
+		return -EINVAL;
+
+	channel = our_chip->channels[pwm_dev->hwpwm];
+	if (!channel)
+		return -EINVAL;
+#endif
 
 	cycles = clk_get_rate(our_chip->base_clk);
 	pr_debug("clk_get_rate=%llu\n", cycles);
@@ -140,20 +209,36 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 
 static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
-	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
-	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	struct cv_pwm_channel *channel;
 	uint32_t pwm_start_value;
 	uint32_t value;
+	unsigned int hwpwm;
 
-	writel(channel->period, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD);
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	hwpwm = pwm_dev->pwm;
+	channel = pwm_get_chip_data(pwm_dev);
+#else
+	hwpwm = pwm_dev->hwpwm;
+
+	/* Check channel count */
+	if (hwpwm >= chip->npwm)
+		return -EINVAL;
+
+	channel = our_chip->channels[hwpwm];
+	if (!channel)
+		return -EINVAL;
+#endif
+
+	writel(channel->period, our_chip->base + REG_GROUP * hwpwm + REG_PERIOD);
 	if (channel->hlperiod != 0)
-		writel(channel->hlperiod, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD);
+		writel(channel->hlperiod, our_chip->base + REG_GROUP * hwpwm + REG_HLPERIOD);
 
 	pwm_start_value = readl(our_chip->base + REG_PWMSTART);
 
-	writel(pwm_start_value & (~(1 << (pwm_dev->hwpwm))), our_chip->base + REG_PWMSTART);
+	writel(pwm_start_value & (~(1 << hwpwm)), our_chip->base + REG_PWMSTART);
 
-	value = pwm_start_value | (1 << pwm_dev->hwpwm);
+	value = pwm_start_value | (1 << hwpwm);
 	pr_debug("pwm_cv_enable: value = %x\n", value);
 
 	writel(value, our_chip->base + REG_PWM_OE);
@@ -165,33 +250,47 @@ static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 static void pwm_cv_disable(struct pwm_chip *chip,
 			       struct pwm_device *pwm_dev)
 {
-	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
 	uint32_t value;
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	unsigned int hwpwm = pwm_dev->pwm;
+#else
+	unsigned int hwpwm = pwm_dev->hwpwm;
+#endif
 
-	value = readl(our_chip->base + REG_PWMSTART) & (~(1 << (pwm_dev->hwpwm)));
+	value = readl(our_chip->base + REG_PWMSTART) & (~(1 << hwpwm));
 	pr_debug("pwm_cv_disable: value = %x\n", value);
 	writel(value, our_chip->base + REG_PWM_OE);
 	writel(value, our_chip->base + REG_PWMSTART);
 
-	writel(1, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD);
-	writel(2, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD);
+	writel(1, our_chip->base + REG_GROUP * hwpwm + REG_PERIOD);
+	writel(2, our_chip->base + REG_GROUP * hwpwm + REG_HLPERIOD);
 }
 
 static int pwm_cv_set_polarity(struct pwm_chip *chip,
 				    struct pwm_device *pwm_dev,
 				    enum pwm_polarity polarity)
 {
-	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	unsigned int hwpwm = pwm_dev->pwm;
+#else
+	unsigned int hwpwm = pwm_dev->hwpwm;
+#endif
 
 	if (our_chip->no_polarity) {
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 		dev_err(chip->dev, "no polarity\n");
+#else
+		dev_err(&chip->dev, "no polarity\n");
+#endif
 		return -ENOTSUPP;
 	}
 
 	if (polarity == PWM_POLARITY_NORMAL)
-		our_chip->polarity_mask &= ~(1 << pwm_dev->hwpwm);
+		our_chip->polarity_mask &= ~(1 << hwpwm);
 	else
-		our_chip->polarity_mask |= 1 << pwm_dev->hwpwm;
+		our_chip->polarity_mask |= 1 << hwpwm;
 
 	writel(our_chip->polarity_mask, our_chip->base + REG_POLARITY);
 
@@ -210,24 +309,40 @@ static int pwm_cv_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	ret = pwm_cv_config(chip, pwm, state->duty_cycle, state->period);
 	if (ret) {
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 		dev_err(chip->dev, "pwm apply err\n");
+#else
+		dev_err(&chip->dev, "pwm apply err\n");
+#endif
 		return ret;
 	}
 
 	ret = pwm_cv_set_polarity(chip, pwm, state->polarity);
 	if (ret) {
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 		dev_err(chip->dev, "pwm apply err\n");
+#else
+		dev_err(&chip->dev, "pwm apply err\n");
+#endif
 		return ret;
 	}
 
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	dev_dbg(chip->dev, "pwm_cv_apply state->enabled = %d\n", state->enabled);
+#else
+	dev_dbg(&chip->dev, "pwm_cv_apply state->enabled = %d\n", state->enabled);
+#endif
 	if (state->enabled)
 		ret = pwm_cv_enable(chip, pwm);
 	else
 		pwm_cv_disable(chip, pwm);
 
 	if (ret) {
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 		dev_err(chip->dev, "pwm apply failed\n");
+#else
+		dev_err(&chip->dev, "pwm apply failed\n");
+#endif
 		return ret;
 	}
 	return ret;
@@ -236,26 +351,31 @@ static int pwm_cv_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 			   struct pwm_capture *result, unsigned long timeout)
 {
-	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
 	uint32_t value;
 	u64 cycles;
 	u64 cycle_cnt;
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	unsigned int hwpwm = pwm_dev->pwm;
+#else
+	unsigned int hwpwm = pwm_dev->hwpwm;
+#endif
 
 	// Set corresponding bit in PWM_OE to 0
-	value = readl(our_chip->base + REG_PWM_OE) & (~(1 << (pwm_dev->hwpwm)));
+	value = readl(our_chip->base + REG_PWM_OE) & (~(1 << hwpwm));
 	writel(value, our_chip->base + REG_PWM_OE);
 	pr_debug("pwm_cv_capture: REG_PWM_OE = %x\n", value);
 
 	// Enable capture
-	writel(1, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_FREQNUM);
-	writel(1 << pwm_dev->hwpwm, our_chip->base + REG_FREQEN);
+	writel(1, our_chip->base + REG_GROUP * hwpwm + REG_FREQNUM);
+	writel(1 << hwpwm, our_chip->base + REG_FREQEN);
 	pr_debug("pwm_cv_capture: REG_FREQEN = %x\n", readl(our_chip->base + REG_FREQEN));
 
 	// Wait for done status
 	while (timeout--) {
 		mdelay(1);
 		pr_debug("delay 1ms\n");
-		value = readl(our_chip->base + REG_FREQ_DONE_NUM + pwm_dev->hwpwm * 4);
+		value = readl(our_chip->base + REG_FREQ_DONE_NUM + hwpwm * 4);
 		if (value != 0)
 			break;
 	}
@@ -266,7 +386,7 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 		result->duty_cycle = 0;
 	} else {
 		// Read cycle count
-		cycle_cnt = readl(our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_FREQDATA) + 1;
+		cycle_cnt = readl(our_chip->base + REG_GROUP * hwpwm + REG_FREQDATA) + 1;
 		pr_debug("%s: cycle_cnt = %llu\n", __func__, cycle_cnt);
 
 		// Convert from cycle count to period ns
@@ -279,23 +399,33 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 	}
 
 	// Disable capture
-	value = readl(our_chip->base + REG_FREQEN) & (~(1 << (pwm_dev->hwpwm)));
+	value = readl(our_chip->base + REG_FREQEN) & (~(1 << hwpwm));
 	writel(value, our_chip->base + REG_FREQEN);
 
 	return 0;
 }
 
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+/* Linux 5.10: pwm_ops includes enable, disable, config, owner */
 static const struct pwm_ops pwm_cv_ops = {
 	.request	= pwm_cv_request,
 	.free		= pwm_cv_free,
 	.enable		= pwm_cv_enable,
 	.disable	= pwm_cv_disable,
 	.config		= pwm_cv_config,
-	// .set_polarity	= pwm_cv_set_polarity,
 	.apply		= pwm_cv_apply,
 	.capture	= pwm_cv_capture,
 	.owner		= THIS_MODULE,
 };
+#else
+/* Linux 6.12: pwm_ops only includes request, free, apply, capture */
+static const struct pwm_ops pwm_cv_ops = {
+	.request	= pwm_cv_request,
+	.free		= pwm_cv_free,
+	.apply		= pwm_cv_apply,
+	.capture	= pwm_cv_capture,
+};
+#endif
 
 static const struct of_device_id cv_pwm_match[] = {
 	{ .compatible = "cvitek,cvi-pwm" },
@@ -306,22 +436,55 @@ MODULE_DEVICE_TABLE(of, cv_pwm_match);
 static int pwm_cv_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct cv_pwm_chip *chip;
+	cv_pwm_chip *chip;
 	struct resource *res;
 	int ret;
+	unsigned int npwm;
 
 	// pr_debug("%s\n", __func__);
 
+	//pwm-num default is 4, compatible with bm1682
+	if (of_property_read_bool(pdev->dev.of_node, "pwm-num"))
+		device_property_read_u32(&pdev->dev, "pwm-num", &npwm);
+	else
+		npwm = 4;
+
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	/* Linux 5.10: allocate chip structure */
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (chip == NULL)
 		return -ENOMEM;
 
 	chip->chip.dev = &pdev->dev;
-	chip->chip.ops = &pwm_cv_ops;
 	chip->chip.base = -1;
+	chip->chip.of_pwm_n_cells = 3;
+	chip->chip.npwm = npwm;
+#else
+	/* Linux 6.12: use devm_pwmchip_alloc for flexible array member support
+	 * Note: devm_pwmchip_alloc already calls device_initialize and sets dev.parent
+	 * dev_set_name will be called by pwmchip_add
+	 */
+	struct pwm_chip *pwm_chip;
+	size_t chip_size = struct_size((struct cv_pwm_chip_priv *)0, channels, npwm);
+
+	pwm_chip = devm_pwmchip_alloc(dev, npwm, chip_size);
+	if (IS_ERR(pwm_chip))
+		return PTR_ERR(pwm_chip);
+
+	chip = pwmchip_get_drvdata(pwm_chip);
+	chip->chip = pwm_chip; /* Save back pointer */
+	/* npwm is already set by devm_pwmchip_alloc */
+#endif
+
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	chip->chip.ops = &pwm_cv_ops;
 	chip->polarity_mask = 0;
 	chip->chip.of_xlate = of_pwm_xlate_with_flags;
-	chip->chip.of_pwm_n_cells = 3;
+#else
+	chip->chip->ops = &pwm_cv_ops;
+	chip->polarity_mask = 0;
+	chip->chip->of_xlate = of_pwm_xlate_with_flags;
+#endif
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	chip->base = devm_ioremap_resource(&pdev->dev, res);
@@ -340,12 +503,6 @@ static int pwm_cv_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	//pwm-num default is 4, compatible with bm1682
-	if (of_property_read_bool(pdev->dev.of_node, "pwm-num"))
-		device_property_read_u32(&pdev->dev, "pwm-num", &chip->chip.npwm);
-	else
-		chip->chip.npwm = 4;
-
 	//no_polarity default is false(have polarity) , compatible with bm1682
 	if (of_property_read_bool(pdev->dev.of_node, "no-polarity"))
 		chip->no_polarity = true;
@@ -355,7 +512,11 @@ static int pwm_cv_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, chip);
 
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	ret = pwmchip_add(&chip->chip);
+#else
+	ret = pwmchip_add(chip->chip);
+#endif
 	if (ret < 0) {
 		dev_err(dev, "failed to register PWM chip\n");
 		clk_disable_unprepare(chip->base_clk);
@@ -365,6 +526,8 @@ static int pwm_cv_probe(struct platform_device *pdev)
 	return 0;
 }
 
+/* platform_driver.remove return type changed from int to void in Linux 6.12 */
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int pwm_cv_remove(struct platform_device *pdev)
 {
 	struct cv_pwm_chip *chip = platform_get_drvdata(pdev);
@@ -378,11 +541,28 @@ static int pwm_cv_remove(struct platform_device *pdev)
 
 	return 0;
 }
+#else
+static void pwm_cv_remove(struct platform_device *pdev)
+{
+	cv_pwm_chip *chip = platform_get_drvdata(pdev);
+	int i;
+
+	pwmchip_remove(chip->chip);
+
+	/* Free all allocated channels */
+	for (i = 0; i < chip->chip->npwm; i++) {
+		kfree(chip->channels[i]);
+		chip->channels[i] = NULL;
+	}
+
+	clk_disable_unprepare(chip->base_clk);
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int pwm_cv_suspend(struct device *dev)
 {
-	struct cv_pwm_chip *chip = dev_get_drvdata(dev);
+	cv_pwm_chip *chip = dev_get_drvdata(dev);
 
 	memcpy_fromio(chip->pwm_saved_regs, chip->base, PWM_REG_NUM * 4);
 
@@ -391,7 +571,7 @@ static int pwm_cv_suspend(struct device *dev)
 
 static int pwm_cv_resume(struct device *dev)
 {
-	struct cv_pwm_chip *chip = dev_get_drvdata(dev);
+	cv_pwm_chip *chip = dev_get_drvdata(dev);
 
 	memcpy_toio(chip->base, chip->pwm_saved_regs, PWM_REG_NUM * 4);
 

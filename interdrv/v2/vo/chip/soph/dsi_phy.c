@@ -190,7 +190,7 @@ void dphy_init(u8 inst, enum vo_disp_intf intf)
 }
 EXPORT_SYMBOL_GPL(dphy_init);
 
-void cal_pll_reg(u8 dsi_id, u32 clk_khz, u32 vco_rx10000, u32 *reg_txpll, u32 *reg_set, u32 factor)
+static void cal_pll_reg(u8 dsi_id, u32 clk_khz, u32 vco_rx10000, u32 *reg_txpll, u32 *reg_set, u32 factor)
 {
 	u8 gain = 1 << ilog2(MAX(1, 25000000UL / vco_rx10000));
 	u32 vco_cx1000 = vco_rx10000 * gain / 10;

@@ -183,7 +183,7 @@ audio_n_computation_t n_values_48[] = {
 /**********************************************
  * Internal functions
  */
-void _audio_clock_n(hdmi_tx_dev_t *dev, u32 value)
+static void _audio_clock_n(hdmi_tx_dev_t *dev, u32 value)
 {
 	/* 19-bit width */
 	dev_write_mask(AUD_N3, AUD_N3_AUDN_MASK, (u8)(value >> 16));
@@ -195,7 +195,7 @@ void _audio_clock_n(hdmi_tx_dev_t *dev, u32 value)
 	dev_write_mask(AUD_CTS3, AUD_CTS3_N_SHIFT_MASK, 0);
 }
 
-void _audio_clock_cts(hdmi_tx_dev_t *dev, u32 value)
+static void _audio_clock_cts(hdmi_tx_dev_t *dev, u32 value)
 {
 	if(value > 0){
 		/* 19-bit width */
@@ -210,17 +210,17 @@ void _audio_clock_cts(hdmi_tx_dev_t *dev, u32 value)
 	}
 }
 
-void _audio_clock_atomic(hdmi_tx_dev_t *dev, u8 value)
+static void _audio_clock_atomic(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(AUD_N3, AUD_N3_NCTS_ATOMIC_WRITE_MASK, value);
 }
 
-void _audio_clock_f(hdmi_tx_dev_t *dev, u8 value)
+static void __maybe_unused _audio_clock_f(hdmi_tx_dev_t *dev, u8 value)
 {
 	dev_write_mask(AUD_INPUTCLKFS, AUD_INPUTCLKFS_IFSFACTOR_MASK, value);
 }
 
-void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
+static void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	int dma_channel = 0;
 	u32 high_bit;

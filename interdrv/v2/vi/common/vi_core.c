@@ -1,6 +1,7 @@
 #include <vi_core.h>
 #include <base_cb.h>
 #include <linux/compat.h>
+#include <linux/version.h>
 
 #define VI_IRQ_NAME            "isp"
 #define VI_CLASS_NAME          "soph-vi"
@@ -63,7 +64,7 @@ const struct file_operations vi_fops = {
 	.poll = vi_core_poll,
 };
 
-int vi_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
+static int vi_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	return vi_cb(dev, caller, cmd, arg);
 }
@@ -98,7 +99,11 @@ static int vi_core_register_cdev(struct sop_vi_dev *dev)
 	struct device *dev_t;
 	int err = 0;
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	dev->vi_class = class_create(VI_CLASS_NAME);
+#else
 	dev->vi_class = class_create(THIS_MODULE, VI_CLASS_NAME);
+#endif
 	if (IS_ERR(dev->vi_class)) {
 		dev_err(dev->dev, "create class failed\n");
 		return PTR_ERR(dev->vi_class);
@@ -256,22 +261,16 @@ err_req_irq:
 	return ret;
 }
 
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+static void vi_core_remove(struct platform_device *pdev)
+#else
 static int vi_core_remove(struct platform_device *pdev)
+#endif
 {
-	int ret = 0;
-
 	struct sop_vi_dev *dev = dev_get_drvdata(&pdev->dev);
 
-	ret = vi_destroy_instance(pdev);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to destroy instance, err %d\n", ret);
-		goto err_destroy_instance;
-	}
-
-	ret = vi_core_rm_cb();
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to rm vi cb, err %d\n", ret);
-	}
+	vi_destroy_instance(pdev);
+	vi_core_rm_cb();
 
 	device_destroy(dev->vi_class, dev->cdev_id);
 	cdev_del(&dev->cdev);
@@ -280,10 +279,12 @@ static int vi_core_remove(struct platform_device *pdev)
 
 	dev_set_drvdata(&pdev->dev, NULL);
 
-err_destroy_instance:
 	vi_pr(VI_INFO, "%s -\n", __func__);
-
-	return ret;
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	/* void return for Linux 6.x */
+#else
+	return 0;
+#endif
 }
 
 static int vi_core_suspend(struct platform_device *pdev, pm_message_t state)

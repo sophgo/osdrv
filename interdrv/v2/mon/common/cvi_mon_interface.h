@@ -6,6 +6,9 @@
 #include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/dma-direction.h>
+#include <linux/version.h>
+
+
 
 struct cvi_mon_work {
 	struct task_struct *work_thread;

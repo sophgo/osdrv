@@ -14,7 +14,7 @@
 #endif
 #include <linux/printk.h>
 #include <drv_file.h>
-#include "../jpuapi/jpuconfig.h"
+#include "jpuconfig.h"
 #include "jpulog.h"
 
 
