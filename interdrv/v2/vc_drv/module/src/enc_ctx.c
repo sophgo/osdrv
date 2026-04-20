@@ -883,7 +883,7 @@ static int vid_enc_close(void *ctx)
             return status;
         }
     }
-
+    pEncCtx->ext.vid.pHandle = NULL;
     return status;
 }
 
