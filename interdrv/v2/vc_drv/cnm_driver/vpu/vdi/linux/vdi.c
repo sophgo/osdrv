@@ -244,6 +244,7 @@ int vdi_release(unsigned long core_idx)
     osal_memset(&vdi->vdb_register, 0x00, sizeof(vpudrv_buffer_t));
     vdb.size = 0;
     // get common memory information to free virtual address
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_common_memory.phys_addr >= vdi->vpu_buffer_pool[i].vdb.phys_addr &&
@@ -255,6 +256,7 @@ int vdi_release(unsigned long core_idx)
             break;
         }
     }
+    vmem_unlock(core_idx);
 
     if (vdb.size > 0)
     {
@@ -321,6 +323,7 @@ int vdi_allocate_common_memory(unsigned long core_idx)
 
     osal_memcpy(&vdi->vpu_common_memory, &vdi->pvip->vpu_common_buffer, sizeof(vpu_buffer_t));
 
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_buffer_pool[i].inuse == 0)
@@ -331,6 +334,7 @@ int vdi_allocate_common_memory(unsigned long core_idx)
             break;
         }
     }
+    vmem_unlock(core_idx);
 
     vdi_set_ddr_map(core_idx, vdb.phys_addr >> 32);
 
@@ -607,6 +611,7 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_buffer_pool[i].inuse == 1)
@@ -614,12 +619,13 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
             vdb = vdi->vpu_buffer_pool[i].vdb;
             if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
                 break;
-			vdb.size = 0;
+            vdb.size = 0;
         }
     }
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
 
@@ -635,6 +641,7 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
     }
+    vmem_unlock(core_idx);
 
     return len;
 }
@@ -658,6 +665,7 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_buffer_pool[i].inuse == 1)
@@ -665,12 +673,13 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
             vdb = vdi->vpu_buffer_pool[i].vdb;
             if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
                 break;
-			vdb.size = 0;
+            vdb.size = 0;
         }
     }
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
 
@@ -686,6 +695,7 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
     }
+    vmem_unlock(core_idx);
 
     return len;
 }
@@ -712,6 +722,7 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_buffer_pool[i].inuse == 1)
@@ -725,6 +736,7 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
 
@@ -738,9 +750,11 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
     if (vdb.is_cached) {
         if (vpu_flush_dcache(&vdb) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
+            vmem_unlock(core_idx);
             return -1;
         }
     }
+    vmem_unlock(core_idx);
 
     return len;
 }
@@ -764,6 +778,7 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    vmem_lock(core_idx);
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
         if (vdi->vpu_buffer_pool[i].inuse == 1)
@@ -771,16 +786,19 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
             vdb = vdi->vpu_buffer_pool[i].vdb;
             if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
                 break;
-			vdb.size = 0;
+            vdb.size = 0;
         }
     }
 
-    if (!vdb.size)
+    if (!vdb.size) {
+        vmem_unlock(core_idx);
         return -1;
+    }
 
     if (vdb.is_cached) {
         if (vpu_invalidate_dcache(&vdb) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
+            vmem_unlock(core_idx);
             return -1;
         }
     }
@@ -791,6 +809,7 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
     pcie_memcpy_d2s(data, addr, len);
 #endif
     swap_endian(core_idx, data, len,  endian);
+    vmem_unlock(core_idx);
 
     return len;
 }
@@ -1067,6 +1086,7 @@ void vdi_remove_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memT
 
     osal_memset(vb, 0, sizeof(vpu_buffer_t));
     vmem_unlock(core_idx);
+    return;
 }
 
 int vdi_get_sram_memory(unsigned long core_idx, vpu_buffer_t *vb)
