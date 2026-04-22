@@ -64,6 +64,16 @@ extern vpudrv_buffer_t s_vpu_register[MAX_NUM_VPU_CORE];
 
 int swap_endian(unsigned long core_idx, unsigned char *data, int len, int endian);
 
+static int vmem_lock(unsigned long core_idx)
+{
+    return vpu_mem_lock(core_idx);
+}
+
+static void vmem_unlock(unsigned long core_idx)
+{
+    vpu_mem_unlock(core_idx);;
+}
+
 int vdi_invalidate_ion_cache(uint64_t u64PhyAddr, void *pVirAddr,
                  uint32_t u32Len)
 {
@@ -507,16 +517,6 @@ int vdi_disp_lock(unsigned long core_idx)
 void vdi_disp_unlock(unsigned long core_idx)
 {
     vpu_disp_unlock(core_idx);
-}
-
-static int vmem_lock(unsigned long core_idx)
-{
-    return vpu_mem_lock(core_idx);
-}
-
-static void vmem_unlock(unsigned long core_idx)
-{
-    vpu_mem_unlock(core_idx);;
 }
 
 void vdi_write_register(unsigned long core_idx, unsigned int addr, unsigned int data)
