@@ -679,8 +679,6 @@ int jpeg_enc_open(drv_jpg_handle handle, drv_jpg_config config)
         JPU_EncGiveCommand(pst_handle->handle, SET_JPG_QUALITY_FACTOR, &pst_handle->config->encQualityPercentage);
     }
 
-    JPU_EncGiveCommand(pst_handle->handle, GET_JPG_QUALITY_TABLE, &pst_handle->config->encQualityPercentage);
-
     pst_handle->output_info.encodeState = -1;
 
     // start rc
@@ -944,7 +942,7 @@ int jpeg_flush(drv_jpg_handle handle)
 
 static int _reopen_instance(drv_jpg_handle hadnle, DRVFRAMEBUF *data)
 {
-    JPEG_ENC_HANDLE *pst_handle = (JPEG_ENC_HANDLE *)data;
+    JPEG_ENC_HANDLE *pst_handle = (JPEG_ENC_HANDLE *)hadnle;
     JpgRet ret = JPG_RET_SUCCESS;
     JpgEncOutputInfo   info;
 
