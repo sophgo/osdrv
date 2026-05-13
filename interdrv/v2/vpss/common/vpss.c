@@ -4311,6 +4311,19 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	}
 	chn_hw_cfg->y_ratio = YRATIO_SCALE;
 
+	/* Reliability judgment conditions for auto YUV. */
+	{
+		bool yuv_in = IS_FMT_YUV(vpss_cfg->snd_frm_cfg.video_frame.video_frame.pixel_format);
+		bool yuv_out = IS_FMT_YUV(vpss_cfg->chn_frm_cfg.video_frame.video_frame.pixel_format);
+		bool use_hw_auto = vpss_cfg->grp_csc_cfg.hw_yuv_auto_csc &&
+			yuv_in && yuv_out &&
+			!vpss_cfg->grp_csc_cfg.enable && !vpss_cfg->chn_csc_cfg.enable &&
+			!vpss_cfg->chn_convert_cfg.convert.enable;
+
+		grp_hw_cfg->hw_yuv_auto_csc = use_hw_auto;
+		chn_hw_cfg->hw_yuv_auto_csc = use_hw_auto;
+	}
+
 	if(vpss_cfg->grp_crop_cfg.crop_info.enable){
 		grp_hw_cfg->crop.width = vpss_cfg->grp_crop_cfg.crop_info.crop_rect.width;
 		grp_hw_cfg->crop.height = vpss_cfg->grp_crop_cfg.crop_info.crop_rect.height;

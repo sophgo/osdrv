@@ -350,6 +350,7 @@ struct sclr_mem {
 struct sclr_img_cfg {
 	u8 src;      // 0(ISP), 1(dwa), 2(share), 3(DRAM)
 	bool dup2fancy_enable;
+	bool auto_csc_en; /* REG_SCL_IMG_CFG bit13, applied in sclr_img_set_cfg via sclr_auto_csc_en() */
 	bool csc_en;
 	enum sclr_csc csc;
 	u8 burst;       // 0~15
@@ -837,6 +838,7 @@ void sclr_img_set_fmt(u8 inst, enum sclr_format fmt);
 void sclr_img_set_mem(u8 inst, struct sclr_mem *mem, bool update);
 void sclr_img_set_addr(u8 inst, u64 addr0, u64 addr1, u64 addr2);
 void sclr_img_csc_en(u8 inst, bool enable);
+void sclr_auto_csc_en(u8 inst, bool enable);
 void sclr_img_set_csc(u8 inst, struct sclr_csc_matrix *cfg);
 union sclr_img_dbg_status sclr_img_get_dbg_status(u8 inst, bool clr);
 void sclr_img_checksum_en(u8 inst, bool enable);

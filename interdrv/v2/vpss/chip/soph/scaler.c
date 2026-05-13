@@ -938,6 +938,8 @@ void sclr_img_set_cfg(u8 img_inst, struct sclr_img_cfg *cfg)
 
 	sclr_img_dup2fancy_bypass(img_inst, cfg->dup2fancy_enable);
 
+	sclr_auto_csc_en(img_inst, cfg->auto_csc_en);
+
 	g_img_cfg[img_inst] = *cfg;
 }
 
@@ -1146,6 +1148,12 @@ void sclr_img_csc_en(u8 inst, bool enable)
 {
 	_reg_write_mask(reg_base + REG_SCL_IMG_CFG(inst), BIT(12),
 			enable ? BIT(12) : 0);
+}
+
+void sclr_auto_csc_en(u8 inst, bool enable)
+{
+	_reg_write_mask(reg_base + REG_SCL_IMG_CFG(inst), BIT(13),
+			enable ? BIT(13) : 0);
 }
 
 /**
@@ -2175,6 +2183,7 @@ int sclr_ctrl_set_input(u8 inst, enum sclr_input input,
 	g_img_cfg[inst].src = input;
 
 	g_img_cfg[inst].fmt = fmt;
+	g_img_cfg[inst].auto_csc_en = false;
 	sclr_img_set_cfg(inst, &g_img_cfg[inst]);
 
 	g_img_cfg[inst].csc = csc;
@@ -2216,9 +2225,11 @@ int sclr_ctrl_set_output(u8 inst, struct sclr_csc_cfg *cfg,
 			return -EINVAL;
 		}
 	} else {
-		// Use rgb for quant/hsv
-		if (IS_YUV_FMT(fmt)) {
-			TRACE_VPSS(DBG_ERR,"quant/hsv not support yuv format\n");
+		/* quant/hsv/convert_to expect RGB out of sc; SCL_OUT_DISABLE is passthrough for any fmt */
+		if (IS_YUV_FMT(fmt) && cfg->mode != SCL_OUT_DISABLE) {
+			TRACE_VPSS(DBG_ERR,
+				   "output mode %d does not support yuv format\n",
+				   cfg->mode);
 			return -EINVAL;
 		}
 	}
@@ -2264,6 +2275,7 @@ static void _map_ctrl_to_img(struct sclr_ctrl_cfg *cfg,
 	img_cfg->burst = g_img_cfg[cfg->img_inst].burst;
 	img_cfg->fmt = cfg->src_fmt;
 	img_cfg->csc = cfg->src_csc;
+	img_cfg->auto_csc_en = false;
 	img_cfg->csc_en = (cfg->src_csc == SCL_CSC_NONE) ? false : true;
 	img_cfg->src = cfg->input;
 	img_cfg->mem.addr0 = cfg->src_addr0;

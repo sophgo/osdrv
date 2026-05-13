@@ -279,6 +279,10 @@ static int _sc_ext_set_quant(u8 dev_idx, const struct sc_quant_param *param)
 	if (IS_YUV_FMT(odma_cfg->fmt)) {
 		struct sclr_img_cfg *img_cfg = sclr_img_get_cfg(dev_idx);
 
+		/* Cannot modify `img_cfg->csc`, as this will overwrite/disrupt the `auto` convention. */
+		if (img_cfg->auto_csc_en)
+			return 0;
+
 		img_cfg->csc = (IS_YUV_FMT(img_cfg->fmt))
 			     ? SCL_CSC_NONE : SCL_CSC_601_LIMIT_RGB2YUV;
 
@@ -823,7 +827,11 @@ void sc_update(u8 dev_idx, const struct vpss_hal_chn_cfg *chn_cfg)
 
 	odma_cfg->csc_cfg.datatype = user_fmt_to_datatype(chn_cfg->pixelformat);
 	odma_cfg->csc_cfg.work_on_border = true;
-	if ((chn_cfg->pixelformat == PIXEL_FORMAT_HSV_888) || (chn_cfg->pixelformat == PIXEL_FORMAT_HSV_888_PLANAR))
+	if (chn_cfg->hw_yuv_auto_csc && IS_YUV_FMT(odma_cfg->fmt)) {
+		/* ODMA RGB2YUV cannot be used. */
+		odma_cfg->csc_cfg.mode = SCL_OUT_DISABLE;
+		odma_cfg->csc_cfg.csc_type = SCL_CSC_NONE;
+	} else if ((chn_cfg->pixelformat == PIXEL_FORMAT_HSV_888) || (chn_cfg->pixelformat == PIXEL_FORMAT_HSV_888_PLANAR))
 		odma_cfg->csc_cfg.mode = SCL_OUT_HSV;
 	else if ((chn_cfg->pixelformat == PIXEL_FORMAT_YUV_PLANAR_444) || (chn_cfg->pixelformat == PIXEL_FORMAT_YUV_444)) {
 		odma_cfg->csc_cfg.mode = SCL_OUT_CSC;
@@ -1003,6 +1011,17 @@ void img_update(u8 dev_idx, bool is_master, const struct vpss_hal_grp_cfg *grp_c
 		cfg->mem.addr0 = 0;
 		cfg->mem.addr1 = 0;
 		cfg->mem.addr2 = 0;
+	}
+
+	/* When hw_yuv_auto_csc is enabled under safety conditions, turn off explicit YUV→RGB CSC on IMG. */
+	cfg->auto_csc_en = (grp_cfg->hw_yuv_auto_csc && is_master &&
+			    !grp_cfg->online_from_isp && !grp_cfg->fbd_enable &&
+			    IS_FMT_YUV(grp_cfg->pixelformat) && IS_YUV_FMT(cfg->fmt));
+	if (cfg->auto_csc_en) {
+		cfg->csc = SCL_CSC_NONE;
+		cfg->csc_en = false;
+	} else {
+		cfg->auto_csc_en = false;
 	}
 
 	_sc_ext_set_fbd(dev_idx, grp_cfg);

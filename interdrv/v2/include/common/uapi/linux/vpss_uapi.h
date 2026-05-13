@@ -154,6 +154,12 @@ struct vpss_grp_csc_cfg {
 	__u8 add[3];
 	__u8 scene;
 	__u8 is_copy_upsample;
+	/*
+	 * BM VPSS_BM_SEND_FRAME: YUV input + YUV output, skip explicit
+	 * YUV2RGB (IMG matrix) + RGB2YUV (ODMA matrix); use HW auto CSC
+	 * (REG_SCL_IMG_CFG bit13).
+	 */
+	__u8 hw_yuv_auto_csc;
 };
 
 struct vpss_chn_csc_cfg {
