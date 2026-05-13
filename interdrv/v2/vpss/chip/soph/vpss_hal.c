@@ -66,6 +66,17 @@ module_param(work_mask, int, 0644);
 
 module_param(sche_thread_enable, int, 0644);
 
+static void vpss_free_cmdq_buf(struct vpss_cmdq_buf *cmdq_buf)
+{
+	if (!cmdq_buf->cmdq_phy_addr)
+		return;
+
+	base_ion_free(cmdq_buf->cmdq_phy_addr);
+	cmdq_buf->cmdq_phy_addr = 0;
+	cmdq_buf->cmdq_vir_addr = NULL;
+	cmdq_buf->cmdq_buf_size = 0;
+}
+
 static void show_hw_state(void)
 {
 	u8 state[VPSS_MAX];
@@ -569,6 +580,35 @@ int vpss_hal_init(struct vpss_device *dev)
 	return 0;
 }
 
+void vpss_hal_release_cmdq_buf(void)
+{
+	struct vpss_cmdq_buf *cmdq_buf;
+	int i, count;
+
+	if (!vpss_dev)
+		return;
+
+	for (i = VPSS_D0; i <= VPSS_D1; i++) {
+		cmdq_buf = &task_ctx.cmdq_buf[i - VPSS_D0];
+		if (!cmdq_buf->cmdq_phy_addr)
+			continue;
+
+		count = 20;
+		while (atomic_read(&vpss_dev->vpss_cores[i].state) != VIP_IDLE) {
+			usleep_range(1000, 2000);
+			if (--count <= 0)
+				break;
+		}
+
+		if (count == 0) {
+			TRACE_VPSS(DBG_ERR, "vpss(%d) Wait timeout, skip cmdq buf release.\n", i);
+			continue;
+		}
+
+		vpss_free_cmdq_buf(cmdq_buf);
+	}
+}
+
 void vpss_hal_deinit(void)
 {
 	int ret;
@@ -602,12 +642,7 @@ void vpss_hal_deinit(void)
 	spin_unlock_irqrestore(&task_ctx.task_lock, flags);
 
 	for (i = 0; i < 2; i++) {
-		if (task_ctx.cmdq_buf[i].cmdq_phy_addr) {
-			base_ion_free(task_ctx.cmdq_buf[i].cmdq_phy_addr);
-			task_ctx.cmdq_buf[i].cmdq_phy_addr = 0;
-			task_ctx.cmdq_buf[i].cmdq_vir_addr = NULL;
-			task_ctx.cmdq_buf[i].cmdq_buf_size = 0;
-		}
+		vpss_free_cmdq_buf(&task_ctx.cmdq_buf[i]);
 	}
 
 	vpss_dev = NULL;

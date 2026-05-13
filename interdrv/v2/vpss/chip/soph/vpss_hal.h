@@ -186,6 +186,7 @@ struct vpss_job {
 void vpss_irq_handler(struct vpss_core *vpss_dev);
 int vpss_hal_init(struct vpss_device *dev);
 void vpss_hal_deinit(void);
+void vpss_hal_release_cmdq_buf(void);
 
 int vpss_hal_push_job(struct vpss_job *job);
 int vpss_hal_push_online_job(struct vpss_job *job);

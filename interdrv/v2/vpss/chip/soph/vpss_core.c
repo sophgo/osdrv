@@ -543,6 +543,7 @@ static int vpss_release(struct inode *inode, struct file *filep)
 	}
 	vpss_release_grp();
 	vpss_mode_deinit();
+	vpss_hal_release_cmdq_buf();
 
 	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
