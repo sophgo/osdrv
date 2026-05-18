@@ -179,6 +179,7 @@ extern int vdi_invalidate_ion_cache(uint64_t u64PhyAddr, void *pVirAddr,
 extern int vdi_flush_ion_cache(uint64_t u64PhyAddr, void *pVirAddr, uint32_t u32Len);
 
 extern int vdi_get_suspend_state(void);
+int vdi_is_dma_memory(unsigned long core_idx, PhysicalAddress addr);
 #if defined (__cplusplus)
 }
 #endif

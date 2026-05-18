@@ -962,6 +962,7 @@ static void venc_release_exten_buf(void *handle)
             }
         }
     }
+    mutex_unlock(&pst_handle->extra_buf_lock);
 }
 
 static int pic_type_to_nal_type(int picType)
@@ -2078,9 +2079,9 @@ int internal_venc_release_stream(void *handle, stPack *pstPack, unsigned int pac
         return 0;
 
     for (i=0; i < packCnt; i++) {
-        if (pstPack[i].NalType == NAL_SEI) {
+        if ((pstPack[i].NalType == NAL_SEI) && !vdi_is_dma_memory(pst_handle->core_idx, pstPack[i].u64PhyAddr)) {
             osal_kfree(pstPack[i].addr);
-        } else if (pstPack[i].NalType == NAL_VPS || pstPack[i].NalType == NAL_SPS) {
+        } else if (pstPack[i].NalType == NAL_VPS || pstPack[i].NalType == NAL_SPS || pstPack[i].NalType == NAL_SEI) {
             pst_handle->header_cache_ref--;
             // release older header cache
             if ((pstPack[i].u64PhyAddr != pst_handle->header_cache_pack.u64PhyAddr) && (pst_handle->header_cache_ref == 0)) {

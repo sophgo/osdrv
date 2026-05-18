@@ -1047,6 +1047,28 @@ void vdi_free_dma_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes,
     vmem_unlock(core_idx);
 }
 
+int vdi_is_dma_memory(unsigned long core_idx, PhysicalAddress addr)
+{
+    vdi_info_t *vdi;
+    int i;
+
+    if (core_idx >= MAX_NUM_VPU_CORE)
+        return 0;
+
+    vdi = s_vdi_info[core_idx];
+
+    if(!vdi || vdi->vpu_fd== (VPU_FD)-1 || vdi->vpu_fd == (VPU_FD)0x00)
+        return 0;
+
+    for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+    {
+        if (vdi->vpu_buffer_pool[i].vdb.phys_addr == addr)
+            return 1;
+    }
+
+    return 0;
+}
+
 void vdi_remove_extern_memory(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex)
 {
     vdi_info_t *vdi;

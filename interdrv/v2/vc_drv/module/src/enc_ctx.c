@@ -697,6 +697,7 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
     }
 
     DRV_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
+
     return 0;
 }
 
