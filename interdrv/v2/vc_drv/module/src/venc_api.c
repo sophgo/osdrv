@@ -505,7 +505,7 @@ static void release_frame_idx(void * handle, int srcIdx)
     pst_handle->input_frame[srcIdx].buffer_addr = 0;
 }
 
-static int  alloc_framebuffer(void * handle)
+static int  alloc_framebuffer(void * handle, int min_recon_frame_count)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -547,16 +547,29 @@ static int  alloc_framebuffer(void * handle)
     }
     vdi_update_resolution(pst_handle->core_idx, pst_handle->handle->instIndex, pst_open_param->picWidth, pst_open_param->picHeight);
 
-    pst_handle->pst_frame_buffer = (FrameBuffer *)vzalloc(pst_handle->min_recon_frame_count * sizeof(FrameBuffer));
+    pst_handle->pst_frame_buffer = (FrameBuffer *)vzalloc(min_recon_frame_count * sizeof(FrameBuffer));
+    if (pst_handle->pst_frame_buffer == NULL) {
+        VLOG(ERR, "Failed to allocate pst_frame_buffer (count:%d)\n", min_recon_frame_count);
+        return RETCODE_FAILURE;
+    }
+
     stride = VPU_GetFrameBufStride(pst_handle->handle, fbWidth, fbHeight,
         FORMAT_420, 0, map_type);
     frame_size = VPU_GetFrameBufSize(pst_handle->handle, pst_handle->core_idx, stride,
         fbHeight, map_type, FORMAT_420, 0, NULL);
     vb_buffer.size = frame_size;
 
-    for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
+    for (i = 0; i < min_recon_frame_count; i++) {
         ret = vdi_allocate_dma_memory(pst_handle->core_idx, &vb_buffer, "ENC_RECON_BUF", 0);
-        if(ret != RETCODE_SUCCESS) {
+        if (ret != RETCODE_SUCCESS) {
+            VLOG(ERR, "Failed to alloc recon dma buf[%d], rolling back %d bufs\n", i, i);
+            while (i-- > 0) {
+                vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+                vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
+                vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+            }
+            vfree(pst_handle->pst_frame_buffer);
+            pst_handle->pst_frame_buffer = NULL;
             return ret;
         }
         pst_handle->pst_frame_buffer[i].bufY = vb_buffer.phys_addr;
@@ -567,7 +580,7 @@ static int  alloc_framebuffer(void * handle)
     }
 
     ret = VPU_EncRegisterFrameBuffer(pst_handle->handle, pst_handle->pst_frame_buffer,
-        pst_handle->min_recon_frame_count, stride, fbHeight, map_type);
+        min_recon_frame_count, stride, fbHeight, map_type);
     if (ret != RETCODE_SUCCESS) {
         VLOG(ERR, "Failed VPU_EncRegisterFrameBuffer(ret:%d)\n", ret);
         return ret;
@@ -1386,8 +1399,15 @@ int venc_op_stop(void *handle, void *arg)
     int i;
     vpu_buffer_t vb_buffer;
     ENCODER_HANDLE *pst_handle = handle;
-    drv_enc_param *pEncParam = &pst_handle->enc_param;
+    drv_enc_param *pEncParam;
     int int_reason = 0;
+
+    if (pst_handle == NULL) {
+        VLOG(ERR, "venc_op_stop: handle is NULL\n");
+        return -1;
+    }
+
+    pEncParam = &pst_handle->enc_param;
 
     if (pst_handle->thread_handle != NULL) {
         pst_handle->stop_thread = 1;
@@ -1395,21 +1415,23 @@ int venc_op_stop(void *handle, void *arg)
         pst_handle->thread_handle = NULL;
     }
 
-    while (VPU_EncClose(pst_handle->handle) == RETCODE_VPU_STILL_RUNNING) {
-        if ((int_reason = VPU_WaitInterruptEx(pst_handle->handle, 1000*1000)) == -1) {
-            VLOG(ERR, "NO RESPONSE FROM VPU_EncClose2()\n");
-            break;
-        }
-        else if (int_reason > 0) {
-            VPU_ClearInterruptEx(pst_handle->handle, int_reason);
-            if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
-                EncOutputInfo   outputInfo;
-                VLOG(INFO, "VPU_EncClose() : CLEAR REMAIN INTERRUPT\n");
-                VPU_EncGetOutputInfo(pst_handle->handle, &outputInfo);
-                continue;
+    if (pst_handle->handle != NULL) {
+        while (VPU_EncClose(pst_handle->handle) == RETCODE_VPU_STILL_RUNNING) {
+            if ((int_reason = VPU_WaitInterruptEx(pst_handle->handle, 1000*1000)) == -1) {
+                VLOG(ERR, "NO RESPONSE FROM VPU_EncClose2()\n");
+                break;
             }
+            else if (int_reason > 0) {
+                VPU_ClearInterruptEx(pst_handle->handle, int_reason);
+                if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
+                    EncOutputInfo   outputInfo;
+                    VLOG(INFO, "VPU_EncClose() : CLEAR REMAIN INTERRUPT\n");
+                    VPU_EncGetOutputInfo(pst_handle->handle, &outputInfo);
+                    continue;
+                }
+            }
+            osal_msleep(10);
         }
-        osal_msleep(10);
     }
 
     if (pst_handle->header_cache_pack.len > 0 && pst_handle->header_cache_pack.u64PhyAddr) {
@@ -1420,16 +1442,17 @@ int venc_op_stop(void *handle, void *arg)
         pst_handle->header_encoded = 0;
     }
 
-    for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
-        if (pst_handle->pst_frame_buffer[i].size == 0)
-            continue;
-        vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
-        vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
-        vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
-    }
     if (pst_handle->pst_frame_buffer != NULL) {
+        for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
+            if (pst_handle->pst_frame_buffer[i].size == 0)
+                continue;
+            vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+            vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
+            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+        }
         vfree(pst_handle->pst_frame_buffer);
         pst_handle->pst_frame_buffer = NULL;
+        pst_handle->min_recon_frame_count = 0;
     }
 
     if (!pst_handle->use_extern_bs_buf) {
@@ -1453,6 +1476,7 @@ int venc_op_stop(void *handle, void *arg)
     }
     // enable alloc_bitstream_buf
     pst_handle->bitstream_buffer[0] = 0L;
+    pst_handle->min_src_frame_count = 0;
 
     while(Queue_Get_Cnt(pst_handle->customMapBuffer) > 0) {
         PhysicalAddress *phys_addr = Queue_Dequeue(pst_handle->customMapBuffer);
@@ -2239,17 +2263,22 @@ int venc_op_start(void *handle, void *arg)
             goto ERR_VPU_ENC_OPEN;
         }
 
-        pst_handle->min_recon_frame_count = init_info.minFrameBufferCount;
-        pst_handle->min_src_frame_count = init_info.minSrcFrameCount + pst_handle->cmd_queue_depth;
+        {
+            int min_recon = init_info.minFrameBufferCount;
+            int min_src = init_info.minSrcFrameCount + pst_handle->cmd_queue_depth;
 
-        VLOG(INFO, "gop_preset:%d, cmdqueue:%d, min_recon_cnt:%d, min_src_cnt:%d\n"
-            , pst_handle->open_param.EncStdParam.waveParam.gopPresetIdx, pst_handle->cmd_queue_depth
-            , pst_handle->min_recon_frame_count, pst_handle->min_src_frame_count);
+            VLOG(INFO, "gop_preset:%d, cmdqueue:%d, min_recon_cnt:%d, min_src_cnt:%d\n"
+                , pst_handle->open_param.EncStdParam.waveParam.gopPresetIdx, pst_handle->cmd_queue_depth
+                , min_recon, min_src);
 
-        ret = alloc_framebuffer(pst_handle);
-        if ( ret != RETCODE_SUCCESS) {
-            VLOG(ERR, "Failed to alloc_framebuffer\n");
-            goto ERR_VPU_ENC_OPEN;
+            ret = alloc_framebuffer(pst_handle, min_recon);
+            if (ret != RETCODE_SUCCESS) {
+                VLOG(ERR, "Failed to alloc_framebuffer\n");
+                goto ERR_VPU_ENC_OPEN;
+            }
+
+            pst_handle->min_recon_frame_count = min_recon;
+            pst_handle->min_src_frame_count = min_src;
         }
 
         // additional is for store header and header_backup
