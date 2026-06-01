@@ -124,7 +124,6 @@ struct vpss_hal_chn_cfg {
 	struct sc_border_vpp_param border_vpp_cfg[VPSS_RECT_NUM];
 	struct sc_mute mute_cfg;
 	struct csc_cfg csc_cfg;
-	bool hw_yuv_auto_csc;
 	enum sc_flip_mode flip;
 	enum sc_scaling_coef sc_coef;
 };
@@ -134,7 +133,6 @@ struct vpss_hal_grp_cfg {
 	bool online_from_isp;
 	bool upsample;
 	bool bm_scene;
-	bool hw_yuv_auto_csc;
 	__u32 pixelformat;
 	__u32 bytesperline[2];
 	__u64 addr[4];
