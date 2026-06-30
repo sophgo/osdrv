@@ -1516,6 +1516,8 @@ static int vpss_open(struct inode *inode, struct file *filep)
 		}
 		idev->user_trig_cnt = 0;
 		idev->user_trig_fail_cnt = 0;
+		idev->hw_duration_total = 0;
+		idev->duty_ratio = 0;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(dev->sc_vdev); i++) {
@@ -1556,6 +1558,11 @@ static int vpss_release(struct inode *inode, struct file *filep)
 	if (i) {
 		pr_info("vpss_close: open %d times\n", i);
 		return 0;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(dev->img_vdev); i++) {
+		dev->img_vdev[i].duty_ratio = 0;
+		dev->img_vdev[i].hw_duration_total = 0;
 	}
 
 	return 0;

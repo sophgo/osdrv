@@ -373,6 +373,7 @@ void img_irq_handler(union sclr_intr intr_status, u8 cmdq_intr_status, struct cv
 			}
 		}
 
+		idev->hw_duration_total += idev->hw_duration;
 		idev->irq_cnt[idev->job_grp]++;
 		++idev->frame_number[idev->job_grp];
 

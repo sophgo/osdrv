@@ -72,6 +72,7 @@ struct vpss_ext_ctx {
 };
 
 static struct cvi_vip_dev *vip_dev;
+static struct timespec64 vpss_duty_pre_time[CVI_VIP_IMG_MAX];
 
 static struct cvi_vpss_ctx *vpssCtx[VPSS_MAX_GRP_NUM] = { [0 ... VPSS_MAX_GRP_NUM - 1] = NULL };
 
@@ -2109,6 +2110,35 @@ static CVI_VOID _update_vpss_grp_proc(VPSS_GRP VpssGrp, CVI_U32 duration, CVI_U3
 	}
 }
 
+static CVI_VOID _update_vpss_duty_ratio(CVI_U8 img_idx, struct timespec64 cur_time)
+{
+	CVI_U32 duration;
+	struct cvi_img_vdev *idev;
+
+	if (!vip_dev || img_idx >= CVI_VIP_IMG_MAX)
+		return;
+
+	idev = &vip_dev->img_vdev[img_idx];
+	if (!vpss_duty_pre_time[img_idx].tv_sec && !vpss_duty_pre_time[img_idx].tv_nsec) {
+		vpss_duty_pre_time[img_idx] = cur_time;
+		idev->hw_duration_total = 0;
+		return;
+	}
+
+	duration = get_diff_in_us(vpss_duty_pre_time[img_idx], cur_time);
+	if (duration < 1000000)
+		return;
+
+	vpss_duty_pre_time[img_idx] = cur_time;
+	if (duration > 2000000) {
+		idev->hw_duration_total = 0;
+		return;
+	}
+
+	idev->duty_ratio = (idev->hw_duration_total * 100) / duration;
+	idev->hw_duration_total = 0;
+}
+
 static CVI_VOID _update_vpss_chn_proc(VPSS_GRP VpssGrp, VPSS_CHN VpssChn)
 {
 	struct VPSS_CHN_WORK_STATUS_S *pstChnStatus;
@@ -2654,6 +2684,7 @@ static CVI_VOID vpss_handle_online_frame_done(struct vpss_handler_ctx *ctx, VPSS
 	HwDuration = vip_dev->img_vdev[ctx->img_idx].hw_duration;
 	// Update vpss proc info
 	_update_vpss_grp_proc(workingGrp, duration, HwDuration);
+	_update_vpss_duty_ratio(ctx->img_idx, time);
 }
 
 static CVI_VOID vpss_sbm_err_handle(struct vpss_handler_ctx *ctx)
@@ -2981,6 +3012,7 @@ static CVI_VOID vpss_handle_frame_done(struct vpss_handler_ctx *ctx)
 
 	// Update vpss grp proc info
 	_update_vpss_grp_proc(workingGrp, duration, HwDuration);
+	_update_vpss_duty_ratio(ctx->img_idx, time);
 }
 
 static void vpss_handle_offline(struct vpss_handler_ctx *ctx)

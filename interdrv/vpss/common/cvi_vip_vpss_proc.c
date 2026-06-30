@@ -402,22 +402,26 @@ int vpss_ctx_proc_show(struct seq_file *m, void *v)
 		seq_printf(m, "\n------------------------------DRV WORK STATUS DEV%d------------------------------\n", i);
 
 		if (bdev->img_vdev[i].is_online_from_isp) {
-			seq_printf(m, "%10s%20s%20s%20s%20s\n", "GrpID", "TrigCnt", "FailCnt", "IrqCnt", "OverFlowCnt");
+			seq_printf(m, "%10s%20s%20s%20s%20s%20s\n", "GrpID", "TrigCnt", "FailCnt", "IrqCnt", "OverFlowCnt", "DutyRatio");
 			for (j = 0; j < VPSS_ONLINE_NUM; ++j) {
-				seq_printf(m, "%8s%2d%20d%20d%20d%20d\n",
-					"#",
-					j,
-					bdev->img_vdev[i].isp_trig_cnt[j],
-					bdev->img_vdev[i].isp_trig_fail_cnt[j],
-					bdev->img_vdev[i].irq_cnt[j],
-					bdev->img_vdev[i].overflow_cnt[j]);
+				if (pVpssCtx[j] && pVpssCtx[j]->isCreated && pVpssCtx[j]->stGrpAttr.u8VpssDev == i) {
+					seq_printf(m, "%8s%2d%20d%20d%20d%20d%20d\n",
+						"#",
+						j,
+						bdev->img_vdev[i].isp_trig_cnt[j],
+						bdev->img_vdev[i].isp_trig_fail_cnt[j],
+						bdev->img_vdev[i].irq_cnt[j],
+						bdev->img_vdev[i].overflow_cnt[j],
+						bdev->img_vdev[i].duty_ratio);
+				}
 			}
 		} else {
-			seq_printf(m, "%20s%20s%20s\n", "UserTrigCnt", "UserTrigFailCnt", "IrqCnt");
-			seq_printf(m, "%20d%20d%20d\n",
+			seq_printf(m, "%20s%20s%20s%20s\n", "UserTrigCnt", "UserTrigFailCnt", "IrqCnt", "DutyRatio");
+			seq_printf(m, "%20d%20d%20d%20d\n",
 				bdev->img_vdev[i].user_trig_cnt,
 				bdev->img_vdev[i].user_trig_fail_cnt,
-				bdev->img_vdev[i].irq_cnt[0]);
+				bdev->img_vdev[i].irq_cnt[0],
+				bdev->img_vdev[i].duty_ratio);
 		}
 	}
 

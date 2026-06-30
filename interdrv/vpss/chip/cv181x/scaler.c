@@ -3577,15 +3577,88 @@ EXPORT_SYMBOL_GPL(sclr_disp_gamma_ctrl);
 
 void sclr_disp_gamma_lut_update(const u8 *b, const u8 *g, const u8 *r)
 {
-	u8 i;
-	u32 value;
+	u8 i, retry, idx, retry_failed, final_failed;
+	u32 value, readback, expected;
+	s32 failed_indices[SCL_DISP_GAMMA_NODE];
+	u32 failed_count = 0;
+
+	if (!b || !g || !r) {
+		CVI_TRACE_VPSS(CVI_DBG_ERR, "Invalid input pointer: b=%p, g=%p, r=%p\n", b, g, r);
+		return;
+	}
 
 	_reg_write_mask(reg_base + REG_SCL_DISP_GAMMA_CTRL, 0x03, 0x03);
 
+	// Double-write to ensure reliable hardware latch (fix probabilistic write errors)
 	for (i = 0; i < SCL_DISP_GAMMA_NODE; ++i) {
-		value = *(b + i) | (*(g + i) << 8) | (*(r + i) << 16)
-			| (i << 24) | 0x80000000;
+		value = *(b + i) | (*(g + i) << 8) | (*(r + i) << 16) | (i << 24) | 0x80000000;
 		_reg_write(reg_base + REG_SCL_DISP_GAMMA_WR_LUT, value);
+		udelay(5);
+		_reg_write(reg_base + REG_SCL_DISP_GAMMA_WR_LUT, value);
+	}
+
+	_reg_write_mask(reg_base + REG_SCL_DISP_GAMMA_CTRL, 0x03, 0x01);
+
+	for (i = 0; i < SCL_DISP_GAMMA_NODE; ++i) {
+		_reg_write(reg_base + REG_SCL_DISP_GAMMA_WR_LUT, (i << 24) | 0x80000000);
+		readback = _reg_read(reg_base + REG_SCL_DISP_GAMMA_RD_LUT) & 0xFFFFFF;
+		value = *(b + i) | (*(g + i) << 8) | (*(r + i) << 16);
+
+		if (readback != value) {
+			failed_indices[failed_count++] = i;
+			CVI_TRACE_VPSS(CVI_DBG_WARN, "Gamma LUT write mismatch at node %d: wrote 0x%08x, read back 0x%08x\n",
+			       i, value, readback);
+		}
+	}
+
+	if (failed_count > 0) {
+		CVI_TRACE_VPSS(CVI_DBG_INFO, "Gamma LUT write failed on %d nodes, retrying...\n", failed_count);
+
+		for (retry = 0; retry < 3; ++retry) {
+			retry_failed = 0;
+
+			_reg_write_mask(reg_base + REG_SCL_DISP_GAMMA_CTRL, 0x03, 0x03);
+
+			for (i = 0; i < failed_count; ++i) {
+				idx = failed_indices[i];
+				value = *(b + idx) | (*(g + idx) << 8) | (*(r + idx) << 16) | (idx << 24) | 0x80000000;
+				_reg_write(reg_base + REG_SCL_DISP_GAMMA_WR_LUT, value);
+				udelay(5);
+			}
+
+			_reg_write_mask(reg_base + REG_SCL_DISP_GAMMA_CTRL, 0x03, 0x01);
+
+			for (i = 0; i < failed_count; ++i) {
+				idx = failed_indices[i];
+				_reg_write(reg_base + REG_SCL_DISP_GAMMA_WR_LUT, (idx << 24) | 0x80000000);
+				readback = _reg_read(reg_base + REG_SCL_DISP_GAMMA_RD_LUT) & 0xFFFFFF;
+				expected = *(b + idx) | (*(g + idx) << 8) | (*(r + idx) << 16);
+
+				if (readback == expected) {
+					failed_indices[i] = -1;
+				} else {
+					retry_failed++;
+				}
+			}
+
+			if (retry_failed == 0) {
+				CVI_TRACE_VPSS(CVI_DBG_INFO, "Gamma LUT write retry success after %d attempts.\n", retry + 1);
+				break;
+			} else {
+				CVI_TRACE_VPSS(CVI_DBG_WARN, "Retry %d: %d nodes still failed.\n", retry + 1, retry_failed);
+			}
+		}
+
+		final_failed = 0;
+		for (i = 0; i < failed_count; ++i) {
+			if (failed_indices[i] != -1) {
+				final_failed++;
+			}
+		}
+
+		if (final_failed > 0) {
+			CVI_TRACE_VPSS(CVI_DBG_ERR, "Gamma LUT write failed for %d nodes. Verify hardware or timing constraints.\n", final_failed);
+		}
 	}
 
 	_reg_write_mask(reg_base + REG_SCL_DISP_GAMMA_CTRL, 0x03, 0x00);

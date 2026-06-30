@@ -159,6 +159,8 @@ struct cvi_img_vdev {
 	struct timespec64 ts_start;
 	struct timespec64 ts_end;
 	u32 hw_duration;
+	u32 hw_duration_total;
+	u32 duty_ratio;
 	u32 frame_number[VPSS_ONLINE_NUM];
 	u8 IntMask;
 
