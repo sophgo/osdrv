@@ -30,6 +30,9 @@
 #include "ion/ion.h"
 #include "ion/cvitek/cvitek_ion_alloc.h"
 
+#define CVIFB_IOCTL_ENABLE   _IO('F', 0x01)
+#define CVIFB_IOCTL_DISABLE  _IO('F', 0x02)
+
 #define GOP_ALIGNMENT 0x10
 #define MAX_PALETTES 16
 #define VXRES_SIZE(xres, bpp)                                                 \
@@ -49,6 +52,7 @@ static int option;
 static int start_x = -1;
 static int start_y = -1;
 static int panel_res_x, panel_res_y;
+static bool auto_disable_on_close = true;
 
 struct sclr_gop_cfg *g_cfg;
 
@@ -162,8 +166,11 @@ static int cvifb_release(struct fb_info *info, int user)
 
 	fb_dbg(info, "%s+\n", __func__);
 
-	if (atomic_sub_return(1, &par->ref_count) == 0)
+	atomic_sub_return(1, &par->ref_count);
+
+	if (auto_disable_on_close && atomic_read(&par->ref_count) == 0) {
 		_fb_enable(false);
+	}
 
 	return 0;
 }
@@ -619,6 +626,17 @@ static int cvifb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info
 
 static int cvifb_ioctl(struct fb_info *info, u32 cmd, unsigned long arg)
 {
+	switch (cmd) {
+	case CVIFB_IOCTL_ENABLE:
+		_fb_enable(true);
+		return 0;
+	case CVIFB_IOCTL_DISABLE:
+		_fb_enable(false);
+		return 0;
+	default:
+		return -ENOTTY;
+	}
+
 	return 0;
 }
 
@@ -910,6 +928,7 @@ static struct platform_driver cvifb_driver = {
 #endif
 };
 
+module_param(auto_disable_on_close, bool, 0664);
 module_param_named(vxres, def_vxres, long, 0664);
 module_param_named(vyres, def_vyres, long, 0664);
 module_param(mode_option, charp, 0444);

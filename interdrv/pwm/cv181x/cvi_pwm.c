@@ -163,8 +163,27 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 {
 	struct cv_pwm_chip *our_chip = to_cv_pwm_chip(chip);
+	struct cv_pwm_channel *channel = pwm_get_chip_data(pwm_dev);
 	uint32_t pwm_start_value;
-	uint32_t value;
+	unsigned long value;
+
+	/*
+	 * pwm_cv_disable modifies REG_PERIOD and REG_HLPERIOD.
+	 * We must restore them before enabling.
+	 */
+	if (channel && channel->period > 0) {
+		writel(channel->period, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_PERIOD);
+		if (channel->hlperiod != 0)
+			writel(channel->hlperiod, our_chip->base + REG_GROUP * pwm_dev->hwpwm + REG_HLPERIOD);
+
+		/* Trigger update to latch the restored values */
+		value = readl(our_chip->base + REG_PWMSTART);
+		set_bit(pwm_dev->hwpwm, &value);
+		writel(value, our_chip->base + REG_PWMUPDATE);
+
+		clear_bit(pwm_dev->hwpwm, &value);
+		writel(value, our_chip->base + REG_PWMUPDATE);
+	}
 
 	pwm_start_value = readl(our_chip->base + REG_PWMSTART);
 

@@ -338,7 +338,7 @@ MODULE_DEVICE_TABLE(of,	cvi_saradc_match);
 #ifdef CONFIG_PM_SLEEP
 static int saradc_cv_suspend(struct	device *dev)
 {
-	struct cvi_saradc_device *ndev = dev_get_drvdata(dev);
+	struct cvi_saradc_device *ndev = iio_priv(dev);
 
 	platform_saradc_clk_init(ndev);
 	/*Save all registers*/
@@ -358,7 +358,7 @@ static int saradc_cv_suspend(struct	device *dev)
 
 static int saradc_cv_resume(struct device *dev)
 {
-	struct cvi_saradc_device *ndev = dev_get_drvdata(dev);
+	struct cvi_saradc_device *ndev = iio_priv(dev);
 
 	platform_saradc_clk_init(ndev);
 	/*Restore register settings*/
