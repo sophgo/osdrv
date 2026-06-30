@@ -11,7 +11,7 @@
 
 #define HAL_WAIT_TIMEOUT_MS  1000
 
-static int job_cheack_hw_ready(struct vpss_device *device)
+static int job_check_hw_ready(struct vpss_device *device)
 {
 	int i, state;
 
@@ -45,33 +45,33 @@ static int vpss_cb_vc_get_sbm_pos(int y_pos, int uv_pos)
 static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 {
 	int ret;
-	u8 i;
+	u8 i, last_index = 0;
 	struct vpss_hw_cfg *cfg = &job->cfg;
 	unsigned long flags;
-	int first_idx;
 	struct vpss_core *core;
 
 	osal_spin_lock_irqsave(&device->dev_lock, &flags);
 
-	ret = job_cheack_hw_ready(device);
+	ret = job_check_hw_ready(device);
 	if (ret) {
 		TRACE_VPSS(DBG_DEBUG, "dev(%d) not ready.\n", device->id);
 		osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 		return -1;
 	}
 
+	for (i = 0; i < device->core_num; i++) {
+		if (job->cfg.chn_enable[i])
+			last_index = i;
+	}
+
 	device->job = (void *)job;
-	first_idx = device->core_list[0]->vpss_type;
 
 	for (i = 0; i < device->core_num; i++) {
 		core = device->core_list[i];
 
 		core->chn_idx = i;
 		core->vc_sbm_done = 0;
-		if (cfg->chn_cfg[i].sb_cfg.sb_mode)
-			core->is_sbm = 1;
-		else
-			core->is_sbm = 0;
+		core->is_sbm = cfg->chn_cfg[i].sb_cfg.sb_mode ? 1 : 0;
 		if (core->reset_sbm) {
 			vpss_ip_reset(core->vpss_type, core->reset_sbm, false);
 			core->reset_sbm = 0;
@@ -84,10 +84,7 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 			vpss_cb_vc_get_sbm_pos(y_pos, uv_pos);
 		}
 
-		if (i == 0)
-			img_update(core->vpss_type, true, &cfg->grp_cfg);
-		else
-			img_update(core->vpss_type, false, &cfg->grp_cfg); //use dma share
+		img_update(core->vpss_type, i == 0, &cfg->grp_cfg);
 
 		if (job->cfg.chn_enable[i]) {
 			sc_update(core->vpss_type, &cfg->chn_cfg[i]);
@@ -97,10 +94,7 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 			osal_atomic_set(&core->state, VPSS_END);
 		}
 
-		if (i == (device->core_num - 1))
-			top_update(core->vpss_type, false, job->cfg.chn_enable[i]); //last chn,not share
-		else
-			top_update(core->vpss_type, true, job->cfg.chn_enable[i]);
+		top_update(core->vpss_type, i < last_index, job->cfg.chn_enable[i]);
 	}
 
 	device->start_cnt++;
@@ -113,7 +107,7 @@ static int job_try_schedule(struct vpss_job *job, struct vpss_device *device)
 		job->grp_id, cfg->chn_enable[0], cfg->chn_enable[1],
 		cfg->chn_enable[2], cfg->chn_enable[3], device->id);
 
-	img_start(first_idx, device->core_num);
+	img_start(device->core_list[0]->vpss_type, device->core_num);
 
 	return 0;
 }
@@ -340,8 +334,6 @@ int vpss_hal_try_schedule(struct vpss_hal_ctx *hal_ctx)
 
 		osal_spin_lock_irqsave(&job->lock, &flags_job);
 		if (job_try_schedule(job, &cores->device[job->dev_id])) {
-			//TRACE_VPSS(DBG_DEBUG, "Grp(%d), try schedule fail, wait for next time.\n",
-			//	job->grp_id);
 			osal_spin_unlock_irqrestore(&job->lock, &flags_job);
 			break;
 		}
@@ -461,6 +453,11 @@ void vpss_hal_job_finish(struct vpss_device *device)
 			osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
 			return;
 		}
+
+		if (job->cfg.chn_enable[i] && device->core_list[i]->is_sbm && !device->core_list[i]->vc_sbm_done) {
+			osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
+			return;
+		}
 	}
 
 	//job finish
@@ -501,14 +498,17 @@ int vpss_hal_reset(struct vpss_job *job, struct vpss_hal_ctx *hal_ctx)
 	unsigned long flags;
 
 	device = &cores->device[job->dev_id];
+	TRACE_VPSS(DBG_NOTICE, "device-%d reset...\n", device->id);
 
 	for (i = 0; i < device->core_num; i++) {
+		TRACE_VPSS(DBG_NOTICE, "vpss-%d reset...\n", device->core_list[i]->vpss_type);
 		vpss_stauts(device->core_list[i]->vpss_type);
 		vpss_ip_reset(device->core_list[i]->vpss_type, device->core_list[i]->is_sbm, true);
 		osal_atomic_set(&device->core_list[i]->state, VPSS_IDLE);
 	}
 
 	osal_atomic_set(&device->state, VPSS_IDLE);
+	device->job = NULL;
 
 	osal_spin_lock_irqsave(&hal_ctx->task_lock, &flags);
 	if (device->is_online)

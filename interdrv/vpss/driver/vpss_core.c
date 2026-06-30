@@ -62,7 +62,7 @@ static int vpss_online_err_cb(u8 snr_num, struct vpss_cores *cores)
 		}
 	}
 
-	if (device->job) {
+	if (device->job && (osal_atomic_read(&device->state) == VPSS_RUNNING)) {
 		osal_spin_lock_irqsave(&device->dev_lock, &flags);
 		vpss_hal_reset(device->job, &cores->hal_ctx);
 		device->job = NULL;
@@ -101,6 +101,18 @@ int vpss_overflow_check(struct vpss_reg_info *vpss_info,
 	//sclr_check_overflow_reg(vpss_info);
 
 	return 0;
+}
+
+int _vpss_call_vi_reset(void)
+{
+	struct base_exe_m_cb exe_cb;
+
+	exe_cb.callee = E_MODULE_VI;
+	exe_cb.caller = E_MODULE_VPSS;
+	exe_cb.cmd_id = VI_CB_RESET_ISP;
+	exe_cb.data   = NULL;
+
+	return base_exe_module_cb(&exe_cb);
 }
 
 static int vpss_get_sbm_info(struct vpss_sbm_cfg *info, struct vpss_cores *cores)
@@ -150,13 +162,34 @@ static int vpss_reset_sbm(struct vpss_cores *cores)
 static int _vpss_set_vc_sbm_done(int venc_chn, struct vpss_cores *cores)
 {
 	int vpss_sbm_index = 0;
+	struct vpss_device *device;
+	unsigned long flags;
+	unsigned int diff_us;
+	osal_timeval now;
 
 	TRACE_VPSS(DBG_DEBUG, "vc frame done.\n");
 
-	vpss_ip_reset(vpss_sbm_index, true, false);
 	cores->core[vpss_sbm_index].vc_sbm_done = 1;
-	osal_atomic_cmpxchg(&cores->core[vpss_sbm_index].state, VPSS_RUNNING, VPSS_END);
-	vpss_hal_job_finish((struct vpss_device *)cores->core[vpss_sbm_index].device);
+	cores->core[vpss_sbm_index].reset_sbm = 1;
+	device = cores->core[vpss_sbm_index].device;
+
+	if (osal_atomic_read(&cores->core[vpss_sbm_index].state) == VPSS_END) {
+		vpss_hal_job_finish(device);
+	} else {
+		osal_gettimeofday(&now);
+		diff_us = get_diff_in_us(device->ts_start, now);
+		if ((diff_us > VPSS_TIMEOUT_US) &&
+			(osal_atomic_read(&device->state) == VPSS_RUNNING)) {
+			osal_spin_lock_irqsave(&device->dev_lock, &flags);
+			vpss_hal_reset(device->job, &cores->hal_ctx);
+			device->job = NULL;
+			osal_spin_unlock_irqrestore(&device->dev_lock, &flags);
+			if (device->is_online)
+				_vpss_call_vi_reset();
+			else
+				vpss_hal_try_schedule(&cores->hal_ctx);
+		}
+	}
 	return 0;
 }
 
@@ -176,6 +209,13 @@ static int _vpss_get_dev_idx(vpss_grp vpss_grp, vpss_chn vpss_chn, struct vpss_c
 	if (cores == NULL) {
 		TRACE_VPSS(DBG_ERR, "cores is nulL.\n");
 		return ERR_VPSS_NULL_PTR;
+	}
+	if (check_vpss_grp_valid(vpss_grp))
+		return ERR_VPSS_ILLEGAL_PARAM;
+
+	if (check_vpss_grp_created(vpss_grp, &cores->ctx)) {
+		TRACE_VPSS(DBG_ERR, "Grp(%d) isn't created yet.\n", vpss_grp);
+		return ERR_VPSS_UNEXIST;
 	}
 
 	vpss_mode = cores->vpss_mode;
@@ -360,6 +400,31 @@ static int _vpss_core_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 		break;
 	}
 
+
+	case VPSS_CB_IS_RGN_ADDR_IN_USE:
+	{
+		struct _rgn_is_addr_in_use_cb_param *attr = (struct _rgn_is_addr_in_use_cb_param *)arg;
+		vpss_grp vpss_grp = attr->chn.dev_id;
+		vpss_chn vpss_chn = attr->chn.chn_id;
+		u32 layer = attr->layer;
+		int idx_ret = _vpss_get_dev_idx(vpss_grp, vpss_chn, cores);
+		u8 dev_idx;
+
+		if (idx_ret < 0) {
+			TRACE_VPSS(DBG_ERR, "_vpss_get_dev_idx failed(%d)\n", idx_ret);
+			rc = idx_ret;
+			break;
+		}
+		dev_idx = (u8)idx_ret;
+
+		if (dev_idx > 1)
+			layer = 0;
+
+		rc = vpss_is_rgn_addr_in_use(vpss_grp, vpss_chn, layer, attr->handle,
+				attr->addr, &attr->in_use, &cores->ctx, dev_idx);
+		break;
+	}
+
 	case VPSS_CB_GET_CHN_SIZE:
 	{
 		struct _rgn_chn_size_cb_param *attr = (struct _rgn_chn_size_cb_param *)arg;
@@ -499,6 +564,16 @@ static void _vpss_timer_core_update(struct vpss_cores *cores, unsigned int durat
 	}
 }
 
+static void _vpss_show_register(struct vpss_device *device)
+{
+	int i;
+
+	for (i = 0; i < device->core_num; i++)
+		if (osal_atomic_read(&device->core_list[i]->state) == VPSS_RUNNING)
+			vpss_error_stauts(device->core_list[i]->vpss_type);
+}
+
+
 static void _vpss_timer_callback(unsigned long data)
 {
 	int i;
@@ -519,14 +594,18 @@ static void _vpss_timer_callback(unsigned long data)
 	//timout reset, only offline
 	for (i = 0; i < VPSS_DEVICE_NUM; ++i) {
 		osal_spin_lock_irqsave(&cores->device[i].dev_lock, &flags);
-		if (cores->device[i].core_num && (!cores->device[i].is_online) &&
+		if (cores->device[i].core_num &&
 			(osal_atomic_read(&cores->device[i].state) == VPSS_RUNNING)) {
 			diff_us = get_diff_in_us(cores->device[i].ts_start, now);
-			if (diff_us > VPSS_TIMEOUT_US) {
-				vpss_hal_reset(cores->device[i].job, &cores->hal_ctx);
-				cores->device[i].job = NULL;
-				is_timeout = true;
-				TRACE_VPSS(DBG_NOTICE, "device-%d timeout...\n", cores->device[i].id);
+			if ((diff_us > VPSS_TIMEOUT_US) && (diff_us < (2 * VPSS_TIMEOUT_US))) {
+				_vpss_show_register(&cores->device[i]);
+				if (!cores->device[i].is_online) {
+					_vpss_show_register(&cores->device[i]);
+					vpss_hal_reset(cores->device[i].job, &cores->hal_ctx);
+					cores->device[i].job = NULL;
+					is_timeout = true;
+					TRACE_VPSS(DBG_NOTICE, "device-%d timeout...\n", cores->device[i].id);
+				}
 			}
 		}
 		osal_spin_unlock_irqrestore(&cores->device[i].dev_lock, &flags);
@@ -703,13 +782,7 @@ static void vpss_irq_handler(struct vpss_core *core)
 	struct vpss_device *device = (struct vpss_device *)core->device;
 
 	core->int_cnt++;
-	if (core->is_sbm) {
-		if (core->vc_sbm_done)
-			osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
-	} else {
-		osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
-	}
-
+	osal_atomic_cmpxchg(&core->state, VPSS_RUNNING, VPSS_END);
 	vpss_hal_job_finish(device);
 }
 
@@ -756,8 +829,9 @@ void vpss_core_isr(int irq, void *data)
 		return;
 	}
 
-	if (core->intr_status.sc_end) {
+	if (core->intr_status.sc_end && core->intr_status.img_end) {
 		core->intr_status.sc_end = false;
+		core->intr_status.img_end = false;
 		core->checksum = vpss_get_checksum(vpss_idx);
 		vpss_irq_handler(core);
 	}

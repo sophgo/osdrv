@@ -964,6 +964,9 @@ static int vo_set_bt_param(vo_dev dev, vo_bt_attr_s *bt_param)
 		} else if (dv_timings.bt.pixelclock == 54054000) {
 			dv_timings.bt.pixelclock = 54000000;
 			TRACE_VO(DBG_INFO, "pixelclock(54054000hz) before adjustment, pixelclock(54000000hz) after adjustment.\n");
+		} else if (dv_timings.bt.pixelclock == 13513500) {
+			dv_timings.bt.pixelclock = 13500000;
+			TRACE_VO(DBG_INFO, "pixelclock(13513500 hz) before adjustment, pixelclock(13500000 hz) after adjustment.\n");
 		}
 	} else if (dev_ctx->pub_attr.intf_sync < VO_OUTPUT_USER) {
 		dv_timings.bt.pixelclock = sync_info[dev_ctx->pub_attr.intf_sync].frame_rate *

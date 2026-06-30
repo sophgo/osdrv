@@ -36,6 +36,7 @@ static int ai_isp_resolve_cfg(struct vi_dev *vdev, struct vi_ai_isp_cfg *cfg)
 	case AI_ISP_CFG_ENABLE:
 	{
 		osal_atomic_set(&ctx->isp_pipe_cfg[pipe].ai_isp_en, 1);
+		osal_atomic_set(&vdev->isp_ai_int_flag[raw_num], E_AI_WAKE_TYPE_NONE);
 		break;
 	}
 	case AI_ISP_CFG_DISABLE:
@@ -469,10 +470,11 @@ static long _vi_g_ctrl(struct vi_dev *vdev, struct vi_ctrl *ctrl)
 
 		osal_memcpy(ctrl->ptr, &vdev->ai_isp_info[pipe], sizeof(struct vi_ai_isp_info));
 
-		vi_pr(VI_DBG, "AI_ISP_RAW: vi_pipe %d, raw_num %d, input(0x%llx, 0x%llx), output(0x%llx, 0x%llx)\n",
+		vi_pr(VI_DBG, "AI_ISP_RAW: pipe %d, raw_%d, input(0x%llx, 0x%llx), output(0x%llx, 0x%llx) size(%d)\n",
 				pipe, raw_num,
 				vdev->ai_isp_info[pipe].input_addr[0], vdev->ai_isp_info[pipe].input_addr[1],
-				vdev->ai_isp_info[pipe].output_addr[0], vdev->ai_isp_info[pipe].output_addr[1]);
+				vdev->ai_isp_info[pipe].output_addr[0], vdev->ai_isp_info[pipe].output_addr[1],
+				vdev->ai_isp_info[pipe].size);
 		rc = 0;
 		break;
 	}

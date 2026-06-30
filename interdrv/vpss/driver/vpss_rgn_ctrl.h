@@ -19,5 +19,7 @@ s32 vpss_get_rgn_ow_inst(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
 		rgn_handle handle, struct vpss_ctx *ctx, u8 *ow_inst);
 s32 vpss_set_rgn_lut_cfg(vpss_grp grp_id, vpss_chn chn_id,
 		struct rgn_lut_cfg *cfg, struct vpss_ctx *ctx);
+s32 vpss_is_rgn_addr_in_use(vpss_grp grp_id, vpss_chn chn_id, u32 layer,
+		rgn_handle handle, u64 addr, u8 *in_use, struct vpss_ctx *ctx, u8 dev_idx);
 
 #endif /* _VPSS_RGN_CTRL_H_ */

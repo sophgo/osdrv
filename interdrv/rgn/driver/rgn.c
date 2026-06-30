@@ -195,6 +195,9 @@ static inline int _rgn_get_bytesperline(pixel_format_e pixel_format, unsigned in
 	case PIXEL_FORMAT_8BIT_MODE:
 		*bytesperline = width;
 		break;
+	case PIXEL_FORMAT_4BIT_MODE:
+		*bytesperline = width >> 1;
+		break;
 	case PIXEL_FORMAT_FONT:
 		*bytesperline = (width + 7) >> 3;
 		break;
@@ -632,6 +635,9 @@ static int _rgn_set_hw_cfg(rgn_handle hdls[], unsigned char size, mmf_chn_s *pch
 			break;
 		case PIXEL_FORMAT_8BIT_MODE:
 			cfg.param[rgn_idx].fmt = RGN_FMT_256LUT;
+			break;
+		case PIXEL_FORMAT_4BIT_MODE:
+			cfg.param[rgn_idx].fmt = RGN_FMT_16LUT;
 			break;
 		case PIXEL_FORMAT_FONT:
 			cfg.param[rgn_idx].fmt = RGN_FMT_FONT;
@@ -1238,6 +1244,7 @@ int rgn_create(rgn_handle handle, const rgn_attr_s *pregion)
 		if ((pixel_format != PIXEL_FORMAT_ARGB_8888)
 		 && (pixel_format != PIXEL_FORMAT_ARGB_4444)
 		 && (pixel_format != PIXEL_FORMAT_ARGB_1555)
+		 && (pixel_format != PIXEL_FORMAT_4BIT_MODE)
 		 && (pixel_format != PIXEL_FORMAT_8BIT_MODE)
 		 && (pixel_format != PIXEL_FORMAT_FONT)) {
 			TRACE_RGN(RGN_ERR, "unsupported pxl-fmt(%d).\n", pixel_format);
@@ -1490,6 +1497,7 @@ int rgn_attach_to_chn(rgn_handle handle, const mmf_chn_s *pchn, const rgn_chn_at
 	unsigned int proc_idx;
 	int ret;
 	unsigned char i;
+	struct _rgn_clr_ow_addr_cb_param cb_param;
 
 	ret = check_rgn_handle(&ctx, handle);
 	if (ret != 0)
@@ -1651,6 +1659,23 @@ int rgn_attach_to_chn(rgn_handle handle, const mmf_chn_s *pchn, const rgn_chn_at
 		// only update rgn_prc_ctx after _rgn_update_hw success
 		rgn_prc_ctx[proc_idx].used = true;
 	}
+
+	cb_param.chn = ctx->chn;
+	cb_param.handle = handle;
+	if (ctx->canvas_info[ctx->canvas_idx].compressed) {
+		cb_param.layer = RGN_ODEC_LAYER_VPSS;
+	} else {
+		cb_param.layer = RGN_NORMAL_LAYER_VPSS;
+	}
+
+	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
+		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_INST, &cb_param) != 0) {
+			TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_INST is failed\n");
+		}
+	}
+
+	ctx->ow_inst = cb_param.ow_inst;
+
 	osal_mutex_unlock(&g_rgnlock);
 
 	return ret;
@@ -1691,20 +1716,6 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s *pchn)
 
 	osal_mutex_lock(&g_rgnlock);
 
-	cb_param.chn = ctx->chn;
-	cb_param.handle = handle;
-	if (ctx->canvas_info[ctx->canvas_idx].compressed) {
-		cb_param.layer = RGN_ODEC_LAYER_VPSS;
-	} else {
-		cb_param.layer = RGN_NORMAL_LAYER_VPSS;
-	}
-
-	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
-		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_INST, &cb_param) != 0) {
-			TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_INST is failed\n");
-		}
-	}
-
 	ret = _rgn_update_hw(ctx, RGN_OP_REMOVE);
 	if (ret == 0) {
 		ctx->chn.mod_id = rgn_prc_ctx[proc_idx].chn.mod_id = ID_BASE;
@@ -1727,6 +1738,15 @@ int rgn_detach_from_chn(rgn_handle handle, const mmf_chn_s *pchn)
 		if (ctx->canvas_info[0].phy_addr)
 			base_ion_free(ctx->canvas_info[0].phy_addr);
 	}
+
+	cb_param.chn = ctx->chn;
+	cb_param.handle = handle;
+	if (ctx->canvas_info[ctx->canvas_idx].compressed) {
+		cb_param.layer = RGN_ODEC_LAYER_VPSS;
+	} else {
+		cb_param.layer = RGN_NORMAL_LAYER_VPSS;
+	}
+	cb_param.ow_inst = ctx->ow_inst;
 
 	if (ctx->region.type == OVERLAY_RGN || ctx->region.type == COVER_RGN) {
 		if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_CLR_RGN_OW_ADDR, &cb_param) != 0) {
@@ -1807,8 +1827,7 @@ int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 	struct rgn_ctx *ctx = NULL;
 	unsigned int proc_idx;
 	unsigned int canvas_num;
-	int ret;
-	struct _rgn_get_ow_addr_cb_param cb_param;
+	int ret = 0;
 	int cnt = 0;
 
 	ret = check_rgn_handle(&ctx, handle);
@@ -1841,33 +1860,37 @@ int rgn_get_canvas_info(rgn_handle handle, rgn_canvas_info_s *pcanvas_info)
 		, handle, pcanvas_info->pixel_format, pcanvas_info->size.width
 		, pcanvas_info->size.height, pcanvas_info->stride, pcanvas_info->compressed);
 
-	if ((canvas_num > 1) && (pcanvas_info->compressed)) {
-		TRACE_RGN(RGN_INFO, "canvas p_addr(%llx) v_addr(%lx).\n"
-			, pcanvas_info->phy_addr, (uintptr_t)pcanvas_info->virt_addr);
+	if ((canvas_num > 1) && (ctx->chn.mod_id == ID_VPSS)) {
+		struct _rgn_is_addr_in_use_cb_param in_use_param;
+		u32 osd_layer = pcanvas_info->compressed ? RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
 
-		cb_param.chn = ctx->chn;
-		cb_param.handle = handle;
-		cb_param.layer = RGN_ODEC_LAYER_VPSS;
+		in_use_param.chn = ctx->chn;
+		in_use_param.handle = handle;
+		in_use_param.layer = osd_layer;
+		in_use_param.addr = pcanvas_info->phy_addr;
 
 		do {
-			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_ADDR, &cb_param) != 0) {
-				TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_ADDR is failed\n");
-					return ERR_RGN_ILLEGAL_PARAM;
+			in_use_param.in_use = 0;
+			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_IS_RGN_ADDR_IN_USE, &in_use_param) != 0) {
+				TRACE_RGN(RGN_ERR, "VPSS_CB_IS_RGN_ADDR_IN_USE is failed\n");
+				return ERR_RGN_ILLEGAL_PARAM;
 			}
 			cnt++;
-			osal_mdelay(1);
-		} while ((cb_param.addr == pcanvas_info->phy_addr) && (cnt <= 500) && ctx->chn_attr.show);
-
-		TRACE_RGN(RGN_INFO, "VPSS_CB_GET_RGN_OW_ADDR PhyAaddr:%llx cnt:%d.\n",
-			cb_param.addr, cnt);
-		TRACE_RGN(RGN_INFO, "ow addr(%llx).\n", cb_param.addr);
-		if (cb_param.addr == pcanvas_info->phy_addr) {
-			TRACE_RGN(RGN_INFO, "get a using canvas!\n");
-		}
+			osal_msleep(4);
+		} while (in_use_param.in_use && (cnt <= 100) && ctx->chn_attr.show);
 	}
-	ctx->canvas_get = 1;
 
-	return 0;
+	if (cnt > 100) {
+		TRACE_RGN(RGN_ERR, "rgn_handle(%d) wait canvas[%d] hw_ref timeout.\n",
+			handle, ctx->canvas_idx);
+		ret = ERR_RGN_BUSY;
+		ctx->canvas_get = 0;
+	} else {
+		ctx->canvas_get = 1;
+		ret = 0;
+	}
+
+	return ret;
 }
 
 int rgn_update_canvas(rgn_handle handle)

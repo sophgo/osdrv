@@ -1519,10 +1519,23 @@ void vpss_handle_frame_done(osal_workqueue *work)
 	struct vpss_job *job = osal_container_of(work, struct vpss_job, work);
 	struct vpss_grp_ctx *grp_ctx = (struct vpss_grp_ctx *)job->data;
 
-	if (!grp_ctx->is_created || !grp_ctx->is_started) {
-		TRACE_VPSS(DBG_NOTICE, "Grp(%d) isn't start yet.\n", grp_ctx->grp_id);
+	if (!grp_ctx) {
+		TRACE_VPSS(DBG_NOTICE, "Grp(%d) isn't created yet.\n", job->grp_id);
 		return;
 	}
+
+	osal_mutex_lock(&grp_ctx->lock);
+	if (!grp_ctx->is_created) {
+		TRACE_VPSS(DBG_NOTICE, "Grp(%d) isn't created yet.\n", grp_ctx->grp_id);
+		osal_mutex_unlock(&grp_ctx->lock);
+		return;
+	}
+	if (!grp_ctx->is_started) {
+		TRACE_VPSS(DBG_NOTICE, "Grp(%d) isn't start yet.\n", grp_ctx->grp_id);
+		osal_mutex_unlock(&grp_ctx->lock);
+		return;
+	}
+	osal_mutex_unlock(&grp_ctx->lock);
 
 	if (grp_ctx->online_from_isp) {
 		vpss_handle_online_frame_done(job);

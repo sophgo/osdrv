@@ -87,14 +87,14 @@ void _vi_yuv_get_dma_size(struct isp_ctx *ctx, const enum sop_isp_raw raw_num)
 void _vi_pre_fe_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	u32 bufsize = 0;
-	u8  i = 0;
-	u8  pre_fe_buf_num = OFFLINE_RAW_BUF_NUM;
-	u32 raw_le, raw_se;
-	enum sop_isp_raw phy_raw = find_phy_raw_num(ctx, raw_num);
+	u8 i = 0;
+	u64 buf_unalign = 0;
 	struct _mempool *mempool = &ctx->csi_mempool[raw_num];
-
-	raw_le = csibdg_dma_find_hwid(phy_raw, ISP_FE_CH0);
-	raw_se = csibdg_dma_find_hwid(phy_raw, ISP_FE_CH1);
+	u32 fe_dma_id;
+	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
+	enum sop_isp_fe_chn_num fe_max = ctx->isp_csi_cfg[raw_num].is_hdr_on
+					    ? ISP_FE_CH1 : ISP_FE_CH0;
+	bool ai_isp = ctx->isp_csi_cfg[raw_num].is_ai_isp;
 
 	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor &&
 		ctx->isp_csi_cfg[raw_num].yuv_scene_mode != ISP_YUV_SCENE_BYPASS) { //YUV sensor
@@ -102,19 +102,20 @@ void _vi_pre_fe_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 		return;
 	}
 
-	if (_is_fe_post_offline(ctx)) { //fe->dram->post
-		if (raw_num < ISP_PRERAW_VIRT0) {
-			for (i = 0; i < pre_fe_buf_num; i++) {
-				CACL_DMA_SIZE(mempool, raw_num, raw_le);
-				if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-					CACL_DMA_SIZE(mempool, raw_num, raw_se);
-				}
+	if (_is_fe_post_offline(ctx) && raw_num < ISP_PRERAW_VIRT0) { //fe->dram->post
+		for (; fe_chn <= fe_max; fe_chn++) {
+			fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
+			bufsize = ispblk_dma_buf_get_size(ctx, raw_num, fe_dma_id);
+			for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
+				buf_unalign = _mempool_get_addr(mempool);
+				_mempool_pop(mempool, bufsize + (u32)(ai_isp ?
+					VI_4K_ALIGN(buf_unalign) - buf_unalign : 0));
 			}
 		}
 	} else if (_is_fe_post_slice(ctx)) {
-		CACL_DMA_SIZE(mempool, raw_num, raw_le);
-		if (ctx->isp_csi_cfg[raw_num].is_hdr_on) {
-			CACL_DMA_SIZE(mempool, raw_num, raw_se);
+		for (; fe_chn <= fe_max; fe_chn++) {
+			fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
+			CACL_DMA_SIZE(mempool, raw_num, fe_dma_id);
 		}
 	}
 
@@ -136,7 +137,8 @@ void _vi_pre_fe_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 void _vi_pre_ai_isp_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 {
 	u32 bufsize = 0;
-	u8  i = 0;
+	u8 i = 0;
+	u64 buf_unalign = 0;
 	u32 fe_dma_id;
 	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
 	enum sop_isp_fe_chn_num fe_max = ctx->isp_csi_cfg[raw_num].is_hdr_on
@@ -151,8 +153,11 @@ void _vi_pre_ai_isp_get_dma_size(struct isp_ctx *ctx, enum sop_isp_raw raw_num)
 
 	for (; fe_chn <= fe_max; fe_chn++) {
 		fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
+		bufsize = ispblk_dma_buf_get_size(ctx, raw_num, fe_dma_id);
 		for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
-			CACL_DMA_SIZE(mempool, raw_num, fe_dma_id);
+			buf_unalign = _mempool_get_addr(mempool);
+			_mempool_pop(mempool, bufsize +
+				(u32)(VI_4K_ALIGN(buf_unalign) - buf_unalign));
 		}
 	}
 }
@@ -383,6 +388,7 @@ static void _isp_preraw_fe_dma_dump(struct isp_ctx *ctx, enum sop_isp_raw raw_nu
 static void _vi_rgb_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 {
 	u64 bufaddr = 0;
+	u64 buf_unalign = 0;
 	u32 bufsize = 0;
 	u8 i = 0;
 	u32 fe_dma_id;
@@ -397,9 +403,10 @@ static void _vi_rgb_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 	for (; fe_chn <= fe_max; fe_chn++) {
 		fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
 		for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
-			bufaddr = _mempool_get_addr(mempool);
+			buf_unalign = _mempool_get_addr(mempool);
+			bufaddr = ctx->isp_csi_cfg[raw_num].is_ai_isp ? VI_4K_ALIGN(buf_unalign) : buf_unalign;
 			bufsize = ispblk_dma_buf_get_size(ctx, raw_num, fe_dma_id);
-			_mempool_pop(mempool, bufsize);
+			_mempool_pop(mempool, bufsize + (u32)(bufaddr - buf_unalign));
 
 			b = osal_vzalloc(sizeof(*b));
 			if (b == NULL) {
@@ -517,6 +524,7 @@ void _isp_pre_ai_isp_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 	u8 i = 0;
 	u32 fe_dma_id;
 	u64 bufaddr = 0;
+	u64 buf_unalign = 0;
 	u32 bufsize = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct isp_buffer *b = NULL;
@@ -534,7 +542,10 @@ void _isp_pre_ai_isp_dma_setup(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 	for (; fe_chn <= fe_max; fe_chn++) {
 		fe_dma_id = csibdg_dma_find_hwid(raw_num, fe_chn);
 		for (i = 0; i < OFFLINE_RAW_BUF_NUM; i++) {
-			CACL_AND_DMA_SETUP(mempool, raw_num, fe_dma_id);
+			buf_unalign = _mempool_get_addr(mempool);
+			bufaddr = VI_4K_ALIGN(buf_unalign);
+			bufsize = ispblk_dma_config(ctx, raw_num, fe_dma_id, bufaddr);
+			_mempool_pop(mempool, bufsize + (u32)(bufaddr - buf_unalign));
 			b = osal_vzalloc(sizeof(*b));
 			if (b == NULL) {
 				vi_pr(VI_ERR, "raw_le isp_buf_%d vmalloc size(%zu) fail\n", i, sizeof(*b));
@@ -833,14 +844,14 @@ static int vi_get_ion_buf(struct vi_dev *vdev, bool is_csi,
 	struct isp_ctx *ctx = &vdev->ctx;
 	char buf_name[64] = {0};
 
-	mempool->base = 0x80000000;
+	mempool->base = 0x80000008;
 	mempool->size = 0x40000000;
 	mempool->byteused = 0;
 
 	if (is_csi) {
-		if (ctx->is_rawreplay)
-			return 0;
-		_vi_pre_fe_get_dma_size(ctx, idx);
+		if (!ctx->is_rawreplay) {
+			_vi_pre_fe_get_dma_size(ctx, idx);
+		}
 		_vi_pre_ai_isp_get_dma_size(ctx, idx);
 	} else {
 		_vi_get_pipe_dma_buf_size(ctx, idx);

@@ -49,11 +49,7 @@ struct vi_ctx {
 
 	__u32 blk_size[VI_MAX_PIPE_NUM][VI_MAX_CHN_NUM];
 	__u8 bypass_frm[VI_MAX_PIPE_NUM];
-#ifdef __arm__
-	__u32 vi_raw_blk[2];
-#else
 	__u64 vi_raw_blk[2];
-#endif
 	__s32 chn_bind[VI_MAX_CHN_NUM][VI_MAX_EXTCHN_BIND_PER_CHN];
 	vi_ext_chn_attr_s ext_chn_attr[VI_MAX_EXT_CHN_NUM];
 };

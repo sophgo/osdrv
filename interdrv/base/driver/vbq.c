@@ -6,6 +6,9 @@
 #include "bind.h"
 #include "base_common.h"
 
+#define SNAP_INVALID 0
+#define SNAP_AVAIL 1
+#define SNAP_EXIT 2
 
 static struct vbq_recv_s g_vbq_recv[ID_BUTT];
 
@@ -154,7 +157,7 @@ s32 base_get_chn_buffer(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk *blk, s32 
 
 	s->chn = chn;
 	s->blk = VB_INVALID_HANDLE;
-	s->avail = 0;
+	s->avail = SNAP_INVALID;
 
 	if (timeout_ms < 0) {
 		TAILQ_INSERT_TAIL(&jobs->snap_jobs, s, tailq);
@@ -172,14 +175,15 @@ s32 base_get_chn_buffer(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk *blk, s32 
 		// ret = 1, condition true
 	}
 
-	if (s->avail)
+	if (s->avail == SNAP_AVAIL) {
 		ret = 0;
-	else
-		ret = -1;
-
-	if (!ret) {
 		*blk = s->blk;
+	} else if (s->avail == SNAP_EXIT) {
+		ret = -2;
+		if (s->blk != VB_INVALID_HANDLE)
+			vb_release_block(s->blk);
 	} else {
+		ret = -1;
 		osal_mutex_lock(&jobs->dlock);
 		if (s->blk != VB_INVALID_HANDLE)
 			vb_release_block(s->blk);
@@ -310,8 +314,10 @@ void base_mod_jobs_exit(struct vb_jobs_t *jobs)
 	}
 	FIFO_EXIT(&jobs->doneq);
 
-	TAILQ_FOREACH_SAFE(s, &jobs->snap_jobs, tailq, s_tmp)
-	TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
+	TAILQ_FOREACH_SAFE(s, &jobs->snap_jobs, tailq, s_tmp) {
+		TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
+		s->avail = SNAP_EXIT;
+	}
 	osal_mutex_unlock(&jobs->dlock);
 	osal_mutex_destroy(&jobs->dlock);
 	osal_sem_destroy(&jobs->sem);
@@ -508,7 +514,7 @@ static void _handle_snap(mmf_chn_s chn, struct vb_jobs_t *jobs, vb_blk blk)
 		if (CHN_MATCH(&s->chn, &chn)) {
 			TAILQ_REMOVE(&jobs->snap_jobs, s, tailq);
 			s->blk = blk;
-			s->avail = 1;
+			s->avail = SNAP_AVAIL;
 			osal_atomic_inc_return(&p->usr_cnt);
 			vb_add_tag(blk, ID_USER);
 			osal_wait_wakeup(&s->cond_queue);

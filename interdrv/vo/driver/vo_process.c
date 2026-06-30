@@ -915,7 +915,6 @@ int vo_stop_streaming(vo_dev dev)
 	dev_ctx = &g_vo_ctx->dev_ctx[dev];
 
 	disp_enable_window_bgcolor(dev, true);
-	disp_tgen_enable(dev, false);
 
 	osal_atomic_set(&dev_ctx->disp_streamon, 0);
 	TRACE_VO(DBG_INFO, "[dev%d]stop streaming.\n", dev);
@@ -923,5 +922,6 @@ int vo_stop_streaming(vo_dev dev)
 
 	osal_irq_free(dev_ctx->irq_num, (void *)dev_ctx);
 
+	disp_tgen_enable(dev, false);
 	return rc;
 }

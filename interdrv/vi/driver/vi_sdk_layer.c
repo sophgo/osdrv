@@ -201,13 +201,13 @@ vb_blk vi_sdk_dqbuf(mmf_chn_s mmf_chn, void *data)
 
 	if (!vdev) {
 		vi_pr(VI_ERR, "null point\n");
-		return ERR_VI_INVALID_NULL_PTR;
+		return VB_INVALID_HANDLE;
 	}
 
 	ret = vb_dqbuf(mmf_chn, &vdev->vi_jobs[pipe][chn], &blk);
 	if (ret != 0) {
 		vi_pr(VI_DBG, "Can't acquire VB BLK for VI\n");
-		return ERR_VI_NOMEM;
+		return VB_INVALID_HANDLE;
 	}
 
 	return blk;
@@ -995,8 +995,6 @@ int vi_send_pipe_raw(struct vi_dev *vdev, int pipe, const video_frame_info_s *pv
 	int ret = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
 	struct vi_ctx *vi_ctx = (struct vi_ctx *)(vdev->shared_mem);
-	u64 phy_addr;
-	u32 dmaid_le, dmaid_se;
 
 	ret = check_vi_pipe_valid(pipe);
 	if (ret != 0)
@@ -1022,11 +1020,6 @@ int vi_send_pipe_raw(struct vi_dev *vdev, int pipe, const video_frame_info_s *pv
 
 	osal_mutex_lock(&vi_ctx->pipe_lock[pipe]);
 
-	if (vi_ctx->source[pipe] == VI_PIPE_FRAME_SOURCE_USER_BE) {
-		dmaid_le = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE;
-		dmaid_se = ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE;
-	}
-
 	if (pvideo_frame->video_frame.dynamic_range == DYNAMIC_RANGE_HDR10) {
 		ctx->is_hdr_on = true;
 		ctx->isp_csi_cfg[ISP_PRERAW0].is_hdr_on = true;
@@ -1050,15 +1043,11 @@ int vi_send_pipe_raw(struct vi_dev *vdev, int pipe, const video_frame_info_s *pv
 	ctx->isp_pipe_cfg[pipe].crop.x = vdev->usr_crop.left;
 	ctx->isp_pipe_cfg[pipe].crop.y = vdev->usr_crop.top;
 
-	phy_addr = pvideo_frame->video_frame.phyaddr[0];
-	ispblk_dma_config(ctx, pipe, dmaid_le, phy_addr);
-	vdev->usr_pic_phy_addr[ISP_RAW_PATH_LE] = phy_addr;
+	vdev->usr_pic_phy_addr[ISP_RAW_PATH_LE] = pvideo_frame->video_frame.phyaddr[0];
 	vi_pr(VI_INFO, "raw_replay le(0x%llx)\n", vdev->usr_pic_phy_addr[ISP_RAW_PATH_LE]);
 
 	if (ctx->is_hdr_on || pvideo_frame->video_frame.pixel_format) {
-		phy_addr = pvideo_frame->video_frame.phyaddr[1];
-		ispblk_dma_config(ctx, pipe, dmaid_se, phy_addr);
-		vdev->usr_pic_phy_addr[ISP_RAW_PATH_SE] = phy_addr;
+		vdev->usr_pic_phy_addr[ISP_RAW_PATH_SE] = pvideo_frame->video_frame.phyaddr[1];
 		vi_pr(VI_INFO, "raw_replay se(0x%llx)\n", vdev->usr_pic_phy_addr[ISP_RAW_PATH_SE]);
 	}
 

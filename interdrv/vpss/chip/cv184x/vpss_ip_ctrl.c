@@ -116,7 +116,12 @@ int _sc_ext_set_rgn_cfg(const u8 inst, u8 layer, const struct rgn_cfg *rgn_cfg,
 	gop_cfg->colorkey = rgn_cfg->colorkey;
 
 	if (rgn_lut_cfg->is_updated) {
-		sclr_gop_setup_256LUT(inst, layer, rgn_lut_cfg->lut_length, rgn_lut_cfg->lut_addr);
+		if (rgn_lut_cfg->lut_length > 16){
+			sclr_gop_setup_256LUT(inst, layer, rgn_lut_cfg->lut_length, rgn_lut_cfg->lut_addr);
+		}
+		else{
+			sclr_gop_setup_16LUT(inst, layer, rgn_lut_cfg->lut_length, rgn_lut_cfg->lut_addr);
+		}
 	}
 
 	if (rgn_cfg->odec.enable) { // odec enable
@@ -951,6 +956,8 @@ void vpss_interrupter_clear(u8 dev_idx, struct vpss_interrupter_status *status)
 
 	if (intr_status.b.scl_frame_end == 1)
 		status->sc_end = true;
+	if (intr_status.b.img_in_frame_end == 1)
+		status->img_end = true;
 
 	if (intr_status.b.cmdq_end == 1) {
 		status->cmdq_end = true;

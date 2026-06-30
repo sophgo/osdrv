@@ -28,6 +28,7 @@ struct rgn_ctx {
 	unsigned char odec_data_valid;
 	unsigned char canvas_updated;
 	osal_mutex rgn_canvas_q_lock;
+	unsigned char ow_inst;
 };
 
 #ifdef __cplusplus

@@ -2054,7 +2054,7 @@ void sclr_ctrl_init(u8 inst, bool is_resume)
 	rt_cfg.b.img_d_sel = 1;
 
 	intr_mask.raw = 0;
-	//intr_mask.b.img_in_frame_end = true;
+	intr_mask.b.img_in_frame_end = true;
 	intr_mask.b.scl_frame_end = true;
 	//intr_mask.b.prog_too_late = true;
 	intr_mask.b.cmdq = true;
@@ -3141,7 +3141,7 @@ void sclr_dump_odma_register(u8 inst)
 
 	_reg_write(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst), 0x1);
 	val = _reg_read(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst));
-	TRACE_VPSS(DBG_DEBUG, "\t latch line count=%d\n", val >> 8);
+	TRACE_VPSS(DBG_INFO, "\t sc(%d) latch line count=%d\n", inst, val >> 8);
 
 	val = _reg_read(reg_base + REG_SCL_ODMA_CFG(inst));
 	TRACE_VPSS(DBG_DEBUG, "\t fmt=%d hflip=%d vflip=%d\n",
@@ -3185,6 +3185,7 @@ void sclr_dump_odma_register(u8 inst)
 void sclr_dump_register(u8 inst)
 {
 	int i;
+	u32 val;
 
 	TRACE_VPSS(DBG_ERR, "---dump vpss(%d) register---\n", inst);
 	TRACE_VPSS(DBG_ERR, "---sc top register---\n");
@@ -3257,6 +3258,10 @@ void sclr_dump_register(u8 inst)
 			(unsigned int)(i), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i),
 			(unsigned int)(i + 0x4), (unsigned int)_reg_read(reg_base + REG_SCL_ODMA_BASE(inst) + i + 0x4));
 	}
+
+	_reg_write(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst), 0x1);
+	val = _reg_read(reg_base + REG_SCL_ODMA_LATCH_LINE_CNT(inst));
+	TRACE_VPSS(DBG_ERR, "---vpss(%d) latch line count=%d---\n", inst, val >> 8);
 }
 
 void sclr_get_sb_write_pos(u8 inst, int *y_pos, int *uv_pos)

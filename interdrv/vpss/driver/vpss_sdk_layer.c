@@ -434,6 +434,7 @@ int vpss_destroy_grp(vpss_grp grp_id, struct vpss_cores *cores)
 	job_num = grp_ctx->online_from_isp ? VPSS_ONLINE_JOB_NUM : 1;
 	job = (struct vpss_job *)grp_ctx->job_buffer;
 	for (i = 0; i < job_num; i++) {
+		job[i].data = NULL;
 		osal_spin_lock_destroy(&job[i].lock);
 		osal_workqueue_destroy(&job[i].work);
 	}
@@ -522,11 +523,16 @@ int vpss_stop_grp(vpss_grp grp_id, struct vpss_ctx *ctx)
 		if ((osal_atomic_read(&job[i].job_state) == JOB_WAIT) ||
 			(osal_atomic_read(&job[i].job_state) == JOB_WORKING)) {
 			vpss_hal_remove_job(job + i, &cores->hal_ctx);
-			FIFO_PUSH(&grp_ctx->jobq, job + i);
-			release_buffers(grp_ctx);
 		}
+		release_buffers(grp_ctx);
 		osal_atomic_set(&job[i].job_state, JOB_INVALID);
 	}
+	while (!FIFO_EMPTY(&grp_ctx->jobq))
+		FIFO_POP(&grp_ctx->jobq, &job);
+
+	job = (struct vpss_job *)grp_ctx->job_buffer;
+	for (i = 0; i < job_num; i++)
+		FIFO_PUSH(&grp_ctx->jobq, job + i);
 
 	osal_atomic_set(&grp_ctx->hdl_state, HANDLER_STATE_STOP);
 	osal_mutex_unlock(&grp_ctx->lock);

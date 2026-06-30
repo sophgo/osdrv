@@ -1259,6 +1259,18 @@ void vi_csi_ctrl_init(struct vi_dev *vdev, enum sop_isp_raw raw_num)
 		}
 	}
 
+	if (ctx->is_rawreplay) {
+		ctx->isp_csi_cfg[raw_num].csibdg_width = vdev->usr_crop.width;
+		ctx->isp_csi_cfg[raw_num].csibdg_height = vdev->usr_crop.height;
+
+		for (i = 0; i < ctx->isp_csi_cfg[raw_num].chn_num; i++) {
+			ctx->isp_csi_cfg[raw_num].crop[i].w = vdev->usr_crop.width;
+			ctx->isp_csi_cfg[raw_num].crop[i].h = vdev->usr_crop.height;
+			ctx->isp_csi_cfg[raw_num].crop[i].x = vdev->usr_crop.left;
+			ctx->isp_csi_cfg[raw_num].crop[i].y = vdev->usr_crop.top;
+		}
+	}
+
 	if (ctx->cfg_info.raw_num == ISP_PRERAW_MAX && !ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
 		//Postraw out size
 		ctx->cfg_info.raw_num = raw_num;
@@ -1869,6 +1881,7 @@ s8 _pre_hw_enque(
 				/* VI Online VPSS sc cb trigger */
 				post_para.snr_num = pipe;
 				post_para.is_tile = false;
+				post_para.frm_num = vdev->postraw_frame_number[pipe] + 1;
 				if (_vi_call_cb(E_MODULE_VPSS, VPSS_CB_VI_ONLINE_TRIGGER, &post_para) != 0) {
 					vi_pr(VI_DBG, "raw_%d, sc_%d is running\n", raw_num, pipe);
 					osal_atomic_set(&vdev->postraw_state, ISP_STATE_IDLE);
@@ -1939,6 +1952,81 @@ s8 _pre_hw_enque(
 	}
 
 	return ISP_SUCCESS;
+}
+
+void user_rawreply_trig(struct vi_dev *vdev)
+{
+	uint8_t ret = ISP_SUCCESS;
+	struct isp_ctx *ctx = &vdev->ctx;
+	enum sop_isp_raw raw_num = ISP_PRERAW0;
+	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
+	u8 pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[fe_chn];
+	bool is_hdr = ctx->isp_pipe_cfg[pipe].is_hdr_on;
+	enum sop_isp_fe_chn_num fe_max = ctx->isp_csi_cfg[raw_num].is_hdr_on
+					? ISP_FE_CH1
+					: ctx->isp_csi_cfg[raw_num].mux_mode;
+	struct isp_buffer *b = NULL;
+	struct isp_queue *post_in_q = NULL;
+	u64 phy_addr[ISP_FE_CHN_MAX] = {0};
+
+	if (osal_atomic_read(&vdev->postraw_state) != ISP_STATE_IDLE) {
+		vi_pr(VI_DBG, "Postraw is running\n");
+		return;
+	}
+
+	for (fe_chn = ISP_FE_CH0; fe_chn <= fe_max; fe_chn++) {
+		if (osal_atomic_read(&ctx->isp_pipe_cfg[pipe].ai_isp_en)) {
+			post_in_q = is_hdr ? &vdev->postraw_wdr_in_q[fe_chn] : &vdev->postraw_in_q;
+			b = isp_buf_next(post_in_q);
+			if (!b) {
+				vi_pr(VI_DBG, "fail to find buf\n");
+				return;
+			}
+			phy_addr[fe_chn] = b->addr;
+		} else {
+			phy_addr[fe_chn] = vdev->usr_pic_phy_addr[fe_chn];
+		}
+
+		if (phy_addr[fe_chn] == 0) {
+			vi_pr(VI_DBG, "rawreply trig fail, phy_addr is 0\n");
+			return;
+		}
+	}
+
+	fe_chn = ISP_FE_CH0;
+	ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_LE, phy_addr[ISP_FE_CH0]);
+	if (is_hdr)
+		ispblk_dma_config(ctx, pipe, ISP_BLK_ID_DMA_CTL_PRE_VI_SEL_SE, phy_addr[ISP_FE_CH1]);
+
+	isp_first_frm_reset(ctx, vdev->postraw_frame_number[pipe] == 0, false);
+
+	_vi_clear_mmap_fbc_ring_base(vdev, pipe);
+
+	vi_tuning_gamma_ips_update(ctx, pipe);
+	vi_tuning_dci_update(ctx, pipe);
+	vi_tuning_drc_update(ctx, pipe);
+
+	ispblk_fbc_debug_info(ctx);
+
+	_post_dma_update(vdev, pipe);
+
+	ret = _pre_hw_enque(vdev, raw_num, fe_chn);
+	if (ret != ISP_SUCCESS) {
+		return;
+	}
+
+	vdev->usr_pic_phy_addr[ISP_RAW_PATH_LE] = 0;
+	vdev->usr_pic_phy_addr[ISP_RAW_PATH_SE] = 0;
+	vdev->pre_fe_frm_num[raw_num][fe_chn]++;
+
+	_vi_wake_up_preraw_th(vdev, raw_num);
+
+	vi_pr(VI_DBG, "le_phy_addr: 0x%llx, se_phy_addr: 0x%llx\n",  phy_addr[ISP_FE_CH0], phy_addr[ISP_FE_CH1]);
+
+	if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
+		vi_event_queue(vdev, VI_EVENT_PRE0_EOF + ctx->isp_csi_cfg[raw_num].bind_pipe[fe_chn],
+				vdev->pre_fe_frm_num[raw_num][fe_chn]);
+	}
 }
 
 /**
@@ -3450,6 +3538,8 @@ static void _isp_ai_isp_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_
 					? ISP_FE_CH1
 					: ISP_FE_CH0;
 	bool is_skip_ai_isp = true;
+	u64 frm_num;
+	osal_timeval tv;
 
 	while (fe_chn <= fe_max) {
 		in_buf = isp_buf_next(&vdev->pre_ai_isp_in_q[raw_num][fe_chn]);
@@ -3466,7 +3556,7 @@ static void _isp_ai_isp_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_
 
 		ai_isp_info->input_addr[fe_chn] = in_buf->addr;
 		ai_isp_info->output_addr[fe_chn] = out_buf->addr;
-		ai_isp_info->size = in_buf->byr_size;
+		ai_isp_info->size = in_buf->size;
 		fe_chn++;
 	}
 
@@ -3502,21 +3592,33 @@ static void _isp_ai_isp_handler(struct vi_dev *vdev, const enum sop_isp_raw raw_
 			isp_buf_queue(post_in_q, in_buf);
 			vi_pr(VI_DBG, "AI_ISP skip raw %d, fe_chn %d\n", raw_num, fe_chn);
 		} else {
-			isp_buf_queue(fe_out_q, in_buf);
+			frm_num = in_buf->frm_num;
+			tv = in_buf->tv;
+			if (in_buf->is_ext == EXTERNAL_BUFFER) {
+				osal_kfree(in_buf);
+			} else {
+				isp_buf_queue(fe_out_q, in_buf);
+			}
+
 			out_buf = isp_buf_remove(&vdev->pre_ai_isp_out_q[raw_num][fe_chn]);
 			if (out_buf == NULL) {
 				vi_pr(VI_ERR, "AI_ISP outbuf is empty for raw %d, fe_chn %d\n", raw_num, fe_chn);
 				continue;
 			}
 			out_buf->ai_cfg = ctx->isp_csi_cfg[raw_num].ai_cfg;
-			out_buf->tv = in_buf->tv;
-			out_buf->frm_num = in_buf->frm_num;
+			out_buf->tv = tv;
+			out_buf->frm_num = frm_num;
 			isp_buf_queue(post_in_q, out_buf);
 		}
 		fe_chn++;
 	}
 
-	_vi_wake_up_post_th(vdev);
+	if (ctx->is_rawreplay) {
+		osal_atomic_set(&vdev->isp_ai_int_flag[raw_num], E_AI_WAKE_TYPE_NONE);
+		user_rawreply_trig(vdev);
+	} else {
+		_vi_wake_up_post_th(vdev);
+	}
 }
 
 static int _vi_ai_isp_handler_thread(void *arg)
@@ -4015,7 +4117,8 @@ static void _isp_postraw_done_handler(struct vi_dev *vdev)
 	++ctx->isp_pipe_cfg[pipe].first_frm_cnt;
 	++vdev->postraw_frame_number[pipe];
 
-	if (_is_fe_post_offline(ctx) && !ctx->is_rawreplay) { //fe->dram->post
+	if (_is_fe_post_offline(ctx) &&
+		(!ctx->is_rawreplay || osal_atomic_read(&ctx->isp_pipe_cfg[pipe].ai_isp_en))) { //fe->dram->post
 		struct isp_queue *post_in_le_q = ctx->cfg_info.is_hdr_on
 						? &vdev->postraw_wdr_in_q[ISP_FE_CH0]
 						: &vdev->postraw_in_q;
@@ -4570,44 +4673,56 @@ int vi_cb(void *dev, cb_modules_id caller, u32 cmd, void *arg)
 
 int user_pic_trig(struct vi_dev *vdev, bool is_frm_rst)
 {
+	u8 pipe = 0;
 	struct isp_ctx *ctx = &vdev->ctx;
 	enum sop_isp_raw raw_num = ISP_PRERAW0;
-	u8 pipe = 0;
+	enum sop_isp_fe_chn_num fe_chn = ISP_FE_CH0;
+	struct isp_buffer *b = NULL;
 
 	if (!osal_atomic_read(&vdev->stream.isp_streamon[pipe])) {
 		vi_pr(VI_DBG, "isp stream is not on, can't trigger preraw\n");
 		return 1;
 	}
 
-	if (ctx->is_rawreplay) {
-		if (osal_atomic_read(&vdev->postraw_state) != ISP_STATE_IDLE)
+	if (!ctx->is_rawreplay)
+		return 0;
+
+	if (osal_atomic_read(&ctx->isp_pipe_cfg[pipe].ai_isp_en)) {
+		if (osal_atomic_read(&vdev->isp_ai_int_flag[raw_num]) != E_AI_WAKE_TYPE_NONE
+			|| osal_atomic_read(&vdev->postraw_state) != ISP_STATE_IDLE) {
+			vi_pr(VI_DBG, "ai isp is trigged, can't trigger preraw\n");
 			return 1;
-
-		pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
-
-		isp_first_frm_reset(ctx, vdev->postraw_frame_number[pipe] == 0, false);
-
-		_vi_clear_mmap_fbc_ring_base(vdev, pipe);
-
-		vi_tuning_gamma_ips_update(ctx, pipe);
-		vi_tuning_dci_update(ctx, pipe);
-		vi_tuning_drc_update(ctx, pipe);
-
-		ispblk_fbc_debug_info(ctx);
-
-		_post_dma_update(vdev, pipe);
-
-		_pre_hw_enque(vdev, raw_num, ISP_FE_CH0);
-
-		_vi_wake_up_preraw_th(vdev, raw_num);
-
-		vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]++;
-
-		if (!ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
-			vi_event_queue(vdev, VI_EVENT_PRE0_EOF + ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0],
-					vdev->pre_fe_frm_num[raw_num][ISP_FE_CH0]);
 		}
+
+		if (!vdev->usr_pic_phy_addr[ISP_RAW_PATH_LE]
+			&& !vdev->usr_pic_phy_addr[ISP_RAW_PATH_SE]) {
+			vi_pr(VI_DBG, "usr_pic_phy_addr[ISP_RAW_PATH_LE] is 0\n");
+			return 1;
+		}
+
+		b = osal_kzalloc(sizeof(struct isp_buffer), OSAL_GFP_ATOMIC);
+		if (!b) {
+			vi_pr(VI_DBG, "vzalloc b failed\n");
+			return 1;
+		}
+		b->addr = vdev->usr_pic_phy_addr[fe_chn];
+		b->raw_num = raw_num;
+		b->chn_num = fe_chn;
+		b->ir_idx = 0;
+		b->is_ext = EXTERNAL_BUFFER;
+		b->source = PRE_AI_ISP;
+		b->frm_num = vdev->postraw_frame_number[pipe];
+
+		isp_buf_queue(&vdev->pre_ai_isp_in_q[raw_num][fe_chn], b);
+		vdev->usr_pic_phy_addr[fe_chn] = 0;
+
+		_vi_wake_up_ai_isp_th(vdev, raw_num);
+
+		vi_pr(VI_DBG, "ai isp trigger preraw frm_num=%d\n", b->frm_num);
+	} else {
+		user_rawreply_trig(vdev);
 	}
+
 	return 0;
 }
 
@@ -4625,11 +4740,8 @@ static void _usr_pic_timer_handler(unsigned long data)
 
 	vdev = (struct vi_dev *)osal_timer_get_private_data((void *)data);
 
-	if (user_pic_trig(vdev, false)) {
-		goto EXIT;
-	}
+	user_pic_trig(vdev, false);
 
-EXIT:
 	vi_pr(VI_DBG, "wait next trig\n");
 
 	if (vdev->usr_pic_timer.timer)
@@ -4782,7 +4894,7 @@ int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
 	uint8_t total_chn = (ctx->isp_csi_cfg[raw_num].is_yuv_sensor)
 			? ctx->isp_csi_cfg[raw_num].mux_mode + 1
 			: ctx->isp_csi_cfg[raw_num].is_hdr_on + 1;
-	uint8_t chn_str = 0, pipe = 0;
+	uint8_t chn_str = 0;
 
 	if (osal_atomic_read(&vdev->stream.csi_streamon[raw_num])) {
 		vi_pr(VI_INFO, "raw_num(%d) is already streaming\n", raw_num);
@@ -4794,9 +4906,6 @@ int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
 
 	//sw workaround to disable csibdg enable first due to csibdg enable is on as default.
 	isp_streaming(ctx, false, raw_num);
-
-	if (ctx->is_rawreplay)
-		return 0;
 
 	if (osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
 		ret = vi_get_csi_ion_buf(vdev, raw_num);
@@ -4811,12 +4920,11 @@ int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
 
 	_vi_mempool_reset(&ctx->csi_mempool[raw_num]);
 
-	_isp_pre_fe_dma_setup(vdev, raw_num);
-
-	if (raw_num >= ISP_PRERAW_VIRT0) {
-		vi_pr(VI_DBG, "virtual raw should not set hw\n");
-		goto skip_hw_setup;
+	if (!ctx->is_rawreplay) {
+		_isp_pre_fe_dma_setup(vdev, raw_num);
 	}
+
+	_isp_pre_ai_isp_dma_setup(vdev, raw_num);
 
 	if (ctx->is_ai_isp && osal_atomic_read(&vdev->state) != E_STATE_SUSPEND) {
 		ret = vi_create_thread(vdev, E_VI_TH_AI_ISP);
@@ -4824,6 +4932,14 @@ int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
 			vi_pr(VI_ERR, "Failed to create ai_isp thread\n");
 			goto err_create_ai_isp;
 		}
+	}
+
+	if (ctx->is_rawreplay)
+		return 0;
+
+	if (raw_num >= ISP_PRERAW_VIRT0) {
+		vi_pr(VI_DBG, "virtual raw should not set hw\n");
+		goto skip_hw_setup;
 	}
 
 	_vi_call_cb(E_MODULE_CIF, CIF_CB_RESET_LVDS, &raw_num);
@@ -4840,20 +4956,6 @@ int vi_csi_start_streaming(struct vi_dev *vdev, uint8_t raw_num)
 	}
 
 	_vi_pre_fe_ctrl_setup(vdev, raw_num);
-	_isp_pre_ai_isp_dma_setup(vdev, raw_num);
-
-	if (ctx->isp_csi_cfg[raw_num].is_yuv_sensor) {
-		if (ctx->isp_csi_cfg[raw_num].yuv_scene_mode == ISP_YUV_SCENE_ISP) {
-			pipe = ctx->isp_csi_cfg[raw_num].bind_pipe[ISP_FE_CH0];
-			if (ctx->isp_pipe_cfg[pipe].is_offline_scaler) {
-				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & offline scaler\n", raw_num, pipe);
-			} else {
-				vi_pr(VI_INFO, "raw[%d] pipe[%d] YUV ISP & online scaler\n", raw_num, pipe);
-			}
-		} else {
-			vi_pr(VI_INFO, "raw_num [%d] YUV bypass ISP\n", raw_num);
-		}
-	}
 
 	_vi_dma_set_sw_mode(ctx, raw_num, true);
 
@@ -4892,11 +4994,6 @@ int vi_csi_stop_streaming(struct vi_dev *vdev, uint8_t raw_num)
 	bool is_all_idle = true;
 	struct _isp_raw_num_n *raw_n = NULL, *raw_tmp = NULL;
 	struct isp_sof_raw_num_q *raw_num_q = &vdev->pre_raw_num_q;
-
-	if (ctx->is_rawreplay) {
-		vi_pr(VI_INFO, "raw replay, skip clean csi resources\n");
-		goto clean_resources;
-	}
 
 	osal_atomic_set(&vdev->stream.csi_streamon[raw_num], 0);
 
@@ -4962,7 +5059,6 @@ int vi_csi_stop_streaming(struct vi_dev *vdev, uint8_t raw_num)
 		}
 	}
 
-clean_resources:
 	for (i = 0; i < ISP_PRERAW_MAX; i++) {
 		if (osal_atomic_read(&vdev->stream.csi_streamon[i])) {
 			is_all_idle = false;

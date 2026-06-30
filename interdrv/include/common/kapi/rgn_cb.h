@@ -65,6 +65,14 @@ struct _rgn_clr_ow_addr_cb_param {
 	__u8 ow_inst;
 };
 
+struct _rgn_is_addr_in_use_cb_param {
+	mmf_chn_s chn;
+	rgn_handle handle;
+	__u32 layer;
+	__u64 addr;     // [in] physical address to check
+	__u8 in_use;    // [out] whether the address is currently in use
+};
+
 #ifdef __cplusplus
 }
 #endif

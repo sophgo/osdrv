@@ -18,6 +18,9 @@ static void _pix_fmt_to_string(enum _pixel_format_e pix_fmt, char *str, int len)
 	case PIXEL_FORMAT_8BIT_MODE:
 		strncpy(str, "256LUT", len);
 		break;
+	case PIXEL_FORMAT_4BIT_MODE:
+		strncpy(str, "16LUT", len);
+		break;
 	case PIXEL_FORMAT_ARGB_1555:
 		strncpy(str, "ARGB_1555", len);
 		break;

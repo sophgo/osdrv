@@ -134,6 +134,7 @@ struct vpss_img_in_cfg {
 
 struct vpss_interrupter_status {
 	bool sc_end;
+	bool img_end;
 	bool cmdq_end;
 };
 
