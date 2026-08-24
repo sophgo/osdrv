@@ -72,6 +72,7 @@ typedef enum _VO_INTF_SYNC_E {
 	VO_OUTPUT_1920x1200_60, /* VESA 1920 x 1600 at 60 Hz (non-interlaced) CVT (Reduced Blanking)*/
 	VO_OUTPUT_640x480_60, /* VESA 640 x 480 at 60 Hz (non-interlaced) CVT */
 	VO_OUTPUT_720x1280_60, /* For MIPI DSI Tx 720 x1280 at 60 Hz */
+	VO_OUTPUT_720x1280_120, /* For MIPI DSI Tx 720 x1280 at 120 Hz */
 	VO_OUTPUT_1080x1920_60, /* For MIPI DSI Tx 1080x1920 at 60 Hz */
 	VO_OUTPUT_480x800_60, /* For MIPI DSI Tx 480x800 at 60 Hz */
 	VO_OUTPUT_USER, /* User timing. */

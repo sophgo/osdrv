@@ -129,6 +129,9 @@ static void _intfSync_to_String(enum _VO_INTF_SYNC_E intfSync, char *str, int le
 	case VO_OUTPUT_720x1280_60:
 		strncpy(str, "720x1280@60", len);
 		break;
+	case VO_OUTPUT_720x1280_120:
+		strncpy(str, "720x1280@120", len);
+		break;
 	case VO_OUTPUT_1080x1920_60:
 		strncpy(str, "1080x1920@60", len);
 		break;

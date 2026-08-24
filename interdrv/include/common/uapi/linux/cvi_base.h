@@ -61,6 +61,10 @@ enum ENUM_CHIP_ID {
 	E_CHIPID_CV1801C,		//25
 // new add for cv181x
 	E_CHIPID_CV1810H = 28,		//28
+// phobos3
+	E_CHIPID_CV190AH = 29,		//29
+// external DDR (no SIP DDR), efuse capacity field == 0
+	E_CHIPID_CV1815J = 30,		//30
 };
 
 /* chip version list */
