@@ -331,6 +331,10 @@ unsigned int cvi_base_read_chip_id(void)
 	case 0x1801C:
 		return E_CHIPID_CV1801C;
 
+	// external DDR (no SIP DDR), FSBL writes 0x1815
+	case 0x1815:
+		return E_CHIPID_CV1815J;
+
 	//default cv1835
 	default:
 		return E_CHIPID_CV1835;
