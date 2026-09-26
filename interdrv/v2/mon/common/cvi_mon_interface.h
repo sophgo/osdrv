@@ -38,6 +38,45 @@ struct cvi_mon_device {
 	uint8_t __iomem *ddr_ddrmon_sys2_vaddr;
 #endif
 	uint8_t __iomem *ddr_top_vaddr;			//0x0800A000
+#if defined(CONFIG_CHIP_CPU_CV84X6)
+	void __iomem *mon_f0s1_vaddr;
+	void __iomem *mon_f1s1_vaddr;
+	void __iomem *mon_f2s1_vaddr;
+	void __iomem *mon_f3s1_vaddr;
+	void __iomem *mon_f5s1_vaddr;
+	void __iomem *mon_vd0_mon0_vaddr;
+	void __iomem *mon_vd0_mon1_vaddr;
+	void __iomem *mon_vd1_mon0_vaddr;
+	void __iomem *mon_vd1_mon1_vaddr;
+	void __iomem *mon_vd2_mon0_vaddr;
+	void __iomem *mon_vd2_mon1_vaddr;
+	void __iomem *mon_vd3_mon0_vaddr;
+	void __iomem *mon_vd3_mon1_vaddr;
+	void __iomem *mon_ve_vaddr;
+	/* VO monitors (no IRQ) */
+	void __iomem *mon_vo_iga_vaddr;
+	void __iomem *mon_vo_off_vaddr;
+	void __iomem *mon_vo_rt_vaddr;
+	/* TPU monitors (no IRQ) */
+	void __iomem *mon_tpu_mon0_vaddr;
+	void __iomem *mon_tpu_mon1_vaddr;
+	void __iomem *mon_tpu_mon2_vaddr;
+	void __iomem *mon_tpu_mon3_vaddr;
+	void __iomem *mon_tpu_mon4_vaddr;
+	void __iomem *mon_tpu_mon5_vaddr;
+	/* DDR monitors MON0 (no IRQ) - 0x70c06000, 0x74c06000, 0x78c06000, 0x7cc06000 */
+	void __iomem *mon_ddr0_mon0_vaddr;
+	void __iomem *mon_ddr1_mon0_vaddr;
+	void __iomem *mon_ddr2_mon0_vaddr;
+	void __iomem *mon_ddr3_mon0_vaddr;
+	/* DDR monitors MON1 (no IRQ) - 0x70c06100, 0x74c06100, 0x78c06100, 0x7cc06100 */
+	void __iomem *mon_ddr0_mon1_vaddr;
+	void __iomem *mon_ddr1_mon1_vaddr;
+	void __iomem *mon_ddr2_mon1_vaddr;
+	void __iomem *mon_ddr3_mon1_vaddr;
+	/* Physical addresses for debugging */
+	phys_addr_t mon_paddr[31];
+#endif
 	int aximon_irq;
 	struct mutex dev_lock;
 	spinlock_t close_lock;

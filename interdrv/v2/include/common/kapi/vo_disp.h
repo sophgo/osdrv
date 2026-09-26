@@ -70,11 +70,17 @@ struct bt_intf_cfg {
 	struct vo_pins pins;
 };
 
+struct rgb_intf_cfg {
+	__u32 pixelclock;
+	struct vo_pins pins;
+};
+
 struct vo_disp_intf_cfg {
 	enum vo_disp_intf intf_type;
 	union {
 		struct lvds_intf_cfg lvds_cfg;
 		struct bt_intf_cfg bt_cfg;
+		struct rgb_intf_cfg rgb_cfg;
 		//to do: prgb/srgb i80(sw_i80/hw_mcu)
 	};
 };

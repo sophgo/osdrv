@@ -8,6 +8,47 @@
 #define __REG_ISP_DMA_CTL_STRUCT_H__
 
 typedef unsigned int uint32_t;
+#ifdef MEDIA_V3
+typedef union {
+	struct {
+		/*Client QoS source selection
+		0 : HW QoS (from client)
+		1 : SW QoS (from DMA register);*/
+		uint32_t reg_qos_sel:1;
+		/*SW QoS setting;*/
+		uint32_t reg_sw_qos:1;
+		uint32_t reg_enable_inv:1;
+		uint32_t reg_reserved1:1;
+		/*Base address of memory layout (H part = bit32) , unit = byte;*/
+		uint32_t reg_baseh:16;
+		/*Base address selection
+		0 : hw mode
+		1 : sw mode;*/
+		uint32_t reg_base_sel:1;
+		/*Stride select:
+		0 : hw mode
+		1 : sw mode;*/
+		uint32_t reg_stride_sel:1;
+		/*seglen sel
+		0 : hw mode
+		1 : sw mode;*/
+		uint32_t reg_seglen_sel:1;
+		/*segnum select:
+		0 : hw mode
+		1 : sw mode;*/
+		uint32_t reg_segnum_sel:1;
+		/*slice mode enable;*/
+		uint32_t reg_slice_enable:1;
+		uint32_t reg_reserved2:1;
+		uint32_t reg_inv_sel:1;
+		uint32_t reg_reserved3:1;
+		/*reg_dbg_sel;*/
+		uint32_t reg_dbg_sel:3;
+		uint32_t reg_reserved4:1;
+	};
+	uint32_t val;
+} isp_dma_ctl_sys_control_c;
+#else
 typedef union {
 	struct {
 		/*Client QoS source selection
@@ -43,6 +84,7 @@ typedef union {
 	};
 	uint32_t val;
 } isp_dma_ctl_sys_control_c;
+#endif
 typedef union {
 	struct {
 		/*Base address of memory layout (L part = bit31~0) , unit = byte
@@ -100,6 +142,10 @@ typedef union {
 		uint32_t reg_sync_patch_enable:1;
 		/*enable patch for ip trigger reg update;*/
 		uint32_t reg_trig_patch_enable:1;
+#ifdef MEDIA_V3
+		/*byte mode enable;*/
+		uint32_t reg_byte_mode:1;
+#endif
 	};
 	uint32_t val;
 } isp_dma_ctl_dma_dummy_c;
@@ -138,7 +184,9 @@ static void isp_dma_ctl_dump_ini(FILE* fp, isp_dma_ctl_c* p) {
 	fprintf(fp, "reg_seglen_less16_enable = 0x%x\n",p->dma_dummy.reg_seglen_less16_enable);
 	fprintf(fp, "reg_sync_patch_enable = 0x%x\n",p->dma_dummy.reg_sync_patch_enable);
 	fprintf(fp, "reg_trig_patch_enable = 0x%x\n",p->dma_dummy.reg_trig_patch_enable);
-
+#ifdef MEDIA_V3
+	fprintf(fp, "reg_byte_mode = 0x%x\n",p->dma_dummy.reg_byte_mode);
+#endif
 }
 static void isp_dma_ctl_print(isp_dma_ctl_c* p) {
     fprintf(stderr, "isp_dma_ctl\n");
@@ -162,6 +210,9 @@ static void isp_dma_ctl_print(isp_dma_ctl_c* p) {
 	fprintf(stderr, "\tDMA_DUMMY.reg_seglen_less16_enable = 0x%x\n", p->dma_dummy.reg_seglen_less16_enable);
 	fprintf(stderr, "\tDMA_DUMMY.reg_sync_patch_enable = 0x%x\n", p->dma_dummy.reg_sync_patch_enable);
 	fprintf(stderr, "\tDMA_DUMMY.reg_trig_patch_enable = 0x%x\n", p->dma_dummy.reg_trig_patch_enable);
+#ifdef MEDIA_V3
+	fprintf(stderr, "\tDMA_DUMMY.reg_byte_mode = 0x%x\n", p->dma_dummy.reg_byte_mode);
+#endif
 
 }
 #pragma GCC diagnostic pop
@@ -197,7 +248,10 @@ static void isp_dma_ctl_print(isp_dma_ctl_c* p) {
 	/*.dma_dummy.reg_seglen_less16_enable = */0x1,\
 	/*.dma_dummy.reg_sync_patch_enable = */0x1,\
 	/*.dma_dummy.reg_trig_patch_enable = */0x1,\
-	}\
+#ifdef MEDIA_V3\
+		/*.dma_dummy.reg_byte_mode = */0x0,\
+#endif
+}\
 };
 #else /* !ifdef __cplusplus */
 #define _DEFINE_isp_dma_ctl_c \

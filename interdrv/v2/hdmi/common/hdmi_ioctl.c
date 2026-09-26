@@ -5,7 +5,7 @@
 #include <base_ctx.h>
 #include <linux/version.h>
 #include <linux/hdmi_uapi.h>
-
+#include <linux/comm_hdmi.h>
 #include "hdmi_debug.h"
 #include "core/hdmi_core.h"
 #include "hdmi_ioctl.h"
@@ -149,16 +149,24 @@ long hdmitx_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = hdmitx_set_avmute(*enable);
 			break;
 		}
-		case CVI_HDMI_SET_AUDIO_MUTE:
-		{
-			unsigned char* enable = (unsigned char*)kdata;
-			ret = hdmitx_set_audio_mute(*enable);
-			break;
-		}
+	case CVI_HDMI_SET_AUDIO_MUTE:
+	{
+		unsigned char* enable = (unsigned char*)kdata;
+		ret = hdmitx_set_audio_mute(*enable);
+		break;
+	}
+	case CVI_HDMI_SEND_AUDIO_FRAME:
+	{
+		hdmi_audio_frame *frame = (hdmi_audio_frame *)kdata;
+		CHECK_IOCTL_CMD(cmd, hdmi_audio_frame);
+		ret = hdmitx_send_audio_frame(frame->seq, frame->len,
+		                              frame->phy_addr, frame->vb_blk);
+		break;
+	}
 
-		default:
-			CVI_TRACE_HDMI(CVI_DBG_ERR, "unknown cmd(0x%x)\n", cmd);
-			break;
+	default:
+		CVI_TRACE_HDMI(CVI_DBG_ERR, "unknown cmd(0x%x)\n", cmd);
+		break;
 	}
 
 	if (copy_to_user((void __user *)arg, kdata, out_size) != 0)

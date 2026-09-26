@@ -11,7 +11,10 @@
 //-----------------------------------------------------------------------------
 #ifndef __JPU_DRV_H__
 #define __JPU_DRV_H__
-
+#include <linux/interrupt.h>
+#include <linux/ioport.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/fs.h>
 #include <linux/types.h>
 #include "jpuconfig.h"
@@ -97,6 +100,8 @@ int jpu_free_memory(jpudrv_buffer_t *arg);
 int jpu_alloc_memory(jpudrv_buffer_t *arg);
 int jpu_invalidate_cache(jpudrv_buffer_t *arg);
 int jpu_flush_cache(jpudrv_buffer_t *arg);
+int jpu_core_init_resources(unsigned int core_num);
+void jpu_core_cleanup_resources(void);
 int jpu_core_release_resource(int id);
 int jpu_core_request_resource(int timeout);
 int jpu_open_device(void);
@@ -109,6 +114,13 @@ void jpu_set_extension_address(int core_idx, uint32_t addr);
 void jpu_sw_top_reset(int core_idx);
 void jpu_lock(void);
 void jpu_unlock(void);
-
+irqreturn_t jpu_irq_handler(int param, void *dev_id);
+int jpu_enable_irq(int core_idx);
+#ifdef CONFIG_PM
+int jpeg_drv_suspend(struct platform_device *pdev, pm_message_t state);
+int jpeg_drv_resume(struct platform_device *pdev);
+#endif /* !CONFIG_PM */
+int jpeg_platform_init(struct platform_device *pdev);
+void jpeg_platform_exit(void);
 extern jpu_statistic_info_t s_jpu_usage_info;
 #endif

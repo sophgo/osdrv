@@ -44,7 +44,6 @@
 #define CVI_MON_CDEV_NAME "cvi-mon"
 #define CVI_MON_CLASS_NAME "cvi-mon"
 
-
 struct cvi_list_node {
 	struct device *dev;
 	struct list_head list;
@@ -123,13 +122,16 @@ static inline long get_duration_us(const struct timespec *start, const struct ti
 	return event_duration_us;
 }
 
-//static void cvi_mon_bw_profile_timer_handler(unsigned long data)
-static enum hrtimer_restart cvi_mon_bw_profile_timer_handler(struct hrtimer *timer)
+enum hrtimer_restart cvi_mon_bw_profile_timer_handler(struct hrtimer *timer)
 {
-	//stop last
+	/*
+	 * Snapshot latches counter values into shadow registers for stable
+	 * reading, then HW auto-resets counters to 0 and keeps counting.
+	 * No explicit clear needed afterward snapshot handles the reset.
+	 */
 	axi_mon_snapshot_all();
 
-	//read value
+	/* Read and accumulate statistics from latched shadow registers */
 	axi_mon_get_info_all(mon_bw_info.timer_current_us);
 
 	hrtimer_forward_now(&mon_bw_info.hr_timer, ms_to_ktime(mon_window_ms));
@@ -183,6 +185,12 @@ static ssize_t cvi_mon_bw_proc_write(struct file *file, const char __user *user_
 		pr_err("bandwidth profiling is started\n");
 	} else {
 		axi_mon_stop_all();
+
+#if !defined(CONFIG_CHIP_CPU_CV84X6)
+		/* soph: accumulative mode, read final cumulative values */
+		axi_mon_snapshot_all();
+		axi_mon_get_info_all(0);
+#endif
 		axi_mon_dump();
 		axi_mon_reset_all();
 		pr_err("bandwidth profiling is ended\n");
@@ -191,13 +199,12 @@ static ssize_t cvi_mon_bw_proc_write(struct file *file, const char __user *user_
 	return count;
 }
 
-
 static int cvi_mon_bw_proc_open(struct inode *inode, struct file *file)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
-	return single_open(file, cvi_mon_bw_proc_show, PDE_DATA(inode));
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, cvi_mon_bw_proc_show, pde_data(inode));
 #else
-	return 0;
+	return single_open(file, cvi_mon_bw_proc_show, PDE_DATA(inode));
 #endif
 }
 
@@ -227,7 +234,19 @@ static ssize_t cvi_mon_window_proc_write(struct file *file, const char __user *u
 		return count;
 	}
 
-	//reset related info
+#if defined(CONFIG_CHIP_CPU_CV84X6)
+	/*
+	 * cycle_count register is 28-bit [27:0], max = 268435455.
+	 * Overflow threshold per axi_clk:
+	 *   1200 MHz -> 223ms,  1066 MHz -> 251ms
+	 *   1000 MHz -> 268ms,   650 MHz -> 413ms
+	 * Warn at the most conservative limit (fastest clock).
+	 */
+	if (input_param > 223)
+		pr_warn("profiling_window_ms=%u exceeds cycle_count 28-bit limit at 1200MHz (~223ms). Results may be inaccurate.\n",
+			input_param);
+#endif
+
 	mon_window_ms = input_param;
 	return count;
 }
@@ -240,10 +259,10 @@ static int cvi_mon_window_proc_show(struct seq_file *m, void *v)
 
 static int cvi_mon_window_proc_open(struct inode *inode, struct file *file)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
-	return single_open(file, cvi_mon_window_proc_show, PDE_DATA(inode));
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, cvi_mon_window_proc_show, pde_data(inode));
 #else
-	return 0;
+	return single_open(file, cvi_mon_window_proc_show, PDE_DATA(inode));
 #endif
 }
 
@@ -264,10 +283,86 @@ static const struct file_operations mon_window_proc_ops = {
 };
 #endif
 
+#if !defined(CONFIG_CHIP_CPU_CV84X6)
 static irqreturn_t cvi_aximon_irq(int irq, void *data)
 {
 	return IRQ_NONE;
 }
+#endif
+
+#if defined(CONFIG_CHIP_CPU_CV84X6)
+/*
+ * CV84X6 hit_filter procfs interface
+ * Read:  cat /proc/mon/hit_filter
+ * Write: echo "<name> <sel> <id> <mask>" > /proc/mon/hit_filter
+ */
+static ssize_t cvi_mon_hit_filter_write(struct file *file,
+					const char __user *user_buf,
+					size_t count, loff_t *ppos)
+{
+	char buf[64];
+	char name[16];
+	uint32_t sel, id, mask;
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	buf[count] = '\0';
+
+	ret = sscanf(buf, "%15s %u %i %i", name, &sel, &id, &mask);
+	if (ret != 4) {
+		pr_err("Usage: echo \"<name> <sel> <id> <mask>\" > hit_filter\n");
+		return -EINVAL;
+	}
+
+	if (axi_mon_set_hit_filter(name, sel, id, mask) < 0) {
+		pr_err("Unknown monitor: %s\n", name);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static int cvi_mon_hit_filter_show(struct seq_file *m, void *v)
+{
+	char buf[1024];
+	int len;
+
+	len = axi_mon_get_hit_filter_info(buf, sizeof(buf));
+	seq_write(m, buf, len);
+	return 0;
+}
+
+static int cvi_mon_hit_filter_open(struct inode *inode, struct file *file)
+{
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
+	return single_open(file, cvi_mon_hit_filter_show, pde_data(inode));
+#else
+	return single_open(file, cvi_mon_hit_filter_show, PDE_DATA(inode));
+#endif
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+static const struct proc_ops mon_hit_filter_proc_ops = {
+	.proc_open = cvi_mon_hit_filter_open,
+	.proc_read = seq_read,
+	.proc_write = cvi_mon_hit_filter_write,
+	.proc_release = single_release,
+};
+#else
+static const struct file_operations mon_hit_filter_proc_ops = {
+	.owner = THIS_MODULE,
+	.open = cvi_mon_hit_filter_open,
+	.read = seq_read,
+	.write = cvi_mon_hit_filter_write,
+	.release = single_release,
+};
+#endif
+#endif /* CONFIG_CHIP_CPU_CV84X6 */
 
 static void cvi_mon_cleanup_done_list(struct cvi_mon_device *ndev,
 				     struct cvi_mon_work *mon_work)
@@ -458,6 +553,7 @@ static const struct file_operations mon_fops = {
 int cvi_mon_register_cdev(struct cvi_mon_device *ndev)
 {
 	int ret;
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	mon_class = class_create(THIS_MODULE, CVI_MON_CLASS_NAME);
 #else
@@ -498,14 +594,270 @@ static int cvi_mon_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	ndev->dev = dev;
 
+#if defined(CONFIG_ARCH_CV183X) || defined(CONFIG_ARCH_CV182X)
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pcmon");
+	if (res != NULL)
+		ndev->pcmon_vaddr = devm_ioremap_resource(&pdev->dev, res);
+#endif
+
+#if defined(CONFIG_CHIP_CPU_CV84X6)
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "f0s1");
 	if (res == NULL) {
-		dev_err(dev, "failed to retrieve pcmon io\n");
+		dev_err(dev, "failed to retrieve f0s1 io\n");
 		return -ENXIO;
 	}
-	ndev->pcmon_vaddr = devm_ioremap_resource(&pdev->dev, res);
+	ndev->mon_paddr[0] = res->start;
+	ndev->mon_f0s1_vaddr = devm_ioremap_resource(&pdev->dev, res);
 
-#ifndef CONFIG_ARCH_CV186X
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "f1s1");
+	if (res == NULL) {
+		dev_err(dev, "failed to retrieve f1s1 io\n");
+		return -ENXIO;
+	}
+	ndev->mon_paddr[1] = res->start;
+	ndev->mon_f1s1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "f2s1");
+	if (res == NULL) {
+		dev_err(dev, "failed to retrieve f2s1 io\n");
+		return -ENXIO;
+	}
+	ndev->mon_paddr[2] = res->start;
+	ndev->mon_f2s1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "f3s1");
+	if (res == NULL) {
+		dev_err(dev, "failed to retrieve f3s1 io\n");
+		return -ENXIO;
+	}
+	ndev->mon_paddr[3] = res->start;
+	ndev->mon_f3s1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "f5s1");
+	if (res == NULL) {
+		dev_err(dev, "failed to retrieve f5s1 io\n");
+		return -ENXIO;
+	}
+	ndev->mon_paddr[4] = res->start;
+	ndev->mon_f5s1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+
+	/* VE monitor (optional) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ve");
+	if (res != NULL) {
+		ndev->mon_paddr[5] = res->start;
+		ndev->mon_ve_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ve_vaddr))
+			ndev->mon_ve_vaddr = NULL;
+	}
+
+	/* VD0 monitors (optional) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd0_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[6] = res->start;
+		ndev->mon_vd0_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd0_mon0_vaddr))
+			ndev->mon_vd0_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd0_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[7] = res->start;
+		ndev->mon_vd0_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd0_mon1_vaddr))
+			ndev->mon_vd0_mon1_vaddr = NULL;
+	}
+
+	/* VD1 monitors (optional) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd1_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[8] = res->start;
+		ndev->mon_vd1_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd1_mon0_vaddr))
+			ndev->mon_vd1_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd1_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[9] = res->start;
+		ndev->mon_vd1_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd1_mon1_vaddr))
+			ndev->mon_vd1_mon1_vaddr = NULL;
+	}
+
+	/* VD2 monitors (optional) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd2_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[10] = res->start;
+		ndev->mon_vd2_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd2_mon0_vaddr))
+			ndev->mon_vd2_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd2_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[11] = res->start;
+		ndev->mon_vd2_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd2_mon1_vaddr))
+			ndev->mon_vd2_mon1_vaddr = NULL;
+	}
+
+	/* VD3 monitors (optional) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd3_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[12] = res->start;
+		ndev->mon_vd3_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd3_mon0_vaddr))
+			ndev->mon_vd3_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vd3_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[13] = res->start;
+		ndev->mon_vd3_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vd3_mon1_vaddr))
+			ndev->mon_vd3_mon1_vaddr = NULL;
+	}
+
+	/* VO monitors (optional, no IRQ) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vo_iga");
+	if (res != NULL) {
+		ndev->mon_paddr[14] = res->start;
+		ndev->mon_vo_iga_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vo_iga_vaddr))
+			ndev->mon_vo_iga_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vo_off");
+	if (res != NULL) {
+		ndev->mon_paddr[15] = res->start;
+		ndev->mon_vo_off_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vo_off_vaddr))
+			ndev->mon_vo_off_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vo_rt");
+	if (res != NULL) {
+		ndev->mon_paddr[16] = res->start;
+		ndev->mon_vo_rt_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_vo_rt_vaddr))
+			ndev->mon_vo_rt_vaddr = NULL;
+	}
+
+	/* TPU monitors (optional, no IRQ) */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[17] = res->start;
+		ndev->mon_tpu_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon0_vaddr))
+			ndev->mon_tpu_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[18] = res->start;
+		ndev->mon_tpu_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon1_vaddr))
+			ndev->mon_tpu_mon1_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon2");
+	if (res != NULL) {
+		ndev->mon_paddr[19] = res->start;
+		ndev->mon_tpu_mon2_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon2_vaddr))
+			ndev->mon_tpu_mon2_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon3");
+	if (res != NULL) {
+		ndev->mon_paddr[20] = res->start;
+		ndev->mon_tpu_mon3_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon3_vaddr))
+			ndev->mon_tpu_mon3_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon4");
+	if (res != NULL) {
+		ndev->mon_paddr[21] = res->start;
+		ndev->mon_tpu_mon4_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon4_vaddr))
+			ndev->mon_tpu_mon4_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tpu_mon5");
+	if (res != NULL) {
+		ndev->mon_paddr[22] = res->start;
+		ndev->mon_tpu_mon5_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_tpu_mon5_vaddr))
+			ndev->mon_tpu_mon5_vaddr = NULL;
+	}
+
+	/* DDR MON0 (optional, no IRQ) - 0x70c06000, 0x74c06000, 0x78c06000, 0x7cc06000 */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr0_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[23] = res->start;
+		ndev->mon_ddr0_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr0_mon0_vaddr))
+			ndev->mon_ddr0_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr1_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[24] = res->start;
+		ndev->mon_ddr1_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr1_mon0_vaddr))
+			ndev->mon_ddr1_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr2_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[25] = res->start;
+		ndev->mon_ddr2_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr2_mon0_vaddr))
+			ndev->mon_ddr2_mon0_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr3_mon0");
+	if (res != NULL) {
+		ndev->mon_paddr[26] = res->start;
+		ndev->mon_ddr3_mon0_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr3_mon0_vaddr))
+			ndev->mon_ddr3_mon0_vaddr = NULL;
+	}
+
+	/* DDR MON1 (optional, no IRQ) - 0x70c06100, 0x74c06100, 0x78c06100, 0x7cc06100 */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr0_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[27] = res->start;
+		ndev->mon_ddr0_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr0_mon1_vaddr))
+			ndev->mon_ddr0_mon1_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr1_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[28] = res->start;
+		ndev->mon_ddr1_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr1_mon1_vaddr))
+			ndev->mon_ddr1_mon1_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr2_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[29] = res->start;
+		ndev->mon_ddr2_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr2_mon1_vaddr))
+			ndev->mon_ddr2_mon1_vaddr = NULL;
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr3_mon1");
+	if (res != NULL) {
+		ndev->mon_paddr[30] = res->start;
+		ndev->mon_ddr3_mon1_vaddr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(ndev->mon_ddr3_mon1_vaddr))
+			ndev->mon_ddr3_mon1_vaddr = NULL;
+	}
+#elif !defined(CONFIG_ARCH_CV186X)
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr_ctrl");
 	if (res == NULL) {
 		dev_err(dev, "failed to retrieve aximon io\n");
@@ -533,7 +885,7 @@ static int cvi_mon_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 	ndev->ddr_top_vaddr = devm_ioremap_resource(&pdev->dev, res);
-#else
+#elif defined(CONFIG_ARCH_CV186X)
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddr_ctrl");
 	if (res == NULL) {
 		dev_err(dev, "failed to retrieve ddr_ctrl io\n");
@@ -590,16 +942,18 @@ static int cvi_mon_probe(struct platform_device *pdev)
 	}
 	ndev->ddr_top_vaddr = devm_ioremap_resource(&pdev->dev, res);
 #endif
+#if !defined(CONFIG_CHIP_CPU_CV84X6)
+	/* CV84X6 uses per-monitor IRQs registered in axi_mon_init() */
 	ndev->aximon_irq = platform_get_irq(pdev, 0);
-	if (ndev->aximon_irq < 0) {
-		dev_err(dev, "failed to retrieve aximon irq");
-		return -ENXIO;
+	if (ndev->aximon_irq >= 0) {
+		ret = devm_request_irq(&pdev->dev, ndev->aximon_irq,
+				       cvi_aximon_irq, 0, "cvi-aximon", ndev);
+		if (ret)
+			dev_warn(dev, "failed to request aximon irq, ret=%d\n", ret);
+	} else {
+		dev_info(dev, "No single IRQ configured, using per-monitor IRQs\n");
 	}
-
-	ret = devm_request_irq(&pdev->dev, ndev->aximon_irq, cvi_aximon_irq, 0,
-			       "cvi-aximon", ndev);
-	if (ret)
-		return -ENXIO;
+#endif
 
 	init_completion(&ndev->aximon_completion);
 	mutex_init(&ndev->dev_lock);
@@ -633,17 +987,19 @@ static int cvi_mon_probe(struct platform_device *pdev)
 	if (proc_create_data("profiling_window_ms", 0644, mon_proc_dir, &mon_window_proc_ops, ndev) == NULL)
 		pr_err("mon profiling_window_ms proc creation failed\n");
 
+#if defined(CONFIG_CHIP_CPU_CV84X6)
+	if (proc_create_data("hit_filter", 0644, mon_proc_dir, &mon_hit_filter_proc_ops, ndev) == NULL)
+		pr_err("mon hit_filter proc creation failed\n");
+#endif
+
 	axi_mon_init(ndev);
 
 	pr_debug("===cvi_mon_probe end\n");
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int cvi_mon_remove(struct platform_device *pdev)
-#else
-static void cvi_mon_remove(struct platform_device *pdev)
-#endif
 {
 	struct cvi_mon_device *ndev = platform_get_drvdata(pdev);
 	struct cvi_mon_work *mon_work = &ndev->mon_work;
@@ -659,13 +1015,27 @@ static void cvi_mon_remove(struct platform_device *pdev)
 	pr_debug("===cvi_mon_remove\n");
 
 	proc_remove(mon_proc_dir);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	return 0;
-#else
-	return;
-#endif
 }
+#else
+static void cvi_mon_remove(struct platform_device *pdev)
+{
+	struct cvi_mon_device *ndev = platform_get_drvdata(pdev);
+	struct cvi_mon_work *mon_work = &ndev->mon_work;
+
+	kthread_stop(mon_work->work_thread);
+	device_destroy(mon_class, mon_cdev_id);
+
+	cdev_del(&ndev->cdev);
+	unregister_chrdev_region(mon_cdev_id, 1);
+	class_destroy(mon_class);
+
+	platform_set_drvdata(pdev, NULL);
+	pr_debug("===cvi_mon_remove\n");
+
+	proc_remove(mon_proc_dir);
+}
+#endif
 
 static const struct of_device_id cvi_mon_match[] = {
 	{ .compatible = "cvitek,mon" },

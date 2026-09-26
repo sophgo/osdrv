@@ -8,10 +8,10 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
-#include <asm/div64.h>
-#include <uapi/linux/sched/types.h>
-#include <linux/moduleparam.h>
 #include <linux/version.h>
+#include <uapi/linux/sched/types.h>
+#include <asm/div64.h>
+
 #include <base_ctx.h>
 #include <linux/defines.h>
 #include <linux/common.h>
@@ -48,6 +48,11 @@
 #define CTX_EVENT_EOF        0x0002
 #define CTX_EVENT_VI_ERR     0x0004
 
+struct vpss_stitch_data {
+	wait_queue_head_t wait;
+	unsigned char flag;
+};
+#ifndef CV84X6
 struct vpss_jobs_ctx {
 	struct vb_jobs_t ins;
 	struct vb_jobs_t outs[VPSS_MAX_CHN_NUM];
@@ -72,11 +77,6 @@ struct vpss_ext_ctx {
 	signed int proc_amp[PROC_AMP_MAX];
 };
 
-struct vpss_stitch_data {
-	wait_queue_head_t wait;
-	unsigned char flag;
-};
-
 static struct vpss_ctx *g_vpss_ctx[VPSS_MAX_GRP_NUM] = { [0 ... VPSS_MAX_GRP_NUM - 1] = NULL };
 
 // vpss_ctx in uapi, internal extension version.
@@ -89,23 +89,11 @@ static struct mlv_i_s g_mlv_i[VI_MAX_DEV_NUM];
 
 static struct workqueue_struct *g_vpss_workqueue;
 
-//update proc info
-static void _update_vpss_chn_real_frame_rate(struct timer_list *timer);
-DEFINE_TIMER(timer_proc, _update_vpss_chn_real_frame_rate);
-static atomic_t g_timer_added = ATOMIC_INIT(0);
-
 //vpss job prepare
 static struct vpss_handler_ctx g_vpss_hdl_ctx;
 
-//global lock
-static struct mutex g_vpss_lock;
-
 //Get Available Grp lock
 static unsigned char g_vpss_grp_used[VPSS_MAX_GRP_NUM];
-
-//timer callback
-static vpss_timer_cb g_core_cb;
-static void *g_core_data;
 
 static struct gdc_mesh g_vpss_mesh[VPSS_MAX_GRP_NUM][VPSS_MAX_CHN_NUM];
 
@@ -118,9 +106,20 @@ static proc_amp_ctrl_s g_procamp_ctrls[PROC_AMP_MAX] = {
 
 static vi_vpss_mode_s g_vi_vpss_mode;
 static vpss_mod_param_s g_vpss_mod_param;
+#endif
+//timer callback
+static vpss_timer_cb g_core_cb;
+static void *g_core_data;
 
+//update proc info
+static void _update_vpss_chn_real_frame_rate(struct timer_list *timer);
+DEFINE_TIMER(timer_proc, _update_vpss_chn_real_frame_rate);
+static atomic_t g_timer_added = ATOMIC_INIT(0);
+
+//global lock
+static struct mutex g_vpss_lock;
 static struct semaphore g_vpss_core_sem;
-
+#ifndef CV84X6
 static inline signed int check_vpss_grp_created(vpss_grp grp)
 {
 	if (!g_vpss_ctx[grp] || !g_vpss_ctx[grp]->is_created) {
@@ -166,20 +165,22 @@ static void vpss_notify_wkup_evt(void)
 	spin_unlock(&g_vpss_hdl_ctx.hdl_lock);
 	wake_up_interruptible(&g_vpss_hdl_ctx.wait);
 }
-
+#endif
 static void vpss_wkup_frame_done_handle(void *pdata)
 {
 	struct vpss_job *job = container_of(pdata, struct vpss_job, data);
-
+#ifndef CV84X6
 	if(!job->cfg.grp_cfg.bm_scene)
 		queue_work(g_vpss_workqueue, &job->job_work);
-	else {
+	else
+#endif
+	{
 		struct vpss_stitch_data *data = (struct vpss_stitch_data *)job->data;
 		data->flag = 1;
 		wake_up(&data->wait);
 	}
 }
-
+#ifndef CV84X6
 struct vpss_ctx **vpss_get_ctx(void)
 {
 	return g_vpss_ctx;
@@ -1030,6 +1031,9 @@ static void _vpss_chn_hw_cfg_update(vpss_chn chn_id, struct vpss_ctx *ctx)
 	case VPSS_SCALE_COEF_BICUBIC_OPENCV:
 		hw_chn_cfg->sc_coef = SC_SCALING_COEF_BICUBIC_OPENCV;
 		break;
+	case VPSS_SCALE_COEF_AREA:
+		hw_chn_cfg->sc_coef = SC_SCALING_COEF_AREA;
+		break;
 	}
 
 	for (i = 0; i < VPSS_RECT_NUM; i++) {
@@ -1280,9 +1284,10 @@ static signed int commit_hw_settings(struct vpss_ctx *ctx)
 
 	return 0;
 }
-
+#endif
 static void _update_vpss_chn_real_frame_rate(struct timer_list *timer)
 {
+#ifndef CV84X6
 	int i, j;
 	unsigned long long duration, cur_time_us;
 	struct timespec64 cur_time;
@@ -1290,7 +1295,6 @@ static void _update_vpss_chn_real_frame_rate(struct timer_list *timer)
 	UNUSED(timer);
 	ktime_get_ts64(&cur_time);
 	cur_time_us = (unsigned long long)cur_time.tv_sec * USEC_PER_SEC + cur_time.tv_nsec / NSEC_PER_USEC;
-
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		if (g_vpss_ctx[i] && g_vpss_ctx[i]->is_created) {
 			for (j = 0; j < VPSS_MAX_CHN_NUM; ++j) {
@@ -1306,11 +1310,12 @@ static void _update_vpss_chn_real_frame_rate(struct timer_list *timer)
 			}
 		}
 	}
+#endif
 	g_core_cb(g_core_data);
 
 	mod_timer(&timer_proc, jiffies + msecs_to_jiffies(1000));
 }
-
+#ifndef CV84X6
 /* _vpss_chl_frame_rate_ctrl: dynamically disabled chn per frame-rate-ctrl
  *
  * @param proc_ctx: the frame statics for reference
@@ -4222,7 +4227,7 @@ EXIT:
 
 	return ret;
 }
-
+#endif
 static signed int video_frame_dmabuf_fd_to_paddr(video_frame_s *video_frame){
 	int dmabuf_fd = video_frame->phyaddr[0];
 	int height = video_frame->height;
@@ -4434,6 +4439,9 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 	case VPSS_SCALE_COEF_BICUBIC_OPENCV:
 		chn_hw_cfg->sc_coef = SC_SCALING_COEF_BICUBIC_OPENCV;
 		break;
+	case VPSS_SCALE_COEF_AREA:
+		chn_hw_cfg->sc_coef = SC_SCALING_COEF_AREA;
+		break;
 	}
 
 	down(&g_vpss_core_sem);
@@ -4457,12 +4465,21 @@ signed int vpss_bm_send_frame(bm_vpss_cfg *vpss_cfg){
 		}
 		vpss_hal_remove_job(job);
 	}
+
+#ifdef CV84X6
+	if (ret == 0 &&
+		(grp_hw_cfg->pixelformat == PIXEL_FORMAT_NV12 ||
+		 grp_hw_cfg->pixelformat == PIXEL_FORMAT_NV21) &&
+		(chn_hw_cfg->flip == SC_FLIP_HFLIP || chn_hw_cfg->flip == SC_FLIP_HVFLIP))
+		vpss_hal_reset(BIT(job->dev_idx_start), job->is_online);
+#endif
+
 	up(&g_vpss_core_sem);
 	kfree(job);
 
 	return ret;
 }
-
+#ifndef CV84X6
 signed int vpss_set_vivpss_mode(const vi_vpss_mode_s *mode)
 {
 	memcpy(&g_vi_vpss_mode, mode, sizeof(g_vi_vpss_mode));
@@ -4490,13 +4507,15 @@ void vpss_get_mlv_info(unsigned char snr_num, struct mlv_i_s *p_m_lv_i)
 	p_m_lv_i->mlv_i_level = g_mlv_i[snr_num].mlv_i_level;
 	memcpy(p_m_lv_i->mlv_i_table, g_mlv_i[snr_num].mlv_i_table, sizeof(g_mlv_i[snr_num].mlv_i_table));
 }
-
+#endif
 void vpss_mode_init(void)
 {
+#ifndef CV84X6
 	unsigned char i, j;
 	proc_amp_ctrl_s ctrl;
-
+#endif
 	mutex_lock(&g_vpss_lock);
+#ifndef CV84X6
 	for (i = 0; i < VPSS_MAX_GRP_NUM; ++i) {
 		for (j = PROC_AMP_BRIGHTNESS; j < PROC_AMP_MAX; ++j) {
 			vpss_get_proc_amp_ctrl(j, &ctrl);
@@ -4504,7 +4523,7 @@ void vpss_mode_init(void)
 		}
 		g_vpss_grp_used[i] = false;
 	}
-
+#endif
 	//init_timer(&timer_proc);
 	//timer_proc.function = _update_vpss_chn_real_frame_rate;
 	//timer_proc.expires = jiffies + msecs_to_jiffies(1000);
@@ -4531,28 +4550,29 @@ void register_timer_fun(vpss_timer_cb cb, void *data)
 
 void vpss_init(void)
 {
+#ifndef CV84X6
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	int ret;
-    struct sched_param tsk = {
-        .sched_priority = MAX_USER_RT_PRIO - 4,
-    };
+	struct sched_param tsk = {
+		.sched_priority = MAX_USER_RT_PRIO - 4,
+	};
 #else
-    const struct sched_attr tsk = {
-        .sched_policy = SCHED_RR,
-        .sched_priority = MAX_RT_PRIO - 4,
-    };
+	const struct sched_attr tsk = {
+		.sched_policy = SCHED_RR,
+		.sched_priority = MAX_RT_PRIO - 4,
+	};
 #endif
 
 	base_register_recv_cb(ID_VPSS, vpss_grp_qbuf);
-
+#endif
 	mutex_init(&g_vpss_lock);
+#ifndef CV84X6
 	init_waitqueue_head(&g_vpss_hdl_ctx.wait);
 	spin_lock_init(&g_vpss_hdl_ctx.hdl_lock);
 	atomic_set(&g_vpss_hdl_ctx.active_cnt, 0);
 	g_vpss_hdl_ctx.events = 0;
 
 	// Same as sched_set_fifo in linux 5.x
-	
 	g_vpss_hdl_ctx.thread = kthread_run(vpss_event_handler, &g_vpss_hdl_ctx,
 		"task_vpss_hdl");
 	if (IS_ERR(g_vpss_hdl_ctx.thread)) {
@@ -4573,11 +4593,13 @@ void vpss_init(void)
 	// g_vpss_workqueue = create_singlethread_workqueue("vpss_workqueue");
 	if (!g_vpss_workqueue)
 		TRACE_VPSS(DBG_ERR, "vpss create_workqueue failed.\n");
+#endif
 	sema_init(&g_vpss_core_sem, VPSS_WORK_MAX);
 }
 
 void vpss_deinit(void)
 {
+#ifndef CV84X6
 	int ret;
 
 	if (!g_vpss_hdl_ctx.thread) {
@@ -4592,9 +4614,10 @@ void vpss_deinit(void)
 
 	g_vpss_hdl_ctx.thread = NULL;
 	destroy_workqueue(g_vpss_workqueue);
+#endif
 	mutex_destroy(&g_vpss_lock);
 }
-
+#ifndef CV84X6
 void vpss_release_grp(void)
 {
 	vpss_grp grp;
@@ -4613,9 +4636,10 @@ void vpss_release_grp(void)
 		}
 	}
 }
-
+#endif
 signed int vpss_suspend_handler(void)
 {
+#ifndef CV84X6
 	int ret, count;
 	vpss_grp grp_id;
 	struct vpss_ctx *ctx;
@@ -4631,12 +4655,12 @@ signed int vpss_suspend_handler(void)
 		return -1;
 	}
 	g_vpss_hdl_ctx.thread = NULL;
-
+#endif
 	mutex_lock(&g_vpss_lock);
 	if (atomic_cmpxchg(&g_timer_added,1, 0) == 1)
 		del_timer(&timer_proc);
 	mutex_unlock(&g_vpss_lock);
-
+#ifndef CV84X6
 	for (grp_id = 0; grp_id < VPSS_MAX_GRP_NUM; ++grp_id) {
 		if (!g_vpss_ctx[grp_id])
 			continue;
@@ -4655,22 +4679,23 @@ signed int vpss_suspend_handler(void)
 			//TODO: reset dev and job
 		}
 	}
-
+#endif
 	return 0;
 }
 
 signed int vpss_resume_handler(void)
 {
+#ifndef CV84X6
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 	int ret;
-    struct sched_param tsk = {
-        .sched_priority = MAX_USER_RT_PRIO - 4,
-    };
+	struct sched_param tsk = {
+		.sched_priority = MAX_USER_RT_PRIO - 4,
+	};
 #else
-    const struct sched_attr tsk = {
-        .sched_policy = SCHED_RR,
-        .sched_priority = MAX_RT_PRIO - 4,
-    };
+	const struct sched_attr tsk = {
+		.sched_policy = SCHED_RR,
+		.sched_priority = MAX_RT_PRIO - 4,
+	};
 #endif
 	if (g_vpss_hdl_ctx.thread) {
 		TRACE_VPSS(DBG_WARN, "resumed\n");
@@ -4690,9 +4715,9 @@ signed int vpss_resume_handler(void)
 		return -1;
 	}
 #else
-        sched_setattr_nocheck(g_vpss_hdl_ctx.thread, &tsk);
+	sched_setattr_nocheck(g_vpss_hdl_ctx.thread, &tsk);
 #endif
-
+#endif
 	mutex_lock(&g_vpss_lock);
 	if (atomic_cmpxchg(&g_timer_added,0, 1) == 0)
 		add_timer(&timer_proc);

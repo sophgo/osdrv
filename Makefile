@@ -2,13 +2,12 @@ SHELL=/bin/bash
 -include $(BUILD_PATH)/.config
 #
 ccviarch := $(shell echo $(CVIARCH) | tr A-Z a-z)
-ifeq ($(ccviarch), $(filter $(ccviarch), sophon bm1688))
+ifeq ($(CHIP), $(filter $(CHIP), cv84x6 bm1688 cv186ah))
 export CVIARCH_L := soph
 else
 export CVIARCH_L := $(shell echo $(CVIARCH) | tr A-Z a-z)
 endif
 #
-export CHIP_ARCH_L := $(shell echo $(CHIP_ARCH) | tr A-Z a-z)
 INTERDRV_PATH := interdrv/$(shell echo $(MW_VER))
 
 ifeq ($(KERNEL_DIR), )
@@ -61,15 +60,15 @@ SUBDIRS := $(filter-out $(exclude_dirs), $(SUBDIRS))
 
 KO_LIST = base sys pwm mon clock_cooling saradc keyscan irrx wiegand wiegand-gpio vc_drv rtc
 
-ifeq ($(CVIARCH), $(filter $(CVIARCH), CV181X SOPHON))
+ifeq ($(CHIP), $(filter $(CHIP), bm1688 cv186ah))
 	KO_LIST += vi snsr_i2c cif vpss ldc vo mipi_tx rgn ive 2d_engine dpu stitch spacc
 	FB_DEP = vpss vo
 ifneq (${CONFIG_BOARD}, "fpga")
 	KO_LIST += hdmi
 endif
 
-else ifeq ($(CVIARCH), $(filter $(CVIARCH), CV180X))
-	KO_LIST += vi snsr_i2c cif vpss rgn audio
+else ifeq ($(CHIP), $(filter $(CHIP), cv84x6))
+	KO_LIST += vpss ldc vo rgn ive dpu stitch spacc 2d_engine cv84x2_dvfs_pmbus
 	FB_DEP = vpss
 endif
 
@@ -109,8 +108,8 @@ fb: base $(FB_DEP)
 base:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
-audio:
-	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+# audio:
+# 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 # vcodec:
 # 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
@@ -152,6 +151,9 @@ mon:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 clock_cooling:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+
+cv84x2_dvfs_pmbus:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 saradc:
@@ -202,8 +204,8 @@ ive:
 vc_drv:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
-# rtos_cmdqu:
-# 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
+rtos_cmdqu:
+	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
 
 2d_engine:
 	@$(call MAKE_KO, ${INTERDRV_PATH}/${@})
@@ -234,7 +236,7 @@ ms9132:
 	@$(call MAKE_EXT_KO, extdrv/${@})
 
 motionsensor:
-	@$(call MAKE_EXT_KO, extdrv/${@})
+		@$(call MAKE_EXT_KO, extdrv/${@})
 
 #motor:
 #	@$(call MAKE_EXT_KO, extdrv/${@})

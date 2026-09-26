@@ -40,6 +40,11 @@ typedef struct vpu_buffer_t {
     PhysicalAddress phys_addr;
     unsigned long   base;
     unsigned long   virt_addr;
+#ifdef MEDIA_V3
+    PhysicalAddress phys_addr_36bit;
+    int mmu_entry_index;
+    int mmu_entry_num;
+#endif
 } vpu_buffer_t;
 
 typedef enum {
@@ -98,6 +103,14 @@ typedef enum {
     MEM_TYPE_MAX
 } MemTypes;
 
+typedef struct bwl_param_t
+{
+    unsigned int aw_win;
+    unsigned int aw_vld;
+    unsigned int ar_win;
+    unsigned int ar_vld;
+} bwl_param_t;
+
 typedef struct vpu_instance_pool_t {
     unsigned char   codecInstPool[MAX_NUM_INSTANCE][MAX_INST_HANDLE_SIZE];  // Since VDI don't know the size of CodecInst structure, VDI should have the enough space not to overflow.
     vpu_buffer_t    vpu_common_buffer;
@@ -107,6 +120,7 @@ typedef struct vpu_instance_pool_t {
     int             pendingInstIdxPlus1;
     Uint32          lastPerformanceCycles;
 } vpu_instance_pool_t;
+
 
 #define MAX_VPU_ION_BUFFER_NAME	(32)
 #define AR_DEFAULT_EXTRA_LINE   512
@@ -151,6 +165,13 @@ extern int vdi_done_change_clock(unsigned long core_idx);
 extern int  vdi_get_instance_num(unsigned long core_idx);
 extern void vdi_write_register(unsigned long core_idx, unsigned int addr, unsigned int data);
 extern unsigned int vdi_read_register(unsigned long core_idx, unsigned int addr);
+#if defined(MEDIA_V3)
+extern void vdi_write_top_register(unsigned long core_idx, unsigned int addr, unsigned int data);
+extern unsigned int vdi_read_top_register(unsigned long core_idx, unsigned int addr);
+extern void vdi_write_mmu_entry(unsigned long core_idx, unsigned int addr, unsigned int data);
+extern unsigned int vdi_read_mmu_entry(unsigned long core_idx, unsigned int addr);
+extern void vdi_bwc_showinfo(unsigned long core_idx);
+#endif
 extern void vdi_fio_write_register(unsigned long core_idx, unsigned int addr, unsigned int data);
 extern unsigned int vdi_fio_read_register(unsigned long core_idx, unsigned int addr);
 extern int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int endian);
@@ -169,9 +190,7 @@ extern int vdi_get_system_endian(unsigned long core_idx);
 extern int vdi_convert_endian(unsigned long core_idx, unsigned int endian);
 
 
-#if defined(SUPPORT_SW_UART) || defined(SUPPORT_SW_UART_V2)
 extern int vdi_get_task_num(unsigned long core_idx);
-#endif
 extern int vdi_set_ddr_map(unsigned long core_idx, unsigned int ext_addr);
 extern int vdi_get_ddr_map(unsigned long core_idx);
 extern int vdi_invalidate_ion_cache(uint64_t u64PhyAddr, void *pVirAddr,
@@ -179,6 +198,7 @@ extern int vdi_invalidate_ion_cache(uint64_t u64PhyAddr, void *pVirAddr,
 extern int vdi_flush_ion_cache(uint64_t u64PhyAddr, void *pVirAddr, uint32_t u32Len);
 
 extern int vdi_get_suspend_state(void);
+int vdi_is_dma_memory(unsigned long core_idx, PhysicalAddress addr);
 #if defined (__cplusplus)
 }
 #endif

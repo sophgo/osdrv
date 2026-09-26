@@ -36,7 +36,11 @@ NIEUPORT REGISTERS
 #define MJPEG_ROT_INFO_REG          (NPT_BASE + 0x01C)    // [4] - rot-mir enable, [3:0] - rot-mir mode
 
 #define MJPEG_SCL_INFO_REG          (NPT_BASE + 0x020)
+#ifdef MEDIA_V3
+#define MJPEG_DPB_HIG_BASE_REG      (NPT_BASE + 0x024)
+#else
 #define MJPEG_IF_INFO_REG           (NPT_BASE + 0x024)    // [1] - sensor interface clear, [0] - display interface clear
+#endif
 #define MJPEG_CLP_INFO_REG          (NPT_BASE + 0x028)
 #define MJPEG_OP_INFO_REG           (NPT_BASE + 0x02C)    // [31:16] - # of line in 1 partial buffer, [5:3] - # of partial buffers [2:0] - # of request
 
@@ -102,6 +106,7 @@ NIEUPORT REGISTERS
 
 // BBC CONTROL REGISTER
 #define MJPEG_BBC_INTERNAL_REG      (NPT_BASE + 0x200) // [4:1] r_mib_fsm, [0] r_gbu_intreq  WriteOnly
+#define MJPEG_BBC_HIG_ADDR_REG      (NPT_BASE + 0x204)
 #define MJPEG_BBC_END_ADDR_REG      (NPT_BASE + 0x208)
 #define MJPEG_BBC_WR_PTR_REG        (NPT_BASE + 0x20C)
 #define MJPEG_BBC_RD_PTR_REG        (NPT_BASE + 0x210)
@@ -119,6 +124,7 @@ NIEUPORT REGISTERS
 #define MJPEG_BBC_STRM_CTRL_REG     (NPT_BASE + 0x234) // [31] - end of bitstream file  [23:0] - stream counter
 
 #define MJPEG_BBC_FLUSH_CMD_REG     (NPT_BASE + 0x238)
+#define MJPEG_BBC_HIG_BAS_ADDR_REG  (NPT_BASE + 0x23c)
 
 #define MJPEG_SLICE_INFO_REG        (NPT_BASE + 0x240)
 #define MJPEG_SLICE_POS_REG         (NPT_BASE + 0x244)

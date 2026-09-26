@@ -1,6 +1,7 @@
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 #include <linux/utsname.h>
 
 #include "base_ctx.h"
@@ -13,19 +14,28 @@
 #include "vpss_hal.h"
 #include "vpss.h"
 
-#define VPSS_PROC_NAME          "soph/vpss"
-#define VPP_PROC_NAME          "soph/vppinfo"
-
 // for proc info
 static int proc_vpss_mode;
 static const char * const vb_source[] = {"CommonVB", "UserVB", "UserIon"};
+#ifdef CV84X6
+#define VPSS_PROC_NAME          "vpss"
+#define VPP_PROC_NAME          "vppinfo"
+static const char * const vpss_name[] = {"vpss_t0", "vpss_t1", "vpss_t2", "vpss_t3",
+										"vpss_t4", "vpss_t5", "vpss_t6", "vpss_t7",
+										"vpss_t8", "vpss_t9", "vpss_t10", "vpss_t11",
+										"vpss_d"};
+#else
+#define VPSS_PROC_NAME          "soph/vpss"
+#define VPP_PROC_NAME          "soph/vppinfo"
 static const char * const vpss_name[] = {"vpss_v0", "vpss_v1", "vpss_v2", "vpss_v3",
 										"vpss_t0", "vpss_t1", "vpss_t2", "vpss_t3",
 										"vpss_d0", "vpss_d1"};
+#endif
 
 /*************************************************************************
  *	VPSS proc functions
  *************************************************************************/
+#ifndef CV84X6
 static void _pix_fmt_to_string(pixel_format_e pix_fmt, char *str, int len)
 {
 	switch (pix_fmt) {
@@ -169,24 +179,27 @@ static void _pix_fmt_to_string(pixel_format_e pix_fmt, char *str, int len)
 		break;
 	}
 }
-
+#endif
 static int vpss_ctx_proc_show(struct seq_file *m, void *v)
 {
-	int i, j;
-	char c[32];
+	int i;
+#ifndef CV84X6
+	int j;
+	struct vpss_ctx **vpss_ctx;
 	vpss_mod_param_s mod_param;
-	struct vpss_ctx **vpss_ctx = vpss_get_ctx();
-	struct vpss_device *dev = (struct vpss_device *)m->private;
 	signed int proc_amp[PROC_AMP_MAX];
+#endif
+	char c[32];
+	struct vpss_device *dev = (struct vpss_device *)m->private;
 
-	vpss_get_mod_param(&mod_param);
-
-	// Module Param
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	seq_printf(m, "\nModule: [VPSS], Build Time[%s]\n", UTS_VERSION);
 #else
 	seq_printf(m, "\nModule: [VPSS], Build Time[%s]\n", utsname()->version);
 #endif
+#ifndef CV84X6
+	vpss_ctx = vpss_get_ctx();
+	vpss_get_mod_param(&mod_param);
 	seq_puts(m, "\n-------------------------------MODULE PARAM-------------------------------\n");
 	seq_printf(m, "%25s\n", "vpss_vb_source");
 	seq_printf(m, "%25s\n", vb_source[mod_param.vpss_buf_source]);
@@ -422,11 +435,12 @@ static int vpss_ctx_proc_show(struct seq_file *m, void *v)
 			}
 		}
 	}
+#endif
 
 	seq_puts(m, "\n-------------------------------VPSS HW STATUS-----------------------\n");
 	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s\n",
 		"ID", "Dev", "Online", "Status", "StartCnt", "IntCnt", "DutyRatio");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		int state = atomic_read(&dev->vpss_cores[i].state);
 
 		memset(c, 0, sizeof(c));
@@ -455,7 +469,7 @@ static int vpss_ctx_proc_show(struct seq_file *m, void *v)
 
 static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 {
-	int i;
+	int i, total_fps = 0;
 	char c[32];
 	struct vpss_device *dev = (struct vpss_device *)m->private;
 	struct timespec64 ts;
@@ -464,10 +478,25 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	ktime_get_ts64(&ts);
 
 	seq_puts(m, "\n-------------------------------VPSS HW STATUS-----------------------\n");
-	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s\n",
-		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime", "TimeoutCnt");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+#ifdef CV84X6
+	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s\n",
+		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime", "TimeoutCnt", "fps", "sysc_cap", "sc_avg");
+#else
+	seq_printf(m, "%10s%10s%10s%10s%10s%10s%10s%10s\n",
+		"ID", "Dev", "Status", "StartCnt", "IntCnt", "CostTime", "TimeoutCnt", "fps");
+#endif
+	for (i = 0; i < VPSS_MAX; ++i) {
 		int state = atomic_read(&dev->vpss_cores[i].state);
+#ifdef CV84X6
+		int j;
+		int sysc_cap_int = dev->vpss_cores[i].int_cnt > 1000 ? 1000 : dev->vpss_cores[i].int_cnt;
+		int sysc_cap_avg_val;
+		long sysc_cap_sum_val = 0;
+
+		for (j = 0; j < sysc_cap_int; j++)
+			sysc_cap_sum_val += dev->vpss_cores[i].sysc_cap_dur_val[j];
+		sysc_cap_avg_val = sysc_cap_sum_val / sysc_cap_int;
+#endif
 
 		memset(c, 0, sizeof(c));
 		if (state == VIP_IDLE)
@@ -479,7 +508,13 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 		else if (state == VIP_ONLINE)
 			strncpy(c, "Online", sizeof(c));
 
-		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d%10d\n",
+		total_fps += dev->vpss_cores[i].fps;
+
+#ifdef CV84X6
+		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d%10d%10d%10d%10d\n",
+#else
+		seq_printf(m, "%8s%2d%10s%10s%10d%10d%10d%10d%10d\n",
+#endif
 			"#",
 			i,
 			vpss_name[i],
@@ -487,13 +522,21 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 			dev->vpss_cores[i].start_cnt,
 			dev->vpss_cores[i].int_cnt,
 			dev->vpss_cores[i].hw_duration,
-			dev->vpss_cores[i].timeout_cnt);
+			dev->vpss_cores[i].timeout_cnt,
+#ifdef CV84X6
+			dev->vpss_cores[i].fps,
+			dev->vpss_cores[i].sysc_cap_dur_val[(dev->vpss_cores[i].int_cnt-1)%1000],
+			sysc_cap_avg_val);
+#else
+			dev->vpss_cores[i].fps);
+#endif
 	}
+	seq_printf(m, "%8s total fps :%d\n", "#", total_fps);
 
 	seq_puts(m, "\n-------------------------------VPSS INPUT INFO-------------------------\n");
 	seq_printf(m, "%10s%5s%5s%4s%10s%10s%10s%10s%10s%6s\n",
 		"ID", "w", "h", "fmt", "paddr0", "paddr1", "paddr2", "paddr3", "stride", "fancy");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		if(dev->vpss_cores[i].job){
 			job = dev->vpss_cores[i].job;
 			seq_printf(m, "%8s %d %4d %4d %3d %9lx %9lx %9lx %9lx %4d %4d %5s\n",
@@ -516,7 +559,7 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "%10s%5s%5s%4s%10s%10s%10s%10s%5s%5s%5s%6s%4s%4s\n",
 		"ID", "w", "h", "fmt", "paddr0", "paddr1", "paddr2", "stride", "flip", "conv",
 		"draw", "cover", "cir", "rgn");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		if(dev->vpss_cores[i].job){
 			job = dev->vpss_cores[i].job;
 			seq_printf(m, "%8s %d %4d %4d %3d %9lx %9lx %9lx %4d %4d %4d %4s %4s %5s %3s %3s\n",
@@ -542,7 +585,7 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------VPSS CROP&PAD INFO-------------------------\n");
 	seq_printf(m, "%10s%20s%20s%20s%12s\n",
 		"ID", "grpcrop", "chncrop", "dstrect", "padcolor");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		if(dev->vpss_cores[i].job){
 			job = dev->vpss_cores[i].job;
 			seq_printf(m, "%8s %d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %4d %3d %3d %3d\n",
@@ -567,9 +610,9 @@ static int vpp_ctx_proc_show(struct seq_file *m, void *v)
 	}
 
 	seq_puts(m, "\n-------------------------------VPSS USAGE INFO-------------------------\n");
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		seq_printf(m, "{\"id\":%d, \"usage(instant|long)\":%5d%%|%5d%% \n", i, dev->vpss_cores[i].duty_ratio,\
-			(int)(dev->vpss_cores[i].duty_ratio_long / ts.tv_sec));
+                (int)(dev->vpss_cores[i].duty_ratio_long / ts.tv_sec));
 	}
 
 	return 0;
@@ -611,10 +654,10 @@ static ssize_t vpss_proc_write(struct file *file, const char __user *user_buf, s
 
 static int vpss_proc_open(struct inode *inode, struct file *file)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
-	return single_open(file, vpss_proc_show, PDE_DATA(inode));
-#else
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
 	return single_open(file, vpss_proc_show, pde_data(inode));
+#else
+	return single_open(file, vpss_proc_show, PDE_DATA(inode));
 #endif
 }
 
@@ -637,10 +680,10 @@ static ssize_t vpp_proc_write(struct file *file, const char __user *user_buf, si
 
 static int vpp_proc_open(struct inode *inode, struct file *file)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
-	return single_open(file, vpp_proc_show, PDE_DATA(inode));
-#else
+#if (KERNEL_VERSION(5, 17, 0) <= LINUX_VERSION_CODE)
 	return single_open(file, vpp_proc_show, pde_data(inode));
+#else
+	return single_open(file, vpp_proc_show, PDE_DATA(inode));
 #endif
 }
 

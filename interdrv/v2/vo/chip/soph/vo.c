@@ -266,6 +266,9 @@ static void _disp_sel_pinmux(vo_dev VoDev, enum vo_disp_intf intf_type, void *pa
 	if (intf_type == VO_DISP_INTF_BT656 || intf_type == VO_DISP_INTF_BT1120) {
 		struct bt_intf_cfg *cfg = param;
 		_disp_sel_remux(VoDev, cfg->pins.d_pins, cfg->pins.pin_num);
+	} else if (intf_type == VO_DISP_INTF_PARALLEL_RGB || intf_type == VO_DISP_INTF_SERIAL_RGB) {
+		struct rgb_intf_cfg *cfg = param;
+		_disp_sel_remux(VoDev, cfg->pins.d_pins, cfg->pins.pin_num);
 	}
 }
 
@@ -359,6 +362,27 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 		union disp_lvdstx lvds_cfg;
 		bool data_en[LANE_MAX_NUM] = {false, false, false, false, false};
 
+		if ((vdev->clk_vo[dev * 2]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2])))
+		clk_prepare_enable(vdev->clk_vo[dev * 2]);
+
+		if(!(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & (VO_INTF_MIPI | VO_INTF_LVDS | VO_INTF_HDMI))) {
+			if ((vdev->clk_vo[dev * 2 + 1]) && (!__clk_is_enabled(vdev->clk_vo[dev * 2 + 1])))
+				clk_prepare_enable(vdev->clk_vo[dev * 2 + 1]);
+		}
+
+		if(g_vo_ctx->dev_ctx[dev].pub_attr.intf_type & VO_INTF_LVDS) {
+			if ((vdev->clk_lvds[dev]) && (!__clk_is_enabled(vdev->clk_lvds[dev])))
+				clk_prepare_enable(vdev->clk_lvds[dev]);
+		}
+
+		if (cfg->lvds_cfg.pixelclock == 0) {
+			TRACE_VO(DBG_ERR, "lvds pixelclock 0 invalid\n");
+			return -1;
+		}
+
+		dphy_lvds_set_pll(dev, cfg->lvds_cfg.pixelclock, cfg->lvds_cfg.chn_num);
+		udelay(200);
+
 		for (i = 0; i < LANE_MAX_NUM; i++) {
 			if ((cfg->lvds_cfg.lane_id[i] < 0) ||
 				(cfg->lvds_cfg.lane_id[i] >= LANE_MAX_NUM)) {
@@ -375,10 +399,6 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 
 		disp_set_intf(dev, VO_DISP_INTF_LVDS);
 
-		if (cfg->lvds_cfg.pixelclock == 0) {
-			TRACE_VO(DBG_ERR, "lvds pixelclock 0 invalid\n");
-			return -1;
-		}
 		lvds_cfg.b.out_bit = cfg->lvds_cfg.out_bits;
 		lvds_cfg.b.vesa_mode = cfg->lvds_cfg.mode;
 		if (cfg->lvds_cfg.chn_num == 1)
@@ -397,7 +417,6 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 		lvds_cfg.b.ctrl_rev = cfg->lvds_cfg.serial_msb_first;
 		lvds_cfg.b.oe_swap = cfg->lvds_cfg.even_odd_link_swap;
 		lvds_cfg.b.en = cfg->lvds_cfg.enable;
-		dphy_lvds_set_pll(dev, cfg->lvds_cfg.pixelclock, cfg->lvds_cfg.chn_num);
 		disp_lvdstx_set(dev, lvds_cfg);
 	} else if (cfg->intf_type == VO_DISP_INTF_BT656 || cfg->intf_type == VO_DISP_INTF_BT1120) {
 		char fmt_sel = 0;
@@ -456,6 +475,11 @@ int vo_set_interface(vo_dev dev, struct vo_disp_intf_cfg *cfg)
 		sync.b.eav_blk = 0xb6;
 		disp_bt_set(dev, enc, sync);
 		disp_bt_en(dev);
+	} else if (cfg->intf_type == VO_DISP_INTF_PARALLEL_RGB) {
+		disp_set_intf(dev, VO_DISP_INTF_PARALLEL_RGB);
+		dphy_dsi_set_pll(dev, cfg->rgb_cfg.pixelclock, 4, 24);
+		dphy_dsi_clk_setting(dev, 0x10010);
+		_disp_sel_pinmux(dev, cfg->intf_type, &cfg->rgb_cfg);
 	} else {
 		TRACE_VO(DBG_ERR, "invalid disp-intf(%d)\n", cfg->intf_type);
 		return -1;

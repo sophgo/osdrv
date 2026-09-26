@@ -216,6 +216,9 @@ int hdmitx_set_avmute(int enable);
 
 int hdmitx_set_audio_mute(int enable);
 
+int hdmitx_send_audio_frame(unsigned int seq, unsigned int len,
+                            unsigned long long phy_addr, unsigned long long vb_blk);
+
 int edid_parser(hdmi_tx_dev_t *dev, u8 * buffer, sink_edid_t *edid_ext, u16 edid_size);
 
 void print_videoinfo(video_params_t *pvideo);

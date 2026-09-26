@@ -10,7 +10,11 @@
 
 #define YRATIO_SCALE         100
 #define VPSS_CMDQ_BUF_SIZE (0x8000)
+#ifdef CV84X6
+#define VPSS_WORK_MAX        13
+#else
 #define VPSS_WORK_MAX        8
+#endif
 
 enum sc_flip_mode {
 	SC_FLIP_NO,
@@ -40,6 +44,7 @@ enum sc_scaling_coef {
 	SC_SCALING_COEF_BILINEAR,
 	SC_SCALING_COEF_NEAREST,
 	SC_SCALING_COEF_BICUBIC_OPENCV,
+	SC_SCALING_COEF_AREA,
 	SC_SCALING_COEF_MAX,
 };
 
@@ -221,6 +226,7 @@ void vpss_hal_deinit(void);
 int vpss_hal_push_job(struct vpss_job *job);
 int vpss_hal_push_online_job(struct vpss_job *job);
 int vpss_hal_remove_job(struct vpss_job *job);
+void vpss_hal_reset(u32 vpss_dev_mask, bool is_online);
 int vpss_hal_try_schedule(void);
 int vpss_hal_direct_schedule(struct vpss_job *job);
 int vpss_hal_online_run(struct vpss_online_cb *param);

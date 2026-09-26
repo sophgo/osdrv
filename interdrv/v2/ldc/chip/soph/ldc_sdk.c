@@ -113,6 +113,186 @@ int ldc_reg_cb(struct ldc_vdev *wdev)
 	return base_reg_module_cb(&reg_cb);
 }
 
+static DEFINE_SPINLOCK(ldc_ctx_lock);
+
+int ldc_ctx_bind_job(struct ldc_file_ctx *ctx, unsigned long long handle)
+{
+	struct ldc_job *job = (struct ldc_job *)(uintptr_t)handle;
+	unsigned long flags;
+
+	if (!ctx || !job)
+		return ERR_GDC_NULL_PTR;
+
+	spin_lock_irqsave(&ldc_ctx_lock, flags);
+	job->file_ctx = ctx;
+	list_add_tail(&job->ctx_node, &ctx->job_handles);
+	spin_unlock_irqrestore(&ldc_ctx_lock, flags);
+
+	return 0;
+}
+
+bool ldc_ctx_contains_job(struct ldc_file_ctx *ctx, unsigned long long handle)
+{
+	struct ldc_job *job, *target = (struct ldc_job *)(uintptr_t)handle;
+	unsigned long flags;
+	bool found = false;
+
+	if (!ctx || !target)
+		return false;
+
+	spin_lock_irqsave(&ldc_ctx_lock, flags);
+	list_for_each_entry(job, &ctx->job_handles, ctx_node) {
+		if (job == target) {
+			found = true;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&ldc_ctx_lock, flags);
+
+	return found;
+}
+
+static void ldc_job_unbind_ctx(struct ldc_job *job)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&ldc_ctx_lock, flags);
+	if (job->file_ctx) {
+		list_del_init(&job->ctx_node);
+		job->file_ctx = NULL;
+	}
+	spin_unlock_irqrestore(&ldc_ctx_lock, flags);
+}
+
+static bool ldc_job_wake_sync_waiter(struct ldc_job *job)
+{
+	unsigned long flags;
+	bool sync_io;
+
+	spin_lock_irqsave(&job->lock, flags);
+	sync_io = job->identity.sync_io;
+	if (sync_io)
+		job->job_done_evt = true;
+	spin_unlock_irqrestore(&job->lock, flags);
+
+	if (sync_io)
+		up(&job->job_done_sem);
+
+	return sync_io;
+}
+
+static void ldc_free_job_tasks(struct ldc_job *job)
+{
+	struct ldc_task *tsk, *tmp_tsk;
+	unsigned long flags;
+
+	spin_lock_irqsave(&job->lock, flags);
+	list_for_each_entry_safe(tsk, tmp_tsk, &job->task_list, node) {
+		list_del(&tsk->node);
+		kfree(tsk);
+	}
+	spin_unlock_irqrestore(&job->lock, flags);
+}
+
+static bool ldc_job_dequeue_wdev(struct ldc_vdev *wdev, struct ldc_job *target)
+{
+	struct ldc_job *job, *tmp;
+	unsigned long flags;
+	bool found = false;
+
+	spin_lock_irqsave(&wdev->wdev_lock, flags);
+	list_for_each_entry_safe(job, tmp, &wdev->job_list, node) {
+		if (job == target) {
+			list_del(&job->node);
+			wdev->job_cnt--;
+			found = true;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+
+	return found;
+}
+
+static void ldc_release_orphan_job(struct ldc_vdev *wdev, struct ldc_job *job, pid_t tgid)
+{
+	unsigned long flags;
+	bool free_now = false;
+
+	if (atomic_read(&job->job_state) == LDC_JOB_CREAT) {
+		free_now = true;
+	} else if (ldc_job_dequeue_wdev(wdev, job)) {
+		free_now = true;
+	} else {
+		spin_lock_irqsave(&job->lock, flags);
+		if (atomic_read(&job->job_state) == LDC_JOB_END && job->job_done_evt) {
+			free_now = true;
+		} else {
+			job->identity.sync_io = false;
+		}
+		spin_unlock_irqrestore(&job->lock, flags);
+	}
+
+	if (free_now) {
+		TRACE_LDC(DBG_NOTICE, "reclaim leaked job[%px] of process(%d)\n", job, tgid);
+		ldc_free_job_tasks(job);
+		kfree(job);
+	} else {
+		TRACE_LDC(DBG_NOTICE, "orphan in-flight job[%px] of process(%d)\n", job, tgid);
+	}
+}
+
+void ldc_file_ctx_release(struct ldc_file_ctx *ctx)
+{
+	struct ldc_vdev *wdev;
+	struct ldc_job *job;
+	struct ldc_vb_done *vb_done, *vb_done_tmp;
+	unsigned long flags;
+	int swept = 0;
+	unsigned char coreid;
+
+	if (!ctx || !ctx->wdev)
+		return;
+
+	wdev = ctx->wdev;
+	while (1) {
+		spin_lock_irqsave(&ldc_ctx_lock, flags);
+		job = list_first_entry_or_null(&ctx->job_handles, struct ldc_job, ctx_node);
+		if (job) {
+			list_del_init(&job->ctx_node);
+			job->file_ctx = NULL;
+		}
+		spin_unlock_irqrestore(&ldc_ctx_lock, flags);
+
+		if (!job)
+			break;
+
+		ldc_release_orphan_job(wdev, job, ctx->tgid);
+	}
+
+#if LDC_USE_WORKQUEUE
+	for (coreid = 0; coreid < wdev->core_num; coreid++)
+		flush_work(&wdev->core[coreid].work_frm_done);
+#else
+	(void)coreid;
+#endif
+
+	spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
+	list_for_each_entry_safe(vb_done, vb_done_tmp, &wdev->vb_doneq.doneq, node) {
+		if (vb_done->job.file_ctx == ctx) {
+			list_del(&vb_done->node);
+			kfree(vb_done);
+			swept++;
+		}
+	}
+	spin_unlock_irqrestore(&wdev->vb_doneq.lock, flags);
+
+	while (swept-- > 0) {
+		if (down_trylock(&wdev->vb_doneq.sem))
+			break;
+	}
+}
+
 static void ldc_op_done_cb(mod_id_e mod_id, void *param, vb_blk blk)
 {
 	struct ldc_op_done_cfg cfg;
@@ -191,8 +371,10 @@ static void ldc_hdl_hw_tsk_cb(struct ldc_vdev *wdev, struct ldc_job *job
 			vfree((void *)(uintptr_t)tsk->attr.private_data[2]);
 		}
 	} else {
-		if (!job->identity.sync_io && is_last) {
+		if (!job->identity.sync_io && is_last && READ_ONCE(job->file_ctx)) {
 			vb_done = kzalloc(sizeof(*vb_done), GFP_ATOMIC);
+			if (!vb_done)
+				return;
 
 			memcpy(&vb_done->img_out, &tsk->attr.img_out, sizeof(vb_done->img_out));
 			memcpy(&vb_done->job, job, sizeof(*job));
@@ -259,8 +441,8 @@ static void ldc_clr_evt_kth(void *data)
 		return;
 	}
 
-	evt = dev->evt;
 	spin_lock_irqsave(&dev->wdev_lock, flags);
+	evt = dev->evt;
 	dev->evt &= ~evt;
 	spin_unlock_irqrestore(&dev->wdev_lock, flags);
 	TRACE_LDC(DBG_DEBUG, "evt[%d], dev evt[%d]\n", evt, dev->evt);
@@ -272,6 +454,7 @@ static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job)
 	struct fasync_struct *fasync;
 	struct ldc_core *core;
 	int coreid;
+	bool sync_io;
 
 	coreid = job->coreid;
 	core = &dev->core[coreid];
@@ -283,16 +466,18 @@ static void ldc_work_handle_job_done(struct ldc_vdev *dev, struct ldc_job *job)
 	spin_lock_irqsave(&job->lock, flags);
 	list_del(&job->node);
 	job->job_done_evt = true;
+	sync_io = job->identity.sync_io;
 	spin_unlock_irqrestore(&job->lock, flags);
 
 	TRACE_LDC(DBG_INFO, "job [%px] done\n", job);
 
 	atomic_set(&core->state, LDC_CORE_STATE_IDLE);
 
-	if (job->identity.sync_io) {
+	if (sync_io) {
 		TRACE_LDC(DBG_INFO, "job[%px] wake endjob\n", job);
 		up(&job->job_done_sem);
 	} else {
+		ldc_job_unbind_ctx(job);
 		kfree(job);
 		fasync = ldc_get_dev_fasync();
 		kill_fasync(&fasync, SIGIO, POLL_IN);
@@ -586,6 +771,13 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 	}
 
 	cmdq_addr = kzalloc(sizeof(*cmdq_addr) * tsk_num * LDC_CMDQ_MAX_REG_CNT, GFP_ATOMIC);
+	if (!cmdq_addr) {
+		TRACE_LDC(DBG_ERR, "cmdq_addr alloc failed, tsk_num=%d\n", tsk_num);
+		spin_lock_irqsave(&wdev->wdev_lock, flags);
+		wdev->job_cnt--;
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+		return;
+	}
 
 	spin_lock_irqsave(&job->lock, flags);
 	job->coreid = top_id;
@@ -605,6 +797,10 @@ static void ldc_submit_hw_cmdq(struct ldc_vdev *wdev, int top_id
 		ldc_set_tsk_run_status(wdev, top_id, job, tskq[tsk_idx]);
 
 		cfg_q[tsk_idx] = kzalloc(sizeof(struct ldc_cfg), GFP_ATOMIC);
+		if (!cfg_q[tsk_idx]) {
+			TRACE_LDC(DBG_ERR, "cfg_q[%d] alloc failed\n", tsk_idx);
+			goto FREE_CMDQ_RES;
+		}
 
 		bg_color = tskq[tsk_idx]->attr.private_data[3];
 		mesh_addr = (tskq[tsk_idx]->attr.private_data[0] != DEFAULT_MESH_PADDR)
@@ -973,7 +1169,8 @@ static int ldc_event_handler_th(void *data)
 {
 	struct ldc_vdev *wdev = (struct ldc_vdev *)data;
 	unsigned long flags;
-	struct ldc_job *job;
+	struct ldc_job *job, *job_tmp, *tmp_job;
+	bool list_was_empty;
 	int ret;
 	unsigned long idle_timeout = msecs_to_jiffies(LDC_IDLE_WAIT_TIMEOUT_MS);
 	unsigned long eof_timeout = msecs_to_jiffies(LDC_EOF_WAIT_TIMEOUT_MS);
@@ -1009,23 +1206,29 @@ static int ldc_event_handler_th(void *data)
 				TRACE_LDC(DBG_NOTICE, "timeout but job list not empty\n");
 		}
 
-		if (list_empty(&wdev->job_list)) {
-			TRACE_LDC(DBG_DEBUG, "job list empty\n");
-			ldc_set_vdev_stt(wdev);
-			goto continue_th;
-		}
-
 		spin_lock_irqsave(&wdev->wdev_lock, flags);
-		job = list_first_entry_or_null(&wdev->job_list, struct ldc_job, node);
+		job = NULL;
+		list_for_each_entry_safe(job_tmp, tmp_job, &wdev->job_list, node) {
+			if (ldc_have_idle_core(wdev, job_tmp->devs_type)) {
+				job = job_tmp;
+				list_del(&job->node);
+				break;
+			}
+		}
+		list_was_empty = list_empty(&wdev->job_list);
+		if (!job)
+			wdev->evt &= ~LDC_EVENT_WKUP;
+		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
-		if (!ldc_have_idle_core(wdev, job->devs_type)) {
-			TRACE_LDC(DBG_INFO, "core busy, not have idle core\n");
-			spin_unlock_irqrestore(&wdev->wdev_lock, flags);
+		if (!job) {
+			if (list_was_empty) {
+				TRACE_LDC(DBG_DEBUG, "job list empty\n");
+				ldc_set_vdev_stt(wdev);
+			} else {
+				TRACE_LDC(DBG_INFO, "all cores busy\n");
+			}
 			goto continue_th;
 		}
-
-		list_del(&job->node);
-		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
 		TRACE_LDC(DBG_INFO, "send job[[%px]]\n", job);
 
@@ -1070,6 +1273,7 @@ int ldc_begin_job(struct ldc_vdev *wdev, struct gdc_handle_data *data)
 	}
 
 	INIT_LIST_HEAD(&job->task_list);
+	INIT_LIST_HEAD(&job->ctx_node);
 	spin_lock_init(&job->lock);
 	atomic_set(&job->job_state, LDC_JOB_CREAT);
 	atomic_set(&job->task_num, 0);
@@ -1092,6 +1296,9 @@ int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 	int tsk_num = 0;
 	unsigned long timeout = msecs_to_jiffies(LDC_SYNC_IO_WAIT_TIMEOUT_MS);
 	struct ldc_task *tsk, *tmp_tsk;
+	struct ldc_file_ctx *owner_ctx = NULL;
+	bool detached = false;
+	unsigned char coreid;
 
 	ret = ldc_check_null_ptr(wdev) ||
 		ldc_check_null_ptr(job);
@@ -1105,6 +1312,8 @@ int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 
 	if (wdev->job_cnt >= END_JOB_MAX_LEN) {
 		TRACE_LDC(DBG_ERR, "job_cnt is full.\n");
+		ldc_job_unbind_ctx(job);
+		ldc_free_job_tasks(job);
 		kfree(job);
 		return ERR_GDC_BUF_FULL;
 	}
@@ -1136,13 +1345,47 @@ int ldc_end_job(struct ldc_vdev *wdev, unsigned long long handle)
 	if (job->identity.sync_io) {
 		spin_lock_irqsave(&job->lock, flags);
 		job->job_done_evt = false;
+		owner_ctx = job->file_ctx;
 		spin_unlock_irqrestore(&job->lock, flags);
 
 		sync_io_ret = down_timeout(&job->job_done_sem, timeout);
 		if (sync_io_ret != 0) {
-			TRACE_LDC(DBG_WARN, "end job[%px] fail, timeout, ret(%d)\n", job, sync_io_ret);
+			TRACE_LDC(DBG_WARN, "end job timeout, ret(%d) handle=0x%llx\n",
+				  sync_io_ret, handle);
+			for (coreid = 0; coreid < wdev->core_num; coreid++)
+				ldc_dump_register(coreid);
+
+			if (owner_ctx) {
+				struct ldc_job *cur;
+
+				spin_lock_irqsave(&ldc_ctx_lock, flags);
+				list_for_each_entry(cur, &owner_ctx->job_handles, ctx_node) {
+					if (cur == job) {
+						list_del_init(&job->ctx_node);
+						job->file_ctx = NULL;
+						detached = true;
+						break;
+					}
+				}
+				spin_unlock_irqrestore(&ldc_ctx_lock, flags);
+			}
+
+			if (!detached)
+				return -1;
+
+			spin_lock_irqsave(&job->lock, flags);
+			if (job->job_done_evt) {
+				spin_unlock_irqrestore(&job->lock, flags);
+				ldc_free_job_tasks(job);
+				kfree(job);
+			} else {
+				job->identity.sync_io = false;
+				spin_unlock_irqrestore(&job->lock, flags);
+			}
 			return -1;
 		}
+		ldc_job_unbind_ctx(job);
+		ldc_free_job_tasks(job);
 		kfree(job);
 	}
 
@@ -1170,6 +1413,11 @@ static int ldc_cancel_wait_job(struct ldc_vdev *wdev, struct ldc_job *job_handle
 		wdev->job_cnt--;
 		spin_unlock_irqrestore(&wdev->wdev_lock, flags);
 
+		if (ldc_job_wake_sync_waiter(job_handle))
+			return 0;
+
+		ldc_job_unbind_ctx(job_handle);
+		ldc_free_job_tasks(job_handle);
 		kfree(job_handle);
 		TRACE_LDC(DBG_NOTICE, "cancel wdev job_list job[%px]\n", job_handle);
 		return 0;
@@ -1222,8 +1470,13 @@ static int ldc_cancel_work_job(struct ldc_vdev *wdev, struct ldc_job *job_handle
 			list_del(&job_handle->node);
 			spin_unlock_irqrestore(&core->core_lock, flags);
 
-			kfree(job_handle);
 			ldc_core_deinit(coreid);
+			if (ldc_job_wake_sync_waiter(job_handle))
+				return 0;
+
+			ldc_job_unbind_ctx(job_handle);
+			ldc_free_job_tasks(job_handle);
+			kfree(job_handle);
 			TRACE_LDC(DBG_NOTICE, "cancel core[%d] workjob[%px]\n", job_handle->coreid, job_handle);
 			TRACE_LDC(DBG_NOTICE, "cur core if timeout, need reset\n");
 		} else
@@ -1697,7 +1950,8 @@ int ldc_add_dwa_rot_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr)
 	return ret;
 }
 
-int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
+int ldc_get_chn_frame(struct ldc_vdev *wdev, struct ldc_file_ctx *ctx,
+	struct gdc_identity_attr *identity
 	, video_frame_info_s *pstvideo_frame, int s32milli_sec)
 {
 	int ret;
@@ -1708,6 +1962,7 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 	TRACE_LDC(DBG_DEBUG, "++\n");
 	ret = ldc_check_null_ptr(pstvideo_frame)
 		|| ldc_check_null_ptr(wdev)
+		|| ldc_check_null_ptr(ctx)
 		|| ldc_check_null_ptr(identity);
 	if (ret)
 		return ret;
@@ -1735,7 +1990,8 @@ int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
 
 	spin_lock_irqsave(&wdev->vb_doneq.lock, flags);
 	list_for_each_entry_safe(vb_done, vb_done_tmp, &wdev->vb_doneq.doneq, node) {
-		if (ldc_identity_is_match(&vb_done->job.identity, &identity->attr)) {
+		if (vb_done->job.file_ctx == ctx &&
+		    ldc_identity_is_match(&vb_done->job.identity, &identity->attr)) {
 			TRACE_LDC(DBG_DEBUG, "vb_doneq identity[%d-%d-%s] is match [%d-%d-%s]\n"
 				, vb_done->job.identity.mod_id, vb_done->job.identity.id, vb_done->job.identity.name
 				, identity->attr.mod_id, identity->attr.id, identity->attr.name);

@@ -180,10 +180,10 @@ void dphy_init(u8 inst, enum vo_disp_intf intf)
 		_reg_write(REG_DSI_PHY_ESC_INIT(inst), 0x100);
 		_reg_write(REG_DSI_PHY_ESC_WAKE(inst), 0x100);
 		_reg_write(REG_DSI_PHY_EXT_GPIO(inst), gpio_ex);
-		_reg_write(REG_DSI_PHY_LVDS_EN(inst), (intf == VO_DISP_INTF_LVDS));
 		_reg_write(REG_DSI_PHY_EN_LVDS_CFG(inst), (intf == VO_DISP_INTF_LVDS) ? 0x1f1f : 0x0);
 		_reg_write_mask(REG_DSI_PHY_TXPLL_SETUP(inst), 0x3 << 21
 						, (intf == VO_DISP_INTF_LVDS) ? 0x3 << 21 : 0x0);
+		_reg_write(REG_DSI_PHY_LVDS_EN(inst), (intf == VO_DISP_INTF_LVDS));
 	} else {
 		_reg_write(REG_DSI_PHY_EXT_GPIO(inst), 0x3fffffff);
 	}

@@ -29,7 +29,7 @@
 #include <asm/cacheflush.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include "sophon_spacc.h"
+#include "spacc.h"
 #include <linux/cdev.h>  
 
 #define DEVICE_NAME "spacc"

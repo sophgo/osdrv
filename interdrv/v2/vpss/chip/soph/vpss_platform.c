@@ -800,6 +800,7 @@ void sc_update(u8 dev_idx, const struct vpss_hal_chn_cfg *chn_cfg)
 
 	/*odma config*/
 	fmt = user_fmt_to_hw(chn_cfg->pixelformat);
+	odma_cfg->burst = 1;
 	odma_cfg->fmt = fmt;
 	odma_cfg->flip = (enum sclr_flip_mode)chn_cfg->flip;
 	odma_cfg->frame_size.w = chn_cfg->dst_size.width;
@@ -882,7 +883,7 @@ void sc_update(u8 dev_idx, const struct vpss_hal_chn_cfg *chn_cfg)
 		cir_cfg.color_g = chn_cfg->circle_cfg.cfg0.b.value_g;
 		cir_cfg.color_b = chn_cfg->circle_cfg.cfg0.b.value_b;
 	}
-	sclr_cir_set_cfg(dev_idx, &cir_cfg);
+	sclr_cir_set_cfg(dev_idx, &cir_cfg, true);
 
 	/*border*/
 	_sc_ext_set_border(dev_idx, &chn_cfg->border_cfg);

@@ -40,23 +40,6 @@ void ReleaseDebugEnv(void)
 {
 }
 
-Int32 checkLineFeedInHelp(
-    struct OptionExt *opt
-    )
-{
-    int i;
-
-    for (i=0;i<MAX_GETOPT_OPTIONS;i++) {
-        if (opt[i].name==NULL)
-            break;
-        if (!osal_strstr(opt[i].help, "\n")) {
-            VLOG(INFO, "(%s) doesn't have \\n in options struct in main function. please add \\n\n", opt[i].help);
-            return FALSE;
-        }
-    }
-    return TRUE;
-}
-
 RetCode PrintVpuProductInfo(
     Uint32   coreIdx,
     VpuAttr* productInfo
@@ -211,17 +194,8 @@ RetCode PrintVpuProductInfo(
 #define FIO_DBG_IRB_ADDR    0x8074
 #define FIO_DBG_IRB_DATA    0x8078
 #define FIO_DBG_IRB_STATUS  0x807C
-void vdi_irb_write_register(
-    unsigned long coreIdx,
-    unsigned int  vcore_idx,
-    unsigned int  irb_addr,
-    unsigned int  irb_data)
-{
-    vdi_fio_write_register(coreIdx, FIO_DBG_IRB_DATA + 0x1000*vcore_idx, irb_data);
-    vdi_fio_write_register(coreIdx, FIO_DBG_IRB_ADDR + 0x1000*vcore_idx, irb_addr);
-}
 
-unsigned int vdi_irb_read_register(
+static unsigned int vdi_irb_read_register(
     unsigned long coreIdx,
     unsigned int  vcore_idx,
     unsigned int  irb_addr
@@ -310,160 +284,14 @@ void WriteRegVCE(
 #define VCE_DEC_CHECK_SUM11        0x13C
 
 #define READ_BIT(val,high,low) ((((high)==31) && ((low) == 0)) ?  (val) : (((val)>>(low)) & (((1<< ((high)-(low)+1))-1))))
-
-
-void DisplayVceEncDebugCommon521(int coreIdx, int vcore_idx, int set_mode, int debug0, int debug1, int debug2)
-{
-    int reg_val;
-    VLOG(INFO, "---------------Common Debug INFO-----------------\n");
-
-    WriteRegVCE(coreIdx, vcore_idx, set_mode,0 );
-
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, debug0);
-    VLOG(INFO,"\t- subblok_done      :  0x%x\n", READ_BIT(reg_val,30,23));
-    VLOG(INFO,"\t- pipe_on[4]        :  0x%x\n", READ_BIT(reg_val,20,20));
-    VLOG(INFO,"\t- cur_s2ime         :  0x%x\n", READ_BIT(reg_val,19,16));
-    VLOG(INFO,"\t- cur_pipe          :  0x%x\n", READ_BIT(reg_val,15,12));
-    VLOG(INFO,"\t- pipe_on[3:0]      :  0x%x\n", READ_BIT(reg_val,11, 8));
-    VLOG(INFO,"\t- i_grdma_debug_reg :  0x%x\n", READ_BIT(reg_val, 5, 3));
-    VLOG(INFO,"\t- cur_ar_tbl_w_fsm  :  0x%x\n", READ_BIT(reg_val, 2, 0));
-
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, debug1);
-    VLOG(INFO,"\t- i_avc_rdo_debug :  0x%x\n", READ_BIT(reg_val,31,31));
-    VLOG(INFO,"\t- curbuf_prp      :  0x%x\n", READ_BIT(reg_val,28,25));
-    VLOG(INFO,"\t- curbuf_s2       :  0x%x\n", READ_BIT(reg_val,24,21));
-    VLOG(INFO,"\t- curbuf_s0       :  0x%x\n", READ_BIT(reg_val,20,17));
-    VLOG(INFO,"\t- cur_s2ime_sel   :  0x%x\n", READ_BIT(reg_val,16,16));
-    VLOG(INFO,"\t- cur_mvp         :  0x%x\n", READ_BIT(reg_val,15,14));
-    VLOG(INFO,"\t- cmd_ready       :  0x%x\n", READ_BIT(reg_val,13,13));
-    VLOG(INFO,"\t- rc_ready        :  0x%x\n", READ_BIT(reg_val,12,12));
-    VLOG(INFO,"\t- pipe_cmd_cnt    :  0x%x\n", READ_BIT(reg_val,11, 9));
-    VLOG(INFO,"\t- subblok_done    :  LF_PARAM 0x%x SFU 0x%x LF 0x%x RDO 0x%x IMD 0x%x FME 0x%x IME 0x%x\n",
-        READ_BIT(reg_val, 6, 6), READ_BIT(reg_val, 5, 5), READ_BIT(reg_val, 4, 4), READ_BIT(reg_val, 3, 3),
-        READ_BIT(reg_val, 2, 2), READ_BIT(reg_val, 1, 1), READ_BIT(reg_val, 0, 0));
-
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, debug2);
-    //VLOG(INFO,"\t- reserved          :  0x%x\n", READ_BIT(reg_val,31, 23));
-    VLOG(INFO,"\t- cur_prp_dma_state :  0x%x\n", READ_BIT(reg_val,22, 20));
-    VLOG(INFO,"\t- cur_prp_state     :  0x%x\n", READ_BIT(reg_val,19, 18));
-    VLOG(INFO,"\t- main_ctu_xpos     :  0x%x\n", READ_BIT(reg_val,17,  9));
-    VLOG(INFO,"\t- main_ctu_ypos     :  0x%x(HEVC:*32, AVC:*16)\n", READ_BIT(reg_val, 8,  0));
-
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, 0x0ae8);
-    VLOG(INFO,"\t- sub_frame_sync_ypos_valid :  0x%x\n", READ_BIT(reg_val,0,0));
-    VLOG(INFO,"\t- sub_frame_sync_ypos       :  0x%x\n", READ_BIT(reg_val,13,1));
-}
-
-void DisplayVceEncDebugMode(int core_idx, int vcore_idx, int set_mode, int* debug)
-{
-    int reg_val;
-    int i;
-    VLOG(INFO,"----------- MODE 2 : ----------\n");
-
-    WriteRegVCE(core_idx,vcore_idx, set_mode, 2);
-
-    reg_val = ReadRegVCE(core_idx, vcore_idx, debug[7]);
-    VLOG(INFO,"\t- s2fme_info_full    :  0x%x\n", READ_BIT(reg_val,26,26));
-    VLOG(INFO,"\t- ime_cmd_ref_full   :  0x%x\n", READ_BIT(reg_val,25,25));
-    VLOG(INFO,"\t- ime_cmd_ctb_full   :  0x%x\n", READ_BIT(reg_val,24,24));
-    VLOG(INFO,"\t- ime_load_info_full :  0x%x\n", READ_BIT(reg_val,23,23));
-    VLOG(INFO,"\t- mvp_nb_info_full   :  0x%x\n", READ_BIT(reg_val,22,22));
-    VLOG(INFO,"\t- ime_final_mv_full  :  0x%x\n", READ_BIT(reg_val,21,21));
-    VLOG(INFO,"\t- ime_mv_full        :  0x%x\n", READ_BIT(reg_val,20,20));
-    VLOG(INFO,"\t- cur_fme_fsm[3:0]   :  0x%x\n", READ_BIT(reg_val,19,16));
-    VLOG(INFO,"\t- cur_s2me_fsm[3:0]  :  0x%x\n", READ_BIT(reg_val,15,12));
-    VLOG(INFO,"\t- cur_s2mvp_fsm[3:0] :  0x%x\n", READ_BIT(reg_val,11, 8));
-    VLOG(INFO,"\t- cur_ime_fsm[3:0]   :  0x%x\n", READ_BIT(reg_val, 7, 4));
-    VLOG(INFO,"\t- cur_sam_fsm[3:0]   :  0x%x\n", READ_BIT(reg_val, 3, 0));
-
-    VLOG(INFO,"----------- MODE 6 : ----------\n");
-    WriteRegVCE(core_idx,vcore_idx, set_mode, 6);
-    for ( i = 3; i < 10 ; i++ )
-    {
-        reg_val = ReadRegVCE(core_idx, vcore_idx, debug[i]);
-        VLOG(INFO,"\t- mode 6, %08x = %08x\n", debug[i], reg_val);
-    }
-
-    VLOG(INFO,"----------- MODE 7 : ----------\n");
-    WriteRegVCE(core_idx,vcore_idx, set_mode, 7);
-    for ( i = 3; i < 10 ; i++ )
-    {
-        reg_val = ReadRegVCE(core_idx, vcore_idx, debug[i]);
-        VLOG(INFO,"\t- mode 7, %08x = %08x\n", debug[i], reg_val);
-    }
-}
-
-void DisplayVceEncDebugModeAll(int core_idx, int vcore_idx)
-{
-    int ii;
-    int iMode, iIndex;
-    int reg_val;
-
-    int REG_DEBUG[12] = {0, };
-
-    REG_DEBUG[ 0] = 0x0ba0;//MODE SEL //parameter VCE_ENC_DEBUG0            = 9'h1A0;
-    REG_DEBUG[ 1] = 0x0ba4;
-    REG_DEBUG[ 2] = 0x0ba8;
-    REG_DEBUG[ 3] = 0x0bac;
-    REG_DEBUG[ 4] = 0x0bb0;
-    REG_DEBUG[ 5] = 0x0bb4;
-    REG_DEBUG[ 6] = 0x0bb8;
-    REG_DEBUG[ 7] = 0x0bbc;
-    REG_DEBUG[ 8] = 0x0bc0;
-    REG_DEBUG[ 9] = 0x0bc4;
-    REG_DEBUG[10] = 0x0bc8;
-    REG_DEBUG[11] = 0x0bcc;
-
-    for( ii=0; ii<2; ii++ )
-    {
-        for( iMode = 0; iMode < 8; iMode++ )
-        {
-            WriteRegVCE(core_idx, vcore_idx, REG_DEBUG[0], iMode);
-            VLOG(INFO,"-----------  VCE Scan with mode:%d  ----------.\n", iMode );
-
-            for( iIndex = 0; iIndex < 12; iIndex++ )
-            {
-                reg_val = ReadRegVCE(core_idx, vcore_idx, REG_DEBUG[iIndex]);
-                VLOG(INFO,"\t- debug[%2d] : 0x%x\n", iIndex, reg_val );
-            }
-        }
-    }
-
-    ///---- read backbone reg
-    ///-- ADR_EMPTY_FLAG
-    reg_val = vdi_fio_read_register(core_idx, 0xFE14);
-    VLOG(INFO,"ADR_EMPTY_FLAG = 0x%x   \n",reg_val);
-    VLOG(INFO,"ADR_EMPTY_FLAG = 0x%x   \n",reg_val);
-}
-
-
 #define VCE_BUSY                   0xA04
 #define VCE_LF_PARAM               0xA6c
 #define VCE_BIN_WDMA_CUR_ADDR      0xB1C
 #define VCE_BIN_PIC_PARAM          0xB20
 #define VCE_BIN_WDMA_BASE          0xB24
 #define VCE_BIN_WDMA_END           0xB28
-void DisplayVceEncReadVCE(int coreIdx, int vcore_idx)
-{
-    int reg_val;
 
-    VLOG(INFO, "---------------DisplayVceEncReadVCE-----------------\n");
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_BUSY);
-    VLOG(INFO,"\t- VCE_BUSY                 :  0x%x\n", reg_val);
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_LF_PARAM);
-    VLOG(INFO,"\t- VCE_LF_PARAM             :  0x%x\n", reg_val);
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_BIN_WDMA_CUR_ADDR);
-    VLOG(INFO,"\t- VCE_BIN_WDMA_CUR_ADDR    :  0x%x\n", reg_val);
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_BIN_PIC_PARAM);
-    VLOG(INFO,"\t- VCE_BIN_PIC_PARAM        :  0x%x\n", reg_val);
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_BIN_WDMA_BASE);
-    VLOG(INFO,"\t- VCE_BIN_WDMA_BASE        :  0x%x\n", reg_val);
-    reg_val = ReadRegVCE(coreIdx, vcore_idx, VCE_BIN_WDMA_END);
-    VLOG(INFO,"\t- VCE_BIN_WDMA_END         :  0x%x\n", reg_val);
-}
-
-
-void PrintWave5xxDecSppStatus(
+static void PrintWave5xxDecSppStatus(
     Uint32 coreIdx
     )
 {
@@ -518,8 +346,7 @@ void PrintWave5xxDecSppStatus(
     VLOG(WARN,"[-] GBU REG Dump\n");
 }
 
-
-void PrintWave5xxDecPrescanStatus(
+static void PrintWave5xxDecPrescanStatus(
     Uint32 coreIdx
     )
 {
@@ -858,7 +685,7 @@ void print_busy_timeout_status(Uint32 coreIdx, Uint32 product_code, Uint32 pc)
     }
 }
 
-void wave5xx_vcore_status(
+static void wave5xx_vcore_status(
     Uint32 coreIdx
     )
 {
@@ -874,28 +701,6 @@ void wave5xx_vcore_status(
         temp = vdi_fio_read_register(coreIdx, (W5_REG_BASE + 0x8000 + 0x18));
         VLOG(WARN,"BITPC = 0x%08x\n", temp);
     }
-
-/*
-    VLOG(WARN, "r0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x0) );
-    VLOG(WARN, "r1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x1) );
-    VLOG(WARN, "r2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x2) );
-    VLOG(WARN, "r3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x3) );
-
-    VLOG(WARN, "r4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x4) );
-    VLOG(WARN, "r5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x5) );
-    VLOG(WARN, "r6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x6) );
-    VLOG(WARN, "r7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x7) );
-
-    VLOG(WARN, "stack0 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x10) );
-    VLOG(WARN, "stack1 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x11) );
-    VLOG(WARN, "stack2 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x12) );
-    VLOG(WARN, "stack3 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x13) );
-
-    VLOG(WARN, "stack4 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x14) );
-    VLOG(WARN, "stack5 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x15) );
-    VLOG(WARN, "stack6 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x16) );
-    VLOG(WARN, "stack7 : 0x%08x \n", vdi_irb_read_register(coreIdx, 0, 0x17) );
-*/
 
     VLOG(WARN,"[+] BPU Debug message REG Dump\n");
     VLOG(WARN,"[MSG_0:0x%08x], [MSG_1:0x%08x],[MSG_2:0x%08x],[MSG_3:0x%08x],[MSG_4:0x%08x],[MSG_5:0x%08x] \n",
@@ -973,7 +778,7 @@ void wave5xx_vcore_status(
     VLOG(WARN,"[-] VCE REG Dump\n");
 }
 
-
+#if 0
 void wave5xx_PP_status(
     Uint32 coreIdx
     )
@@ -1040,7 +845,6 @@ void wave5xx_PP_status(
     VLOG(INFO,"[-] PP IFBC REG Dump\n");
 }
 
-
 void wave5xx_mismatch_vcore_status(
     Uint32 coreIdx
     )
@@ -1059,7 +863,7 @@ void wave5xx_mismatch_vcore_status(
     }
     VLOG(INFO,"[-] VCE REG Dump\n");
 }
-
+#endif
 void wave5xx_bpu_status(
     Uint32 coreIdx
     )
@@ -1191,18 +995,6 @@ void vdi_print_vpu_status_enc(unsigned long coreIdx)
     vce_enc_debug[9] = 0x0bc4;
     set_mode              = 0x0ba0;
     vcore_num            = 1;
-
-#if 0
-    for (vcore_idx = 0; vcore_idx < vcore_num ; vcore_idx++) {
-        VLOG(WARN,"==========================================\n");
-        VLOG(WARN,"[+] VCE REG Dump VCORE_IDX : %d\n",vcore_idx);
-        VLOG(WARN,"==========================================\n");
-        DisplayVceEncReadVCE             (coreIdx, vcore_idx);
-        DisplayVceEncDebugCommon521      (coreIdx, vcore_idx, set_mode, vce_enc_debug[0], vce_enc_debug[1], vce_enc_debug[2]);
-        DisplayVceEncDebugMode          (coreIdx, vcore_idx, set_mode, vce_enc_debug);
-        DisplayVceEncDebugModeAll       (coreIdx, vcore_idx);
-    }
-#endif
 }
 
 void vdi_print_vpu_status_dec(unsigned long coreIdx)

@@ -123,30 +123,28 @@ static ive_filterop_c *init_ive_filterop_c(void)
 
 }
 
-// static void ive_dma_printk(ive_dma_c *p)
-// {
-// 	pr_info("ive_dma\n");
-// 	pr_info("\tREG_0.reg_ive_dma_enable = 0x%x\n", p->reg_0.reg_ive_dma_enable);
-// 	pr_info("\tREG_0.reg_shdw_sel = 0x%x\n", p->reg_0.reg_shdw_sel);
-// 	pr_info("\tREG_0.reg_softrst = 0x%x\n", p->reg_0.reg_softrst);
-// 	pr_info("\tREG_0.reg_ive_dma_mode = 0x%x\n", p->reg_0.reg_ive_dma_mode);
-// 	pr_info("\tREG_0.reg_force_clk_enable = 0x%x\n", p->reg_0.reg_force_clk_enable);
-// 	pr_info("\tREG_0.reg_force_rdma_disable = 0x%x\n", p->reg_0.reg_force_rdma_disable);
-// 	pr_info("\tREG_0.reg_force_wdma_disable = 0x%x\n", p->reg_0.reg_force_wdma_disable);
-// 	pr_info("\tREG_1.reg_ive_dma_src_stride = 0x%x\n", p->reg_1.reg_ive_dma_src_stride);
-// 	pr_info("\tREG_1.reg_ive_dma_dst_stride = 0x%x\n", p->reg_1.reg_ive_dma_dst_stride);
-// 	pr_info("\tREG_2.reg_ive_dma_src_mem_addr = 0x%x\n", p->reg_2.reg_ive_dma_src_mem_addr);
-// 	pr_info("\tREG_3.reg_ive_dma_dst_mem_addr = 0x%x\n", p->reg_3.reg_ive_dma_dst_mem_addr);
-// 	pr_info("\tREG_4.reg_ive_dma_horsegsize = 0x%x\n", p->reg_4.reg_ive_dma_horsegsize);
-// 	pr_info("\tREG_4.reg_ive_dma_elemsize = 0x%x\n", p->reg_4.reg_ive_dma_elemsize);
-// 	pr_info("\tREG_4.reg_ive_dma_versegrow = 0x%x\n", p->reg_4.reg_ive_dma_versegrow);
-// 	pr_info("\tREG_5.reg_ive_dma_u64_val[0] = 0x%x\n", p->reg_5.reg_ive_dma_u64_val[0]);
-// 	pr_info("\tREG_5.reg_ive_dma_u64_val[1] = 0x%x\n", p->reg_5.reg_ive_dma_u64_val[1]);
-// }
-
-static void ive_filterop_printk(ive_filterop_c *p)
+static void ive_dma_printk(ive_dma_c *p)
 {
-	pr_info("ive_filterop\n");
+	pr_info("ive_dma\n");
+	pr_info("\tREG_0.reg_ive_dma_enable = 0x%x\n", p->reg_0.reg_ive_dma_enable);
+	pr_info("\tREG_0.reg_shdw_sel = 0x%x\n", p->reg_0.reg_shdw_sel);
+	pr_info("\tREG_0.reg_softrst = 0x%x\n", p->reg_0.reg_softrst);
+	pr_info("\tREG_0.reg_ive_dma_mode = 0x%x\n", p->reg_0.reg_ive_dma_mode);
+	pr_info("\tREG_0.reg_force_clk_enable = 0x%x\n", p->reg_0.reg_force_clk_enable);
+	pr_info("\tREG_0.reg_force_rdma_disable = 0x%x\n", p->reg_0.reg_force_rdma_disable);
+	pr_info("\tREG_0.reg_force_wdma_disable = 0x%x\n", p->reg_0.reg_force_wdma_disable);
+	pr_info("\tREG_1.reg_ive_dma_src_stride = 0x%x\n", p->reg_1.reg_ive_dma_src_stride);
+	pr_info("\tREG_1.reg_ive_dma_dst_stride = 0x%x\n", p->reg_1.reg_ive_dma_dst_stride);
+	pr_info("\tREG_2.reg_ive_dma_src_mem_addr = 0x%x\n", p->reg_2.reg_ive_dma_src_mem_addr);
+	pr_info("\tREG_3.reg_ive_dma_dst_mem_addr = 0x%x\n", p->reg_3.reg_ive_dma_dst_mem_addr);
+	pr_info("\tREG_4.reg_ive_dma_horsegsize = 0x%x\n", p->reg_4.reg_ive_dma_horsegsize);
+	pr_info("\tREG_4.reg_ive_dma_elemsize = 0x%x\n", p->reg_4.reg_ive_dma_elemsize);
+	pr_info("\tREG_4.reg_ive_dma_versegrow = 0x%x\n", p->reg_4.reg_ive_dma_versegrow);
+	pr_info("\tREG_5.reg_ive_dma_u64_val[0] = 0x%x\n", p->reg_5.reg_ive_dma_u64_val[0]);
+	pr_info("\tREG_5.reg_ive_dma_u64_val[1] = 0x%x\n", p->reg_5.reg_ive_dma_u64_val[1]);
+}
+static void ive_filterop_printk(ive_filterop_c* p) {
+    pr_info("ive_filterop\n");
 	pr_info("\tREG_1.reg_softrst = 0x%x\n", p->reg_1.reg_softrst);
 	pr_info("\tREG_1.reg_softrst_wdma_y = 0x%x\n", p->reg_1.reg_softrst_wdma_y);
 	pr_info("\tREG_1.reg_softrst_wdma_c = 0x%x\n", p->reg_1.reg_softrst_wdma_c);
@@ -167,58 +165,114 @@ static void ive_filterop_printk(ive_filterop_c *p)
 	pr_info("\treg_h14.reg_op_c_wdma_en = 0x%x\n", p->reg_h14.reg_op_c_wdma_en);
 	pr_info("\treg_h14.reg_op_y_wdma_w1b_en = 0x%x\n", p->reg_h14.reg_op_y_wdma_w1b_en);
 	pr_info("\treg_h14.reg_op_c_wdma_w1b_en = 0x%x\n", p->reg_h14.reg_op_c_wdma_w1b_en);
-	pr_info("\tREG_4.reg_filterop_h_coef00 = 0x%x\n", p->reg_4.reg_filterop_h_coef00);
-	pr_info("\tREG_4.reg_filterop_h_coef01 = 0x%x\n", p->reg_4.reg_filterop_h_coef01);
-	pr_info("\tREG_4.reg_filterop_h_coef02 = 0x%x\n", p->reg_4.reg_filterop_h_coef02);
-	pr_info("\tREG_4.reg_filterop_h_coef03 = 0x%x\n", p->reg_4.reg_filterop_h_coef03);
-	pr_info("\tREG_5.reg_filterop_h_coef04 = 0x%x\n", p->reg_5.reg_filterop_h_coef04);
-	pr_info("\tREG_5.reg_filterop_h_coef10 = 0x%x\n", p->reg_5.reg_filterop_h_coef10);
-	pr_info("\tREG_5.reg_filterop_h_coef11 = 0x%x\n", p->reg_5.reg_filterop_h_coef11);
-	pr_info("\tREG_5.reg_filterop_h_coef12 = 0x%x\n", p->reg_5.reg_filterop_h_coef12);
-	pr_info("\tREG_6.reg_filterop_h_coef13 = 0x%x\n", p->reg_6.reg_filterop_h_coef13);
-	pr_info("\tREG_6.reg_filterop_h_coef14 = 0x%x\n", p->reg_6.reg_filterop_h_coef14);
-	pr_info("\tREG_6.reg_filterop_h_coef20 = 0x%x\n", p->reg_6.reg_filterop_h_coef20);
-	pr_info("\tREG_6.reg_filterop_h_coef21 = 0x%x\n", p->reg_6.reg_filterop_h_coef21);
-	pr_info("\tREG_7.reg_filterop_h_coef22 = 0x%x\n", p->reg_7.reg_filterop_h_coef22);
-	pr_info("\tREG_7.reg_filterop_h_coef23 = 0x%x\n", p->reg_7.reg_filterop_h_coef23);
-	pr_info("\tREG_7.reg_filterop_h_coef24 = 0x%x\n", p->reg_7.reg_filterop_h_coef24);
-	pr_info("\tREG_7.reg_filterop_h_coef30 = 0x%x\n", p->reg_7.reg_filterop_h_coef30);
-	pr_info("\tREG_8.reg_filterop_h_coef31 = 0x%x\n", p->reg_8.reg_filterop_h_coef31);
-	pr_info("\tREG_8.reg_filterop_h_coef32 = 0x%x\n", p->reg_8.reg_filterop_h_coef32);
-	pr_info("\tREG_8.reg_filterop_h_coef33 = 0x%x\n", p->reg_8.reg_filterop_h_coef33);
-	pr_info("\tREG_8.reg_filterop_h_coef34 = 0x%x\n", p->reg_8.reg_filterop_h_coef34);
-	pr_info("\tREG_9.reg_filterop_h_coef40 = 0x%x\n", p->reg_9.reg_filterop_h_coef40);
-	pr_info("\tREG_9.reg_filterop_h_coef41 = 0x%x\n", p->reg_9.reg_filterop_h_coef41);
-	pr_info("\tREG_9.reg_filterop_h_coef42 = 0x%x\n", p->reg_9.reg_filterop_h_coef42);
-	pr_info("\tREG_9.reg_filterop_h_coef43 = 0x%x\n", p->reg_9.reg_filterop_h_coef43);
-	pr_info("\tREG_10.reg_filterop_h_coef44 = 0x%x\n", p->reg_10.reg_filterop_h_coef44);
+#ifdef MEDIA_V3
+	pr_info("reg_filterop_h_coef22 = 0x%x\n",p->reg_4.reg_filterop_h_coef22);
+	pr_info("reg_filterop_h_coef23 = 0x%x\n",p->reg_4.reg_filterop_h_coef23);
+	pr_info("reg_filterop_h_coef24 = 0x%x\n",p->reg_4.reg_filterop_h_coef24);
+	pr_info("reg_filterop_h_coef25 = 0x%x\n",p->reg_4.reg_filterop_h_coef25);
+	pr_info("reg_filterop_h_coef26 = 0x%x\n",p->reg_5.reg_filterop_h_coef26);
+	pr_info("reg_filterop_h_coef32 = 0x%x\n",p->reg_5.reg_filterop_h_coef32);
+	pr_info("reg_filterop_h_coef33 = 0x%x\n",p->reg_5.reg_filterop_h_coef33);
+	pr_info("reg_filterop_h_coef34 = 0x%x\n",p->reg_5.reg_filterop_h_coef34);
+	pr_info("reg_filterop_h_coef35 = 0x%x\n",p->reg_6.reg_filterop_h_coef35);
+	pr_info("reg_filterop_h_coef36 = 0x%x\n",p->reg_6.reg_filterop_h_coef36);
+	pr_info("reg_filterop_h_coef42 = 0x%x\n",p->reg_6.reg_filterop_h_coef42);
+	pr_info("reg_filterop_h_coef43 = 0x%x\n",p->reg_6.reg_filterop_h_coef43);
+	pr_info("reg_filterop_h_coef44 = 0x%x\n",p->reg_7.reg_filterop_h_coef44);
+	pr_info("reg_filterop_h_coef45 = 0x%x\n",p->reg_7.reg_filterop_h_coef45);
+	pr_info("reg_filterop_h_coef46 = 0x%x\n",p->reg_7.reg_filterop_h_coef46);
+	pr_info("reg_filterop_h_coef52 = 0x%x\n",p->reg_7.reg_filterop_h_coef52);
+	pr_info("reg_filterop_h_coef53 = 0x%x\n",p->reg_8.reg_filterop_h_coef53);
+	pr_info("reg_filterop_h_coef54 = 0x%x\n",p->reg_8.reg_filterop_h_coef54);
+	pr_info("reg_filterop_h_coef55 = 0x%x\n",p->reg_8.reg_filterop_h_coef55);
+	pr_info("reg_filterop_h_coef56 = 0x%x\n",p->reg_8.reg_filterop_h_coef56);
+	pr_info("reg_filterop_h_coef62 = 0x%x\n",p->reg_9.reg_filterop_h_coef62);
+	pr_info("reg_filterop_h_coef63 = 0x%x\n",p->reg_9.reg_filterop_h_coef63);
+	pr_info("reg_filterop_h_coef64 = 0x%x\n",p->reg_9.reg_filterop_h_coef64);
+	pr_info("reg_filterop_h_coef65 = 0x%x\n",p->reg_9.reg_filterop_h_coef65);
+	pr_info("reg_filterop_h_coef66 = 0x%x\n",p->reg_10.reg_filterop_h_coef66);
+#else
+	pr_info("reg_filterop_h_coef00 = 0x%x\n",p->reg_4.reg_filterop_h_coef00);
+	pr_info("reg_filterop_h_coef01 = 0x%x\n",p->reg_4.reg_filterop_h_coef01);
+	pr_info("reg_filterop_h_coef02 = 0x%x\n",p->reg_4.reg_filterop_h_coef02);
+	pr_info("reg_filterop_h_coef03 = 0x%x\n",p->reg_4.reg_filterop_h_coef03);
+	pr_info("reg_filterop_h_coef04 = 0x%x\n",p->reg_5.reg_filterop_h_coef04);
+	pr_info("reg_filterop_h_coef10 = 0x%x\n",p->reg_5.reg_filterop_h_coef10);
+	pr_info("reg_filterop_h_coef11 = 0x%x\n",p->reg_5.reg_filterop_h_coef11);
+	pr_info("reg_filterop_h_coef12 = 0x%x\n",p->reg_5.reg_filterop_h_coef12);
+	pr_info("reg_filterop_h_coef13 = 0x%x\n",p->reg_6.reg_filterop_h_coef13);
+	pr_info("reg_filterop_h_coef14 = 0x%x\n",p->reg_6.reg_filterop_h_coef14);
+	pr_info("reg_filterop_h_coef20 = 0x%x\n",p->reg_6.reg_filterop_h_coef20);
+	pr_info("reg_filterop_h_coef21 = 0x%x\n",p->reg_6.reg_filterop_h_coef21);
+	pr_info("reg_filterop_h_coef22 = 0x%x\n",p->reg_7.reg_filterop_h_coef22);
+	pr_info("reg_filterop_h_coef23 = 0x%x\n",p->reg_7.reg_filterop_h_coef23);
+	pr_info("reg_filterop_h_coef24 = 0x%x\n",p->reg_7.reg_filterop_h_coef24);
+	pr_info("reg_filterop_h_coef30 = 0x%x\n",p->reg_7.reg_filterop_h_coef30);
+	pr_info("reg_filterop_h_coef31 = 0x%x\n",p->reg_8.reg_filterop_h_coef31);
+	pr_info("reg_filterop_h_coef32 = 0x%x\n",p->reg_8.reg_filterop_h_coef32);
+	pr_info("reg_filterop_h_coef33 = 0x%x\n",p->reg_8.reg_filterop_h_coef33);
+	pr_info("reg_filterop_h_coef34 = 0x%x\n",p->reg_8.reg_filterop_h_coef34);
+	pr_info("reg_filterop_h_coef40 = 0x%x\n",p->reg_9.reg_filterop_h_coef40);
+	pr_info("reg_filterop_h_coef41 = 0x%x\n",p->reg_9.reg_filterop_h_coef41);
+	pr_info("reg_filterop_h_coef42 = 0x%x\n",p->reg_9.reg_filterop_h_coef42);
+	pr_info("reg_filterop_h_coef43 = 0x%x\n",p->reg_9.reg_filterop_h_coef43);
+	pr_info("reg_filterop_h_coef44 = 0x%x\n",p->reg_10.reg_filterop_h_coef44);
+#endif
 	pr_info("\tREG_10.reg_filterop_h_norm = 0x%x\n", p->reg_10.reg_filterop_h_norm);
-	pr_info("\tREG_11.reg_filterop_v_coef00 = 0x%x\n", p->reg_11.reg_filterop_v_coef00);
-	pr_info("\tREG_11.reg_filterop_v_coef01 = 0x%x\n", p->reg_11.reg_filterop_v_coef01);
-	pr_info("\tREG_11.reg_filterop_v_coef02 = 0x%x\n", p->reg_11.reg_filterop_v_coef02);
-	pr_info("\tREG_11.reg_filterop_v_coef03 = 0x%x\n", p->reg_11.reg_filterop_v_coef03);
-	pr_info("\tREG_12.reg_filterop_v_coef04 = 0x%x\n", p->reg_12.reg_filterop_v_coef04);
-	pr_info("\tREG_12.reg_filterop_v_coef10 = 0x%x\n", p->reg_12.reg_filterop_v_coef10);
-	pr_info("\tREG_12.reg_filterop_v_coef11 = 0x%x\n", p->reg_12.reg_filterop_v_coef11);
-	pr_info("\tREG_12.reg_filterop_v_coef12 = 0x%x\n", p->reg_12.reg_filterop_v_coef12);
-	pr_info("\tREG_13.reg_filterop_v_coef13 = 0x%x\n", p->reg_13.reg_filterop_v_coef13);
-	pr_info("\tREG_13.reg_filterop_v_coef14 = 0x%x\n", p->reg_13.reg_filterop_v_coef14);
-	pr_info("\tREG_13.reg_filterop_v_coef20 = 0x%x\n", p->reg_13.reg_filterop_v_coef20);
-	pr_info("\tREG_13.reg_filterop_v_coef21 = 0x%x\n", p->reg_13.reg_filterop_v_coef21);
-	pr_info("\tREG_14.reg_filterop_v_coef22 = 0x%x\n", p->reg_14.reg_filterop_v_coef22);
-	pr_info("\tREG_14.reg_filterop_v_coef23 = 0x%x\n", p->reg_14.reg_filterop_v_coef23);
-	pr_info("\tREG_14.reg_filterop_v_coef24 = 0x%x\n", p->reg_14.reg_filterop_v_coef24);
-	pr_info("\tREG_14.reg_filterop_v_coef30 = 0x%x\n", p->reg_14.reg_filterop_v_coef30);
-	pr_info("\tREG_15.reg_filterop_v_coef31 = 0x%x\n", p->reg_15.reg_filterop_v_coef31);
-	pr_info("\tREG_15.reg_filterop_v_coef32 = 0x%x\n", p->reg_15.reg_filterop_v_coef32);
-	pr_info("\tREG_15.reg_filterop_v_coef33 = 0x%x\n", p->reg_15.reg_filterop_v_coef33);
-	pr_info("\tREG_15.reg_filterop_v_coef34 = 0x%x\n", p->reg_15.reg_filterop_v_coef34);
-	pr_info("\tREG_16.reg_filterop_v_coef40 = 0x%x\n", p->reg_16.reg_filterop_v_coef40);
-	pr_info("\tREG_16.reg_filterop_v_coef41 = 0x%x\n", p->reg_16.reg_filterop_v_coef41);
-	pr_info("\tREG_16.reg_filterop_v_coef42 = 0x%x\n", p->reg_16.reg_filterop_v_coef42);
-	pr_info("\tREG_16.reg_filterop_v_coef43 = 0x%x\n", p->reg_16.reg_filterop_v_coef43);
-	pr_info("\tREG_17.reg_filterop_v_coef44 = 0x%x\n", p->reg_17.reg_filterop_v_coef44);
+#ifdef MEDIA_V3
+    pr_info("reg_filterop_v_coef22 = 0x%x\n",p->reg_11.reg_filterop_v_coef22);
+	pr_info("reg_filterop_v_coef23 = 0x%x\n",p->reg_11.reg_filterop_v_coef23);
+	pr_info("reg_filterop_v_coef24 = 0x%x\n",p->reg_11.reg_filterop_v_coef24);
+	pr_info("reg_filterop_v_coef25 = 0x%x\n",p->reg_11.reg_filterop_v_coef25);
+	pr_info("reg_filterop_v_coef26 = 0x%x\n",p->reg_12.reg_filterop_v_coef26);
+	pr_info("reg_filterop_v_coef32 = 0x%x\n",p->reg_12.reg_filterop_v_coef32);
+	pr_info("reg_filterop_v_coef33 = 0x%x\n",p->reg_12.reg_filterop_v_coef33);
+	pr_info("reg_filterop_v_coef34 = 0x%x\n",p->reg_12.reg_filterop_v_coef34);
+	pr_info("reg_filterop_v_coef35 = 0x%x\n",p->reg_13.reg_filterop_v_coef35);
+	pr_info("reg_filterop_v_coef36 = 0x%x\n",p->reg_13.reg_filterop_v_coef36);
+	pr_info("reg_filterop_v_coef42 = 0x%x\n",p->reg_13.reg_filterop_v_coef42);
+	pr_info("reg_filterop_v_coef43 = 0x%x\n",p->reg_13.reg_filterop_v_coef43);
+	pr_info("reg_filterop_v_coef44 = 0x%x\n",p->reg_14.reg_filterop_v_coef44);
+	pr_info("reg_filterop_v_coef45 = 0x%x\n",p->reg_14.reg_filterop_v_coef45);
+	pr_info("reg_filterop_v_coef46 = 0x%x\n",p->reg_14.reg_filterop_v_coef46);
+	pr_info("reg_filterop_v_coef52 = 0x%x\n",p->reg_14.reg_filterop_v_coef52);
+	pr_info("reg_filterop_v_coef53 = 0x%x\n",p->reg_15.reg_filterop_v_coef53);
+	pr_info("reg_filterop_v_coef54 = 0x%x\n",p->reg_15.reg_filterop_v_coef54);
+	pr_info("reg_filterop_v_coef55 = 0x%x\n",p->reg_15.reg_filterop_v_coef55);
+	pr_info("reg_filterop_v_coef56 = 0x%x\n",p->reg_15.reg_filterop_v_coef56);
+	pr_info("reg_filterop_v_coef62 = 0x%x\n",p->reg_16.reg_filterop_v_coef62);
+	pr_info("reg_filterop_v_coef63 = 0x%x\n",p->reg_16.reg_filterop_v_coef63);
+	pr_info("reg_filterop_v_coef64 = 0x%x\n",p->reg_16.reg_filterop_v_coef64);
+	pr_info("reg_filterop_v_coef65 = 0x%x\n",p->reg_16.reg_filterop_v_coef65);
+	pr_info("reg_filterop_v_coef66 = 0x%x\n",p->reg_17.reg_filterop_v_coef66);
 	pr_info("\tREG_17.reg_filterop_v_norm = 0x%x\n", p->reg_17.reg_filterop_v_norm);
+#else
+    pr_info("reg_filterop_v_coef00 = 0x%x\n",p->reg_11.reg_filterop_v_coef00);
+    pr_info("reg_filterop_v_coef01 = 0x%x\n",p->reg_11.reg_filterop_v_coef01);
+    pr_info("reg_filterop_v_coef02 = 0x%x\n",p->reg_11.reg_filterop_v_coef02);
+    pr_info("reg_filterop_v_coef03 = 0x%x\n",p->reg_11.reg_filterop_v_coef03);
+    pr_info("reg_filterop_v_coef04 = 0x%x\n",p->reg_12.reg_filterop_v_coef04);
+    pr_info("reg_filterop_v_coef10 = 0x%x\n",p->reg_12.reg_filterop_v_coef10);
+    pr_info("reg_filterop_v_coef11 = 0x%x\n",p->reg_12.reg_filterop_v_coef11);
+    pr_info("reg_filterop_v_coef12 = 0x%x\n",p->reg_12.reg_filterop_v_coef12);
+    pr_info("reg_filterop_v_coef13 = 0x%x\n",p->reg_13.reg_filterop_v_coef13);
+    pr_info("reg_filterop_v_coef14 = 0x%x\n",p->reg_13.reg_filterop_v_coef14);
+    pr_info("reg_filterop_v_coef20 = 0x%x\n",p->reg_13.reg_filterop_v_coef20);
+    pr_info("reg_filterop_v_coef21 = 0x%x\n",p->reg_13.reg_filterop_v_coef21);
+    pr_info("reg_filterop_v_coef22 = 0x%x\n",p->reg_14.reg_filterop_v_coef22);
+    pr_info("reg_filterop_v_coef23 = 0x%x\n",p->reg_14.reg_filterop_v_coef23);
+    pr_info("reg_filterop_v_coef24 = 0x%x\n",p->reg_14.reg_filterop_v_coef24);
+    pr_info("reg_filterop_v_coef30 = 0x%x\n",p->reg_14.reg_filterop_v_coef30);
+    pr_info("reg_filterop_v_coef31 = 0x%x\n",p->reg_15.reg_filterop_v_coef31);
+    pr_info("reg_filterop_v_coef32 = 0x%x\n",p->reg_15.reg_filterop_v_coef32);
+    pr_info("reg_filterop_v_coef33 = 0x%x\n",p->reg_15.reg_filterop_v_coef33);
+    pr_info("reg_filterop_v_coef34 = 0x%x\n",p->reg_15.reg_filterop_v_coef34);
+    pr_info("reg_filterop_v_coef40 = 0x%x\n",p->reg_16.reg_filterop_v_coef40);
+    pr_info("reg_filterop_v_coef41 = 0x%x\n",p->reg_16.reg_filterop_v_coef41);
+    pr_info("reg_filterop_v_coef42 = 0x%x\n",p->reg_16.reg_filterop_v_coef42);
+    pr_info("reg_filterop_v_coef43 = 0x%x\n",p->reg_16.reg_filterop_v_coef43);
+    pr_info("reg_filterop_v_coef44 = 0x%x\n",p->reg_17.reg_filterop_v_coef44);
+#endif
 	pr_info("\tREG_18.reg_filterop_mode_trans = 0x%x\n", p->reg_18.reg_filterop_mode_trans);
 	pr_info("\tREG_18.reg_filterop_order_enmode = 0x%x\n", p->reg_18.reg_filterop_order_enmode);
 	pr_info("\tREG_18.reg_filterop_mag_thr = 0x%x\n", p->reg_18.reg_filterop_mag_thr);
@@ -229,39 +283,77 @@ static void ive_filterop_printk(ive_filterop_c *p)
 	pr_info("\tREG_20.reg_filterop_lbp_u8bit_thr = 0x%x\n", p->reg_20.reg_filterop_lbp_u8bit_thr);
 	pr_info("\tREG_20.reg_filterop_lbp_s8bit_thr = 0x%x\n", p->reg_20.reg_filterop_lbp_s8bit_thr);
 	pr_info("\tREG_20.reg_filterop_lbp_enmode = 0x%x\n", p->reg_20.reg_filterop_lbp_enmode);
-	pr_info("\tREG_21.reg_filterop_op2_erodila_coef00 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef00);
-	pr_info("\tREG_21.reg_filterop_op2_erodila_coef01 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef01);
-	pr_info("\tREG_21.reg_filterop_op2_erodila_coef02 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef02);
-	pr_info("\tREG_21.reg_filterop_op2_erodila_coef03 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef03);
-	pr_info("\tREG_22.reg_filterop_op2_erodila_coef04 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef04);
-	pr_info("\tREG_22.reg_filterop_op2_erodila_coef10 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef10);
-	pr_info("\tREG_22.reg_filterop_op2_erodila_coef11 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef11);
-	pr_info("\tREG_22.reg_filterop_op2_erodila_coef12 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef12);
-	pr_info("\tREG_23.reg_filterop_op2_erodila_coef13 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef13);
-	pr_info("\tREG_23.reg_filterop_op2_erodila_coef14 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef14);
-	pr_info("\tREG_23.reg_filterop_op2_erodila_coef20 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef20);
-	pr_info("\tREG_23.reg_filterop_op2_erodila_coef21 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef21);
-	pr_info("\tREG_24.reg_filterop_op2_erodila_coef22 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef22);
-	pr_info("\tREG_24.reg_filterop_op2_erodila_coef23 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef23);
-	pr_info("\tREG_24.reg_filterop_op2_erodila_coef24 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef24);
-	pr_info("\tREG_24.reg_filterop_op2_erodila_coef30 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef30);
-	pr_info("\tREG_25.reg_filterop_op2_erodila_coef31 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef31);
-	pr_info("\tREG_25.reg_filterop_op2_erodila_coef32 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef32);
-	pr_info("\tREG_25.reg_filterop_op2_erodila_coef33 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef33);
-	pr_info("\tREG_25.reg_filterop_op2_erodila_coef34 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef34);
-	pr_info("\tREG_26.reg_filterop_op2_erodila_coef40 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef40);
-	pr_info("\tREG_26.reg_filterop_op2_erodila_coef41 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef41);
-	pr_info("\tREG_26.reg_filterop_op2_erodila_coef42 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef42);
-	pr_info("\tREG_26.reg_filterop_op2_erodila_coef43 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef43);
-	pr_info("\tREG_27.reg_filterop_op2_erodila_coef44 = 0x%x\n", p->reg_27.reg_filterop_op2_erodila_coef44);
-	pr_info("\tREG_28.reg_filterop_op2_erodila_en = 0x%x\n", p->reg_28.reg_filterop_op2_erodila_en);
-	pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_en = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_en);
-	pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_coeff_sel = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_coeff_sel);
-	pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_coeff = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_coeff);
-	pr_info("\tREG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_x = 0x%x\n", p->REG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_x);
-	pr_info("\tREG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_y = 0x%x\n", p->REG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_y);
-	pr_info("\tREG_CSC_DBG_DATA_SRC.reg_csc_dbg_src_data = 0x%x\n", p->REG_CSC_DBG_DATA_SRC.reg_csc_dbg_src_data);
-	pr_info("\tREG_CSC_DBG_DATA_DAT.reg_csc_dbg_dst_data = 0x%x\n", p->REG_CSC_DBG_DATA_DAT.reg_csc_dbg_dst_data);
+#ifdef MEDIA_V3
+	pr_info("reg_filterop_op2_erodila_coef22 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef22);
+    pr_info("reg_filterop_op2_erodila_coef23 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef23);
+    pr_info("reg_filterop_op2_erodila_coef24 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef24);
+    pr_info("reg_filterop_op2_erodila_coef25 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef25);
+    pr_info("reg_filterop_op2_erodila_coef26 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef26);
+    pr_info("reg_filterop_op2_erodila_coef32 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef32);
+    pr_info("reg_filterop_op2_erodila_coef33 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef33);
+    pr_info("reg_filterop_op2_erodila_coef34 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef34);
+    pr_info("reg_filterop_op2_erodila_coef35 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef35);
+    pr_info("reg_filterop_op2_erodila_coef36 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef36);
+    pr_info("reg_filterop_op2_erodila_coef42 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef42);
+    pr_info("reg_filterop_op2_erodila_coef43 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef43);
+    pr_info("reg_filterop_op2_erodila_coef44 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef44);
+    pr_info("reg_filterop_op2_erodila_coef45 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef45);
+    pr_info("reg_filterop_op2_erodila_coef46 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef46);
+    pr_info("reg_filterop_op2_erodila_coef52 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef52);
+    pr_info("reg_filterop_op2_erodila_coef53 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef53);
+    pr_info("reg_filterop_op2_erodila_coef54 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef54);
+    pr_info("reg_filterop_op2_erodila_coef55 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef55);
+    pr_info("reg_filterop_op2_erodila_coef56 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef56);
+    pr_info("reg_filterop_op2_erodila_coef62 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef62);
+    pr_info("reg_filterop_op2_erodila_coef63 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef63);
+    pr_info("reg_filterop_op2_erodila_coef64 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef64);
+    pr_info("reg_filterop_op2_erodila_coef65 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef65);
+    pr_info("reg_filterop_op2_erodila_coef66 = 0x%x\n", p->reg_27.reg_filterop_op2_erodila_coef66);
+	pr_info("\treg_28.reg_filterop_op2_erodila_en = 0x%x\n", p->reg_28.reg_filterop_op2_erodila_en);
+#else
+    pr_info("reg_filterop_op2_erodila_coef00 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef00);
+    pr_info("reg_filterop_op2_erodila_coef01 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef01);
+    pr_info("reg_filterop_op2_erodila_coef02 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef02);
+    pr_info("reg_filterop_op2_erodila_coef03 = 0x%x\n", p->reg_21.reg_filterop_op2_erodila_coef03);
+    pr_info("reg_filterop_op2_erodila_coef04 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef04);
+    pr_info("reg_filterop_op2_erodila_coef10 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef10);
+    pr_info("reg_filterop_op2_erodila_coef11 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef11);
+    pr_info("reg_filterop_op2_erodila_coef12 = 0x%x\n", p->reg_22.reg_filterop_op2_erodila_coef12);
+    pr_info("reg_filterop_op2_erodila_coef13 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef13);
+    pr_info("reg_filterop_op2_erodila_coef14 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef14);
+    pr_info("reg_filterop_op2_erodila_coef20 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef20);
+    pr_info("reg_filterop_op2_erodila_coef21 = 0x%x\n", p->reg_23.reg_filterop_op2_erodila_coef21);
+    pr_info("reg_filterop_op2_erodila_coef22 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef22);
+    pr_info("reg_filterop_op2_erodila_coef23 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef23);
+    pr_info("reg_filterop_op2_erodila_coef24 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef24);
+    pr_info("reg_filterop_op2_erodila_coef30 = 0x%x\n", p->reg_24.reg_filterop_op2_erodila_coef30);
+    pr_info("reg_filterop_op2_erodila_coef31 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef31);
+    pr_info("reg_filterop_op2_erodila_coef32 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef32);
+    pr_info("reg_filterop_op2_erodila_coef33 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef33);
+    pr_info("reg_filterop_op2_erodila_coef34 = 0x%x\n", p->reg_25.reg_filterop_op2_erodila_coef34);
+    pr_info("reg_filterop_op2_erodila_coef40 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef40);
+    pr_info("reg_filterop_op2_erodila_coef41 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef41);
+    pr_info("reg_filterop_op2_erodila_coef42 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef42);
+    pr_info("reg_filterop_op2_erodila_coef43 = 0x%x\n", p->reg_26.reg_filterop_op2_erodila_coef43);
+    pr_info("reg_filterop_op2_erodila_coef44 = 0x%x\n", p->reg_27.reg_filterop_op2_erodila_coef44);
+#endif
+#ifdef MEDIA_V3
+	pr_info("\treg_csc_dbg_coeff.reg_csc_dbg_en = 0x%x\n", p->reg_csc_dbg_coeff.reg_csc_dbg_en);
+	pr_info("\treg_csc_dbg_coeff.reg_csc_dbg_coeff_sel = 0x%x\n", p->reg_csc_dbg_coeff.reg_csc_dbg_coeff_sel);
+	pr_info("\treg_csc_dbg_coeff.reg_csc_dbg_coeff = 0x%x\n", p->reg_csc_dbg_coeff.reg_csc_dbg_coeff);
+	pr_info("\treg_csc_dbg_prob_pix.reg_csc_dbg_prob_x = 0x%x\n", p->reg_csc_dbg_prob_pix.reg_csc_dbg_prob_x);
+	pr_info("\treg_csc_dbg_prob_pix.reg_csc_dbg_prob_y = 0x%x\n", p->reg_csc_dbg_prob_pix.reg_csc_dbg_prob_y);
+	pr_info("\treg_csc_dbg_data_src.reg_csc_dbg_src_data = 0x%x\n", p->reg_csc_dbg_data_src.reg_csc_dbg_src_data);
+	pr_info("\treg_csc_dbg_data_dat.reg_csc_dbg_dst_data = 0x%x\n", p->reg_csc_dbg_data_dat.reg_csc_dbg_dst_data);
+#else
+    pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_en = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_en);
+    pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_coeff_sel = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_coeff_sel);
+    pr_info("\tREG_CSC_DBG_COEFF.reg_csc_dbg_coeff = 0x%x\n", p->REG_CSC_DBG_COEFF.reg_csc_dbg_coeff);
+    pr_info("\tREG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_x = 0x%x\n", p->REG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_x);
+    pr_info("\tREG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_y = 0x%x\n", p->REG_CSC_DBG_PROB_PIX.reg_csc_dbg_prob_y);
+    pr_info("\tREG_CSC_DBG_DATA_SRC.reg_csc_dbg_src_data = 0x%x\n", p->REG_CSC_DBG_DATA_SRC.reg_csc_dbg_src_data);
+    pr_info("\tREG_CSC_DBG_DATA_DAT.reg_csc_dbg_dst_data = 0x%x\n", p->REG_CSC_DBG_DATA_DAT.reg_csc_dbg_dst_data);
+#endif
 	pr_info("\treg_33.reg_filterop_op2_gradfg_en = 0x%x\n", p->reg_33.reg_filterop_op2_gradfg_en);
 	pr_info("\treg_33.reg_filterop_op2_gradfg_softrst = 0x%x\n", p->reg_33.reg_filterop_op2_gradfg_softrst);
 	pr_info("\treg_33.reg_filterop_op2_gradfg_enmode = 0x%x\n", p->reg_33.reg_filterop_op2_gradfg_enmode);
@@ -299,8 +391,7 @@ static void ive_filterop_printk(ive_filterop_c *p)
 	pr_info("\tODMA_REG_14.reg_dma_int_line_target = 0x%x\n", p->odma_reg_14.reg_dma_int_line_target);
 	pr_info("\tODMA_REG_14.reg_dma_int_line_target_sel = 0x%x\n", p->odma_reg_14.reg_dma_int_line_target_sel);
 	pr_info("\tODMA_REG_15.reg_dma_int_cycle_line_target = 0x%x\n", p->odma_reg_15.reg_dma_int_cycle_line_target);
-	pr_info("\tODMA_REG_15.reg_dma_int_cycle_line_target_sel = 0x%x\n",
-							p->odma_reg_15.reg_dma_int_cycle_line_target_sel);
+	pr_info("\tODMA_REG_15.reg_dma_int_cycle_line_target_sel = 0x%x\n", p->odma_reg_15.reg_dma_int_cycle_line_target_sel);
 	pr_info("\tODMA_REG_16.reg_dma_latch_line_cnt = 0x%x\n", p->odma_reg_16.reg_dma_latch_line_cnt);
 	pr_info("\tODMA_REG_16.reg_dma_latched_line_cnt = 0x%x\n", p->odma_reg_16.reg_dma_latched_line_cnt);
 	pr_info("\tODMA_REG_17.axi_active = 0x%x\n", p->odma_reg_17.axi_active);
@@ -327,41 +418,26 @@ static void ive_filterop_printk(ive_filterop_c *p)
 	pr_info("\tREG_CANNY_3.reg_canny_basel = 0x%x\n", p->reg_canny_3.reg_canny_basel);
 	pr_info("\tREG_CANNY_4.reg_canny_baseh = 0x%x\n", p->reg_canny_4.reg_canny_baseh);
 	pr_info("\tREG_ST_CANDI_0.reg_st_candi_corner_bypass = 0x%x\n", p->reg_st_candi_0.reg_st_candi_corner_bypass);
-	pr_info("\tREG_ST_CANDI_0.reg_st_candi_corner_switch_src = 0x%x\n",
-							p->reg_st_candi_0.reg_st_candi_corner_switch_src);
+	pr_info("\tREG_ST_CANDI_0.reg_st_candi_corner_switch_src = 0x%x\n", p->reg_st_candi_0.reg_st_candi_corner_switch_src);
 	pr_info("\tREG_ST_EIGVAL_0.reg_st_eigval_max_eigval = 0x%x\n", p->reg_st_eigval_0.reg_st_eigval_max_eigval);
 	pr_info("\tREG_ST_EIGVAL_0.reg_st_eigval_tile_num = 0x%x\n", p->reg_st_eigval_0.reg_st_eigval_tile_num);
 	pr_info("\tREG_ST_EIGVAL_1.reg_sw_clr_max_eigval = 0x%x\n", p->reg_st_eigval_1.reg_sw_clr_max_eigval);
 	pr_info("\treg_h190.reg_filterop_op2_csc_tab_sw_0 = 0x%x\n", p->reg_h190.reg_filterop_op2_csc_tab_sw_0);
 	pr_info("\treg_h190.reg_filterop_op2_csc_tab_sw_1 = 0x%x\n", p->reg_h190.reg_filterop_op2_csc_tab_sw_1);
-	pr_info("\treg_h194.reg_filterop_op2_csc_tab_sw_update = 0x%x\n",
-								p->reg_h194.reg_filterop_op2_csc_tab_sw_update);
-	pr_info("\treg_h194.reg_filterop_op2_csc_coeff_sw_update = 0x%x\n",
-								p->reg_h194.reg_filterop_op2_csc_coeff_sw_update);
-	pr_info("\tREG_CSC_COEFF_0.reg_filterop_op2_csc_coeff_sw_00 = 0x%x\n",
-								p->reg_csc_coeff_0.reg_filterop_op2_csc_coeff_sw_00);
-	pr_info("\tREG_CSC_COEFF_1.reg_filterop_op2_csc_coeff_sw_01 = 0x%x\n",
-								p->reg_csc_coeff_1.reg_filterop_op2_csc_coeff_sw_01);
-	pr_info("\tREG_CSC_COEFF_2.reg_filterop_op2_csc_coeff_sw_02 = 0x%x\n",
-								p->reg_csc_coeff_2.reg_filterop_op2_csc_coeff_sw_02);
-	pr_info("\tREG_CSC_COEFF_3.reg_filterop_op2_csc_coeff_sw_03 = 0x%x\n",
-								p->reg_csc_coeff_3.reg_filterop_op2_csc_coeff_sw_03);
-	pr_info("\tREG_CSC_COEFF_4.reg_filterop_op2_csc_coeff_sw_04 = 0x%x\n",
-								p->reg_csc_coeff_4.reg_filterop_op2_csc_coeff_sw_04);
-	pr_info("\tREG_CSC_COEFF_5.reg_filterop_op2_csc_coeff_sw_05 = 0x%x\n",
-								p->reg_csc_coeff_5.reg_filterop_op2_csc_coeff_sw_05);
-	pr_info("\tREG_CSC_COEFF_6.reg_filterop_op2_csc_coeff_sw_06 = 0x%x\n",
-								p->reg_csc_coeff_6.reg_filterop_op2_csc_coeff_sw_06);
-	pr_info("\tREG_CSC_COEFF_7.reg_filterop_op2_csc_coeff_sw_07 = 0x%x\n",
-								p->reg_csc_coeff_7.reg_filterop_op2_csc_coeff_sw_07);
-	pr_info("\tREG_CSC_COEFF_8.reg_filterop_op2_csc_coeff_sw_08 = 0x%x\n",
-								p->reg_csc_coeff_8.reg_filterop_op2_csc_coeff_sw_08);
-	pr_info("\tREG_CSC_COEFF_9.reg_filterop_op2_csc_coeff_sw_09 = 0x%x\n",
-								p->reg_csc_coeff_9.reg_filterop_op2_csc_coeff_sw_09);
-	pr_info("\tREG_CSC_COEFF_A.reg_filterop_op2_csc_coeff_sw_10 = 0x%x\n",
-								p->reg_csc_coeff_a.reg_filterop_op2_csc_coeff_sw_10);
-	pr_info("\tREG_CSC_COEFF_B.reg_filterop_op2_csc_coeff_sw_11 = 0x%x\n",
-								p->reg_csc_coeff_b.reg_filterop_op2_csc_coeff_sw_11);
+	pr_info("\treg_h194.reg_filterop_op2_csc_tab_sw_update = 0x%x\n", p->reg_h194.reg_filterop_op2_csc_tab_sw_update);
+	pr_info("\treg_h194.reg_filterop_op2_csc_coeff_sw_update = 0x%x\n", p->reg_h194.reg_filterop_op2_csc_coeff_sw_update);
+	pr_info("\tREG_CSC_COEFF_0.reg_filterop_op2_csc_coeff_sw_00 = 0x%x\n", p->reg_csc_coeff_0.reg_filterop_op2_csc_coeff_sw_00);
+	pr_info("\tREG_CSC_COEFF_1.reg_filterop_op2_csc_coeff_sw_01 = 0x%x\n", p->reg_csc_coeff_1.reg_filterop_op2_csc_coeff_sw_01);
+	pr_info("\tREG_CSC_COEFF_2.reg_filterop_op2_csc_coeff_sw_02 = 0x%x\n", p->reg_csc_coeff_2.reg_filterop_op2_csc_coeff_sw_02);
+	pr_info("\tREG_CSC_COEFF_3.reg_filterop_op2_csc_coeff_sw_03 = 0x%x\n", p->reg_csc_coeff_3.reg_filterop_op2_csc_coeff_sw_03);
+	pr_info("\tREG_CSC_COEFF_4.reg_filterop_op2_csc_coeff_sw_04 = 0x%x\n", p->reg_csc_coeff_4.reg_filterop_op2_csc_coeff_sw_04);
+	pr_info("\tREG_CSC_COEFF_5.reg_filterop_op2_csc_coeff_sw_05 = 0x%x\n", p->reg_csc_coeff_5.reg_filterop_op2_csc_coeff_sw_05);
+	pr_info("\tREG_CSC_COEFF_6.reg_filterop_op2_csc_coeff_sw_06 = 0x%x\n", p->reg_csc_coeff_6.reg_filterop_op2_csc_coeff_sw_06);
+	pr_info("\tREG_CSC_COEFF_7.reg_filterop_op2_csc_coeff_sw_07 = 0x%x\n", p->reg_csc_coeff_7.reg_filterop_op2_csc_coeff_sw_07);
+	pr_info("\tREG_CSC_COEFF_8.reg_filterop_op2_csc_coeff_sw_08 = 0x%x\n", p->reg_csc_coeff_8.reg_filterop_op2_csc_coeff_sw_08);
+	pr_info("\tREG_CSC_COEFF_9.reg_filterop_op2_csc_coeff_sw_09 = 0x%x\n", p->reg_csc_coeff_9.reg_filterop_op2_csc_coeff_sw_09);
+	pr_info("\tREG_CSC_COEFF_A.reg_filterop_op2_csc_coeff_sw_10 = 0x%x\n", p->reg_csc_coeff_a.reg_filterop_op2_csc_coeff_sw_10);
+	pr_info("\tREG_CSC_COEFF_B.reg_filterop_op2_csc_coeff_sw_11 = 0x%x\n", p->reg_csc_coeff_b.reg_filterop_op2_csc_coeff_sw_11);
 	pr_info("\treg_h1c8.reg_filterop_op2_csc_enmode = 0x%x\n", p->reg_h1c8.reg_filterop_op2_csc_enmode);
 	pr_info("\treg_h1c8.reg_filterop_op2_csc_enable = 0x%x\n", p->reg_h1c8.reg_filterop_op2_csc_enable);
 	pr_info("\tREG_cropy_s.reg_crop_y_start_x = 0x%x\n", p->reg_cropy_s.reg_crop_y_start_x);
@@ -379,8 +455,29 @@ static void ive_filterop_printk(ive_filterop_c *p)
 	pr_info("\tREG_crop_odma_e.reg_crop_odma_start_y = 0x%x\n", p->reg_crop_odma_e.reg_crop_odma_start_y);
 	pr_info("\tREG_crop_odma_e.reg_crop_odma_end_y = 0x%x\n", p->reg_crop_odma_e.reg_crop_odma_end_y);
 	pr_info("\tREG_crop_odma_ctl.reg_crop_odma_enable = 0x%x\n", p->reg_crop_odma_ctl.reg_crop_odma_enable);
-}
+    #ifdef MEDIA_V3
+    pr_info("reg_window_size_choose_sobel = 0x%x\n", p->reg_crop_odma_ctl.reg_window_size_choose_sobel);
+    pr_info("reg_window_size_choose_erodila_op1 = 0x%x\n", p->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1);
+    pr_info("reg_window_size_choose_erodila_op2 = 0x%x\n", p->reg_crop_odma_ctl.reg_window_size_choose_erodila_op2);
+    pr_info("reg_window_size_choose_canny = 0x%x\n", p->reg_crop_odma_ctl.reg_window_size_choose_canny);
 
+    pr_info("reg_filterop_v_coef00 = 0x%x\n", p->reg_filter_v0.reg_filterop_v_coef00);
+    pr_info("reg_filterop_v_coef01 = 0x%x\n", p->reg_filter_v0.reg_filterop_v_coef01);
+    pr_info("reg_filterop_v_coef02 = 0x%x\n", p->reg_filter_v0.reg_filterop_v_coef02);
+    pr_info("reg_filterop_v_coef03 = 0x%x\n", p->reg_filter_v0.reg_filterop_v_coef03);
+
+    pr_info("reg_filterop_op2_erodila_coef00 = 0x%x\n", p->reg_filter_ero1.reg_filterop_op2_erodila_coef00);
+    pr_info("reg_filterop_op2_erodila_coef01 = 0x%x\n", p->reg_filter_ero1.reg_filterop_op2_erodila_coef01);
+    pr_info("reg_filterop_op2_erodila_coef02 = 0x%x\n", p->reg_filter_ero1.reg_filterop_op2_erodila_coef02);
+    pr_info("reg_filterop_op2_erodila_coef03 = 0x%x\n", p->reg_filter_ero1.reg_filterop_op2_erodila_coef03);
+
+    pr_info("reg_filterop_h_coef00 = 0x%x\n", p->reg_filter_h1.reg_filterop_h_coef00);
+    pr_info("reg_filterop_h_coef01 = 0x%x\n", p->reg_filter_h1.reg_filterop_h_coef01);
+    pr_info("reg_filterop_h_coef02 = 0x%x\n", p->reg_filter_h1.reg_filterop_h_coef02);
+    pr_info("reg_filterop_h_coef03 = 0x%x\n", p->reg_filter_h1.reg_filterop_h_coef03);
+    #endif
+}
+/*
 static void ive_gmm_printk(ive_gmm_c *p)
 {
 	pr_info("ive_gmm\n");
@@ -454,7 +551,7 @@ static void ive_gmm_printk(ive_gmm_c *p)
 	pr_info("\treg_gmm_14.reg_prob_byte_data = 0x%x\n",
 		p->reg_gmm_14.reg_prob_byte_data);
 }
-
+*/
 // static void ive_map_printk(ive_map_c *p)
 // {
 // 	pr_info("ive_map\n");
@@ -475,7 +572,7 @@ static void ive_gmm_printk(ive_gmm_c *p)
 // 	pr_info("\tREG_4.reg_sw_lut_r_w1t = 0x%x\n", p->reg_4.reg_sw_lut_r_w1t);
 // 	pr_info("\tREG_5.reg_sw_lut_rdata = 0x%x\n", p->reg_5.reg_sw_lut_rdata);
 // }
-
+/*
 static void ive_match_bg_printk(ive_match_bg_c *p)
 {
 	pr_info("ive_match_bg\n");
@@ -507,7 +604,7 @@ static void ive_match_bg_printk(ive_match_bg_c *p)
 	pr_info("\tREG_14.reg_matchbg_stat_sumlum = 0x%x\n",
 		p->reg_14.reg_matchbg_stat_sumlum);
 }
-
+*/
 // static void ive_sad_printk(ive_sad_c *p)
 // {
 // 	pr_info("ive_sad\n");
@@ -744,7 +841,7 @@ static void ive_top_printk(ive_top_c *p)
 	pr_info("\tREG_R2Y4_14.reg_csc_r2y4_enmode = 0x%x\n", p->reg_r2y4_14.reg_csc_r2y4_enmode);
 	pr_info("\tREG_R2Y4_14.reg_csc_r2y4_enable = 0x%x\n", p->reg_r2y4_14.reg_csc_r2y4_enable);
 }
-
+/*
 static void ive_update_bg_printk(ive_update_bg_c *p)
 {
 	pr_info("ive_update_bg\n");
@@ -779,7 +876,7 @@ static void ive_update_bg_printk(ive_update_bg_c *p)
 	pr_info("\treg_crop_e.reg_crop_end_y = 0x%x\n", p->reg_crop_e.reg_crop_end_y);
 	pr_info("\treg_crop_ctl.reg_crop_enable = 0x%x\n", p->reg_crop_ctl.reg_crop_enable);
 }
-
+*/
 // static void ive_ncc_printk(ive_ncc_c *p)
 // {
 // 	pr_info("ive_ncc\n");
@@ -1198,43 +1295,44 @@ static void ive_dump_img_reg_state(void)
 		   sizeof(isp_dma_ctl_c));
 	isp_dma_ctl_printk(&isp_dma);
 
-	//src2
-	pr_info("IVE_BLK_BA_RDMA_IMG1 0x%p\n",
-		IVE_BLK_BA[d_num].RDMA_IMG1 - g_phy_shift[d_num]);
-	memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].RDMA_IMG1),
-		   sizeof(isp_dma_ctl_c));
-	isp_dma_ctl_printk(&isp_dma);
+	// //src2
+	// pr_info("IVE_BLK_BA_RDMA_IMG1 0x%p\n",
+	// 	IVE_BLK_BA[d_num].RDMA_IMG1 - g_phy_shift[d_num]);
+	// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].RDMA_IMG1),
+	// 	   sizeof(isp_dma_ctl_c));
+	// isp_dma_ctl_printk(&isp_dma);
 
-	//dst2
-	pr_info("IVE_BLK_BA_FILTEROP_WDMA_C 0x%p\n",
-		IVE_BLK_BA[d_num].FILTEROP_WDMA_C - g_phy_shift[d_num]);
-	memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].FILTEROP_WDMA_C),
-		   sizeof(isp_dma_ctl_c));
-	isp_dma_ctl_printk(&isp_dma);
+	// //dst2
+	// pr_info("IVE_BLK_BA_FILTEROP_WDMA_C 0x%p\n",
+	// 	IVE_BLK_BA[d_num].FILTEROP_WDMA_C - g_phy_shift[d_num]);
+	// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].FILTEROP_WDMA_C),
+	// 	   sizeof(isp_dma_ctl_c));
+	// isp_dma_ctl_printk(&isp_dma);
 
-	//src3
-	pr_info("IVE_BLK_BA_DMAF_RDMA 0x%p\n",
-		IVE_BLK_BA[d_num].DMAF_RDMA - g_phy_shift[d_num]);
-	memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].DMAF_RDMA),
-		   sizeof(isp_dma_ctl_c));
-	isp_dma_ctl_printk(&isp_dma);
+	// //src3
+	// pr_info("IVE_BLK_BA_DMAF_RDMA 0x%p\n",
+	// 	IVE_BLK_BA[d_num].DMAF_RDMA - g_phy_shift[d_num]);
+	// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].DMAF_RDMA),
+	// 	   sizeof(isp_dma_ctl_c));
+	// isp_dma_ctl_printk(&isp_dma);
 
-	//dst3
-	pr_info("IVE_BLK_BA_DMAF_WDMA 0x%p\n",
-		IVE_BLK_BA[d_num].DMAF_WDMA - g_phy_shift[d_num]);
-	memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].DMAF_WDMA),
-		   sizeof(isp_dma_ctl_c));
-	isp_dma_ctl_printk(&isp_dma);
+	// //dst3
+	// pr_info("IVE_BLK_BA_DMAF_WDMA 0x%p\n",
+	// 	IVE_BLK_BA[d_num].DMAF_WDMA - g_phy_shift[d_num]);
+	// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].DMAF_WDMA),
+	// 	   sizeof(isp_dma_ctl_c));
+	// isp_dma_ctl_printk(&isp_dma);
 }
 
 s32 ive_dump_reg_state(bool bDump)
 {
-	// isp_dma_ctl_c isp_dma;
-	ive_gmm_c gmm;
-	ive_match_bg_c bgmodel;
-	ive_update_bg_c upmodel;
+	isp_dma_ctl_c isp_dma;
+	// ive_gmm_c gmm;
+	// ive_match_bg_c bgmodel;
+	// ive_update_bg_c upmodel;
 	// ive_map_c map;
-	// ive_dma_c dma;
+	ive_dma_c dma;
+
 	// ive_ncc_c ncc;
 	// ive_sad_c sad;
 
@@ -1263,23 +1361,23 @@ s32 ive_dump_reg_state(bool bDump)
 		// 	   sizeof(isp_dma_ctl_c));
 		// isp_dma_ctl_printk(&isp_dma);
 
-		// //RDMA_EIGVAL
-		// pr_info("IVE_BLK_RDMA_EIGVAL 0x%p\n",
-		// 	IVE_BLK_BA[d_num].RDMA_EIGVAL - g_phy_shift[d_num]);
-		// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].RDMA_EIGVAL),
-		// 	   sizeof(isp_dma_ctl_c));
-		// isp_dma_ctl_printk(&isp_dma);
+		//RDMA_EIGVAL
+		pr_info("IVE_BLK_RDMA_EIGVAL 0x%p\n",
+			IVE_BLK_BA[d_num].RDMA_EIGVAL - g_phy_shift[d_num]);
+		memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].RDMA_EIGVAL),
+			   sizeof(isp_dma_ctl_c));
+		isp_dma_ctl_printk(&isp_dma);
 
 		// //MAP
 		// pr_info("IVE_BLK_BA_MAP 0x%p\n", IVE_BLK_BA[d_num].MAP - g_phy_shift[d_num]);
 		// memcpy(&map, (void *)(IVE_BLK_BA[d_num].MAP), sizeof(ive_map_c));
 		// ive_map_printk(&map);
 
-		// //DMAF
-		// pr_info("IVE_BLK_BA_DMAF 0x%p\n",
-		// 	IVE_BLK_BA[d_num].DMAF - g_phy_shift[d_num]);
-		// memcpy(&dma, (void *)(IVE_BLK_BA[d_num].DMAF), sizeof(ive_dma_c));
-		// ive_dma_printk(&dma);
+		//DMAF
+		pr_info("IVE_BLK_BA_DMAF 0x%p\n",
+			IVE_BLK_BA[d_num].DMAF - g_phy_shift[d_num]);
+		memcpy(&dma, (void *)(IVE_BLK_BA[d_num].DMAF), sizeof(ive_dma_c));
+		ive_dma_printk(&dma);
 
 		// //NCC
 		// pr_info("IVE_BLK_BA_NCC 0x%p\n", IVE_BLK_BA[d_num].NCC - g_phy_shift[d_num]);
@@ -1363,22 +1461,22 @@ s32 ive_dump_reg_state(bool bDump)
 		// memcpy(&isp_dma, (void *)(IVE_BLK_BA[d_num].GMM_MODEL_WDMA_4),
 		// 	   sizeof(isp_dma_ctl_c));
 		// isp_dma_ctl_printk(&isp_dma);
-		//GMM
-		pr_info("IVE_BLK_BA_GMM 0x%p\n", IVE_BLK_BA[d_num].GMM - g_phy_shift[d_num]);
-		memcpy(&gmm, (void *)(IVE_BLK_BA[d_num].GMM), sizeof(ive_gmm_c));
-		ive_gmm_printk(&gmm);
+		// GMM
+		// pr_info("IVE_BLK_BA_GMM 0x%p\n", IVE_BLK_BA[d_num].GMM - g_phy_shift[d_num]);
+		// memcpy(&gmm, (void *)(IVE_BLK_BA[d_num].GMM), sizeof(ive_gmm_c));
+		// ive_gmm_printk(&gmm);
 
-		pr_info("IVE_BLK_BA_MATCH_BGMODEL 0x%p\n",
-			IVE_BLK_BA[d_num].BG_MATCH_IVE_MATCH_BG - g_phy_shift[d_num]);
-		memcpy(&bgmodel, (void *)(IVE_BLK_BA[d_num].BG_MATCH_IVE_MATCH_BG),
-			   sizeof(ive_match_bg_c));
-		ive_match_bg_printk(&bgmodel);
+		// pr_info("IVE_BLK_BA_MATCH_BGMODEL 0x%p\n",
+		// 	IVE_BLK_BA[d_num].BG_MATCH_IVE_MATCH_BG - g_phy_shift[d_num]);
+		// memcpy(&bgmodel, (void *)(IVE_BLK_BA[d_num].BG_MATCH_IVE_MATCH_BG),
+		// 	   sizeof(ive_match_bg_c));
+		// ive_match_bg_printk(&bgmodel);
 
-		pr_info("IVE_BLK_BA_UPDATE_BGMODEL 0x%p\n",
-			IVE_BLK_BA[d_num].BG_UPDATE_UPDATE_BG - g_phy_shift[d_num]);
-		memcpy(&upmodel, (void *)(IVE_BLK_BA[d_num].BG_UPDATE_UPDATE_BG),
-			   sizeof(ive_update_bg_c));
-		ive_update_bg_printk(&upmodel);
+		// pr_info("IVE_BLK_BA_UPDATE_BGMODEL 0x%p\n",
+		// 	IVE_BLK_BA[d_num].BG_UPDATE_UPDATE_BG - g_phy_shift[d_num]);
+		// memcpy(&upmodel, (void *)(IVE_BLK_BA[d_num].BG_UPDATE_UPDATE_BG),
+		// 	   sizeof(ive_update_bg_c));
+		// ive_update_bg_printk(&upmodel);
 
 		// pr_info("BG_MATCH_BGMODEL_0_RDMA 0x%p\n",
 		// 	IVE_BLK_BA[d_num].BG_MATCH_BGMODEL_0_RDMA - g_phy_shift[d_num]);
@@ -1817,40 +1915,40 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 	//		dev_id = i;
 	//	}
 	//	spin_unlock(&ndev->core[dev_id].dev_lock);
-
 		ndev->core[dev_id].cur_optype = optype;
 		if (done_mask == 0)
 			done_mask = IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK;
 
-		if (optype == MOD_HIST) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_HIST_MASK;
-			ive_top_c->reg_94.reg_intr_en_hist = !instant;
-		} else if (optype == MOD_NCC) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_NCC_MASK;
-			ive_top_c->reg_94.reg_intr_en_ncc = !instant;
-		} else if (optype == MOD_INTEG) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_INTG_MASK;
-			ive_top_c->reg_94.reg_intr_en_intg = !instant;
-		} else if (optype == MOD_DMA) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_DMAF_MASK;
-			ive_top_c->reg_94.reg_intr_en_dmaf = !instant;
-		} else if (optype == MOD_GRADFG) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK;
-			ive_top_c->reg_94.reg_intr_en_filterop_wdma_y = !instant;
-		} else if (optype == MOD_SAD) {
-			int_mask = IVE_TOP_REG_INTR_STATUS_SAD_MASK;
-			ive_top_c->reg_94.reg_intr_en_sad = !instant;
-		} else if (optype == MOD_CCL){
-			int_mask = IVE_TOP_REG_INTR_STATUS_CCL_MASK;
-			ive_top_c->reg_94.reg_intr_en_ccl = !instant;
-		} else {
-			int_mask = IVE_TOP_REG_INTR_STATUS_FILTEROP_ODMA_MASK |
-				   IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK |
-				   IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_C_MASK;
-			ive_top_c->reg_94.reg_intr_en_filterop_odma = !instant;
-			ive_top_c->reg_94.reg_intr_en_filterop_wdma_y = !instant;
-			ive_top_c->reg_94.reg_intr_en_filterop_wdma_c = !instant;
-		}
+        if (optype == MOD_HIST) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_HIST_MASK;
+            ive_top_c->reg_94.reg_intr_en_hist = !instant;
+        } else if (optype == MOD_NCC) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_NCC_MASK;
+            ive_top_c->reg_94.reg_intr_en_ncc = !instant;
+        } else if (optype == MOD_INTEG) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_INTG_MASK;
+            ive_top_c->reg_94.reg_intr_en_intg = !instant;
+        } else if (optype == MOD_DMA) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_DMAF_MASK;
+            ive_top_c->reg_94.reg_intr_en_dmaf = !instant;
+        } else if (optype == MOD_GRADFG) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK;
+            ive_top_c->reg_94.reg_intr_en_filterop_wdma_y = !instant;
+        } else if (optype == MOD_SAD) {
+            int_mask = IVE_TOP_REG_INTR_STATUS_SAD_MASK;
+            ive_top_c->reg_94.reg_intr_en_sad = !instant;
+        } else if (optype == MOD_CCL){
+            int_mask = IVE_TOP_REG_INTR_STATUS_CCL_MASK;
+            ive_top_c->reg_94.reg_intr_en_ccl = !instant;
+        } else {
+            int_mask = IVE_TOP_REG_INTR_STATUS_FILTEROP_ODMA_MASK |
+                   IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK |
+                   IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_C_MASK;
+            ive_top_c->reg_94.reg_intr_en_filterop_odma = !instant;
+            ive_top_c->reg_94.reg_intr_en_filterop_wdma_y = !instant;
+            ive_top_c->reg_94.reg_intr_en_filterop_wdma_c = !instant;
+        }
+
 		writel(ive_top_c->reg_94.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_94));
 
 		reg_h10.val = readl(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H10);
@@ -1862,10 +1960,9 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 		g_debug_info.op[1].op_en = reg_28.reg_filterop_op2_erodila_en;
 		g_debug_info.op[1].op_sel = reg_h10.reg_filterop_mode;
 
-		//if (optype != MOD_INTEG && optype != MOD_DMA && optype != MOD_GRADFG && optype != MOD_SAD){
 		clear_framedone(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90), 0, dev_id);
 		clear_interrupt_status(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98), 0, dev_id);
-		//}
+
 		// GoGoGo
 		ive_dump_reg_state(false);
 		//ive_dump_hw_flow();
@@ -1881,36 +1978,47 @@ inline s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 		writel(ive_top_c->reg_1.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_1));
 		ive_dump_reg_state(false);
 		start_vld_time(optype, &ndev->core[dev_id]);
-
-		/*TODO:The flag-polling approach can hang under heavy load, so let’s not go down that route for now.*/
 		if (instant) {
 			TRACE_IVE(IVE_DBG_INFO, "instant is true\n");
-			while (((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90) &
-				done_mask) != done_mask) && cnt < 10000) {
-				usleep_range(10, 20);
-				cnt++;
-			}
+			TRACE_IVE(IVE_DBG_INFO, "instant mode: optype=%d, done_mask = 0x%08x\n", optype, done_mask);
+            while (cnt < 10000) {
+                if (optype == MOD_GMM || optype == MOD_GMM2) {
+                    if ((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90) & IVE_TOP_REG_FRAME_DONE_GMM_MASK) &&
+                        (readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98) & IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK) &&
+                        ((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_IVE_GMM_DMA_IDLE) & IVE_TOP_REG_GMM_DMA_IDLE_MASK) == IVE_TOP_REG_GMM_DMA_IDLE_MASK)) {
+                        break;
+                    }
+                } else {
+                    if (((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90) & done_mask) == done_mask)) {
+                        break;
+                    }
+                }
+                usleep_range(10, 20);
+                cnt++;
+            }
 			stop_vld_time(optype, ndev->core[dev_id].tile_num, &ndev->core[dev_id]);
 			complete(&ndev->core[dev_id].frame_done);
 			if (cnt >= 10000) {
-				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile = %d\n", ndev->core[dev_id].tile_num);
+				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile=%d, polls=%d\n", ndev->core[dev_id].tile_num, cnt);
 				ret = FAILURE;
 			}
 		} else {
-				TRACE_IVE(IVE_DBG_INFO, "instant is false\n");
-			    leavetime = wait_for_completion_timeout(
+			TRACE_IVE(IVE_DBG_INFO, "async mode: optype=%d, int_mask=0x%08x\n", optype, int_mask);
+			TRACE_IVE(IVE_DBG_INFO, "async mode: waiting for interrupt...\n");
+			leavetime = wait_for_completion_timeout(
 				&ndev->core[dev_id].frame_done, msecs_to_jiffies(5000 * TIMEOUT_MS));
 
 			reinit_completion(&ndev->core[dev_id].frame_done);
 			if (leavetime <= 0) {
-				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile = %d\n", ndev->core[dev_id].tile_num);
+				TRACE_IVE(IVE_DBG_ERR, "frame done timeout! tile=%d, leavetime=%ld\n", ndev->core[dev_id].tile_num, leavetime);
 				ret = FAILURE;
+			} else {
+				TRACE_IVE(IVE_DBG_INFO, "async mode: interrupt received, done!\n");
 			}
 		}
 		if (ndev->core[dev_id].tile_num == ndev->core[dev_id].total_tile) {
 			complete(&ndev->core[dev_id].op_done);
 		}
-	//}
 
 	return ret;
 }
@@ -2215,7 +2323,13 @@ static s32 emit_bgm_tile(
 			wdma_y_ctl_c->sys_control.reg_seglen_sel = 0;
 			wdma_y_ctl_c->dma_seglen.reg_seglen = 0;
 			wdma_y_ctl_c->dma_stride.reg_stride = Dst0Stride;
-
+            #ifdef MEDIA_V3
+            if ((width & 0xF) != 0) {
+                wdma_y_ctl_c->dma_dummy.reg_byte_mode = 1;
+                wdma_y_ctl_c->dma_stride.reg_stride = tileLen[round];
+                writel(wdma_y_ctl_c->dma_dummy.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_DUMMY));
+            }
+            #endif
 			ive_filterop_c->reg_cropy_s.reg_crop_y_start_x =
 				cropstart[round];
 			ive_filterop_c->reg_cropy_s.reg_crop_y_end_x =
@@ -2474,6 +2588,66 @@ static s32 emit_bgm_tile(
 						(IVE_BLK_BA[dev_id].BG_UPDATE_CHG_WDMA +
 					ISP_DMA_CTL_BASE_ADDR));
 			}
+            #ifdef MEDIA_V3
+            if ((width & 0xF) != 0) {
+                bgmodel_0_rdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                bgmodel_0_rdma_ctl_c->dma_stride.reg_stride = 16 * tileLen[round];
+                bgmodel_1_rdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                bgmodel_1_rdma_ctl_c->dma_stride.reg_stride = 8 * tileLen[round];
+                fgflag_rdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                fgflag_rdma_ctl_c->dma_stride.reg_stride = tileLen[round];
+
+                bgmodel_0_wdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                bgmodel_0_wdma_ctl_c->dma_stride.reg_stride = 16 * tileLen[round];
+                bgmodel_1_wdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                bgmodel_1_wdma_ctl_c->dma_stride.reg_stride = 8 * tileLen[round];
+                fg_wdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                fg_wdma_ctl_c->dma_stride.reg_stride = tileLen[round];
+
+                writel(bgmodel_0_rdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_BGMODEL_0_RDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(bgmodel_0_rdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_BGMODEL_0_RDMA + ISP_DMA_CTL_DMA_STRIDE);
+                writel(bgmodel_1_rdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_BGMODEL_1_RDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(bgmodel_1_rdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_BGMODEL_1_RDMA + ISP_DMA_CTL_DMA_STRIDE);
+                writel(fgflag_rdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_FGFLAG_RDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(fgflag_rdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_MATCH_FGFLAG_RDMA + ISP_DMA_CTL_DMA_STRIDE);
+
+                writel(bgmodel_0_wdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_BGMODEL_0_WDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(bgmodel_0_wdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_BGMODEL_0_WDMA + ISP_DMA_CTL_DMA_STRIDE);
+                writel(bgmodel_1_wdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_BGMODEL_1_WDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(bgmodel_1_wdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_BGMODEL_1_WDMA + ISP_DMA_CTL_DMA_STRIDE);
+                writel(fg_wdma_ctl_c->dma_dummy.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_FG_WDMA + ISP_DMA_CTL_DMA_DUMMY);
+                writel(fg_wdma_ctl_c->dma_stride.val,
+                        IVE_BLK_BA[dev_id].BG_UPDATE_FG_WDMA + ISP_DMA_CTL_DMA_STRIDE);
+
+                if (optype == MOD_BGM) {
+                    difffg_wdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                    difffg_wdma_ctl_c->dma_stride.reg_stride = 2 * tileLen[round];
+                    writel(difffg_wdma_ctl_c->dma_dummy.val,
+                            IVE_BLK_BA[dev_id].BG_MATCH_DIFFFG_WDMA + ISP_DMA_CTL_DMA_DUMMY);
+                    writel(difffg_wdma_ctl_c->dma_stride.val,
+                            IVE_BLK_BA[dev_id].BG_MATCH_DIFFFG_WDMA + ISP_DMA_CTL_DMA_STRIDE);
+                }
+                if (optype == MOD_BGU) {
+                    chg_wdma_ctl_c->dma_dummy.reg_byte_mode = 1;
+                    chg_wdma_ctl_c->dma_stride.reg_stride = 4 * tileLen[round];
+                    writel(chg_wdma_ctl_c->dma_dummy.val,
+                            IVE_BLK_BA[dev_id].BG_UPDATE_CHG_WDMA + ISP_DMA_CTL_DMA_DUMMY);
+                    writel(chg_wdma_ctl_c->dma_stride.val,
+                            IVE_BLK_BA[dev_id].BG_UPDATE_CHG_WDMA + ISP_DMA_CTL_DMA_STRIDE);
+                }
+            }
+            #endif
 		}
 
 		if (enOdma) {
@@ -2582,12 +2756,14 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 		 s32 y_unit, bool enWdma_c, s32 c_unit, bool enOdma,
 		 s32 optype, bool instant, s32 dev_id)
 {
-	/*
-	 * Tile x2 Width: 496~ 928 = 480*n-32*(n-1)
-	 * Tile x3 Width: 944~1376
-	 * Tile x4 Width:1392~1824
-	 * Tile x5 Width:1840~2272
-	 */
+    // Tile x2 Width: 496~ 928 = 480*n-32*(n-1)
+    // Tile x3 Width: 944~1376
+    // Tile x4 Width:1392~1824
+    // Tile x5 Width:1840~2272
+    // Tile x6 Width:2288~2720
+    // Tile x7 Width:2736~3168
+    // Tile x8 Width:3184~3616
+    // Tile x9 Width:3632~4064
 	s32 img1_unit;
 	s32 n = 0, round = 0, done_mask = 0;
 
@@ -2691,18 +2867,67 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 	for (round = 0; round < tileNum; round++) {
 		ndev->core[dev_id].tile_num = round;
 		ive_top_c->reg_2.reg_img_widthm1 = tileLen[round] - 1;
-		img_in_c_f->reg_02.reg_src_wd = tileLen[round] - 1;
-		if (src1->type == IVE_IMAGE_TYPE_U8C3_PACKAGE) {
-			img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round] * 3;
-		} else if (src1->type == IVE_IMAGE_TYPE_YUV420SP) {
-			img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round];
-			img_in_c_f->reg_u_base_0.reg_src_u_base_b0 += inOffset[round];
+		if (optype == MOD_RESIZE) {
+			// src tile width/offset derived from horizontal scaling factor (5.13 fixed-point)
+			uint32_t hor_scaling_factor = ive_top_c->reg_rs_h_sc.reg_resize_h_sc_fac;
+			uint32_t hor_offset = ((uint32_t)inOffset[round] * hor_scaling_factor) >> 13;
+			ive_top_c->reg_rs_dst_size.reg_resize_dst_wd = tileLen[round] - 1;
+			ive_top_c->reg_rs_src_size.reg_resize_src_wd =
+				(((uint32_t)tileLen[round] * hor_scaling_factor) >> 13) - 1;
+			img_in_c_f->reg_02.reg_src_wd = ive_top_c->reg_rs_src_size.reg_resize_src_wd;
+			if ((ive_top_c->reg_rs_ctrl.reg_resize_blnr_mode != 1) && (hor_scaling_factor & 0x1FFF)) {
+                // area mode non-integer scaling require 16-byte upward alignment
+                ive_top_c->reg_rs_src_size.reg_resize_src_wd =
+                    (ive_top_c->reg_rs_src_size.reg_resize_src_wd + 0xF) & ~0xF;
+                img_in_c_f->reg_02.reg_src_wd =
+                    (img_in_c_f->reg_02.reg_src_wd + 0xF) & ~0xF;
+                hor_offset =
+                    ((uint32_t)inOffset[round] * hor_scaling_factor + (1U << 12)) >> 13;
+			}
+			img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += hor_offset;
+			if (src1->type == IVE_IMAGE_TYPE_U8C3_PLANAR) {
+				img_in_c_f->reg_u_base_0.reg_src_u_base_b0 += hor_offset;
+				img_in_c_f->reg_v_base_0.reg_src_v_base_b0 += hor_offset;
+			}
 		} else {
-			img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round];
-
+			img_in_c_f->reg_02.reg_src_wd = tileLen[round] - 1;
+			if (src1->type == IVE_IMAGE_TYPE_U8C3_PACKAGE) {
+				img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round] * 3;
+			} else if (src1->type == IVE_IMAGE_TYPE_YUV420SP ||
+				   src1->type == IVE_IMAGE_TYPE_YUV422SP) {
+				/* NV12 (YUV420SP) and NV16 (YUV422SP): UV interleaved in one plane
+				 * (U base = uv0, V base = uv0+1). Horizontal chroma subsample is 2x
+				 * in BOTH -> UV byte x = luma col x, so U/V/Y all advance by the
+				 * same inOffset (luma bytes). Vertical subsample differs (420=H/2,
+				 * 422=H chroma rows) but tile is horizontal -> no effect on base
+				 * advance. Single tile (inOffset[0]==0) is a no-op. Mirrors the
+				 * U8C3_PLANAR fix below and the MOD_RESIZE branch above. */
+				img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round];
+				img_in_c_f->reg_u_base_0.reg_src_u_base_b0 += inOffset[round];
+				img_in_c_f->reg_v_base_0.reg_src_v_base_b0 += inOffset[round];
+			} else {
+				img_in_c_f->reg_y_base_0.reg_src_y_base_b0 += inOffset[round];
+				/* YUV444 (U8C3_PLANAR): U/V planes share Y geometry (1 byte/pixel,
+				 * same W/H/stride), so advance U/V read base by the same inOffset.
+				 * Guard: U8C1 (grayscale, no chroma) and YUV422P/YUV420P (2x
+				 * subsampled, would need inOffset/2) are left untouched.
+				 * Single tile (inOffset[0]==0) is a no-op. Mirrors the MOD_RESIZE
+				 * branch above. Fixes the multi-tile chroma stuck-base bug. */
+				if (src1->type == IVE_IMAGE_TYPE_U8C3_PLANAR) {
+					img_in_c_f->reg_u_base_0.reg_src_u_base_b0 += inOffset[round];
+					img_in_c_f->reg_v_base_0.reg_src_v_base_b0 += inOffset[round];
+				}
+			}
 		}
+
 		writel(ive_top_c->reg_2.val,
 				(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_2));
+        if (optype == MOD_RESIZE) {
+            writel(ive_top_c->reg_rs_src_size.val,
+                (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_RS_SRC_SIZE));
+            writel(ive_top_c->reg_rs_dst_size.val,
+                (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_RS_DST_SIZE));
+        }
 		writel(img_in_c_f->reg_02.val,
 				(IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_02));
 		writel(img_in_c_f->reg_y_base_0.val,
@@ -2711,6 +2936,7 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 				(IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_U_BASE_0));
 		writel(img_in_c_f->reg_v_base_0.val,
 				(IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_V_BASE_0));
+
 		if (enWdma_y) {
 			wdma_y_ctl_c->base_addr.reg_basel +=
 				y_unit * outOffset[round];
@@ -2724,7 +2950,6 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 			// 		dst1->stride[0] * y_unit;
 			wdma_y_ctl_c->dma_stride.reg_stride =
 					dst1->stride[0];
-
 				// wdma_y_ctl_c->dma_stride.reg_stride =
 				//	(optype == MOD_STBOX) ?
 				//		dst1->stride[0] * y_unit :
@@ -2860,8 +3085,18 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 				ive_filterop_c->odma_reg_03
 					.reg_dma_u_base_low_part +=
 					outOffset[round];
-				img_in_c_f->reg_u_base_0.reg_src_u_base_b0 +=
-					inOffset[round];
+                ive_filterop_c->odma_reg_05
+					.reg_dma_v_base_low_part  =
+                    ive_filterop_c->odma_reg_03.reg_dma_u_base_low_part + 1; //need verification
+                // ive_filterop_c->odma_reg_03
+				// 	.reg_dma_v_base_low_part +=
+				// 	outOffset[round];
+				/* Do NOT re-advance input U base here. It was already
+				 * advanced by inOffset[round] in the input-base block
+				 * above (and reg_u_base_0 was already written there).
+				 * The U8C3_PLANAR case below does not re-advance either.
+				 * This stray advance double-counted U, making multi-tile
+				 * NV12 chroma read from 2x the correct offset. Removed. */
 				img_in_c_f->reg_00.reg_auto_csc_en = 0;
 				writel(img_in_c_f->reg_u_base_0.val,
 						(IVE_BLK_BA[dev_id].IMG_IN +
@@ -3203,7 +3438,7 @@ static s32 emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
 		writel(rdma_gradfg_ctl_c->dma_stride.val,
 				(IVE_BLK_BA[dev_id].FILTEROP_RDMA + ISP_DMA_CTL_DMA_STRIDE));
 		writel(ive_filterop_c->reg_33.val,
-				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_33));
+				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_33));
 		writel(ive_filterop_c->reg_h04.val,
 				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H04));
 		writel(ive_top_c->reg_3.val,
@@ -3245,6 +3480,10 @@ static void ive_reset(struct ive_device *ndev, ive_top_c *ive_top_c, s32 dev_id)
 		reinit_completion(&ndev->core[dev_id].op_done);
 		ndev->core[dev_id].total_tile = 0;
 		ndev->core[dev_id].tile_num = 0;
+
+		/* Clear W1C status left from the previous frame; ive_reset_reg writes 0, won't clear. */
+		clear_framedone(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90), 0, dev_id);
+		clear_interrupt_status(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98), 0, dev_id);
 
 		ive_reset_reg(1, ive_top_c, dev_id);
 		ive_reset_reg(2, ive_top_c, dev_id);
@@ -3327,10 +3566,9 @@ static void ive_set_wh(ive_top_c *top, u32 w, u32 h, char *name, s32 dev_id)
 
 static s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s32 dev_id)
 {
-	// s32 swMode = 0;
+	isp_dma_ctl_c _wdma_y_ctl_c = _DEFINE_isp_dma_ctl_c;
 	s32 swMode = 0;
 	//DEFINE_isp_dma_ctl_c(_wdma_y_ctl_c);
-	isp_dma_ctl_c _wdma_y_ctl_c = _DEFINE_isp_dma_ctl_c;
 
 	if (wdma_y_ctl_c == NULL) {
 		wdma_y_ctl_c = &_wdma_y_ctl_c;
@@ -3346,6 +3584,11 @@ static s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s
 
 		return SUCCESS;
 	}
+#ifdef MEDIA_V3
+	if((dst_img->width & 0xF) != 0) {
+		swMode = 1;
+	}
+#endif
 	wdma_y_ctl_c->base_addr.reg_basel = dst_img->phy_addr[0] & 0xffffffff;
 	writel(wdma_y_ctl_c->base_addr.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_BASE_ADDR));
@@ -3378,18 +3621,23 @@ static s32 set_img_dst1(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_y_ctl_c, s
 	}
 	wdma_y_ctl_c->sys_control.reg_stride_sel = 0;
 	wdma_y_ctl_c->sys_control.reg_base_sel = 1; // sw specify address
+#ifdef MEDIA_V3
+	if ((dst_img->width & 0xF) != 0) {
+		wdma_y_ctl_c->dma_dummy.reg_byte_mode = 1;
+		wdma_y_ctl_c->sys_control.reg_stride_sel = 1;
+		wdma_y_ctl_c->dma_stride.reg_stride = dst_img->stride[0];
+		writel(wdma_y_ctl_c->dma_dummy.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_DUMMY));
+		writel(wdma_y_ctl_c->dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_STRIDE));
+	}
+#endif
+	writel(wdma_y_ctl_c->base_addr.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_BASE_ADDR));
 	writel(wdma_y_ctl_c->sys_control.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_SYS_CONTROL));
-	if (g_dump_dma_info == TRUE) {
-		pr_info("Dst1 address: 0x%08x %08x\n",
-			wdma_y_ctl_c->sys_control.reg_baseh,
-			wdma_y_ctl_c->base_addr.reg_basel);
-	}
 
 	g_debug_info.addr[WDMA_Y].addr_en = wdma_y_ctl_c->sys_control.reg_base_sel;
 	g_debug_info.addr[WDMA_Y].addr_l = wdma_y_ctl_c->base_addr.reg_basel;
 	g_debug_info.addr[WDMA_Y].addr_h = wdma_y_ctl_c->sys_control.reg_baseh & 0xff;
-
 	return SUCCESS;
 }
 
@@ -3409,8 +3657,8 @@ static s32 set_img_dst2(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_c_ctl_c, s
 			(dst_img->phy_addr[0] >> 32) & 0xffffffff;
 		// need to set stride ??
 		// wdma_c_ctl_c->dma_stride.reg_stride = dst_img->stride[0];
-		writel(wdma_c_ctl_c->dma_stride.val,
-			(IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+		// writel(wdma_c_ctl_c->dma_stride.val, //5.19change need verify
+		// 	(IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
 		wdma_c_ctl_c->sys_control.reg_stride_sel = 0;
 		wdma_c_ctl_c->sys_control.reg_base_sel = 1;
 		if (g_dump_dma_info == TRUE) {
@@ -3423,6 +3671,15 @@ static s32 set_img_dst2(ive_dst_image_s *dst_img, isp_dma_ctl_c *wdma_c_ctl_c, s
 		wdma_c_ctl_c->sys_control.reg_baseh = 0;
 		wdma_c_ctl_c->sys_control.reg_base_sel = 0;
 	}
+#ifdef MEDIA_V3
+	if (dst_img != NULL && (dst_img->width & 0xF) != 0) {
+		wdma_c_ctl_c->dma_dummy.reg_byte_mode = 1;
+		wdma_c_ctl_c->sys_control.reg_stride_sel = 1;
+		wdma_c_ctl_c->dma_stride.reg_stride = dst_img->stride[0];
+		writel(wdma_c_ctl_c->dma_dummy.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_DUMMY));
+		writel(wdma_c_ctl_c->dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+	}
+#endif
 	writel(wdma_c_ctl_c->base_addr.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_BASE_ADDR));
 	writel(wdma_c_ctl_c->sys_control.val,
@@ -3598,13 +3855,23 @@ static s32 set_img_src2(ive_src_image_s *src_img, isp_dma_ctl_c *rdma_img1_ctl_c
 
 	rdma_img1_ctl_c->sys_control.reg_baseh =
 		(src_img->phy_addr[0] >> 32) & 0xffffffff;
-	//rdma_img1_ctl_c->dma_stride.reg_stride = src_img->stride[0];
-	//rdma_img1_ctl_c->sys_control.reg_stride_sel = 1;
+
 	rdma_img1_ctl_c->sys_control.reg_base_sel = 1;
+
+	#ifdef MEDIA_V3
+	if ((src_img->width & 0xF) != 0) {
+		rdma_img1_ctl_c->dma_dummy.reg_byte_mode = 1;
+		rdma_img1_ctl_c->sys_control.reg_stride_sel = 1;
+		rdma_img1_ctl_c->dma_stride.reg_stride = src_img->stride[0];
+		writel(rdma_img1_ctl_c->dma_dummy.val, (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_DMA_DUMMY));
+	}
+	#endif
+
 	writel(rdma_img1_ctl_c->dma_stride.val,
 		   (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_DMA_STRIDE));
 	writel(rdma_img1_ctl_c->sys_control.val,
 		   (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_SYS_CONTROL));
+
 	if (g_dump_dma_info == TRUE) {
 		pr_info("Src2 address: 0x%08x %08x\n",
 			rdma_img1_ctl_c->sys_control.reg_baseh,
@@ -3614,6 +3881,297 @@ static s32 set_img_src2(ive_src_image_s *src_img, isp_dma_ctl_c *rdma_img1_ctl_c
 	g_debug_info.addr[RDMA_IMG1].addr_l = rdma_img1_ctl_c->base_addr.reg_basel;
 	g_debug_info.addr[RDMA_IMG1].addr_h = rdma_img1_ctl_c->sys_control.reg_baseh & 0xff;
 	return SUCCESS;
+}
+
+static s32 ive_sad_emit_tile(struct ive_device *ndev, ive_top_c *ive_top_c,
+        img_in_c *img_in_c, isp_dma_ctl_c *rdma_img1_ctl_c,
+        isp_dma_ctl_c *wdma_sad_ctl_c,
+        isp_dma_ctl_c *wdma_sad_thr_ctl_c,
+        ive_src_image_s *pstSrc1, ive_src_image_s *pstSrc2,
+        ive_dst_image_s *pstSadOut,
+        ive_dst_image_s *pstThrOut,
+        ive_sad_ctrl_s *pstSadCtrl,
+        bool instant, s32 dev_id) {
+	s32 in_width;
+	s32 in_height;
+	s32 block_size;
+	s32 out_height;
+	s32 sad_unit;
+	s32 thr_unit;
+	s32 max_in_tile_w;
+	s32 tileNum;
+
+	u32 orig_top_wm1;
+	u32 orig_imgin_wd;
+	u32 orig_imgin_yb0;
+	u32 orig_imgin_yb1;
+	u32 orig_rdma_base;
+	u32 orig_rdma_sys;
+	u32 orig_rdma_segnum;
+	u32 orig_rdma_seglen;
+	u32 orig_rdma_stride;
+	u32 orig_wdma0_sys;
+	u32 orig_wdma1_sys;
+
+	u64 src0_base;
+	u64 src1_base;
+	u64 dst0_base;
+	u64 dst1_base;
+
+	s32 inTileW[MAX_TILES] = { 0 };
+	s32 outTileW[MAX_TILES] = { 0 };
+	s32 inOffset[MAX_TILES] = { 0 };
+	s32 outOffset[MAX_TILES] = { 0 };
+	s32 remain;
+	s32 n;
+	s32 round;
+	s32 ret;
+
+	in_width = pstSrc1->width;
+	in_height = pstSrc1->height;
+	block_size = 4 << pstSadCtrl->mode;
+	out_height = (in_height + block_size - 1) / block_size;
+	sad_unit = (pstSadOut && pstSadOut->type == IVE_IMAGE_TYPE_U16C1) ? 2 : 1;
+	thr_unit = 1;
+	max_in_tile_w = 480 * block_size;
+	tileNum = (in_width + max_in_tile_w - 1) / max_in_tile_w;
+
+	if (tileNum <= 1)
+		return SUCCESS;
+
+	if (tileNum > MAX_TILES) {
+		pr_err("SAD tileNum=%d > %d, not supported!\n", tileNum, MAX_TILES);
+		return FAILURE;
+	}
+
+	/* Save original regs so we can restore to non-tile behavior. */
+	orig_top_wm1 = ive_top_c->reg_2.reg_img_widthm1;
+	orig_imgin_wd = img_in_c->reg_02.reg_src_wd;
+	orig_imgin_yb0 = img_in_c->reg_y_base_0.reg_src_y_base_b0;
+	orig_imgin_yb1 = img_in_c->reg_y_base_1.reg_src_y_base_b1;
+	orig_rdma_base = rdma_img1_ctl_c->base_addr.val;
+	orig_rdma_sys = rdma_img1_ctl_c->sys_control.val;
+	orig_rdma_segnum = rdma_img1_ctl_c->dma_segnum.val;
+	orig_rdma_seglen = rdma_img1_ctl_c->dma_seglen.val;
+	orig_rdma_stride = rdma_img1_ctl_c->dma_stride.val;
+	orig_wdma0_sys = wdma_sad_ctl_c->sys_control.val;
+	orig_wdma1_sys = wdma_sad_thr_ctl_c->sys_control.val;
+
+	src0_base = pstSrc1->phy_addr[0];
+	src1_base = pstSrc2->phy_addr[0];
+	dst0_base = pstSadOut ? pstSadOut->phy_addr[0] : 0;
+	dst1_base = pstThrOut ? pstThrOut->phy_addr[0] : 0;
+
+	remain = in_width;
+	n = 0;
+	round = 0;
+	ret = SUCCESS;
+
+	ndev->core[dev_id].total_tile = tileNum - 1;
+	ndev->cur_optype = MOD_SAD;
+
+	for (n = 0; n < tileNum; n++) {
+		s32 w = (remain > max_in_tile_w) ? max_in_tile_w : remain;
+		inTileW[n] = w;
+		remain -= w;
+	}
+	for (n = 0; n < tileNum; n++) {
+		outTileW[n] = (inTileW[n] + block_size - 1) / block_size;
+		inOffset[n] =
+			(n == 0) ? 0 : (inOffset[n - 1] + inTileW[n - 1]);
+		outOffset[n] =
+			(n == 0) ? 0 : (outOffset[n - 1] + outTileW[n - 1]);
+	}
+
+	/* Make sure status is clean before tiling. */
+	clear_framedone(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90), 0,
+			dev_id);
+	clear_interrupt_status(
+		readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98), 0, dev_id);
+
+	for (round = 0; round < tileNum; round++) {
+		const s32 tile_in_w = inTileW[round];
+		const s32 tile_out_w = outTileW[round];
+		const u64 src0_round = src0_base + (u64)inOffset[round];
+		const u64 src1_round = src1_base + (u64)inOffset[round];
+
+		ndev->core[dev_id].tile_num = round;
+
+		/* Set tile width for HW. */
+		ive_top_c->reg_2.reg_img_widthm1 = tile_in_w - 1;
+		img_in_c->reg_02.reg_src_wd = tile_in_w - 1;
+
+		/* Roll input base (img_in) by pixel offset. */
+		img_in_c->reg_y_base_0.reg_src_y_base_b0 =
+			(u32)(src0_round & 0xffffffff);
+		img_in_c->reg_y_base_1.reg_src_y_base_b1 =
+			(u32)((src0_round >> 32) & 0xffffffff);
+
+		writel(ive_top_c->reg_2.val,
+		       (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_2));
+		writel(img_in_c->reg_02.val,
+		       (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_02));
+		writel(img_in_c->reg_y_base_0.val,
+		       (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_Y_BASE_0));
+		writel(img_in_c->reg_y_base_1.val,
+		       (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_Y_BASE_1));
+
+		/* Roll 2nd input (rdma_img1) by pixel offset. */
+		if (ive_top_c->reg_3.reg_ive_rdma_img1_en == 1) {
+			rdma_img1_ctl_c->base_addr.reg_basel =
+				(u32)(src1_round & 0xffffffff);
+			rdma_img1_ctl_c->sys_control.reg_baseh =
+				(u32)((src1_round >> 32) & 0xffffffff);
+			rdma_img1_ctl_c->sys_control.reg_base_sel = 1;
+			rdma_img1_ctl_c->sys_control.reg_stride_sel = 1;
+			rdma_img1_ctl_c->sys_control.reg_seglen_sel = 1;
+			rdma_img1_ctl_c->sys_control.reg_segnum_sel = 1;
+			rdma_img1_ctl_c->dma_segnum.reg_segnum = in_height;
+			rdma_img1_ctl_c->dma_seglen.reg_seglen = tile_in_w;
+			rdma_img1_ctl_c->dma_stride.reg_stride = pstSrc2->stride[0];
+
+			writel(rdma_img1_ctl_c->base_addr.val,
+			       (IVE_BLK_BA[dev_id].RDMA_IMG1 +
+				ISP_DMA_CTL_BASE_ADDR));
+			writel(rdma_img1_ctl_c->sys_control.val,
+			       (IVE_BLK_BA[dev_id].RDMA_IMG1 +
+				ISP_DMA_CTL_SYS_CONTROL));
+			writel(rdma_img1_ctl_c->dma_segnum.val,
+			       (IVE_BLK_BA[dev_id].RDMA_IMG1 +
+				ISP_DMA_CTL_DMA_SEGNUM));
+			writel(rdma_img1_ctl_c->dma_seglen.val,
+			       (IVE_BLK_BA[dev_id].RDMA_IMG1 +
+				ISP_DMA_CTL_DMA_SEGLEN));
+			writel(rdma_img1_ctl_c->dma_stride.val,
+			       (IVE_BLK_BA[dev_id].RDMA_IMG1 +
+				ISP_DMA_CTL_DMA_STRIDE));
+		}
+
+		/* Program SAD WDMA (dst0). */
+		if (dst0_base) {
+			const u64 dst0_round =
+				dst0_base + (u64)outOffset[round] * sad_unit;
+
+			wdma_sad_ctl_c->base_addr.reg_basel =
+				(u32)(dst0_round & 0xffffffff);
+			wdma_sad_ctl_c->sys_control.reg_baseh =
+				(u32)((dst0_round >> 32) & 0xffffffff);
+			wdma_sad_ctl_c->sys_control.reg_base_sel = 1;
+			wdma_sad_ctl_c->sys_control.reg_stride_sel = 1;
+			wdma_sad_ctl_c->sys_control.reg_seglen_sel = 1;
+			wdma_sad_ctl_c->sys_control.reg_segnum_sel = 1;
+			wdma_sad_ctl_c->dma_segnum.reg_segnum = out_height;
+			wdma_sad_ctl_c->dma_seglen.reg_seglen =
+				tile_out_w * sad_unit;
+			wdma_sad_ctl_c->dma_stride.reg_stride =
+				pstSadOut->stride[0];
+
+			writel(wdma_sad_ctl_c->base_addr.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA +
+				ISP_DMA_CTL_BASE_ADDR));
+			writel(wdma_sad_ctl_c->sys_control.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA +
+				ISP_DMA_CTL_SYS_CONTROL));
+			writel(wdma_sad_ctl_c->dma_segnum.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA +
+				ISP_DMA_CTL_DMA_SEGNUM));
+			writel(wdma_sad_ctl_c->dma_seglen.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA +
+				ISP_DMA_CTL_DMA_SEGLEN));
+			writel(wdma_sad_ctl_c->dma_stride.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA +
+				ISP_DMA_CTL_DMA_STRIDE));
+		}
+
+		/* Program SAD THR/2nd WDMA (dst1). */
+		if (dst1_base) {
+			const u64 dst1_round =
+				dst1_base + (u64)outOffset[round] * thr_unit;
+
+			wdma_sad_thr_ctl_c->base_addr.reg_basel =
+				(u32)(dst1_round & 0xffffffff);
+			wdma_sad_thr_ctl_c->sys_control.reg_baseh =
+				(u32)((dst1_round >> 32) & 0xffffffff);
+			wdma_sad_thr_ctl_c->sys_control.reg_base_sel = 1;
+			wdma_sad_thr_ctl_c->sys_control.reg_stride_sel = 1;
+			wdma_sad_thr_ctl_c->sys_control.reg_seglen_sel = 1;
+			wdma_sad_thr_ctl_c->sys_control.reg_segnum_sel = 1;
+			wdma_sad_thr_ctl_c->dma_segnum.reg_segnum = out_height;
+			wdma_sad_thr_ctl_c->dma_seglen.reg_seglen =
+				tile_out_w * thr_unit;
+			wdma_sad_thr_ctl_c->dma_stride.reg_stride =
+				pstThrOut->stride[0];
+
+			writel(wdma_sad_thr_ctl_c->base_addr.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR +
+				ISP_DMA_CTL_BASE_ADDR));
+			writel(wdma_sad_thr_ctl_c->sys_control.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR +
+				ISP_DMA_CTL_SYS_CONTROL));
+			writel(wdma_sad_thr_ctl_c->dma_segnum.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR +
+				ISP_DMA_CTL_DMA_SEGNUM));
+			writel(wdma_sad_thr_ctl_c->dma_seglen.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR +
+				ISP_DMA_CTL_DMA_SEGLEN));
+			writel(wdma_sad_thr_ctl_c->dma_stride.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR +
+				ISP_DMA_CTL_DMA_STRIDE));
+		}
+
+		ret = ive_go(ndev, ive_top_c, instant, IVE_TOP_REG_FRAME_DONE_SAD_MASK,
+			     MOD_SAD, dev_id);
+		if (ret != SUCCESS)
+			break;
+
+		/* Clear after a tile. */
+		clear_framedone(readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90),
+				0, dev_id);
+		clear_interrupt_status(
+			readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98), 0,
+			dev_id);
+	}
+
+	/* Restore width/base. */
+	ive_top_c->reg_2.reg_img_widthm1 = orig_top_wm1;
+	img_in_c->reg_02.reg_src_wd = orig_imgin_wd;
+	img_in_c->reg_y_base_0.reg_src_y_base_b0 = orig_imgin_yb0;
+	img_in_c->reg_y_base_1.reg_src_y_base_b1 = orig_imgin_yb1;
+	writel(ive_top_c->reg_2.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_2));
+	writel(img_in_c->reg_02.val, (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_02));
+	writel(img_in_c->reg_y_base_0.val,
+	       (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_Y_BASE_0));
+	writel(img_in_c->reg_y_base_1.val,
+	       (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_Y_BASE_1));
+
+	/* Restore RDMA_IMG1 to non-tile behavior (disable seg programming). */
+	rdma_img1_ctl_c->base_addr.val = orig_rdma_base;
+	rdma_img1_ctl_c->sys_control.val = orig_rdma_sys;
+	rdma_img1_ctl_c->dma_segnum.val = orig_rdma_segnum;
+	rdma_img1_ctl_c->dma_seglen.val = orig_rdma_seglen;
+	rdma_img1_ctl_c->dma_stride.val = orig_rdma_stride;
+	writel(rdma_img1_ctl_c->base_addr.val,
+	       (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_BASE_ADDR));
+	writel(rdma_img1_ctl_c->sys_control.val,
+	       (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_SYS_CONTROL));
+	writel(rdma_img1_ctl_c->dma_segnum.val,
+	       (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_DMA_SEGNUM));
+	writel(rdma_img1_ctl_c->dma_seglen.val,
+	       (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_DMA_SEGLEN));
+	writel(rdma_img1_ctl_c->dma_stride.val,
+	       (IVE_BLK_BA[dev_id].RDMA_IMG1 + ISP_DMA_CTL_DMA_STRIDE));
+
+	/* Restore WDMA base_sel (keep consistent with non-tile path). */
+	wdma_sad_ctl_c->sys_control.val = orig_wdma0_sys;
+	wdma_sad_thr_ctl_c->sys_control.val = orig_wdma1_sys;
+	wdma_sad_ctl_c->sys_control.reg_base_sel = 0;
+	wdma_sad_thr_ctl_c->sys_control.reg_base_sel = 0;
+	writel(wdma_sad_ctl_c->sys_control.val,
+	       (IVE_BLK_BA[dev_id].SAD_WDMA + ISP_DMA_CTL_SYS_CONTROL));
+	writel(wdma_sad_thr_ctl_c->sys_control.val,
+	       (IVE_BLK_BA[dev_id].SAD_WDMA_THR + ISP_DMA_CTL_SYS_CONTROL));
+
+	return ret;
 }
 
 static s32 set_isp_rdma(s32 optype, isp_rdma_c *rdma_c, s32 dev_id)
@@ -3658,13 +4216,23 @@ static s32 set_rdma_eigval(ive_src_image_s *pstSrc, isp_dma_ctl_c *rdma_eigval_c
 		   (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_DMA_STRIDE));
 	rdma_eigval_ctl_c->sys_control.reg_base_sel = 1;
 
-	rdma_eigval_ctl_c->sys_control.reg_stride_sel = 1;
+	rdma_eigval_ctl_c->sys_control.reg_stride_sel = 1;//bmtest set 0,need validation
 	rdma_eigval_ctl_c->sys_control.reg_seglen_sel = 0;
 	rdma_eigval_ctl_c->sys_control.reg_segnum_sel = 0;
-	writel(rdma_eigval_ctl_c->base_addr.val,
+
+    #ifdef MEDIA_V3
+    rdma_eigval_ctl_c->dma_dummy.reg_byte_mode = 1;//need validation
+    #endif
+    // if(CURRENT_TEST_TYPE == TEST_TYPE_BYTE_ALIGN) {
+    //     rdma_eigval_ctl_c->sys_control.reg_stride_sel = 1;
+    //     rdma_eigval_ctl_c->dma_stride.reg_stride = pstSrc->stride[0];
+    // }
+    writel(rdma_eigval_ctl_c->base_addr.val,
 		   (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_BASE_ADDR));
 	writel(rdma_eigval_ctl_c->sys_control.val,
 		   (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_SYS_CONTROL));
+    writel(rdma_eigval_ctl_c->dma_dummy.val,
+        (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_DMA_DUMMY));
 	if (g_dump_dma_info == TRUE) {
 		pr_info("RdmaEigval address: 0x%08x %08x\n",
 			rdma_eigval_ctl_c->sys_control.reg_baseh,
@@ -3925,8 +4493,7 @@ static s32 ive_base_op(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 			return ret;
 		}
 
-	ive_go(ndev, ive_top_c, instant,
-				IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK, op, dev_id);
+	ive_go(ndev, ive_top_c, instant, IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK, op, dev_id);
 
 	kfree(ive_top_c);
 	return SUCCESS;
@@ -4607,29 +5174,49 @@ s32 ive_dma(struct ive_device *ndev, ive_data_s *pstSrc,
 			pstSrc->phy_addr & 0xffffffff;
 		rdma_dma_ctl_c.sys_control.reg_baseh =
 			((u64)pstSrc->phy_addr >> 32) & 0xffffffff;
-		rdma_dma_ctl_c.dma_stride.reg_stride = pstSrc->stride;
-		rdma_dma_ctl_c.sys_control.reg_stride_sel = 1;
 		rdma_dma_ctl_c.sys_control.reg_base_sel = 1;
 	}
-	writel(rdma_dma_ctl_c.base_addr.val,
-		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_BASE_ADDR));
-	writel(rdma_dma_ctl_c.dma_stride.val,
-		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_DMA_STRIDE));
-	writel(rdma_dma_ctl_c.sys_control.val,
-		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_SYS_CONTROL));
 
 	wdma_dma_ctl_c.base_addr.reg_basel = pstDst->phy_addr & 0xffffffff;
 	wdma_dma_ctl_c.sys_control.reg_baseh =
 		((u64)pstDst->phy_addr >> 32) & 0xffffffff;
-	wdma_dma_ctl_c.dma_stride.reg_stride = pstDst->stride;
-	wdma_dma_ctl_c.sys_control.reg_stride_sel = 1;
 	wdma_dma_ctl_c.sys_control.reg_base_sel = 1;
+
+	writel(rdma_dma_ctl_c.base_addr.val,
+		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_BASE_ADDR));
+	writel(rdma_dma_ctl_c.dma_stride.val,
+			(IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_DMA_STRIDE));
+	writel(rdma_dma_ctl_c.sys_control.val,
+		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_SYS_CONTROL));
+
+	#ifdef MEDIA_V3
+	if ((pstSrc->width & 0xF) != 0) {
+		wdma_dma_ctl_c.dma_dummy.reg_byte_mode = 1;
+		wdma_dma_ctl_c.sys_control.reg_stride_sel = 1;
+		wdma_dma_ctl_c.dma_stride.reg_stride = pstDst->stride;
+		rdma_dma_ctl_c.dma_dummy.reg_byte_mode = 1;
+		rdma_dma_ctl_c.sys_control.reg_stride_sel = 1;
+		rdma_dma_ctl_c.dma_stride.reg_stride = pstSrc->stride * ive_dma_c_f.reg_4.reg_ive_dma_versegrow;
+		writel(rdma_dma_ctl_c.base_addr.val,
+		   (IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_BASE_ADDR));
+		writel(rdma_dma_ctl_c.dma_stride.val,
+			(IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_DMA_STRIDE));
+		writel(rdma_dma_ctl_c.sys_control.val,
+			(IVE_BLK_BA[dev_id].DMAF_RDMA + ISP_DMA_CTL_SYS_CONTROL));
+		writel(rdma_dma_ctl_c.dma_dummy.val,
+				(IVE_BLK_BA[dev_id].DMAF_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+		writel(wdma_dma_ctl_c.dma_dummy.val,
+				(IVE_BLK_BA[dev_id].DMAF_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+	}
+	#endif
+
 	writel(wdma_dma_ctl_c.base_addr.val,
 		   (IVE_BLK_BA[dev_id].DMAF_WDMA + ISP_DMA_CTL_BASE_ADDR));
 	writel(wdma_dma_ctl_c.dma_stride.val,
 			(IVE_BLK_BA[dev_id].DMAF_WDMA + ISP_DMA_CTL_DMA_STRIDE));
 	writel(wdma_dma_ctl_c.sys_control.val,
 		   (IVE_BLK_BA[dev_id].DMAF_WDMA + ISP_DMA_CTL_SYS_CONTROL));
+
 
 	if (g_dump_dma_info == TRUE) {
 		pr_info("Src address: 0x%08x %08x\n",
@@ -4639,6 +5226,7 @@ s32 ive_dma(struct ive_device *ndev, ive_data_s *pstSrc,
 			wdma_dma_ctl_c.sys_control.reg_baseh,
 			wdma_dma_ctl_c.base_addr.reg_basel);
 	}
+
 	g_debug_info.addr[RDMA_DMA].addr_en = rdma_dma_ctl_c.sys_control.reg_base_sel;
 	g_debug_info.addr[RDMA_DMA].addr_l = rdma_dma_ctl_c.base_addr.reg_basel;
 	g_debug_info.addr[RDMA_DMA].addr_h = rdma_dma_ctl_c.sys_control.reg_baseh & 0xff;
@@ -4815,7 +5403,432 @@ s32 ive_thresh(struct ive_device *ndev, ive_src_image_s *pstSrc,
 
 	return ret;
 }
+#ifdef MEDIA_V3
+static s32 erode_dilate_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			ive_dst_image_s *pstDst, u8 *mask, u8 ksize,
+			bool instant, s32 op, s32 dev_id)
+{
+	s32 ret = 0;
+	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
+	ive_filterop_c ive_filterop_c = _DEFINE_IVE_FILTEROP_C;
+    //dilate use
+    ive_filterop_reg_filter_h1_c reg_h1;
+	ive_filterop_reg_filter_h2_c reg_h2;
+	ive_filterop_reg_filter_h3_c reg_h3;
+	ive_filterop_reg_filter_h4_c reg_h4;
+	ive_filterop_reg_filter_h5_c reg_h5;
+	ive_filterop_reg_filter_h6_c reg_h6;
+	ive_filterop_reg_filter_h7_c reg_h7;
+	ive_filterop_reg_filter_h8_c reg_h8;
+	ive_filterop_reg_filter_h9_c reg_h9;
+	ive_filterop_reg_filter_h10_c reg_h10;
+	ive_filterop_reg_filter_h11_c reg_h11;
+	ive_filterop_reg_filter_h12_c reg_h12;
+	ive_filterop_reg_filter_h13_c reg_h13;
+	ive_filterop_reg_filter_h14_c reg_h14;
+	ive_filterop_reg_4_c reg_4;
+	ive_filterop_reg_5_c reg_5;
+	ive_filterop_reg_6_c reg_6;
+	ive_filterop_reg_7_c reg_7;
+	ive_filterop_reg_8_c reg_8;
+	ive_filterop_reg_9_c reg_9;
+	ive_filterop_reg_10_c reg_10;
+    //erode use
+    ive_filterop_reg_21_c reg_21;
+    ive_filterop_reg_22_c reg_22;
+    ive_filterop_reg_23_c reg_23;
+    ive_filterop_reg_24_c reg_24;
+    ive_filterop_reg_25_c reg_25;
+    ive_filterop_reg_26_c reg_26;
+    ive_filterop_reg_27_c reg_27;
+    ive_filterop_reg_filter_ero1_c reg_ero1;
+    ive_filterop_reg_filter_ero2_c reg_ero2;
+    ive_filterop_reg_filter_ero3_c reg_ero3;
+    ive_filterop_reg_filter_ero4_c reg_ero4;
+    ive_filterop_reg_filter_ero5_c reg_ero5;
+    ive_filterop_reg_filter_ero6_c reg_ero6;
+    ive_filterop_reg_filter_ero7_c reg_ero7;
+    ive_filterop_reg_filter_ero8_c reg_ero8;
+    ive_filterop_reg_filter_ero9_c reg_ero9;
+    ive_filterop_reg_filter_ero10_c reg_ero10;
+    ive_filterop_reg_filter_ero11_c reg_ero11;
+    ive_filterop_reg_filter_ero12_c reg_ero12;
+    ive_filterop_reg_filter_ero13_c reg_ero13;
+    ive_filterop_reg_filter_ero14_c reg_ero14;
+	//DEFINE_img_in_c(img_in_c);
+	img_in_c img_in_c = _DEFINE_img_in_c;
+	//DEFINE_isp_dma_ctl_c(wdma_y_ctl_c);
+	isp_dma_ctl_c wdma_y_ctl_c = _DEFINE_isp_dma_ctl_c;
+	//DEFINE_IVE_TOP_C(ive_top_c);
+	ive_top_c *ive_top_c = init_ive_top_c();
+	if (!ive_top_c) {
+		pr_err("ive_top_c init failed\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
 
+	ive_reset(ndev, ive_top_c, dev_id);
+	if (g_dump_image_info == TRUE) {
+		dump_ive_image("pstSrc", pstSrc);
+		dump_ive_image("pstDst", pstDst);
+	}
+
+    ive_top_c->reg_3.reg_trig_1t_ip_num = 8;//need verify
+    ive_top_c->reg_3.reg_trig_1t_axi_num = 8;
+    writel(ive_top_c->reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
+
+	if (op == MOD_DILA) {
+		ive_set_wh(ive_top_c, pstSrc->width, pstSrc->height, "Dilate", dev_id);
+		ive_filterop_c.reg_h10.reg_filterop_mode = 2; // dilate
+		ive_filterop_c.reg_28.reg_filterop_op2_erodila_en = 0; // op2 en //bmtest dilate set 0 need verify
+		ive_filterop_c.reg_h14.reg_filterop_op1_cmd = 2; // dilate
+    } else if (op == MOD_ERO) {
+		ive_set_wh(ive_top_c, pstSrc->width, pstSrc->height, "Erode", dev_id);
+		ive_filterop_c.reg_h10.reg_filterop_mode = 3; // erode
+		ive_filterop_c.reg_28.reg_filterop_op2_erodila_en = 1; // need verify
+		ive_filterop_c.reg_h14.reg_filterop_op1_cmd = 0;
+	}
+	writel(ive_filterop_c.reg_h10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H10));
+	// ive_filterop_c.reg_h14.reg_filterop_op1_cmd = 0; // op1 bypass
+	ive_filterop_c.reg_h14.reg_filterop_sw_ovw_op = 1; // op1 en
+	writel(ive_filterop_c.reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+	writel(ive_filterop_c.reg_28.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_28));
+
+	if (ksize == 3) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 0; //3*3
+        ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 0;
+	} else if (ksize == 5) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 1; //5*5
+        ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 1;
+	} else if (ksize == 7) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 2; //7*7
+        ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 2;
+	} else if (ksize == 9) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 3; //9*9
+        ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 3;
+	} else {
+		pr_err("erode/dilate ksize must be 3,5,7,9\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	writel(ive_filterop_c.reg_crop_odma_ctl.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CROP_ODMA_CTL));
+
+	if (ive_filterop_c.reg_28.reg_filterop_op2_erodila_en) {
+        reg_ero1.reg_filterop_op2_erodila_coef00 = mask[0];
+        reg_ero1.reg_filterop_op2_erodila_coef01 = mask[1];
+        reg_ero1.reg_filterop_op2_erodila_coef02 = mask[2];
+        reg_ero1.reg_filterop_op2_erodila_coef03 = mask[3];
+        reg_ero2.reg_filterop_op2_erodila_coef04 = mask[4];
+        reg_ero2.reg_filterop_op2_erodila_coef05 = mask[5];
+        reg_ero2.reg_filterop_op2_erodila_coef06 = mask[6];
+        reg_ero2.reg_filterop_op2_erodila_coef07 = mask[7];
+        reg_ero3.reg_filterop_op2_erodila_coef08 = mask[8];
+
+        reg_ero3.reg_filterop_op2_erodila_coef10 = mask[9];
+        reg_ero3.reg_filterop_op2_erodila_coef11 = mask[10];
+        reg_ero3.reg_filterop_op2_erodila_coef12 = mask[11];
+        reg_ero4.reg_filterop_op2_erodila_coef13 = mask[12];
+        reg_ero4.reg_filterop_op2_erodila_coef14 = mask[13];
+        reg_ero4.reg_filterop_op2_erodila_coef15 = mask[14];
+        reg_ero4.reg_filterop_op2_erodila_coef16 = mask[15];
+        reg_ero5.reg_filterop_op2_erodila_coef17 = mask[16];
+        reg_ero5.reg_filterop_op2_erodila_coef18 = mask[17];
+
+        reg_ero5.reg_filterop_op2_erodila_coef20 = mask[18];
+        reg_ero5.reg_filterop_op2_erodila_coef21 = mask[19];
+        reg_21.reg_filterop_op2_erodila_coef22 = mask[20];
+        reg_21.reg_filterop_op2_erodila_coef23 = mask[21];
+        reg_21.reg_filterop_op2_erodila_coef24 = mask[22];
+        reg_21.reg_filterop_op2_erodila_coef25 = mask[23];
+        reg_22.reg_filterop_op2_erodila_coef26 = mask[24];
+        reg_ero6.reg_filterop_op2_erodila_coef27 = mask[25];
+        reg_ero6.reg_filterop_op2_erodila_coef28 = mask[26];
+
+        reg_ero6.reg_filterop_op2_erodila_coef30 = mask[27];
+        reg_ero6.reg_filterop_op2_erodila_coef31 = mask[28];
+        reg_22.reg_filterop_op2_erodila_coef32 = mask[29];
+        reg_22.reg_filterop_op2_erodila_coef33 = mask[30];
+        reg_22.reg_filterop_op2_erodila_coef34 = mask[31];
+        reg_23.reg_filterop_op2_erodila_coef35 = mask[32];
+        reg_23.reg_filterop_op2_erodila_coef36 = mask[33];
+        reg_ero7.reg_filterop_op2_erodila_coef37 = mask[34];
+        reg_ero7.reg_filterop_op2_erodila_coef38 = mask[35];
+
+        reg_ero7.reg_filterop_op2_erodila_coef40 = mask[36];
+        reg_ero7.reg_filterop_op2_erodila_coef41 = mask[37];
+        reg_23.reg_filterop_op2_erodila_coef42 = mask[38];
+        reg_23.reg_filterop_op2_erodila_coef43 = mask[39];
+        reg_24.reg_filterop_op2_erodila_coef44 = mask[40];
+        reg_24.reg_filterop_op2_erodila_coef45 = mask[41];
+        reg_24.reg_filterop_op2_erodila_coef46 = mask[42];
+        reg_ero8.reg_filterop_op2_erodila_coef47 = mask[43];
+        reg_ero8.reg_filterop_op2_erodila_coef48 = mask[44];
+
+        reg_ero8.reg_filterop_op2_erodila_coef50 = mask[45];
+        reg_ero8.reg_filterop_op2_erodila_coef51 = mask[46];
+        reg_24.reg_filterop_op2_erodila_coef52 = mask[47];
+        reg_25.reg_filterop_op2_erodila_coef53 = mask[48];
+        reg_25.reg_filterop_op2_erodila_coef54 = mask[49];
+        reg_25.reg_filterop_op2_erodila_coef55 = mask[50];
+        reg_25.reg_filterop_op2_erodila_coef56 = mask[51];
+        reg_ero9.reg_filterop_op2_erodila_coef57 = mask[52];
+        reg_ero9.reg_filterop_op2_erodila_coef58 = mask[53];
+
+        reg_ero9.reg_filterop_op2_erodila_coef60 = mask[54];
+        reg_ero9.reg_filterop_op2_erodila_coef61 = mask[55];
+        reg_26.reg_filterop_op2_erodila_coef62   = mask[56];
+        reg_26.reg_filterop_op2_erodila_coef63   = mask[57];
+        reg_26.reg_filterop_op2_erodila_coef64   = mask[58];
+        reg_26.reg_filterop_op2_erodila_coef65   = mask[59];
+        reg_27.reg_filterop_op2_erodila_coef66   = mask[60];
+        reg_ero10.reg_filterop_op2_erodila_coef67 = mask[61];
+        reg_ero10.reg_filterop_op2_erodila_coef68 = mask[62];
+
+        reg_ero10.reg_filterop_op2_erodila_coef70 = mask[63];
+        reg_ero10.reg_filterop_op2_erodila_coef71 = mask[64];
+        reg_ero11.reg_filterop_op2_erodila_coef72 = mask[65];
+        reg_ero11.reg_filterop_op2_erodila_coef73 = mask[66];
+        reg_ero11.reg_filterop_op2_erodila_coef74 = mask[67];
+        reg_ero11.reg_filterop_op2_erodila_coef75 = mask[68];
+        reg_ero12.reg_filterop_op2_erodila_coef76 = mask[69];
+        reg_ero12.reg_filterop_op2_erodila_coef77 = mask[70];
+        reg_ero12.reg_filterop_op2_erodila_coef78 = mask[71];
+
+        reg_ero12.reg_filterop_op2_erodila_coef80 = mask[72];
+        reg_ero13.reg_filterop_op2_erodila_coef81 = mask[73];
+        reg_ero13.reg_filterop_op2_erodila_coef82 = mask[74];
+        reg_ero13.reg_filterop_op2_erodila_coef83 = mask[75];
+        reg_ero13.reg_filterop_op2_erodila_coef84 = mask[76];
+        reg_ero14.reg_filterop_op2_erodila_coef85 = mask[77];
+        reg_ero14.reg_filterop_op2_erodila_coef86 = mask[78];
+        reg_ero14.reg_filterop_op2_erodila_coef87 = mask[79];
+        reg_ero14.reg_filterop_op2_erodila_coef88 = mask[80];
+        writel(reg_ero1.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO1));
+        writel(reg_ero2.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO2));
+        writel(reg_ero3.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO3));
+        writel(reg_ero4.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO4));
+        writel(reg_ero5.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO5));
+        writel(reg_ero6.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO6));
+        writel(reg_ero7.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO7));
+		writel(reg_ero8.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO8));
+		writel(reg_ero9.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO9));
+		writel(reg_ero10.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO10));
+		writel(reg_ero11.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO11));
+		writel(reg_ero12.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO12));
+		writel(reg_ero13.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO13));
+		writel(reg_ero14.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_ERO14));
+        writel(reg_21.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_21));
+        writel(reg_22.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_22));
+        writel(reg_23.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_23));
+        writel(reg_24.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_24));
+		writel(reg_25.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_25));
+		writel(reg_26.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_26));
+		writel(reg_27.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_27));
+	} else {
+        reg_h1.reg_filterop_h_coef00 = mask[0];
+        reg_h1.reg_filterop_h_coef01 = mask[1];
+        reg_h1.reg_filterop_h_coef02 = mask[2];
+        reg_h1.reg_filterop_h_coef03 = mask[3];
+        reg_h2.reg_filterop_h_coef04 = mask[4];
+        reg_h2.reg_filterop_h_coef05 = mask[5];
+        reg_h2.reg_filterop_h_coef06 = mask[6];
+        reg_h2.reg_filterop_h_coef07 = mask[7];
+        reg_h3.reg_filterop_h_coef08 = mask[8];
+
+        reg_h3.reg_filterop_h_coef10 = mask[9];
+        reg_h3.reg_filterop_h_coef11 = mask[10];
+        reg_h3.reg_filterop_h_coef12 = mask[11];
+        reg_h4.reg_filterop_h_coef13 = mask[12];
+        reg_h4.reg_filterop_h_coef14 = mask[13];
+        reg_h4.reg_filterop_h_coef15 = mask[14];
+        reg_h4.reg_filterop_h_coef16 = mask[15];
+        reg_h5.reg_filterop_h_coef17 = mask[16];
+        reg_h5.reg_filterop_h_coef18 = mask[17];
+
+        reg_h5.reg_filterop_h_coef20 = mask[18];
+        reg_h5.reg_filterop_h_coef21 = mask[19];
+        reg_4.reg_filterop_h_coef22 = mask[20];
+        reg_4.reg_filterop_h_coef23 = mask[21];
+        reg_4.reg_filterop_h_coef24 = mask[22];
+        reg_4.reg_filterop_h_coef25 = mask[23];
+        reg_5.reg_filterop_h_coef26 = mask[24];
+        reg_h6.reg_filterop_h_coef27 = mask[25];
+        reg_h6.reg_filterop_h_coef28 = mask[26];
+
+        reg_h6.reg_filterop_h_coef30 = mask[27];
+        reg_h6.reg_filterop_h_coef31 = mask[28];
+        reg_5.reg_filterop_h_coef32 = mask[29];
+        reg_5.reg_filterop_h_coef33 = mask[30];
+        reg_5.reg_filterop_h_coef34 = mask[31];
+        reg_6.reg_filterop_h_coef35 = mask[32];
+        reg_6.reg_filterop_h_coef36 = mask[33];
+        reg_h7.reg_filterop_h_coef37 = mask[34];
+        reg_h7.reg_filterop_h_coef38 = mask[35];
+
+        reg_h7.reg_filterop_h_coef40 = mask[36];
+        reg_h7.reg_filterop_h_coef41 = mask[37];
+        reg_6.reg_filterop_h_coef42 = mask[38];
+        reg_6.reg_filterop_h_coef43 = mask[39];
+        reg_7.reg_filterop_h_coef44 = mask[40];
+        reg_7.reg_filterop_h_coef45 = mask[41];
+        reg_7.reg_filterop_h_coef46 = mask[42];
+        reg_h8.reg_filterop_h_coef47 = mask[43];
+        reg_h8.reg_filterop_h_coef48 = mask[44];
+
+        reg_h8.reg_filterop_h_coef50 = mask[45];
+        reg_h8.reg_filterop_h_coef51 = mask[46];
+        reg_7.reg_filterop_h_coef52 = mask[47];
+        reg_8.reg_filterop_h_coef53 = mask[48];
+        reg_8.reg_filterop_h_coef54 = mask[49];
+        reg_8.reg_filterop_h_coef55 = mask[50];
+        reg_8.reg_filterop_h_coef56 = mask[51];
+        reg_h9.reg_filterop_h_coef57 = mask[52];
+        reg_h9.reg_filterop_h_coef58 = mask[53];
+
+        reg_h9.reg_filterop_h_coef60 = mask[54];
+        reg_h9.reg_filterop_h_coef61 = mask[55];
+        reg_9.reg_filterop_h_coef62 = mask[56];
+        reg_9.reg_filterop_h_coef63 = mask[57];
+        reg_9.reg_filterop_h_coef64 = mask[58];
+        reg_9.reg_filterop_h_coef65 = mask[59];
+        reg_10.reg_filterop_h_coef66 = mask[60];
+        reg_h10.reg_filterop_h_coef67 = mask[61];
+        reg_h10.reg_filterop_h_coef68 = mask[62];
+
+        reg_h10.reg_filterop_h_coef70 = mask[63];
+        reg_h10.reg_filterop_h_coef71 = mask[64];
+        reg_h11.reg_filterop_h_coef72 = mask[65];
+        reg_h11.reg_filterop_h_coef73 = mask[66];
+        reg_h11.reg_filterop_h_coef74 = mask[67];
+        reg_h11.reg_filterop_h_coef75 = mask[68];
+        reg_h12.reg_filterop_h_coef76 = mask[69];
+        reg_h12.reg_filterop_h_coef77 = mask[70];
+        reg_h12.reg_filterop_h_coef78 = mask[71];
+
+        reg_h12.reg_filterop_h_coef80 = mask[72];
+        reg_h13.reg_filterop_h_coef81 = mask[73];
+        reg_h13.reg_filterop_h_coef82 = mask[74];
+        reg_h13.reg_filterop_h_coef83 = mask[75];
+        reg_h13.reg_filterop_h_coef84 = mask[76];
+        reg_h14.reg_filterop_h_coef85 = mask[77];
+        reg_h14.reg_filterop_h_coef86 = mask[78];
+        reg_h14.reg_filterop_h_coef87 = mask[79];
+        reg_h14.reg_filterop_h_coef88 = mask[80];
+        writel(reg_h1.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H1));
+        writel(reg_h2.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H2));
+        writel(reg_h3.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H3));
+        writel(reg_h4.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H4));
+        writel(reg_h5.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H5));
+        writel(reg_h6.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H6));
+        writel(reg_h7.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H7));
+        writel(reg_h8.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H8));
+        writel(reg_h9.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H9));
+        writel(reg_h10.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H10));
+        writel(reg_h11.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H11));
+        writel(reg_h12.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H12));
+        writel(reg_h13.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H13));
+        writel(reg_h14.val,
+            (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H14));
+        writel(reg_4.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
+        writel(reg_5.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_5));
+        writel(reg_6.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_6));
+        writel(reg_7.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_7));
+        writel(reg_8.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_8));
+        writel(reg_9.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_9));
+        writel(reg_10.val,
+                (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_10));
+	}
+
+	set_isp_rdma(op, NULL, dev_id);
+	if (set_img_src1(pstSrc, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	// trigger filterop
+	//"2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+	//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+	ive_top_c->reg_20.reg_frame2op_op_mode = 5;
+	writel(ive_top_c->reg_20.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_20));
+	// "2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+	//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+	ive_top_c->reg_h80.reg_frame2op_fg_op_mode = 6;
+	writel(ive_top_c->reg_h80.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H80));
+	ive_top_c->reg_h10.reg_filterop_top_enable = 1;
+	writel(ive_top_c->reg_h10.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
+	// FIXME: check default is 0
+	ive_top_c->reg_r2y4_14.reg_csc_r2y4_enable = 0;
+	writel(ive_top_c->reg_r2y4_14.val,
+		   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_R2Y4_14));
+
+	set_img_dst1(pstDst, &wdma_y_ctl_c, dev_id);
+
+	ive_filterop_c.reg_h14.reg_op_y_wdma_en = 1;
+	ive_filterop_c.reg_h14.reg_op_c_wdma_en = 0;
+	writel(ive_filterop_c.reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+
+	if (pstSrc->width > 480) {
+		ret = emit_tile(ndev, ive_top_c, &ive_filterop_c, &img_in_c,
+				&wdma_y_ctl_c, NULL, NULL, NULL, pstSrc, NULL,
+				NULL, pstDst, NULL, true, 1, false, 1, false, op,
+				instant, dev_id);
+
+		kfree(ive_top_c);
+		return ret;
+	}
+
+	ret = ive_go(ndev, ive_top_c, instant,
+			  IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK, op, dev_id);
+	kfree(ive_top_c);
+	return ret;
+}
+#else
 static s32 erode_dilate_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			ive_dst_image_s *pstDst, u8 *mask,
 			bool instant, s32 op, s32 dev_id)
@@ -5008,7 +6021,9 @@ static s32 erode_dilate_op(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	kfree(ive_top_c);
 	return ret;
 }
+#endif
 
+#ifndef MEDIA_V3
 s32 ive_erode(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDst, ive_erode_ctrl_s *pstErodeCtrl,
 			  bool instant, s32 dev_id)
@@ -5017,7 +6032,23 @@ s32 ive_erode(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return erode_dilate_op(ndev, pstSrc, pstDst, pstErodeCtrl->mask,
 				   instant, 3, dev_id);
 }
+#endif
 
+
+#ifdef MEDIA_V3
+s32 ive_erode_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			  ive_dst_image_s *pstDst, ive_erode_ext_ctrl *pstErodeCtrl,
+			  bool instant, s32 dev_id)
+{
+	TRACE_IVE(IVE_DBG_INFO, "MPI_IVE_Erode\n");
+	return erode_dilate_op(ndev, pstSrc, pstDst, pstErodeCtrl->au8Mask, pstErodeCtrl->ksize,
+				   instant, 3, dev_id);
+}
+#endif
+
+
+
+#ifndef MEDIA_V3
 s32 ive_dilate(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			   ive_dst_image_s *pstDst,
 			   ive_dilate_ctrl_s *pstDilateCtrl, bool instant, s32 dev_id)
@@ -5026,6 +6057,20 @@ s32 ive_dilate(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return erode_dilate_op(ndev, pstSrc, pstDst, pstDilateCtrl->mask,
 				   instant, 2, dev_id);
 }
+#endif
+
+
+#ifdef MEDIA_V3
+s32 ive_dilate_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			   ive_dst_image_s *pstDst,
+			   ive_dilate_ext_ctrl *pstDilateCtrl, bool instant, s32 dev_id)
+{
+	TRACE_IVE(IVE_DBG_INFO, "MPI_IVE_Dilate\n");
+	return erode_dilate_op(ndev, pstSrc, pstDst, pstDilateCtrl->au8Mask, pstDilateCtrl->ksize,
+				   instant, 2, dev_id);
+}
+#endif
+
 
 s32
 ive_frame_diff_motion(struct ive_device *ndev, ive_src_image_s *pstSrc1,
@@ -5102,6 +6147,112 @@ ive_frame_diff_motion(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	writel(ive_filterop_c.reg_28.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_28));
 	// 3 Erode
+#ifdef MEDIA_V3
+	ive_filterop_c.reg_4.reg_filterop_h_coef22 = ctrl->erode_mask[0];
+	ive_filterop_c.reg_4.reg_filterop_h_coef23 = ctrl->erode_mask[1];
+	ive_filterop_c.reg_4.reg_filterop_h_coef24 = ctrl->erode_mask[2];
+	ive_filterop_c.reg_4.reg_filterop_h_coef25 = ctrl->erode_mask[3];
+	writel(ive_filterop_c.reg_4.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
+	ive_filterop_c.reg_5.reg_filterop_h_coef26 = ctrl->erode_mask[4];
+	ive_filterop_c.reg_5.reg_filterop_h_coef32 = ctrl->erode_mask[5];
+	ive_filterop_c.reg_5.reg_filterop_h_coef33 = ctrl->erode_mask[6];
+	ive_filterop_c.reg_5.reg_filterop_h_coef34 = ctrl->erode_mask[7];
+	writel(ive_filterop_c.reg_5.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_5));
+	ive_filterop_c.reg_6.reg_filterop_h_coef35 = ctrl->erode_mask[8];
+	ive_filterop_c.reg_6.reg_filterop_h_coef36 = ctrl->erode_mask[9];
+	ive_filterop_c.reg_6.reg_filterop_h_coef42 = ctrl->erode_mask[10];
+	ive_filterop_c.reg_6.reg_filterop_h_coef43 = ctrl->erode_mask[11];
+	writel(ive_filterop_c.reg_6.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_6));
+	ive_filterop_c.reg_7.reg_filterop_h_coef44 = ctrl->erode_mask[12];
+	ive_filterop_c.reg_7.reg_filterop_h_coef45 = ctrl->erode_mask[13];
+	ive_filterop_c.reg_7.reg_filterop_h_coef46 = ctrl->erode_mask[14];
+	ive_filterop_c.reg_7.reg_filterop_h_coef52 = ctrl->erode_mask[15];
+	writel(ive_filterop_c.reg_7.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_7));
+	ive_filterop_c.reg_8.reg_filterop_h_coef53 = ctrl->erode_mask[16];
+	ive_filterop_c.reg_8.reg_filterop_h_coef54 = ctrl->erode_mask[17];
+	ive_filterop_c.reg_8.reg_filterop_h_coef55 = ctrl->erode_mask[18];
+	ive_filterop_c.reg_8.reg_filterop_h_coef56 = ctrl->erode_mask[19];
+	writel(ive_filterop_c.reg_8.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_8));
+	ive_filterop_c.reg_9.reg_filterop_h_coef62 = ctrl->erode_mask[20];
+	ive_filterop_c.reg_9.reg_filterop_h_coef63 = ctrl->erode_mask[21];
+	ive_filterop_c.reg_9.reg_filterop_h_coef64 = ctrl->erode_mask[22];
+	ive_filterop_c.reg_9.reg_filterop_h_coef65 = ctrl->erode_mask[23];
+	writel(ive_filterop_c.reg_9.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_9));
+	ive_filterop_c.reg_10.reg_filterop_h_coef66 = ctrl->erode_mask[24];
+	writel(ive_filterop_c.reg_10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_10));
+
+	ive_filterop_c.reg_21.reg_filterop_op2_erodila_coef22 =
+		ctrl->dilate_mask[0];
+	ive_filterop_c.reg_21.reg_filterop_op2_erodila_coef23 =
+		ctrl->dilate_mask[1];
+	ive_filterop_c.reg_21.reg_filterop_op2_erodila_coef24 =
+		ctrl->dilate_mask[2];
+	ive_filterop_c.reg_21.reg_filterop_op2_erodila_coef25 =
+		ctrl->dilate_mask[3];
+	writel(ive_filterop_c.reg_21.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_21));
+	ive_filterop_c.reg_22.reg_filterop_op2_erodila_coef26 =
+		ctrl->dilate_mask[4];
+	ive_filterop_c.reg_22.reg_filterop_op2_erodila_coef32 =
+		ctrl->dilate_mask[5];
+	ive_filterop_c.reg_22.reg_filterop_op2_erodila_coef33 =
+		ctrl->dilate_mask[6];
+	ive_filterop_c.reg_22.reg_filterop_op2_erodila_coef34 =
+		ctrl->dilate_mask[7];
+	writel(ive_filterop_c.reg_22.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_22));
+	ive_filterop_c.reg_23.reg_filterop_op2_erodila_coef35 =
+		ctrl->dilate_mask[8];
+	ive_filterop_c.reg_23.reg_filterop_op2_erodila_coef36 =
+		ctrl->dilate_mask[9];
+	ive_filterop_c.reg_23.reg_filterop_op2_erodila_coef42 =
+		ctrl->dilate_mask[10];
+	ive_filterop_c.reg_23.reg_filterop_op2_erodila_coef43 =
+		ctrl->dilate_mask[11];
+	writel(ive_filterop_c.reg_23.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_23));
+	ive_filterop_c.reg_24.reg_filterop_op2_erodila_coef44 =
+		ctrl->dilate_mask[12];
+	ive_filterop_c.reg_24.reg_filterop_op2_erodila_coef45 =
+		ctrl->dilate_mask[13];
+	ive_filterop_c.reg_24.reg_filterop_op2_erodila_coef46 =
+		ctrl->dilate_mask[14];
+	ive_filterop_c.reg_24.reg_filterop_op2_erodila_coef52 =
+		ctrl->dilate_mask[15];
+	writel(ive_filterop_c.reg_24.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_24));
+	ive_filterop_c.reg_25.reg_filterop_op2_erodila_coef53 =
+		ctrl->dilate_mask[16];
+	ive_filterop_c.reg_25.reg_filterop_op2_erodila_coef54 =
+		ctrl->dilate_mask[17];
+	ive_filterop_c.reg_25.reg_filterop_op2_erodila_coef55 =
+		ctrl->dilate_mask[18];
+	ive_filterop_c.reg_25.reg_filterop_op2_erodila_coef56 =
+		ctrl->dilate_mask[19];
+	writel(ive_filterop_c.reg_25.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_25));
+	ive_filterop_c.reg_26.reg_filterop_op2_erodila_coef62 =
+		ctrl->dilate_mask[20];
+	ive_filterop_c.reg_26.reg_filterop_op2_erodila_coef63 =
+		ctrl->dilate_mask[21];
+	ive_filterop_c.reg_26.reg_filterop_op2_erodila_coef64 =
+		ctrl->dilate_mask[22];
+	ive_filterop_c.reg_26.reg_filterop_op2_erodila_coef65 =
+		ctrl->dilate_mask[23];
+	writel(ive_filterop_c.reg_26.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_26));
+	ive_filterop_c.reg_27.reg_filterop_op2_erodila_coef66 =
+		ctrl->dilate_mask[24];
+	writel(ive_filterop_c.reg_27.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_27));
+#else
 	ive_filterop_c.reg_4.reg_filterop_h_coef00 = ctrl->erode_mask[0];
 	ive_filterop_c.reg_4.reg_filterop_h_coef01 = ctrl->erode_mask[1];
 	ive_filterop_c.reg_4.reg_filterop_h_coef02 = ctrl->erode_mask[2];
@@ -5206,6 +6357,7 @@ ive_frame_diff_motion(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 		ctrl->dilate_mask[24];
 	writel(ive_filterop_c.reg_27.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_27));
+#endif
 
 	set_isp_rdma(MOD_BYP, NULL, dev_id);
 	if (set_img_src1(pstSrc1, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
@@ -5893,8 +7045,9 @@ s32 ive_match_bg_model(struct ive_device *ndev,
 	ive_match_bg_c.reg_00.reg_matchbg_en = 1;
 	ive_match_bg_c.reg_00.reg_matchbg_bypass_model = 0;
 	ive_update_bg_c.reg_h04.reg_enable = 0;
-	ive_update_bg_c.reg_h04.reg_updatebg_byp_model = 1;
-	ive_top_c->reg_20.reg_frame2op_op_mode = 5;
+	ive_update_bg_c.reg_h04.reg_updatebg_byp_model = 1; //match + update set
+	// ive_update_bg_c.reg_h04.reg_updatebg_byp_model = 0; //only match set
+    ive_top_c->reg_20.reg_frame2op_op_mode = 5;
 	ive_top_c->reg_h80.reg_frame2op_fg_op_mode = 5;
 
 	ive_top_c->reg_h10.reg_filterop_top_enable = 0;
@@ -6097,7 +7250,12 @@ s32 ive_update_bg_model(struct ive_device *ndev,
 	reg_ctrl5.reg_u8ChgBgAccTimeRateThr =
 		pstUpdateBgModelCtrl->chg_bg_acc_time_rate_thr;
 
-	ive_update_bg_c.reg_ctrl0.reg_u32CurFrmNum =
+    ive_match_bg_c.reg_04.reg_matchbg_curfrmnum = pstUpdateBgModelCtrl->cur_frm_num;
+    ive_match_bg_c.reg_08.reg_matchbg_prefrmnum = pstUpdateBgModelCtrl->cur_frm_num - 1;
+    writel(ive_match_bg_c.reg_04.val, (IVE_BLK_BA[dev_id].BG_MATCH_IVE_MATCH_BG + IVE_MATCH_BG_REG_04));
+    writel(ive_match_bg_c.reg_08.val, (IVE_BLK_BA[dev_id].BG_MATCH_IVE_MATCH_BG + IVE_MATCH_BG_REG_08));
+
+    ive_update_bg_c.reg_ctrl0.reg_u32CurFrmNum =
 		pstUpdateBgModelCtrl->cur_frm_num;
 	ive_update_bg_c.reg_ctrl1.reg_u32PreChkTime =
 		pstUpdateBgModelCtrl->pre_chk_time;
@@ -6349,8 +7507,8 @@ s32 ive_update_bg_model(struct ive_device *ndev,
 	ret = emit_bgm_tile(ndev, false, false, MOD_BGU, ive_top_c,
 			  ive_filterop_c, &img_in_c, NULL, NULL,
 			  pstBgImg->stride[0], pstBgImg->width,
-			  pstBgImg->height, -1,
-			  pstBgImg->type, instant, pstStatData, NULL, NULL, NULL,
+			  pstBgImg->height, pstBgImg->type, //src&&dst type: 84x2 fix need val
+			  pstCurImg->type, instant, pstStatData, NULL, NULL, NULL,
 			  NULL, &fgflag_rdma_ctl_c, &bgmodel_0_rdma_ctl_c, &difffg_wdma_ctl_c,
 			  &bgmodel_1_rdma_ctl_c, &fg_wdma_ctl_c,
 			  &bgmodel_0_wdma_ctl_c, &bgmodel_1_wdma_ctl_c,
@@ -6475,7 +7633,301 @@ s32 ive_bernsen(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	kfree(ive_top_c);
 	return ret;
 }
+#ifdef MEDIA_V3
+static s32 _ive_filter_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			ive_dst_image_s *pstDst, ive_filter_ext_ctrl *pstFltCtrl,
+			bool instant, ive_top_c *ive_top_c,
+			img_in_c *img_in_c, ive_filterop_c *ive_filterop_c,
+			bool isEmit, s32 dev_id) {
+	s32 ret = SUCCESS;
+	//DEFINE_isp_dma_ctl_c(wdma_y_ctl_c);
+	isp_dma_ctl_c wdma_y_ctl_c = _DEFINE_isp_dma_ctl_c;
+	//DEFINE_IVE_GMM_C(ive_gmm_c);
+	// ive_gmm_c ive_gmm_c = _DEFINE_IVE_GMM_C;
 
+	ive_filterop_reg_filter_h1_c reg_h1;
+	ive_filterop_reg_filter_h2_c reg_h2;
+	ive_filterop_reg_filter_h3_c reg_h3;
+	ive_filterop_reg_filter_h4_c reg_h4;
+	ive_filterop_reg_filter_h5_c reg_h5;
+	ive_filterop_reg_filter_h6_c reg_h6;
+	ive_filterop_reg_filter_h7_c reg_h7;
+	ive_filterop_reg_filter_h8_c reg_h8;
+	ive_filterop_reg_filter_h9_c reg_h9;
+	ive_filterop_reg_filter_h10_c reg_h10;
+	ive_filterop_reg_filter_h11_c reg_h11;
+	ive_filterop_reg_filter_h12_c reg_h12;
+	ive_filterop_reg_filter_h13_c reg_h13;
+	ive_filterop_reg_filter_h14_c reg_h14;
+	ive_filterop_reg_4_c reg_4;
+	ive_filterop_reg_5_c reg_5;
+	ive_filterop_reg_6_c reg_6;
+	ive_filterop_reg_7_c reg_7;
+	ive_filterop_reg_8_c reg_8;
+	ive_filterop_reg_9_c reg_9;
+
+	// top
+	if (isEmit)
+		ive_reset(ndev, ive_top_c, dev_id);
+    ive_set_wh(ive_top_c, pstDst->width, pstDst->height, "Filter", dev_id);
+	// ive_set_wh(ive_top_c, pstSrc->width, pstSrc->height, "Filter", dev_id); //need verify-success
+    #ifdef MEDIA_V3
+	// Set filter kernel size
+	if (pstFltCtrl->ksize == 3) {
+		ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 0; //3*3
+	} else if (pstFltCtrl->ksize == 5) {
+		ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 1; //5*5
+	} else if (pstFltCtrl->ksize == 7) {
+		ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 2; //7*7
+	} else if (pstFltCtrl->ksize == 9) {
+		ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 3; //9*9
+	} else {
+		pr_err("ksize must be 3,5,7,9\n");
+		return FAILURE;
+	}
+    // ive_top_c->reg_3.reg_trig_1t_ip_num = 8;//5.14 add useful? need verify
+    // ive_top_c->reg_3.reg_trig_1t_axi_num = 8;
+    // writel(ive_top_c->reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
+    ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_sobel = 3; //5.14 sync from bmtest useful? need verify
+    ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 3;
+    ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 3;
+    ive_filterop_c->reg_crop_odma_ctl.reg_window_size_choose_canny = 3;
+    #endif
+
+	writel(ive_filterop_c->reg_crop_odma_ctl.val,
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CROP_ODMA_CTL));
+
+	// Initialize all filter coefficient registers from extended control structure
+	reg_h1.reg_filterop_h_coef00 = pstFltCtrl->mask[0];
+	reg_h1.reg_filterop_h_coef01 = pstFltCtrl->mask[1];
+	reg_h1.reg_filterop_h_coef02 = pstFltCtrl->mask[2];
+	reg_h1.reg_filterop_h_coef03 = pstFltCtrl->mask[3];
+	reg_h2.reg_filterop_h_coef04 = pstFltCtrl->mask[4];
+	reg_h2.reg_filterop_h_coef05 = pstFltCtrl->mask[5];
+	reg_h2.reg_filterop_h_coef06 = pstFltCtrl->mask[6];
+	reg_h2.reg_filterop_h_coef07 = pstFltCtrl->mask[7];
+	reg_h3.reg_filterop_h_coef08 = pstFltCtrl->mask[8];
+
+	reg_h3.reg_filterop_h_coef10 = pstFltCtrl->mask[9];
+	reg_h3.reg_filterop_h_coef11 = pstFltCtrl->mask[10];
+	reg_h3.reg_filterop_h_coef12 = pstFltCtrl->mask[11];
+	reg_h4.reg_filterop_h_coef13 = pstFltCtrl->mask[12];
+	reg_h4.reg_filterop_h_coef14 = pstFltCtrl->mask[13];
+	reg_h4.reg_filterop_h_coef15 = pstFltCtrl->mask[14];
+	reg_h4.reg_filterop_h_coef16 = pstFltCtrl->mask[15];
+	reg_h5.reg_filterop_h_coef17 = pstFltCtrl->mask[16];
+	reg_h5.reg_filterop_h_coef18 = pstFltCtrl->mask[17];
+
+	reg_h5.reg_filterop_h_coef20 = pstFltCtrl->mask[18];
+	reg_h5.reg_filterop_h_coef21 = pstFltCtrl->mask[19];
+	reg_4.reg_filterop_h_coef22  = pstFltCtrl->mask[20];
+	reg_4.reg_filterop_h_coef23  = pstFltCtrl->mask[21];
+	reg_4.reg_filterop_h_coef24  = pstFltCtrl->mask[22];
+	reg_4.reg_filterop_h_coef25  = pstFltCtrl->mask[23];
+	reg_5.reg_filterop_h_coef26  = pstFltCtrl->mask[24];
+	reg_h6.reg_filterop_h_coef27 = pstFltCtrl->mask[25];
+	reg_h6.reg_filterop_h_coef28 = pstFltCtrl->mask[26];
+
+	reg_h6.reg_filterop_h_coef30 = pstFltCtrl->mask[27];
+	reg_h6.reg_filterop_h_coef31 = pstFltCtrl->mask[28];
+	reg_5.reg_filterop_h_coef32  = pstFltCtrl->mask[29];
+	reg_5.reg_filterop_h_coef33  = pstFltCtrl->mask[30];
+	reg_5.reg_filterop_h_coef34  = pstFltCtrl->mask[31];
+	reg_6.reg_filterop_h_coef35  = pstFltCtrl->mask[32];
+	reg_6.reg_filterop_h_coef36  = pstFltCtrl->mask[33];
+	reg_h7.reg_filterop_h_coef37 = pstFltCtrl->mask[34];
+	reg_h7.reg_filterop_h_coef38 = pstFltCtrl->mask[35];
+
+	reg_h7.reg_filterop_h_coef40 = pstFltCtrl->mask[36];
+	reg_h7.reg_filterop_h_coef41 = pstFltCtrl->mask[37];
+	reg_6.reg_filterop_h_coef42  = pstFltCtrl->mask[38];
+	reg_6.reg_filterop_h_coef43  = pstFltCtrl->mask[39];
+	reg_7.reg_filterop_h_coef44  = pstFltCtrl->mask[40];
+	reg_7.reg_filterop_h_coef45  = pstFltCtrl->mask[41];
+	reg_7.reg_filterop_h_coef46  = pstFltCtrl->mask[42];
+	reg_h8.reg_filterop_h_coef47 = pstFltCtrl->mask[43];
+	reg_h8.reg_filterop_h_coef48 = pstFltCtrl->mask[44];
+
+	reg_h8.reg_filterop_h_coef50 = pstFltCtrl->mask[45];
+	reg_h8.reg_filterop_h_coef51 = pstFltCtrl->mask[46];
+	reg_7.reg_filterop_h_coef52  = pstFltCtrl->mask[47];
+	reg_8.reg_filterop_h_coef53  = pstFltCtrl->mask[48];
+	reg_8.reg_filterop_h_coef54  = pstFltCtrl->mask[49];
+	reg_8.reg_filterop_h_coef55  = pstFltCtrl->mask[50];
+	reg_8.reg_filterop_h_coef56  = pstFltCtrl->mask[51];
+	reg_h9.reg_filterop_h_coef57 = pstFltCtrl->mask[52];
+	reg_h9.reg_filterop_h_coef58 = pstFltCtrl->mask[53];
+
+	reg_h9.reg_filterop_h_coef60 = pstFltCtrl->mask[54];
+	reg_h9.reg_filterop_h_coef61 = pstFltCtrl->mask[55];
+	reg_9.reg_filterop_h_coef62  = pstFltCtrl->mask[56];
+	reg_9.reg_filterop_h_coef63  = pstFltCtrl->mask[57];
+	reg_9.reg_filterop_h_coef64  = pstFltCtrl->mask[58];
+	reg_9.reg_filterop_h_coef65  = pstFltCtrl->mask[59];
+	reg_h10.reg_filterop_h_coef67 = pstFltCtrl->mask[61];
+	reg_h10.reg_filterop_h_coef68 = pstFltCtrl->mask[62];
+
+	reg_h10.reg_filterop_h_coef70 = pstFltCtrl->mask[63];
+	reg_h10.reg_filterop_h_coef71 = pstFltCtrl->mask[64];
+	reg_h11.reg_filterop_h_coef72 = pstFltCtrl->mask[65];
+	reg_h11.reg_filterop_h_coef73 = pstFltCtrl->mask[66];
+	reg_h11.reg_filterop_h_coef74 = pstFltCtrl->mask[67];
+	reg_h11.reg_filterop_h_coef75 = pstFltCtrl->mask[68];
+	reg_h12.reg_filterop_h_coef76 = pstFltCtrl->mask[69];
+	reg_h12.reg_filterop_h_coef77 = pstFltCtrl->mask[70];
+	reg_h12.reg_filterop_h_coef78 = pstFltCtrl->mask[71];
+
+	reg_h12.reg_filterop_h_coef80 = pstFltCtrl->mask[72];
+	reg_h13.reg_filterop_h_coef81 = pstFltCtrl->mask[73];
+	reg_h13.reg_filterop_h_coef82 = pstFltCtrl->mask[74];
+	reg_h13.reg_filterop_h_coef83 = pstFltCtrl->mask[75];
+	reg_h13.reg_filterop_h_coef84 = pstFltCtrl->mask[76];
+	reg_h14.reg_filterop_h_coef85 = pstFltCtrl->mask[77];
+	reg_h14.reg_filterop_h_coef86 = pstFltCtrl->mask[78];
+	reg_h14.reg_filterop_h_coef87 = pstFltCtrl->mask[79];
+	reg_h14.reg_filterop_h_coef88 = pstFltCtrl->mask[80];
+
+	// Write filter coefficient registers to hardware
+	writel(reg_h1.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H1));
+	writel(reg_h2.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H2));
+	writel(reg_h3.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H3));
+	writel(reg_h4.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H4));
+	writel(reg_h5.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H5));
+	writel(reg_h6.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H6));
+	writel(reg_h7.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H7));
+	writel(reg_h8.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H8));
+	writel(reg_h9.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H9));
+	writel(reg_h10.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H10));
+	writel(reg_h11.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H11));
+	writel(reg_h12.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H12));
+	writel(reg_h13.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H13));
+	writel(reg_h14.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H14));
+	writel(reg_4.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
+	writel(reg_5.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_5));
+	writel(reg_6.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_6));
+	writel(reg_7.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_7));
+	writel(reg_8.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_8));
+	writel(reg_9.val,(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_9));
+	ive_filterop_c->reg_10.reg_filterop_h_coef66 = pstFltCtrl->mask[60];
+	ive_filterop_c->reg_10.reg_filterop_h_norm = pstFltCtrl->norm;
+	writel(ive_filterop_c->reg_10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_10));
+
+	// Handle different image types
+	switch (pstSrc->type) {
+	case IVE_IMAGE_TYPE_U8C1:
+		//test1:rgb:set gmm_gmm2_yonly:0
+		//y_only:set gmm_gmm2_yonly:1
+		// ive_gmm_c.reg_gmm_13.reg_gmm_gmm2_yonly = 1; //5.19 change bmtest dont have need verify
+		// writel(ive_gmm_c.reg_gmm_13.val, (IVE_BLK_BA[dev_id].GMM + IVE_GMM_REG_GMM_13));
+		// pass, filter case
+		// TODO: check 1 channels setting
+		ive_filterop_c->reg_h10.reg_filterop_mode = 3;
+		ive_filterop_c->reg_h14.reg_filterop_op1_cmd = 1;
+		ive_filterop_c->reg_h14.reg_filterop_sw_ovw_op = 0;
+		break;
+	case IVE_IMAGE_TYPE_YUV420SP:
+	case IVE_IMAGE_TYPE_YUV422SP:
+	case IVE_IMAGE_TYPE_U8C3_PLANAR:
+		//test1:rgb:set gmm_gmm2_yonly:0
+		//y_only:set gmm_gmm2_yonly:1
+		// ive_gmm_c.reg_gmm_13.reg_gmm_gmm2_yonly = 0;//5.19 change bmtest dont have need verify
+		// writel(ive_gmm_c.reg_gmm_13.val, (IVE_BLK_BA[dev_id].GMM + IVE_GMM_REG_GMM_13));
+
+		ive_filterop_c->reg_h10.reg_filterop_mode = 1;
+		ive_filterop_c->reg_h14.reg_filterop_sw_ovw_op = 0;
+		ive_top_c->reg_r2y4_14.reg_csc_r2y4_enable = 0;
+		ive_filterop_c->reg_h1c8.reg_filterop_op2_csc_enable = 0;
+		ive_filterop_c->reg_h1c8.reg_filterop_op2_csc_enmode = 0;
+		ive_filterop_c->reg_h14.reg_filterop_3ch_en = 1;
+		writel(ive_top_c->reg_r2y4_14.val,
+			   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_R2Y4_14));
+		writel(ive_filterop_c->reg_h1c8.val,
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H1C8));
+		break;
+	default:
+		pr_err("Invalid Image type %d\n", pstSrc->type);
+		return FAILURE;
+	}
+	writel(ive_filterop_c->reg_h10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H10));
+	writel(ive_filterop_c->reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+
+	set_isp_rdma(MOD_FILTER3CH, NULL, dev_id);
+	if (isEmit) {
+
+		if (set_img_src1(pstSrc, img_in_c, ive_top_c, dev_id) != SUCCESS) {
+			return FAILURE;
+		}
+		// trigger filterop
+		//"2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+		//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+		ive_top_c->reg_20.reg_frame2op_op_mode = 5;
+		// "2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+		//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+		ive_top_c->reg_h80.reg_frame2op_fg_op_mode = 6;
+		ive_top_c->reg_h10.reg_filterop_top_enable = 1;
+		writel(ive_top_c->reg_20.val,
+			   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_20));
+		writel(ive_top_c->reg_h80.val,
+			   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H80));
+		writel(ive_top_c->reg_h10.val,
+			   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
+		if (pstDst->type == IVE_IMAGE_TYPE_U8C1) {
+			set_img_dst1(pstDst, &wdma_y_ctl_c, dev_id);
+			ive_filterop_c->odma_reg_00.reg_dma_en = 0;
+			writel(ive_filterop_c->odma_reg_00.val,
+				   (IVE_BLK_BA[dev_id].FILTEROP +
+				IVE_FILTEROP_ODMA_REG_00));
+
+			ive_filterop_c->reg_h14.reg_op_y_wdma_en = 1;
+			ive_filterop_c->reg_h14.reg_op_c_wdma_en = 0;
+			writel(ive_filterop_c->reg_h14.val,
+				   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+
+			if (pstSrc->width > 480) {
+				ret = emit_tile(ndev, ive_top_c, ive_filterop_c, img_in_c,
+					&wdma_y_ctl_c, NULL, NULL, NULL, pstSrc, NULL,
+					NULL, pstDst, NULL, true, 1, false, 1, false, MOD_FILTER3CH,
+					instant, dev_id);
+			} else {
+				ret = ive_go(
+					ndev, ive_top_c, instant,
+					IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK,
+					MOD_FILTER3CH, dev_id);
+			}
+		} else {
+			img_in_c->reg_00.reg_auto_csc_en = 0;
+			writel(img_in_c->reg_00.val,
+				   (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_00));
+
+			set_odma(pstDst, ive_filterop_c, pstDst->width,
+				pstDst->height, dev_id);
+
+			// NOTICE: test img_in = odma
+			ive_filterop_c->reg_h14.reg_op_y_wdma_en = 0;
+			writel(ive_filterop_c->reg_h14.val,
+				   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+
+			if (pstSrc->width > 480) {
+				ret = emit_tile(ndev, ive_top_c, ive_filterop_c, img_in_c,
+					NULL, NULL, NULL, NULL, pstSrc, NULL,
+					NULL, pstDst, NULL, false, 1, false, 1, true, MOD_FILTER3CH,
+					instant, dev_id);
+			} else {
+				ret = ive_go(
+					ndev, ive_top_c, instant,
+					IVE_TOP_REG_FRAME_DONE_FILTEROP_ODMA_MASK,
+					MOD_FILTER3CH, dev_id);
+			}
+		}
+	}
+	return ret;
+}
+#endif
+
+#ifndef MEDIA_V3
 static s32 _ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			ive_dst_image_s *pstDst, ive_filter_ctrl_s *pstFltCtrl,
 			bool instant, ive_top_c *ive_top_c,
@@ -6643,7 +8095,39 @@ static s32 _ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	}
 	return ret;
 }
+#endif
 
+#ifdef MEDIA_V3
+s32 ive_filter_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			   ive_dst_image_s *pstDst, ive_filter_ext_ctrl *pstFltCtrl,
+			   bool instant, s32 dev_id)
+{
+	s32 ret = 0;
+	//DEFINE_img_in_c(img_in_c);
+	img_in_c img_in_c = _DEFINE_img_in_c;
+	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
+	ive_filterop_c ive_filterop_c = _DEFINE_IVE_FILTEROP_C;
+	//DEFINE_IVE_TOP_C(ive_top_c);
+	ive_top_c *ive_top_c = init_ive_top_c();
+	if (!ive_top_c) {
+		pr_err("ive_top_c init failed\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+	TRACE_IVE(IVE_DBG_INFO, "MPI_IVE_Filter\n");
+	if (g_dump_image_info == TRUE) {
+		dump_ive_image("pstSrc", pstSrc);
+		dump_ive_image("pstDst", pstDst);
+	}
+	ret = _ive_filter_ext(ndev, pstSrc, pstDst, pstFltCtrl, instant,
+				ive_top_c, &img_in_c, &ive_filterop_c, true, dev_id);
+
+	kfree(ive_top_c);
+	return ret;
+}
+#endif
+
+#ifndef MEDIA_V3
 s32 ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			   ive_dst_image_s *pstDst, ive_filter_ctrl_s *pstFltCtrl,
 			   bool instant, s32 dev_id)
@@ -6672,6 +8156,8 @@ s32 ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	kfree(ive_top_c);
 	return ret;
 }
+#endif
+
 
 static s32 _ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			 ive_dst_image_s *pstDst, ive_csc_ctrl_s *pstCscCtrl,
@@ -6910,7 +8396,97 @@ s32 ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	kfree(ive_top_c);
 	return ret;
 }
+#ifdef MEDIA_V3
+s32 ive_filter_and_csc_ext(struct ive_device *ndev,
+				 ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
+				 ive_filter_and_csc_ext_ctrl *pstFltCscCtrl,
+				 bool instant, s32 dev_id)
+{
+	s32 ret = SUCCESS;
+	ive_csc_ctrl_s stCscCtrl;
+	ive_filter_ext_ctrl stFltCtrl;
+	//DEFINE_img_in_c(img_in_c);
+	img_in_c img_in_c = _DEFINE_img_in_c;
+	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
+	ive_filterop_c ive_filterop_c = _DEFINE_IVE_FILTEROP_C;
+	//DEFINE_IVE_TOP_C(ive_top_c);
+	ive_top_c *ive_top_c = init_ive_top_c();
+	if (!ive_top_c) {
+		pr_err("ive_top_c init failed\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
 
+
+
+	TRACE_IVE(IVE_DBG_INFO, "MPI_IVE_FilterAndCSC\n");
+	ive_reset(ndev, ive_top_c, dev_id);
+	if (g_dump_image_info == TRUE) {
+		dump_ive_image("pstSrc", pstSrc);
+		dump_ive_image("pstDst", pstDst);
+	}
+	if (pstSrc->type == IVE_IMAGE_TYPE_YUV420SP ||
+		pstSrc->type == IVE_IMAGE_TYPE_YUV422SP) {
+	} else {
+		pr_err("only support input fmt YUV420SP/YUV422SP??\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	// set filter
+	memcpy(stFltCtrl.mask, pstFltCscCtrl->mask, sizeof(s8) * 81);
+	stFltCtrl.norm = pstFltCscCtrl->norm;
+    stFltCtrl.ksize = pstFltCscCtrl->ksize;
+	_ive_filter_ext(ndev, pstSrc, pstDst, &stFltCtrl, instant, ive_top_c,
+			&img_in_c, &ive_filterop_c, /*isEmit=*/false, dev_id);
+	// set csc
+	stCscCtrl.mode = pstFltCscCtrl->mode;
+	_ive_csc(ndev, pstSrc, pstDst, &stCscCtrl, instant, ive_top_c,
+			 &img_in_c, &ive_filterop_c, /*isEmit=*/false, dev_id);
+	strcpy(g_debug_info.op_name, "FilterAndCSC");
+	ive_filterop_c.reg_h14.reg_filterop_3ch_en = 1;
+	ive_filterop_c.reg_h1c8.reg_filterop_op2_csc_enable = 1;
+	writel(ive_filterop_c.reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+	writel(ive_filterop_c.reg_h1c8.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H1C8));
+
+	set_isp_rdma(MOD_FILTERCSC, NULL, dev_id);
+	if (set_img_src1(pstSrc, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	img_in_c.reg_00.reg_auto_csc_en = 0;
+	writel(img_in_c.reg_00.val, (IVE_BLK_BA[dev_id].IMG_IN + IMG_IN_REG_00));
+
+	// NOTICE: need to first set it
+	ive_top_c->reg_h10.reg_filterop_top_enable = 1;
+	writel(ive_top_c->reg_h10.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
+
+	set_odma(pstDst, &ive_filterop_c, pstDst->width, pstDst->height, dev_id);
+
+	ive_filterop_c.reg_h14.reg_op_y_wdma_en = 0;
+	writel(ive_filterop_c.reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+
+	if (pstSrc->width > 480) {
+		ret = emit_tile(ndev, ive_top_c, &ive_filterop_c, &img_in_c,
+			NULL, NULL, NULL, NULL, pstSrc, NULL,
+			NULL, pstDst, NULL, false, 1, false, 1, true, MOD_FILTERCSC,
+			instant, dev_id);
+	} else {
+		ret = ive_go(
+			ndev, ive_top_c, instant,
+			IVE_TOP_REG_FRAME_DONE_FILTEROP_ODMA_MASK,
+			MOD_FILTERCSC, dev_id);
+	}
+	kfree(ive_top_c);
+	return ret;
+}
+#endif
+
+#ifndef MEDIA_V3
 s32 ive_filter_and_csc(struct ive_device *ndev,
 				 ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
 				 ive_filter_and_csc_ctrl_s *pstFltCscCtrl,
@@ -6995,6 +8571,8 @@ s32 ive_filter_and_csc(struct ive_device *ndev,
 	kfree(ive_top_c);
 	return ret;
 }
+#endif
+
 
 s32 ive_hist(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			 ive_dst_mem_info_s *pstDst, bool instant, s32 dev_id)
@@ -7047,6 +8625,22 @@ s32 ive_hist(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	wdma_hist_ctl_c.sys_control.reg_baseh =
 		((u64)pstDst->phy_addr >> 32) & 0xffffffff;
 	wdma_hist_ctl_c.sys_control.reg_base_sel = 1;
+
+	#ifdef MEDIA_V3
+	if ((pstSrc->width & 0xF) != 0) {
+		wdma_hist_ctl_c.dma_dummy.reg_byte_mode = 1;
+		wdma_hist_ctl_c.sys_control.reg_stride_sel = 1;
+		// wdma_hist_ctl_c->dma_stride.reg_stride = ive_top_c->reg_2.reg_img_widthm1 + 1; //no use ? need verify
+		writel(wdma_hist_ctl_c.dma_dummy.val, (IVE_BLK_BA[dev_id].HIST_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+		// writel(wdma_hist_ctl_c.dma_stride.val,
+		//        (IVE_BLK_BA[dev_id].HIST_WDMA + ISP_DMA_CTL_DMA_STRIDE));
+		// writel(wdma_hist_ctl_c.dma_segnum.val,
+		//        (IVE_BLK_BA[dev_id].HIST_WDMA + ISP_DMA_CTL_DMA_SEGNUM));
+		// writel(wdma_hist_ctl_c.dma_seglen.val,
+		//        (IVE_BLK_BA[dev_id].HIST_WDMA + ISP_DMA_CTL_DMA_SEGLEN));
+    }
+	#endif
+
 	if (g_dump_dma_info == TRUE) {
 		pr_info("Hist wdma_hist_ctl_c address: 0x%08x %08x\n",
 			wdma_hist_ctl_c.sys_control.reg_baseh,
@@ -7061,8 +8655,7 @@ s32 ive_hist(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	writel(wdma_hist_ctl_c.sys_control.val,
 		   (IVE_BLK_BA[dev_id].HIST_WDMA + ISP_DMA_CTL_SYS_CONTROL));
 
-	ret = ive_go(ndev, ive_top_c, instant,
-			 IVE_TOP_REG_FRAME_DONE_HIST_MASK, MOD_HIST, dev_id);
+    ret = ive_go(ndev, ive_top_c, instant, IVE_TOP_REG_FRAME_DONE_HIST_MASK, MOD_HIST, dev_id);
 
 	ive_hist_c.reg_0.reg_ive_hist_enable = 0;
 	ive_hist_c.reg_0.reg_force_clk_enable = 1;
@@ -7071,6 +8664,354 @@ s32 ive_hist(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	return ret;
 }
 
+#ifdef MEDIA_V3
+s32 ive_sobel_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+			  ive_dst_image_s *pstDstH, ive_dst_image_s *pstDstV,
+			  ive_sobel_ext_ctrl *pstSobelCtrl, bool instant, s32 dev_id)
+{
+	s32 yunit = 2;
+	s32 ret = SUCCESS;
+	ive_dst_image_s *firstOut = pstDstH;
+	ive_dst_image_s *secondOut = pstDstV;
+	//DEFINE_IVE_FILTEROP_C(ive_filterop_c);
+	ive_filterop_c ive_filterop_c = _DEFINE_IVE_FILTEROP_C;
+	//DEFINE_img_in_c(img_in_c);
+	img_in_c img_in_c = _DEFINE_img_in_c;
+	//DEFINE_isp_dma_ctl_c(wdma_y_ctl_c);
+	isp_dma_ctl_c wdma_y_ctl_c = _DEFINE_isp_dma_ctl_c;
+	//DEFINE_isp_dma_ctl_c(wdma_c_ctl_c);
+	isp_dma_ctl_c wdma_c_ctl_c = _DEFINE_isp_dma_ctl_c;
+    ive_filterop_reg_filter_h1_c reg_h1;
+	ive_filterop_reg_filter_h2_c reg_h2;
+	ive_filterop_reg_filter_h3_c reg_h3;
+	ive_filterop_reg_filter_h4_c reg_h4;
+	ive_filterop_reg_filter_h5_c reg_h5;
+	ive_filterop_reg_filter_h6_c reg_h6;
+	ive_filterop_reg_filter_h7_c reg_h7;
+	ive_filterop_reg_filter_h8_c reg_h8;
+	ive_filterop_reg_filter_h9_c reg_h9;
+	ive_filterop_reg_filter_h10_c reg_h10;
+	ive_filterop_reg_filter_h11_c reg_h11;
+	ive_filterop_reg_filter_h12_c reg_h12;
+	ive_filterop_reg_filter_h13_c reg_h13;
+	ive_filterop_reg_filter_h14_c reg_h14;
+	ive_filterop_reg_4_c reg_4;
+	ive_filterop_reg_5_c reg_5;
+	ive_filterop_reg_6_c reg_6;
+	ive_filterop_reg_7_c reg_7;
+	ive_filterop_reg_8_c reg_8;
+	ive_filterop_reg_9_c reg_9;
+	ive_filterop_reg_10_c reg_10;
+	//DEFINE_IVE_TOP_C(ive_top_c);
+	ive_top_c *ive_top_c = init_ive_top_c();
+	if (!ive_top_c) {
+		pr_err("ive_top_c init failed\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	TRACE_IVE(IVE_DBG_INFO, "MPI_IVE_Sobel\n");
+	ive_reset(ndev, ive_top_c, dev_id);
+	if (g_dump_image_info == TRUE) {
+		dump_ive_image("pstSrc", pstSrc);
+		dump_ive_image("pstDstH", pstDstH);
+		dump_ive_image("pstDstV", pstDstV);
+	}
+	ive_set_wh(ive_top_c, pstSrc->width, pstSrc->height, "Sobel", dev_id);
+
+	ive_filterop_c.reg_h14.reg_filterop_sw_ovw_op = 0;
+	ive_filterop_c.reg_h10.reg_filterop_mode = 9;
+	writel(ive_filterop_c.reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+	writel(ive_filterop_c.reg_h10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H10));
+
+    ive_top_c->reg_3.reg_trig_1t_ip_num = 8;//need verify
+    ive_top_c->reg_3.reg_trig_1t_axi_num = 8;
+    writel(ive_top_c->reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
+
+	if(pstSobelCtrl->ksize == 3) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_sobel = 0; //3*3
+	} else if (pstSobelCtrl->ksize == 5) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_sobel = 1; //5*5
+	} else if (pstSobelCtrl->ksize == 7) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_sobel = 2; //7*7
+	} else if (pstSobelCtrl->ksize == 9) {
+		ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_sobel = 3; //9*9
+	} else {
+		pr_err("ksize must be 3,5,7,9\n");
+		return FAILURE;
+	}
+    ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_sobel = 3; //need verify
+	writel(ive_filterop_c.reg_crop_odma_ctl.val,
+		(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CROP_ODMA_CTL));
+
+    reg_h1.reg_filterop_h_coef00 = pstSobelCtrl->mask[0];
+    reg_h1.reg_filterop_h_coef01 = pstSobelCtrl->mask[1];
+    reg_h1.reg_filterop_h_coef02 = pstSobelCtrl->mask[2];
+    reg_h1.reg_filterop_h_coef03 = pstSobelCtrl->mask[3];
+    reg_h2.reg_filterop_h_coef04 = pstSobelCtrl->mask[4];
+    reg_h2.reg_filterop_h_coef05 = pstSobelCtrl->mask[5];
+    reg_h2.reg_filterop_h_coef06 = pstSobelCtrl->mask[6];
+    reg_h2.reg_filterop_h_coef07 = pstSobelCtrl->mask[7];
+    reg_h3.reg_filterop_h_coef08 = pstSobelCtrl->mask[8];
+
+    reg_h3.reg_filterop_h_coef10 = pstSobelCtrl->mask[9];
+    reg_h3.reg_filterop_h_coef11 = pstSobelCtrl->mask[10];
+    reg_h3.reg_filterop_h_coef12 = pstSobelCtrl->mask[11];
+    reg_h4.reg_filterop_h_coef13 = pstSobelCtrl->mask[12];
+    reg_h4.reg_filterop_h_coef14 = pstSobelCtrl->mask[13];
+    reg_h4.reg_filterop_h_coef15 = pstSobelCtrl->mask[14];
+    reg_h4.reg_filterop_h_coef16 = pstSobelCtrl->mask[15];
+    reg_h5.reg_filterop_h_coef17 = pstSobelCtrl->mask[16];
+    reg_h5.reg_filterop_h_coef18 = pstSobelCtrl->mask[17];
+
+    reg_h5.reg_filterop_h_coef20 = pstSobelCtrl->mask[18];
+    reg_h5.reg_filterop_h_coef21 = pstSobelCtrl->mask[19];
+    reg_4.reg_filterop_h_coef22 = pstSobelCtrl->mask[20];
+    reg_4.reg_filterop_h_coef23 = pstSobelCtrl->mask[21];
+    reg_4.reg_filterop_h_coef24 = pstSobelCtrl->mask[22];
+    reg_4.reg_filterop_h_coef25 = pstSobelCtrl->mask[23];
+    reg_5.reg_filterop_h_coef26 = pstSobelCtrl->mask[24];
+    reg_h6.reg_filterop_h_coef27 = pstSobelCtrl->mask[25];
+    reg_h6.reg_filterop_h_coef28 = pstSobelCtrl->mask[26];
+
+    reg_h6.reg_filterop_h_coef30 = pstSobelCtrl->mask[27];
+    reg_h6.reg_filterop_h_coef31 = pstSobelCtrl->mask[28];
+    reg_5.reg_filterop_h_coef32 = pstSobelCtrl->mask[29];
+    reg_5.reg_filterop_h_coef33 = pstSobelCtrl->mask[30];
+    reg_5.reg_filterop_h_coef34 = pstSobelCtrl->mask[31];
+    reg_6.reg_filterop_h_coef35 = pstSobelCtrl->mask[32];
+    reg_6.reg_filterop_h_coef36 = pstSobelCtrl->mask[33];
+    reg_h7.reg_filterop_h_coef37 = pstSobelCtrl->mask[34];
+    reg_h7.reg_filterop_h_coef38 = pstSobelCtrl->mask[35];
+
+    reg_h7.reg_filterop_h_coef40 = pstSobelCtrl->mask[36];
+    reg_h7.reg_filterop_h_coef41 = pstSobelCtrl->mask[37];
+    reg_6.reg_filterop_h_coef42 = pstSobelCtrl->mask[38];
+    reg_6.reg_filterop_h_coef43 = pstSobelCtrl->mask[39];
+    reg_7.reg_filterop_h_coef44 = pstSobelCtrl->mask[40];
+    reg_7.reg_filterop_h_coef45 = pstSobelCtrl->mask[41];
+    reg_7.reg_filterop_h_coef46 = pstSobelCtrl->mask[42];
+    reg_h8.reg_filterop_h_coef47 = pstSobelCtrl->mask[43];
+    reg_h8.reg_filterop_h_coef48 = pstSobelCtrl->mask[44];
+
+    reg_h8.reg_filterop_h_coef50 = pstSobelCtrl->mask[45];
+    reg_h8.reg_filterop_h_coef51 = pstSobelCtrl->mask[46];
+    reg_7.reg_filterop_h_coef52 = pstSobelCtrl->mask[47];
+    reg_8.reg_filterop_h_coef53 = pstSobelCtrl->mask[48];
+    reg_8.reg_filterop_h_coef54 = pstSobelCtrl->mask[49];
+    reg_8.reg_filterop_h_coef55 = pstSobelCtrl->mask[50];
+    reg_8.reg_filterop_h_coef56 = pstSobelCtrl->mask[51];
+    reg_h9.reg_filterop_h_coef57 = pstSobelCtrl->mask[52];
+    reg_h9.reg_filterop_h_coef58 = pstSobelCtrl->mask[53];
+
+    reg_h9.reg_filterop_h_coef60 = pstSobelCtrl->mask[54];
+    reg_h9.reg_filterop_h_coef61 = pstSobelCtrl->mask[55];
+    reg_9.reg_filterop_h_coef62 = pstSobelCtrl->mask[56];
+    reg_9.reg_filterop_h_coef63 = pstSobelCtrl->mask[57];
+    reg_9.reg_filterop_h_coef64 = pstSobelCtrl->mask[58];
+    reg_9.reg_filterop_h_coef65 = pstSobelCtrl->mask[59];
+    reg_10.reg_filterop_h_coef66 = pstSobelCtrl->mask[60];
+    reg_h10.reg_filterop_h_coef67 = pstSobelCtrl->mask[61];
+    reg_h10.reg_filterop_h_coef68 = pstSobelCtrl->mask[62];
+
+    reg_h10.reg_filterop_h_coef70 = pstSobelCtrl->mask[63];
+    reg_h10.reg_filterop_h_coef71 = pstSobelCtrl->mask[64];
+    reg_h11.reg_filterop_h_coef72 = pstSobelCtrl->mask[65];
+    reg_h11.reg_filterop_h_coef73 = pstSobelCtrl->mask[66];
+    reg_h11.reg_filterop_h_coef74 = pstSobelCtrl->mask[67];
+    reg_h11.reg_filterop_h_coef75 = pstSobelCtrl->mask[68];
+    reg_h12.reg_filterop_h_coef76 = pstSobelCtrl->mask[69];
+    reg_h12.reg_filterop_h_coef77 = pstSobelCtrl->mask[70];
+    reg_h12.reg_filterop_h_coef78 = pstSobelCtrl->mask[71];
+
+    reg_h12.reg_filterop_h_coef80 = pstSobelCtrl->mask[72];
+    reg_h13.reg_filterop_h_coef81 = pstSobelCtrl->mask[73];
+    reg_h13.reg_filterop_h_coef82 = pstSobelCtrl->mask[74];
+    reg_h13.reg_filterop_h_coef83 = pstSobelCtrl->mask[75];
+    reg_h13.reg_filterop_h_coef84 = pstSobelCtrl->mask[76];
+    reg_h14.reg_filterop_h_coef85 = pstSobelCtrl->mask[77];
+    reg_h14.reg_filterop_h_coef86 = pstSobelCtrl->mask[78];
+    reg_h14.reg_filterop_h_coef87 = pstSobelCtrl->mask[79];
+    reg_h14.reg_filterop_h_coef88 = pstSobelCtrl->mask[80];
+
+	writel(reg_h1.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H1));
+	writel(reg_h2.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H2));
+	writel(reg_h3.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H3));
+	writel(reg_h4.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H4));
+	writel(reg_h5.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H5));
+	writel(reg_h6.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H6));
+	writel(reg_h7.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H7));
+	writel(reg_h8.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H8));
+	writel(reg_h9.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H9));
+	writel(reg_h10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H10));
+	writel(reg_h11.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H11));
+	writel(reg_h12.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H12));
+	writel(reg_h13.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H13));
+	writel(reg_h14.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_FILTER_H14));
+	writel(reg_4.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
+	writel(reg_5.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_5));
+	writel(reg_6.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_6));
+	writel(reg_7.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_7));
+	writel(reg_8.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_8));
+	writel(reg_9.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_9));
+	writel(reg_10.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_10));
+
+	if (pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_BOTH ||
+		pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_HOR ||
+		pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_VER) {
+		// valid
+		// "0 : h , v  -> wdma_y wdma_c will be active 1 :h only -> wdma_y
+		// 2: v only -> wdma_c 3. h , v pack => {v ,h} -> wdma_y "
+		ive_filterop_c.reg_110.reg_filterop_norm_out_ctrl =
+			(int)pstSobelCtrl->out_ctrl;
+		writel(ive_filterop_c.reg_110.val,
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
+	} else {
+		pr_err("[IVE] not support out_ctrl\n");
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	set_isp_rdma(MOD_SOBEL, NULL, dev_id);
+	if (set_img_src1(pstSrc, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
+		kfree(ive_top_c);
+		return FAILURE;
+	}
+
+	//"2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+	//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+	ive_top_c->reg_20.reg_frame2op_op_mode = 5;
+	writel(ive_top_c->reg_20.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_20));
+	// "2 frame operation_mode 3'd0: And 3'd1: Or 3'd2: Xor 3'd3: Add 3'd4: Sub 3'
+	//d5: Bypass mode output =frame source 0 3'd6: Bypass mode output =frame source 1 default: And"
+	ive_top_c->reg_h80.reg_frame2op_fg_op_mode = 6;
+	writel(ive_top_c->reg_h80.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H80));
+
+	// "0 : U8 1 : S16 2 : U16"
+	// FIXME: check enable in Sobel
+	ive_filterop_c.reg_110.reg_filterop_map_enmode = 1;
+	ive_top_c->reg_h10.reg_filterop_top_enable = 1;
+	writel(ive_top_c->reg_h10.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
+	writel(ive_filterop_c.reg_110.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
+
+	if ((int)pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_BOTH) {
+		set_img_dst2(secondOut, &wdma_c_ctl_c, dev_id);
+		set_img_dst1(firstOut, &wdma_y_ctl_c, dev_id);
+		// if ((firstOut->width & 0xF) != 0) {
+		// 	wdma_y_ctl_c.dma_stride.reg_stride *= 2;
+		// 	wdma_c_ctl_c.dma_stride.reg_stride *= 2;
+		// 	pr_info("sobel both: wdma_y stride=%d, wdma_c stride=%d\n", wdma_y_ctl_c.dma_stride.reg_stride, wdma_c_ctl_c.dma_stride.reg_stride);
+		// 	writel(wdma_y_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_STRIDE));
+		// 	writel(wdma_c_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+		// }
+
+		// enable it
+		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 1;
+		ive_filterop_c.reg_h14.reg_op_c_wdma_en = 1;
+		writel(ive_filterop_c.reg_h14.val,
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+		if (pstSrc->width > 480) {
+			ret = emit_tile(ndev, ive_top_c, &ive_filterop_c,
+					&img_in_c, &wdma_y_ctl_c, NULL,
+					&wdma_c_ctl_c, NULL, pstSrc, NULL, NULL,
+					firstOut, secondOut, true, yunit, true, 2,
+					false, 0, instant, dev_id);
+			kfree(ive_top_c);
+			return ret;
+		}
+		//ive_filterop_c.reg_h14.reg_op_c_wdma_en = 1;
+	} else if ((int)pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_VER) {
+		set_img_dst1(NULL, NULL, dev_id);
+		set_img_dst2(secondOut, &wdma_c_ctl_c, dev_id);
+		// if ((secondOut->width & 0xF) != 0) {
+		// 	wdma_c_ctl_c.dma_stride.reg_stride *= 2;
+		// 	pr_info("sobel ver: wdma_c stride=%d\n", wdma_c_ctl_c.dma_stride.reg_stride);
+		// 	writel(wdma_c_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+		// }
+
+		// enable it
+		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 0;
+		ive_filterop_c.reg_h14.reg_op_c_wdma_en = 1;
+		writel(ive_filterop_c.reg_h14.val,
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+		if (pstSrc->width > 480) {
+			ret = emit_tile(ndev, ive_top_c, &ive_filterop_c,
+					&img_in_c, NULL, NULL, &wdma_c_ctl_c,
+					NULL, pstSrc, NULL, NULL, firstOut,
+					secondOut, false, yunit, true, 2, false, 0,
+					instant, dev_id);
+			kfree(ive_top_c);
+			return ret;
+		}
+	} else {
+		set_img_dst1(firstOut, &wdma_y_ctl_c, dev_id);
+		// if ((firstOut->width & 0xF) != 0) {
+		// 	wdma_y_ctl_c.dma_stride.reg_stride *= 2;
+		// 	pr_info("sobel hor: wdma_y stride=%d\n", wdma_y_ctl_c.dma_stride.reg_stride);
+		// 	writel(wdma_y_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_STRIDE));
+		// }
+		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 1;
+		ive_filterop_c.reg_h14.reg_op_c_wdma_en = 0;
+		writel(ive_filterop_c.reg_h14.val,
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
+		if (pstSrc->width > 480) {
+			ret = emit_tile(ndev, ive_top_c, &ive_filterop_c,
+					&img_in_c, &wdma_y_ctl_c, NULL, NULL,
+					NULL, pstSrc, NULL, NULL, firstOut,
+					secondOut, true, yunit, false, 1, false, MOD_SOBEL,
+					instant, dev_id);
+			kfree(ive_top_c);
+			return ret;
+		}
+	}
+
+	if ((int)pstSobelCtrl->out_ctrl == 0) {
+		ret = ive_go(
+			ndev, ive_top_c, instant,
+			IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK |
+				IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_C_MASK,
+			MOD_SOBEL, dev_id);
+	} else if ((int)pstSobelCtrl->out_ctrl == 1) {
+		ret = ive_go(ndev, ive_top_c, instant,
+				 IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_Y_MASK,
+				 MOD_SOBEL, dev_id);
+	} else {
+		ret = ive_go(ndev, ive_top_c, instant,
+				 IVE_TOP_REG_FRAME_DONE_FILTEROP_WDMA_C_MASK,
+				 MOD_SOBEL, dev_id);
+	}
+
+	kfree(ive_top_c);
+	return ret;
+}
+
+#endif
+
+#ifndef MEDIA_V3
 s32 ive_sobel(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDstH, ive_dst_image_s *pstDstV,
 			  ive_sobel_ctrl_s *pstSobelCtrl, bool instant, s32 dev_id)
@@ -7160,7 +9101,7 @@ s32 ive_sobel(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		ive_filterop_c.reg_110.reg_filterop_norm_out_ctrl =
 			(int)pstSobelCtrl->out_ctrl;
 		writel(ive_filterop_c.reg_110.val,
-			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 	} else {
 		pr_err("[IVE] not support out_ctrl\n");
 		kfree(ive_top_c);
@@ -7188,7 +9129,7 @@ s32 ive_sobel(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	ive_top_c->reg_h10.reg_filterop_top_enable = 1;
 	writel(ive_top_c->reg_h10.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
 	writel(ive_filterop_c.reg_110.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 
 	if ((int)pstSobelCtrl->out_ctrl == IVE_SOBEL_OUT_CTRL_BOTH) {
 		set_img_dst2(secondOut, &wdma_c_ctl_c, dev_id);
@@ -7261,6 +9202,7 @@ s32 ive_sobel(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	kfree(ive_top_c);
 	return ret;
 }
+#endif
 
 s32 ive_mag_and_ang(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDstMag,
@@ -7297,107 +9239,213 @@ s32 ive_mag_and_ang(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	ive_filterop_c.reg_h10.reg_filterop_mode = 7;
 	writel(ive_filterop_c.reg_h10.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H10));
-	ive_filterop_c.reg_4.reg_filterop_h_coef00 =
-		pstMagAndAngCtrl->mask[0];
-	ive_filterop_c.reg_4.reg_filterop_h_coef01 =
-		pstMagAndAngCtrl->mask[1];
-	ive_filterop_c.reg_4.reg_filterop_h_coef02 =
-		pstMagAndAngCtrl->mask[2];
-	ive_filterop_c.reg_4.reg_filterop_h_coef03 =
-		pstMagAndAngCtrl->mask[3];
-	ive_filterop_c.reg_5.reg_filterop_h_coef04 =
-		pstMagAndAngCtrl->mask[4];
-	ive_filterop_c.reg_5.reg_filterop_h_coef10 =
-		pstMagAndAngCtrl->mask[5];
-	ive_filterop_c.reg_5.reg_filterop_h_coef11 =
-		pstMagAndAngCtrl->mask[6];
-	ive_filterop_c.reg_5.reg_filterop_h_coef12 =
-		pstMagAndAngCtrl->mask[7];
-	ive_filterop_c.reg_6.reg_filterop_h_coef13 =
-		pstMagAndAngCtrl->mask[8];
-	ive_filterop_c.reg_6.reg_filterop_h_coef14 =
-		pstMagAndAngCtrl->mask[9];
-	ive_filterop_c.reg_6.reg_filterop_h_coef20 =
-		pstMagAndAngCtrl->mask[10];
-	ive_filterop_c.reg_6.reg_filterop_h_coef21 =
-		pstMagAndAngCtrl->mask[11];
-	ive_filterop_c.reg_7.reg_filterop_h_coef22 =
-		pstMagAndAngCtrl->mask[12];
-	ive_filterop_c.reg_7.reg_filterop_h_coef23 =
-		pstMagAndAngCtrl->mask[13];
-	ive_filterop_c.reg_7.reg_filterop_h_coef24 =
-		pstMagAndAngCtrl->mask[14];
-	ive_filterop_c.reg_7.reg_filterop_h_coef30 =
-		pstMagAndAngCtrl->mask[15];
-	ive_filterop_c.reg_8.reg_filterop_h_coef31 =
-		pstMagAndAngCtrl->mask[16];
-	ive_filterop_c.reg_8.reg_filterop_h_coef32 =
-		pstMagAndAngCtrl->mask[17];
-	ive_filterop_c.reg_8.reg_filterop_h_coef33 =
-		pstMagAndAngCtrl->mask[18];
-	ive_filterop_c.reg_8.reg_filterop_h_coef34 =
-		pstMagAndAngCtrl->mask[19];
-	ive_filterop_c.reg_9.reg_filterop_h_coef40 =
-		pstMagAndAngCtrl->mask[20];
-	ive_filterop_c.reg_9.reg_filterop_h_coef41 =
-		pstMagAndAngCtrl->mask[21];
-	ive_filterop_c.reg_9.reg_filterop_h_coef42 =
-		pstMagAndAngCtrl->mask[22];
-	ive_filterop_c.reg_9.reg_filterop_h_coef43 =
-		pstMagAndAngCtrl->mask[23];
-	ive_filterop_c.reg_10.reg_filterop_h_coef44 =
-		pstMagAndAngCtrl->mask[24];
+#ifdef MEDIA_V3
+		ive_filterop_c.reg_4.reg_filterop_h_coef22 =
+			pstMagAndAngCtrl->mask[0];
+		ive_filterop_c.reg_4.reg_filterop_h_coef23 =
+			pstMagAndAngCtrl->mask[1];
+		ive_filterop_c.reg_4.reg_filterop_h_coef24 =
+			pstMagAndAngCtrl->mask[2];
+		ive_filterop_c.reg_4.reg_filterop_h_coef25 =
+			pstMagAndAngCtrl->mask[3];
+		ive_filterop_c.reg_5.reg_filterop_h_coef26 =
+			pstMagAndAngCtrl->mask[4];
+		ive_filterop_c.reg_5.reg_filterop_h_coef32 =
+			pstMagAndAngCtrl->mask[5];
+		ive_filterop_c.reg_5.reg_filterop_h_coef33 =
+			pstMagAndAngCtrl->mask[6];
+		ive_filterop_c.reg_5.reg_filterop_h_coef34 =
+			pstMagAndAngCtrl->mask[7];
+		ive_filterop_c.reg_6.reg_filterop_h_coef35 =
+			pstMagAndAngCtrl->mask[8];
+		ive_filterop_c.reg_6.reg_filterop_h_coef36 =
+			pstMagAndAngCtrl->mask[9];
+		ive_filterop_c.reg_6.reg_filterop_h_coef42 =
+			pstMagAndAngCtrl->mask[10];
+		ive_filterop_c.reg_6.reg_filterop_h_coef43 =
+			pstMagAndAngCtrl->mask[11];
+		ive_filterop_c.reg_7.reg_filterop_h_coef44 =
+			pstMagAndAngCtrl->mask[12];
+		ive_filterop_c.reg_7.reg_filterop_h_coef45 =
+			pstMagAndAngCtrl->mask[13];
+		ive_filterop_c.reg_7.reg_filterop_h_coef46 =
+			pstMagAndAngCtrl->mask[14];
+		ive_filterop_c.reg_7.reg_filterop_h_coef52 =
+			pstMagAndAngCtrl->mask[15];
+		ive_filterop_c.reg_8.reg_filterop_h_coef53 =
+			pstMagAndAngCtrl->mask[16];
+		ive_filterop_c.reg_8.reg_filterop_h_coef54 =
+			pstMagAndAngCtrl->mask[17];
+		ive_filterop_c.reg_8.reg_filterop_h_coef55 =
+			pstMagAndAngCtrl->mask[18];
+		ive_filterop_c.reg_8.reg_filterop_h_coef56 =
+			pstMagAndAngCtrl->mask[19];
+		ive_filterop_c.reg_9.reg_filterop_h_coef62 =
+			pstMagAndAngCtrl->mask[20];
+		ive_filterop_c.reg_9.reg_filterop_h_coef63 =
+			pstMagAndAngCtrl->mask[21];
+		ive_filterop_c.reg_9.reg_filterop_h_coef64 =
+			pstMagAndAngCtrl->mask[22];
+		ive_filterop_c.reg_9.reg_filterop_h_coef65 =
+			pstMagAndAngCtrl->mask[23];
+		ive_filterop_c.reg_10.reg_filterop_h_coef66 =
+			pstMagAndAngCtrl->mask[24];
+#else
+		ive_filterop_c.reg_4.reg_filterop_h_coef00 =
+			pstMagAndAngCtrl->mask[0];
+		ive_filterop_c.reg_4.reg_filterop_h_coef01 =
+			pstMagAndAngCtrl->mask[1];
+		ive_filterop_c.reg_4.reg_filterop_h_coef02 =
+			pstMagAndAngCtrl->mask[2];
+		ive_filterop_c.reg_4.reg_filterop_h_coef03 =
+			pstMagAndAngCtrl->mask[3];
+		ive_filterop_c.reg_5.reg_filterop_h_coef04 =
+			pstMagAndAngCtrl->mask[4];
+		ive_filterop_c.reg_5.reg_filterop_h_coef10 =
+			pstMagAndAngCtrl->mask[5];
+		ive_filterop_c.reg_5.reg_filterop_h_coef11 =
+			pstMagAndAngCtrl->mask[6];
+		ive_filterop_c.reg_5.reg_filterop_h_coef12 =
+			pstMagAndAngCtrl->mask[7];
+		ive_filterop_c.reg_6.reg_filterop_h_coef13 =
+			pstMagAndAngCtrl->mask[8];
+		ive_filterop_c.reg_6.reg_filterop_h_coef14 =
+			pstMagAndAngCtrl->mask[9];
+		ive_filterop_c.reg_6.reg_filterop_h_coef20 =
+			pstMagAndAngCtrl->mask[10];
+		ive_filterop_c.reg_6.reg_filterop_h_coef21 =
+			pstMagAndAngCtrl->mask[11];
+		ive_filterop_c.reg_7.reg_filterop_h_coef22 =
+			pstMagAndAngCtrl->mask[12];
+		ive_filterop_c.reg_7.reg_filterop_h_coef23 =
+			pstMagAndAngCtrl->mask[13];
+		ive_filterop_c.reg_7.reg_filterop_h_coef24 =
+			pstMagAndAngCtrl->mask[14];
+		ive_filterop_c.reg_7.reg_filterop_h_coef30 =
+			pstMagAndAngCtrl->mask[15];
+		ive_filterop_c.reg_8.reg_filterop_h_coef31 =
+			pstMagAndAngCtrl->mask[16];
+		ive_filterop_c.reg_8.reg_filterop_h_coef32 =
+			pstMagAndAngCtrl->mask[17];
+		ive_filterop_c.reg_8.reg_filterop_h_coef33 =
+			pstMagAndAngCtrl->mask[18];
+		ive_filterop_c.reg_8.reg_filterop_h_coef34 =
+			pstMagAndAngCtrl->mask[19];
+		ive_filterop_c.reg_9.reg_filterop_h_coef40 =
+			pstMagAndAngCtrl->mask[20];
+		ive_filterop_c.reg_9.reg_filterop_h_coef41 =
+			pstMagAndAngCtrl->mask[21];
+		ive_filterop_c.reg_9.reg_filterop_h_coef42 =
+			pstMagAndAngCtrl->mask[22];
+		ive_filterop_c.reg_9.reg_filterop_h_coef43 =
+			pstMagAndAngCtrl->mask[23];
+		ive_filterop_c.reg_10.reg_filterop_h_coef44 =
+			pstMagAndAngCtrl->mask[24];
+#endif
 
-	ive_filterop_c.reg_11.reg_filterop_v_coef00 =
-		-1 * pstMagAndAngCtrl->mask[0];
-	ive_filterop_c.reg_11.reg_filterop_v_coef01 =
-		-1 * pstMagAndAngCtrl->mask[5];
-	ive_filterop_c.reg_11.reg_filterop_v_coef02 =
-		-1 * pstMagAndAngCtrl->mask[10];
-	ive_filterop_c.reg_11.reg_filterop_v_coef03 =
-		-1 * pstMagAndAngCtrl->mask[15];
-	ive_filterop_c.reg_12.reg_filterop_v_coef04 =
-		-1 * pstMagAndAngCtrl->mask[20];
-	ive_filterop_c.reg_12.reg_filterop_v_coef10 =
-		-1 * pstMagAndAngCtrl->mask[1];
-	ive_filterop_c.reg_12.reg_filterop_v_coef11 =
-		-1 * pstMagAndAngCtrl->mask[6];
-	ive_filterop_c.reg_12.reg_filterop_v_coef12 =
-		-1 * pstMagAndAngCtrl->mask[11];
-	ive_filterop_c.reg_13.reg_filterop_v_coef13 =
-		-1 * pstMagAndAngCtrl->mask[16];
-	ive_filterop_c.reg_13.reg_filterop_v_coef14 =
-		-1 * pstMagAndAngCtrl->mask[21];
-	ive_filterop_c.reg_13.reg_filterop_v_coef20 =
-		-1 * pstMagAndAngCtrl->mask[2];
-	ive_filterop_c.reg_13.reg_filterop_v_coef21 =
-		-1 * pstMagAndAngCtrl->mask[7];
-	ive_filterop_c.reg_14.reg_filterop_v_coef22 =
-		-1 * pstMagAndAngCtrl->mask[12];
-	ive_filterop_c.reg_14.reg_filterop_v_coef23 =
-		-1 * pstMagAndAngCtrl->mask[17];
-	ive_filterop_c.reg_14.reg_filterop_v_coef24 =
-		-1 * pstMagAndAngCtrl->mask[22];
-	ive_filterop_c.reg_14.reg_filterop_v_coef30 =
-		-1 * pstMagAndAngCtrl->mask[3];
-	ive_filterop_c.reg_15.reg_filterop_v_coef31 =
-		-1 * pstMagAndAngCtrl->mask[8];
-	ive_filterop_c.reg_15.reg_filterop_v_coef32 =
-		-1 * pstMagAndAngCtrl->mask[13];
-	ive_filterop_c.reg_15.reg_filterop_v_coef33 =
-		-1 * pstMagAndAngCtrl->mask[18];
-	ive_filterop_c.reg_15.reg_filterop_v_coef34 =
-		-1 * pstMagAndAngCtrl->mask[23];
-	ive_filterop_c.reg_16.reg_filterop_v_coef40 =
-		-1 * pstMagAndAngCtrl->mask[4];
-	ive_filterop_c.reg_16.reg_filterop_v_coef41 =
-		-1 * pstMagAndAngCtrl->mask[9];
-	ive_filterop_c.reg_16.reg_filterop_v_coef42 =
-		-1 * pstMagAndAngCtrl->mask[14];
-	ive_filterop_c.reg_16.reg_filterop_v_coef43 =
-		-1 * pstMagAndAngCtrl->mask[19];
-	ive_filterop_c.reg_17.reg_filterop_v_coef44 =
-		-1 * pstMagAndAngCtrl->mask[24];
+#ifdef MEDIA_V3
+		ive_filterop_c.reg_11.reg_filterop_v_coef22 =
+			-1 * pstMagAndAngCtrl->mask[0];
+		ive_filterop_c.reg_11.reg_filterop_v_coef23 =
+			-1 * pstMagAndAngCtrl->mask[5];
+		ive_filterop_c.reg_11.reg_filterop_v_coef24 =
+			-1 * pstMagAndAngCtrl->mask[10];
+		ive_filterop_c.reg_11.reg_filterop_v_coef25 =
+			-1 * pstMagAndAngCtrl->mask[15];
+		ive_filterop_c.reg_12.reg_filterop_v_coef26 =
+			-1 * pstMagAndAngCtrl->mask[20];
+		ive_filterop_c.reg_12.reg_filterop_v_coef32 =
+			-1 * pstMagAndAngCtrl->mask[1];
+		ive_filterop_c.reg_12.reg_filterop_v_coef33 =
+			-1 * pstMagAndAngCtrl->mask[6];
+		ive_filterop_c.reg_12.reg_filterop_v_coef34 =
+			-1 * pstMagAndAngCtrl->mask[11];
+		ive_filterop_c.reg_13.reg_filterop_v_coef35 =
+			-1 * pstMagAndAngCtrl->mask[16];
+		ive_filterop_c.reg_13.reg_filterop_v_coef36 =
+			-1 * pstMagAndAngCtrl->mask[21];
+		ive_filterop_c.reg_13.reg_filterop_v_coef42 =
+			-1 * pstMagAndAngCtrl->mask[2];
+		ive_filterop_c.reg_13.reg_filterop_v_coef43 =
+			-1 * pstMagAndAngCtrl->mask[7];
+		ive_filterop_c.reg_14.reg_filterop_v_coef44 =
+			-1 * pstMagAndAngCtrl->mask[12];
+		ive_filterop_c.reg_14.reg_filterop_v_coef45 =
+			-1 * pstMagAndAngCtrl->mask[17];
+		ive_filterop_c.reg_14.reg_filterop_v_coef46 =
+			-1 * pstMagAndAngCtrl->mask[22];
+		ive_filterop_c.reg_14.reg_filterop_v_coef52 =
+			-1 * pstMagAndAngCtrl->mask[3];
+		ive_filterop_c.reg_15.reg_filterop_v_coef53 =
+			-1 * pstMagAndAngCtrl->mask[8];
+		ive_filterop_c.reg_15.reg_filterop_v_coef54 =
+			-1 * pstMagAndAngCtrl->mask[13];
+		ive_filterop_c.reg_15.reg_filterop_v_coef55 =
+			-1 * pstMagAndAngCtrl->mask[18];
+		ive_filterop_c.reg_15.reg_filterop_v_coef56 =
+			-1 * pstMagAndAngCtrl->mask[23];
+		ive_filterop_c.reg_16.reg_filterop_v_coef62 =
+			-1 * pstMagAndAngCtrl->mask[4];
+		ive_filterop_c.reg_16.reg_filterop_v_coef63 =
+			-1 * pstMagAndAngCtrl->mask[9];
+		ive_filterop_c.reg_16.reg_filterop_v_coef64 =
+			-1 * pstMagAndAngCtrl->mask[14];
+		ive_filterop_c.reg_16.reg_filterop_v_coef65 =
+			-1 * pstMagAndAngCtrl->mask[19];
+		ive_filterop_c.reg_17.reg_filterop_v_coef66 =
+			-1 * pstMagAndAngCtrl->mask[24];
+#else
+		ive_filterop_c.reg_11.reg_filterop_v_coef00 =
+			-1 * pstMagAndAngCtrl->mask[0];
+		ive_filterop_c.reg_11.reg_filterop_v_coef01 =
+			-1 * pstMagAndAngCtrl->mask[5];
+		ive_filterop_c.reg_11.reg_filterop_v_coef02 =
+			-1 * pstMagAndAngCtrl->mask[10];
+		ive_filterop_c.reg_11.reg_filterop_v_coef03 =
+			-1 * pstMagAndAngCtrl->mask[15];
+		ive_filterop_c.reg_12.reg_filterop_v_coef04 =
+			-1 * pstMagAndAngCtrl->mask[20];
+		ive_filterop_c.reg_12.reg_filterop_v_coef10 =
+			-1 * pstMagAndAngCtrl->mask[1];
+		ive_filterop_c.reg_12.reg_filterop_v_coef11 =
+			-1 * pstMagAndAngCtrl->mask[6];
+		ive_filterop_c.reg_12.reg_filterop_v_coef12 =
+			-1 * pstMagAndAngCtrl->mask[11];
+		ive_filterop_c.reg_13.reg_filterop_v_coef13 =
+			-1 * pstMagAndAngCtrl->mask[16];
+		ive_filterop_c.reg_13.reg_filterop_v_coef14 =
+			-1 * pstMagAndAngCtrl->mask[21];
+		ive_filterop_c.reg_13.reg_filterop_v_coef20 =
+			-1 * pstMagAndAngCtrl->mask[2];
+		ive_filterop_c.reg_13.reg_filterop_v_coef21 =
+			-1 * pstMagAndAngCtrl->mask[7];
+		ive_filterop_c.reg_14.reg_filterop_v_coef22 =
+			-1 * pstMagAndAngCtrl->mask[12];
+		ive_filterop_c.reg_14.reg_filterop_v_coef23 =
+			-1 * pstMagAndAngCtrl->mask[17];
+		ive_filterop_c.reg_14.reg_filterop_v_coef24 =
+			-1 * pstMagAndAngCtrl->mask[22];
+		ive_filterop_c.reg_14.reg_filterop_v_coef30 =
+			-1 * pstMagAndAngCtrl->mask[3];
+		ive_filterop_c.reg_15.reg_filterop_v_coef31 =
+			-1 * pstMagAndAngCtrl->mask[8];
+		ive_filterop_c.reg_15.reg_filterop_v_coef32 =
+			-1 * pstMagAndAngCtrl->mask[13];
+		ive_filterop_c.reg_15.reg_filterop_v_coef33 =
+			-1 * pstMagAndAngCtrl->mask[18];
+		ive_filterop_c.reg_15.reg_filterop_v_coef34 =
+			-1 * pstMagAndAngCtrl->mask[23];
+		ive_filterop_c.reg_16.reg_filterop_v_coef40 =
+			-1 * pstMagAndAngCtrl->mask[4];
+		ive_filterop_c.reg_16.reg_filterop_v_coef41 =
+			-1 * pstMagAndAngCtrl->mask[9];
+		ive_filterop_c.reg_16.reg_filterop_v_coef42 =
+			-1 * pstMagAndAngCtrl->mask[14];
+		ive_filterop_c.reg_16.reg_filterop_v_coef43 =
+			-1 * pstMagAndAngCtrl->mask[19];
+		ive_filterop_c.reg_17.reg_filterop_v_coef44 =
+			-1 * pstMagAndAngCtrl->mask[24];
+#endif
 
 	writel(ive_filterop_c.reg_4.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
@@ -7455,11 +9503,17 @@ s32 ive_mag_and_ang(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		ive_filterop_c.reg_110.reg_filterop_magang_out_ctrl = 1;
 		set_img_dst2(pstDstMag, &wdma_c_ctl_c, dev_id);
 		set_img_dst1(pstDstAng, &wdma_y_ctl_c, dev_id);
+
+		// if((pstDstMag->width & 0xF) != 0) {//need verify
+		// 	wdma_c_ctl_c.dma_stride.reg_stride *= 2; // stride * 2 for U16
+		// 	pr_info("mag&ang both: wdma_c stride=%d\n", wdma_c_ctl_c.dma_stride.reg_stride);
+		// 	writel(wdma_c_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+		// }
 		// enable it
 		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 1;
 		ive_filterop_c.reg_h14.reg_op_c_wdma_en = 1;
 		writel(ive_filterop_c.reg_110.val,
-			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+				   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 		writel(ive_filterop_c.reg_h14.val,
 			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
 		if (pstSrc->width > 480) {
@@ -7475,12 +9529,18 @@ s32 ive_mag_and_ang(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		//setDMA(pstSrc, NULL, NULL, pstDstMag);
 		ive_filterop_c.reg_110.reg_filterop_magang_out_ctrl = 0;
 		set_img_dst2(pstDstMag, &wdma_c_ctl_c, dev_id);
+
+		// if((pstDstMag->width & 0xF) != 0) { //need verify
+		// 	wdma_c_ctl_c.dma_stride.reg_stride *= 2; // stride * 2 for U16
+		// 	pr_info("mag only: wdma_c stride=%d\n", wdma_c_ctl_c.dma_stride.reg_stride); //need delete
+		// 	writel(wdma_c_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_C + ISP_DMA_CTL_DMA_STRIDE));
+		// }
 		//set_img_dst1(pstDstAng, NULL);
 		// enable it
 		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 0;
 		ive_filterop_c.reg_h14.reg_op_c_wdma_en = 1;
 		writel(ive_filterop_c.reg_110.val,
-			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+				   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 		writel(ive_filterop_c.reg_h14.val,
 			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
 		if (pstSrc->width > 480) {
@@ -7560,7 +9620,7 @@ s32 ive_map(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	writel(ive_filterop_c.reg_h14.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
 	writel(ive_filterop_c.reg_110.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 
 
 	pu8Ptr = (u8 *)pstMap;
@@ -7793,6 +9853,21 @@ s32 ive_integ(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	wdma_integ_ctl_c.sys_control.reg_baseh =
 		(_pstDst.phy_addr[0] >> 32) & 0xffffffff;
 	wdma_integ_ctl_c.sys_control.reg_base_sel = 1;
+
+	#ifdef MEDIA_V3
+	if((pstSrc->width & 0xF) != 0) {
+		wdma_integ_ctl_c.dma_dummy.reg_byte_mode = 1;
+		wdma_integ_ctl_c.sys_control.reg_stride_sel = 1;
+		if(pstIntegCtrl->out_ctrl == IVE_INTEG_OUT_CTRL_SUM) {
+			wdma_integ_ctl_c.dma_stride.reg_stride = pstSrc->width * 4;  // stride * 4 for U32 need verify
+		} else {
+			wdma_integ_ctl_c.dma_stride.reg_stride = pstSrc->width * 8;  // stride * 8 for U64 need verify
+		}
+		writel(wdma_integ_ctl_c.dma_dummy.val, (IVE_BLK_BA[dev_id].INTG_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+		writel(wdma_integ_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].INTG_WDMA + ISP_DMA_CTL_DMA_STRIDE));
+	}
+	#endif
+
 	if (g_dump_dma_info == TRUE) {
 		pr_info("Integ wdma_integ_ctl_c address: 0x%08x %08x\n",
 			wdma_integ_ctl_c.sys_control.reg_baseh,
@@ -7919,7 +9994,12 @@ static s32 _ive_16bit_to_8bit(ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
 
 	set_isp_rdma(MOD_16To8, NULL, dev_id);
 	set_rdma_eigval(pstSrc, rdma_eigval_ctl_c, dev_id);
-
+	#ifdef MEDIA_V3
+	if ((pstSrc->width & 0xF) != 0) {
+		rdma_eigval_ctl_c->dma_stride.reg_stride = pstSrc->stride[0] * 2;
+		writel(rdma_eigval_ctl_c->dma_stride.val, (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_DMA_STRIDE));
+	}
+	#endif
 	ive_top_c->reg_3.reg_mapmux_rdma_sel = 1;
 	ive_top_c->reg_3.reg_ive_rdma_eigval_en = 1; //Here?
 	writel(ive_top_c->reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
@@ -8268,6 +10348,58 @@ s32 ive_canny_hys_edge(struct ive_device *ndev,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CANNY_1));
 
 	ive_filterop_c.reg_canny_2.reg_canny_eof = 0xfffe7ffd;
+#ifdef MEDIA_V3
+	ive_filterop_c.reg_4.reg_filterop_h_coef22 =
+		pstCannyHysEdgeCtrl->mask[0];
+	ive_filterop_c.reg_4.reg_filterop_h_coef23 =
+		pstCannyHysEdgeCtrl->mask[1];
+	ive_filterop_c.reg_4.reg_filterop_h_coef24 =
+		pstCannyHysEdgeCtrl->mask[2];
+	ive_filterop_c.reg_4.reg_filterop_h_coef25 =
+		pstCannyHysEdgeCtrl->mask[3];
+	ive_filterop_c.reg_5.reg_filterop_h_coef26 =
+		pstCannyHysEdgeCtrl->mask[4];
+	ive_filterop_c.reg_5.reg_filterop_h_coef32 =
+		pstCannyHysEdgeCtrl->mask[5];
+	ive_filterop_c.reg_5.reg_filterop_h_coef33 =
+		pstCannyHysEdgeCtrl->mask[6];
+	ive_filterop_c.reg_5.reg_filterop_h_coef34 =
+		pstCannyHysEdgeCtrl->mask[7];
+	ive_filterop_c.reg_6.reg_filterop_h_coef35 =
+		pstCannyHysEdgeCtrl->mask[8];
+	ive_filterop_c.reg_6.reg_filterop_h_coef36 =
+		pstCannyHysEdgeCtrl->mask[9];
+	ive_filterop_c.reg_6.reg_filterop_h_coef42 =
+		pstCannyHysEdgeCtrl->mask[10];
+	ive_filterop_c.reg_6.reg_filterop_h_coef43 =
+		pstCannyHysEdgeCtrl->mask[11];
+	ive_filterop_c.reg_7.reg_filterop_h_coef44 =
+		pstCannyHysEdgeCtrl->mask[12];
+	ive_filterop_c.reg_7.reg_filterop_h_coef45 =
+		pstCannyHysEdgeCtrl->mask[13];
+	ive_filterop_c.reg_7.reg_filterop_h_coef46 =
+		pstCannyHysEdgeCtrl->mask[14];
+	ive_filterop_c.reg_7.reg_filterop_h_coef52 =
+		pstCannyHysEdgeCtrl->mask[15];
+	ive_filterop_c.reg_8.reg_filterop_h_coef53 =
+		pstCannyHysEdgeCtrl->mask[16];
+	ive_filterop_c.reg_8.reg_filterop_h_coef54 =
+		pstCannyHysEdgeCtrl->mask[17];
+	ive_filterop_c.reg_8.reg_filterop_h_coef55 =
+		pstCannyHysEdgeCtrl->mask[18];
+	ive_filterop_c.reg_8.reg_filterop_h_coef56 =
+		pstCannyHysEdgeCtrl->mask[19];
+	ive_filterop_c.reg_9.reg_filterop_h_coef62 =
+		pstCannyHysEdgeCtrl->mask[20];
+	ive_filterop_c.reg_9.reg_filterop_h_coef63 =
+		pstCannyHysEdgeCtrl->mask[21];
+	ive_filterop_c.reg_9.reg_filterop_h_coef64 =
+		pstCannyHysEdgeCtrl->mask[22];
+	ive_filterop_c.reg_9.reg_filterop_h_coef65 =
+		pstCannyHysEdgeCtrl->mask[23];
+	ive_filterop_c.reg_10.reg_filterop_h_coef66 =
+		pstCannyHysEdgeCtrl->mask[24];
+#else
 	ive_filterop_c.reg_4.reg_filterop_h_coef00 =
 		pstCannyHysEdgeCtrl->mask[0];
 	ive_filterop_c.reg_4.reg_filterop_h_coef01 =
@@ -8318,6 +10450,7 @@ s32 ive_canny_hys_edge(struct ive_device *ndev,
 		pstCannyHysEdgeCtrl->mask[23];
 	ive_filterop_c.reg_10.reg_filterop_h_coef44 =
 		pstCannyHysEdgeCtrl->mask[24];
+#endif
 	writel(ive_filterop_c.reg_canny_2.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CANNY_2));
 	writel(ive_filterop_c.reg_4.val,
@@ -8423,6 +10556,58 @@ s32 ive_norm_grad(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	writel(ive_filterop_c.reg_28.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_28));
 
+#ifdef MEDIA_V3
+	ive_filterop_c.reg_4.reg_filterop_h_coef22 =
+		pstNormGradCtrl->mask[0];
+	ive_filterop_c.reg_4.reg_filterop_h_coef23 =
+		pstNormGradCtrl->mask[1];
+	ive_filterop_c.reg_4.reg_filterop_h_coef24 =
+		pstNormGradCtrl->mask[2];
+	ive_filterop_c.reg_4.reg_filterop_h_coef25 =
+		pstNormGradCtrl->mask[3];
+	ive_filterop_c.reg_5.reg_filterop_h_coef26 =
+		pstNormGradCtrl->mask[4];
+	ive_filterop_c.reg_5.reg_filterop_h_coef32 =
+		pstNormGradCtrl->mask[5];
+	ive_filterop_c.reg_5.reg_filterop_h_coef33 =
+		pstNormGradCtrl->mask[6];
+	ive_filterop_c.reg_5.reg_filterop_h_coef34 =
+		pstNormGradCtrl->mask[7];
+	ive_filterop_c.reg_6.reg_filterop_h_coef35 =
+		pstNormGradCtrl->mask[8];
+	ive_filterop_c.reg_6.reg_filterop_h_coef36 =
+		pstNormGradCtrl->mask[9];
+	ive_filterop_c.reg_6.reg_filterop_h_coef42 =
+		pstNormGradCtrl->mask[10];
+	ive_filterop_c.reg_6.reg_filterop_h_coef43 =
+		pstNormGradCtrl->mask[11];
+	ive_filterop_c.reg_7.reg_filterop_h_coef44 =
+		pstNormGradCtrl->mask[12];
+	ive_filterop_c.reg_7.reg_filterop_h_coef45 =
+		pstNormGradCtrl->mask[13];
+	ive_filterop_c.reg_7.reg_filterop_h_coef46 =
+		pstNormGradCtrl->mask[14];
+	ive_filterop_c.reg_7.reg_filterop_h_coef52 =
+		pstNormGradCtrl->mask[15];
+	ive_filterop_c.reg_8.reg_filterop_h_coef53 =
+		pstNormGradCtrl->mask[16];
+	ive_filterop_c.reg_8.reg_filterop_h_coef54 =
+		pstNormGradCtrl->mask[17];
+	ive_filterop_c.reg_8.reg_filterop_h_coef55 =
+		pstNormGradCtrl->mask[18];
+	ive_filterop_c.reg_8.reg_filterop_h_coef56 =
+		pstNormGradCtrl->mask[19];
+	ive_filterop_c.reg_9.reg_filterop_h_coef62 =
+		pstNormGradCtrl->mask[20];
+	ive_filterop_c.reg_9.reg_filterop_h_coef63 =
+		pstNormGradCtrl->mask[21];
+	ive_filterop_c.reg_9.reg_filterop_h_coef64 =
+		pstNormGradCtrl->mask[22];
+	ive_filterop_c.reg_9.reg_filterop_h_coef65 =
+		pstNormGradCtrl->mask[23];
+	ive_filterop_c.reg_10.reg_filterop_h_coef66 =
+		pstNormGradCtrl->mask[24];
+#else
 	ive_filterop_c.reg_4.reg_filterop_h_coef00 =
 		pstNormGradCtrl->mask[0];
 	ive_filterop_c.reg_4.reg_filterop_h_coef01 =
@@ -8473,6 +10658,7 @@ s32 ive_norm_grad(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		pstNormGradCtrl->mask[23];
 	ive_filterop_c.reg_10.reg_filterop_h_coef44 =
 		pstNormGradCtrl->mask[24];
+#endif
 	ive_filterop_c.reg_10.reg_filterop_h_norm = pstNormGradCtrl->norm;
 	writel(ive_filterop_c.reg_4.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
@@ -8514,6 +10700,8 @@ s32 ive_norm_grad(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	} else if (pstNormGradCtrl->out_ctrl ==
 		   IVE_NORM_GRAD_OUT_CTRL_COMBINE) {
 		set_img_dst1(pstDstHV, &wdma_y_ctl_c, dev_id);
+		// wdma_y_ctl_c.dma_stride.reg_stride *= 2; //host input s16 no neeed, need verify
+		// writel(wdma_y_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].FILTEROP_WDMA_Y + ISP_DMA_CTL_DMA_STRIDE));
 		set_img_dst2(NULL, NULL, dev_id);
 		ive_filterop_c.reg_110.reg_filterop_norm_out_ctrl = 3;
 		ive_filterop_c.reg_h14.reg_op_y_wdma_en = 1; // h
@@ -8527,7 +10715,7 @@ s32 ive_norm_grad(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	}
 
 	writel(ive_filterop_c.reg_110.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 
 	if (set_img_src1(pstSrc, &img_in_c, ive_top_c, dev_id) != SUCCESS) {
 		kfree(ive_top_c);
@@ -8672,9 +10860,9 @@ s32 ive_grad_fg(struct ive_device *ndev,
 	ive_filterop_c.reg_34.reg_filterop_op2_gradfg_noiseval =
 		pstGradFgCtrl->noise_val;
 	writel(ive_filterop_c.reg_33.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_33));
+			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_33));
 	writel(ive_filterop_c.reg_34.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_34));
+			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_34));
 	//iveReg->setDMA(pstBgDiffFg, pstGradFg, pstCurGrad, NULL, pstBgGrad);
 	rdma_gradfg_ctl_c.base_addr.reg_basel =
 		pstBgGrad->phy_addr[0] & 0xffffffff;
@@ -8683,6 +10871,16 @@ s32 ive_grad_fg(struct ive_device *ndev,
 	rdma_gradfg_ctl_c.dma_stride.reg_stride = pstBgGrad->stride[0];
 	rdma_gradfg_ctl_c.sys_control.reg_stride_sel = 1;
 	rdma_gradfg_ctl_c.sys_control.reg_base_sel = 1;
+
+	#ifdef MEDIA_V3
+	if ((pstBgDiffFg->width & 0xF) != 0) {
+		rdma_gradfg_ctl_c.dma_dummy.reg_byte_mode = 1;
+		rdma_gradfg_ctl_c.sys_control.reg_stride_sel = 1;
+		rdma_gradfg_ctl_c.dma_stride.reg_stride = pstBgDiffFg->stride[0] * 2;  // stride * 2 for u16
+		writel(rdma_gradfg_ctl_c.dma_dummy.val, (IVE_BLK_BA[dev_id].FILTEROP_RDMA + ISP_DMA_CTL_DMA_DUMMY));
+	}
+	#endif
+
 	writel(rdma_gradfg_ctl_c.base_addr.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP_RDMA + ISP_DMA_CTL_BASE_ADDR));
 	writel(rdma_gradfg_ctl_c.dma_stride.val,
@@ -8753,7 +10951,7 @@ s32 ive_grad_fg(struct ive_device *ndev,
 		ive_filterop_c.reg_h04.reg_gradfg_bggrad_rdma_en = 0;
 		ive_top_c->reg_3.reg_muxsel_gradfg = 0;
 		writel(ive_filterop_c.reg_33.val,
-			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_33));
+				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_33));
 		writel(ive_filterop_c.reg_h04.val,
 			(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H04));
 		writel(ive_top_c->reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
@@ -8781,7 +10979,7 @@ s32 ive_grad_fg(struct ive_device *ndev,
 		writel(rdma_gradfg_ctl_c.dma_stride.val,
 				(IVE_BLK_BA[dev_id].FILTEROP_RDMA + ISP_DMA_CTL_DMA_STRIDE));
 		writel(ive_filterop_c.reg_33.val,
-				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_33));
+						(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_33));
 		writel(ive_filterop_c.reg_h04.val,
 				(IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H04));
 		writel(ive_top_c->reg_3.val,
@@ -8808,6 +11006,8 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	isp_dma_ctl_c wdma_sad_ctl_c = _DEFINE_isp_dma_ctl_c;
 	//DEFINE_isp_dma_ctl_c(wdma_sad_thr_ctl_c);
 	isp_dma_ctl_c wdma_sad_thr_ctl_c = _DEFINE_isp_dma_ctl_c;
+	//DEFINE_isp_dma_ctl_c(rdma_img1_ctl_c);
+	isp_dma_ctl_c rdma_img1_ctl_c = _DEFINE_isp_dma_ctl_c;
 	//DEFINE_img_in_c(img_in_c);
 	img_in_c img_in_c = _DEFINE_img_in_c;
 
@@ -8905,7 +11105,7 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 		return FAILURE;
 	}
 
-	set_img_src2(pstSrc2, NULL, dev_id);
+	set_img_src2(pstSrc2, &rdma_img1_ctl_c, dev_id);
 	//set_img_dst1(pstSadOut, NULL);
 
 	mode = ive_get_mod_u8(pstSrc1->type);
@@ -8918,7 +11118,7 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	// TODO: need to set vld?
 	ive_top_c.reg_3.reg_imgmux_img0_sel = 0;
 	ive_top_c.reg_3.reg_ive_rdma_img1_en = 1;
-
+    ive_top_c.reg_h10.reg_rdma_img1_top_enable = 1; //84x2 add
 	// trigger
 	ive_top_c.reg_20.reg_frame2op_op_mode = 6;
 	ive_top_c.reg_h80.reg_frame2op_fg_op_mode = 6;
@@ -8933,7 +11133,16 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	writel(ive_top_c.reg_h10.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_H10));
 	writel(ive_top_c.reg_3.val, (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_3));
 
-	if (pstSadOut->phy_addr[0]) {
+	ret = ive_sad_emit_tile(ndev, &ive_top_c, &img_in_c, &rdma_img1_ctl_c,
+				&wdma_sad_ctl_c, &wdma_sad_thr_ctl_c, pstSrc1,
+				pstSrc2, pstSadOut, pstThrOut, pstSadCtrl,
+				instant, dev_id);
+	if (ret != SUCCESS)
+		goto sad_out;
+	if (pstSrc1->width > 480 * (4 << pstSadCtrl->mode))
+		goto sad_out;
+
+	if (pstSadOut && pstSadOut->phy_addr[0]) {
 		wdma_sad_ctl_c.base_addr.reg_basel =
 			pstSadOut->phy_addr[0] & 0xffffffff;
 		wdma_sad_ctl_c.sys_control.reg_baseh =
@@ -8950,13 +11159,29 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 		wdma_sad_ctl_c.dma_seglen.reg_seglen = 0;
 		// set stride
 		wdma_sad_ctl_c.dma_stride.reg_stride = pstSadOut->stride[0];
+
+		#ifdef MEDIA_V3
+		if ((pstSrc1->width & 0xF) != 0) {
+			wdma_sad_ctl_c.dma_dummy.reg_byte_mode = 1;
+			wdma_sad_ctl_c.sys_control.reg_stride_sel = 1;
+			wdma_sad_ctl_c.dma_stride.reg_stride = (pstSadOut->stride[0] >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode)) * 2;  // stride * 2 for u16
+			wdma_sad_ctl_c.sys_control.reg_seglen_sel = 1;
+			wdma_sad_ctl_c.dma_seglen.reg_seglen = (pstSadOut->stride[0] >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode)) * 2;  // stride * 2 for u16
+			wdma_sad_ctl_c.sys_control.reg_segnum_sel = 1;
+			wdma_sad_ctl_c.dma_segnum.reg_segnum = pstSrc1->height >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode);
+			writel(wdma_sad_ctl_c.dma_dummy.val, (IVE_BLK_BA[dev_id].SAD_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+			writel(wdma_sad_ctl_c.dma_stride.val, (IVE_BLK_BA[dev_id].SAD_WDMA + ISP_DMA_CTL_DMA_STRIDE));
+			writel(wdma_sad_ctl_c.dma_seglen.val, (IVE_BLK_BA[dev_id].SAD_WDMA + ISP_DMA_CTL_DMA_SEGLEN));
+			writel(wdma_sad_ctl_c.dma_segnum.val, (IVE_BLK_BA[dev_id].SAD_WDMA + ISP_DMA_CTL_DMA_SEGNUM));
+		}
+		#endif
 	} else {
 		wdma_sad_ctl_c.sys_control.reg_base_sel = 0;
 		wdma_sad_ctl_c.base_addr.reg_basel = 0;
 		wdma_sad_ctl_c.sys_control.reg_baseh = 0;
 	}
 
-	if (pstThrOut->phy_addr[0]) {
+	if (pstThrOut && pstThrOut->phy_addr[0]) {
 		wdma_sad_thr_ctl_c.base_addr.reg_basel =
 			pstThrOut->phy_addr[0] & 0xffffffff;
 		wdma_sad_thr_ctl_c.sys_control.reg_baseh =
@@ -8973,6 +11198,28 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 		wdma_sad_thr_ctl_c.dma_seglen.reg_seglen = 0;
 		// set stride
 		wdma_sad_thr_ctl_c.dma_stride.reg_stride = pstThrOut->stride[0];
+		#ifdef MEDIA_V3
+		if ((pstSrc1->width & 0xF) != 0) {
+			wdma_sad_thr_ctl_c.dma_dummy.reg_byte_mode = 1;
+			wdma_sad_thr_ctl_c.sys_control.reg_stride_sel = 1;
+			wdma_sad_thr_ctl_c.dma_stride.reg_stride =
+				pstThrOut->stride[0] >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode);
+			wdma_sad_thr_ctl_c.sys_control.reg_seglen_sel = 1;
+			wdma_sad_thr_ctl_c.dma_seglen.reg_seglen =
+				pstThrOut->stride[0] >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode);
+			wdma_sad_thr_ctl_c.sys_control.reg_segnum_sel = 1;
+			wdma_sad_thr_ctl_c.dma_segnum.reg_segnum =
+				pstSrc1->height >> (2 + ive_sad_c.reg_sad_00.reg_sad_enmode);
+			writel(wdma_sad_thr_ctl_c.dma_dummy.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR + ISP_DMA_CTL_DMA_DUMMY));
+			writel(wdma_sad_thr_ctl_c.dma_stride.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR + ISP_DMA_CTL_DMA_STRIDE));
+			writel(wdma_sad_thr_ctl_c.dma_seglen.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR + ISP_DMA_CTL_DMA_SEGLEN));
+			writel(wdma_sad_thr_ctl_c.dma_segnum.val,
+			       (IVE_BLK_BA[dev_id].SAD_WDMA_THR + ISP_DMA_CTL_DMA_SEGNUM));
+		}
+		#endif
 	} else {
 		wdma_sad_thr_ctl_c.sys_control.reg_base_sel = 0;
 		wdma_sad_thr_ctl_c.base_addr.reg_basel = 0;
@@ -9025,6 +11272,7 @@ s32 ive_sad(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 	ret = ive_go(ndev, &ive_top_c, instant,
 			 IVE_TOP_REG_FRAME_DONE_SAD_MASK, MOD_SAD, dev_id);
 
+sad_out:
 	ive_sad_c.reg_sad_02.reg_sad_enable = 0;
 	writel(ive_sad_c.reg_sad_02.val, (IVE_BLK_BA[dev_id].SAD + IVE_SAD_REG_SAD_02));
 
@@ -9101,14 +11349,15 @@ static void _sclr_get_2tap_scale(ive_top_c *ive_top_c, ive_src_image_s *pstSrc,
 		v_ph = scale_y / 2;
 	}
 
-	ive_top_c->reg_rs_ctrl.reg_resize_area_fast = 1;
+	// ive_top_c->reg_rs_ctrl.reg_resize_area_fast = 1;
+    ive_top_c->reg_rs_ctrl.reg_resize_area_fast =  area_fast ? 1 : 0;
 	ive_top_c->reg_rs_ctrl.reg_resize_blnr_mode = 0;
 
 	ive_top_c->reg_rs_h_sc.reg_resize_h_sc_fac = scale_x;
 	ive_top_c->reg_rs_v_sc.reg_resize_v_sc_fac = scale_y;
-	ive_top_c->reg_rs_ph_ini.reg_resize_h_ini_ph = h_ph;
+	ive_top_c->reg_rs_ph_ini.reg_resize_h_ini_ph = h_ph;//scale up use
 	ive_top_c->reg_rs_ph_ini.reg_resize_v_ini_ph = v_ph;
-	ive_top_c->reg_rs_nor.reg_resize_h_nor = h_nor;
+	ive_top_c->reg_rs_nor.reg_resize_h_nor = h_nor;//scale down use
 	ive_top_c->reg_rs_nor.reg_resize_v_nor = v_nor;
 	writel(ive_top_c->reg_rs_ctrl.val,
 		   (IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_RS_CTRL));
@@ -9148,12 +11397,14 @@ s32 ive_resize(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			dump_ive_image(tmp, pstSrc);
 			dump_ive_image(tmp, pstDst);
 	}
+
 	if (pstResizeCtrl->mode != IVE_RESIZE_MODE_AREA &&
-		pstResizeCtrl->mode != IVE_RESIZE_MODE_LINEAR) {
+	    pstResizeCtrl->mode != IVE_RESIZE_MODE_LINEAR) {
 		pr_err("Invalid Resize mode %d\n", pstResizeCtrl->mode);
 		kfree(ive_top_c);
 		return FAILURE;
 	}
+
 	// for (i = 0; i < pstResizeCtrl->num; i++) {
 		if (pstDst->type != IVE_IMAGE_TYPE_U8C3_PLANAR &&
 			pstDst->type != IVE_IMAGE_TYPE_U8C1) {
@@ -9269,17 +11520,18 @@ s32 ive_resize(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		writel(ive_filterop_c.reg_h14.val,
 			   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_H14));
 
-		//if (astSrc[i].width > 480) {
-		//	ret = emit_tile(ndev, &ive_top_c, &ive_filterop_c, &img_in_c,
-		//		NULL, NULL, NULL, NULL, &astSrc[i], NULL,
-		//		NULL, &astDst[i], NULL, false, 1, false, 1, true, 0,
-		//		instant);
-		//} else {
+        if (pstDst->width > 480) {
+			ret = emit_tile(ndev, ive_top_c, &ive_filterop_c, &img_in_c,
+					NULL, NULL, NULL, NULL,
+					pstSrc, NULL, NULL,
+					pstDst, NULL,
+					false, 1, false, 1, true,
+					MOD_RESIZE, instant, dev_id);
+		} else {
 			ret = ive_go(ndev, ive_top_c, instant,
-				IVE_TOP_REG_FRAME_DONE_FILTEROP_ODMA_MASK,
-				MOD_RESIZE, dev_id);
-		//}
-	// }
+				     IVE_TOP_REG_FRAME_DONE_FILTEROP_ODMA_MASK,
+				     MOD_RESIZE, dev_id);
+		}
 	kfree(ive_top_c);
 	return ret;
 }
@@ -9331,7 +11583,17 @@ s32 ive_ccl(struct ive_device *ndev, ive_image_s *src_dst,
 		ccl_src_rdma_label.base_addr.reg_basel = srcAddr & 0xffffffff;
 		ccl_src_rdma_label.sys_control.reg_baseh = (srcAddr >> 32) & 0xffffffff;
 		ccl_src_rdma_label.sys_control.reg_base_sel = 1;
-
+		#ifdef MEDIA_V3
+		if ((src_dst->width & 0xF) != 0) { //need verify
+			ccl_src_rdma_label.dma_dummy.reg_byte_mode = 1;
+			ccl_src_rdma_label.sys_control.reg_stride_sel = 1;
+			ccl_src_rdma_label.dma_stride.reg_stride = src_dst->width;
+			writel(ccl_src_rdma_label.dma_stride.val,
+			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA + ISP_DMA_CTL_DMA_STRIDE));
+			writel(ccl_src_rdma_label.dma_dummy.val,
+			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA + ISP_DMA_CTL_DMA_DUMMY));
+		}
+		#endif
 		writel(ccl_src_rdma_label.base_addr.val,
 			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA + ISP_DMA_CTL_BASE_ADDR));
 		writel(ccl_src_rdma_label.sys_control.val,
@@ -9341,7 +11603,17 @@ s32 ive_ccl(struct ive_device *ndev, ive_image_s *src_dst,
 		ccl_dst_wdma_label.base_addr.reg_basel = srcAddr & 0xffffffff;
 		ccl_dst_wdma_label.sys_control.reg_baseh = (srcAddr >> 32) & 0xffffffff;
 		ccl_dst_wdma_label.sys_control.reg_base_sel = 1;
-
+		#ifdef MEDIA_V3
+		if ((src_dst->width & 0xF) != 0) {
+			ccl_dst_wdma_label.dma_dummy.reg_byte_mode = 1;
+			ccl_dst_wdma_label.sys_control.reg_stride_sel = 1;
+			ccl_dst_wdma_label.dma_stride.reg_stride = src_dst->width;
+			writel(ccl_dst_wdma_label.dma_stride.val,
+			(IVE_BLK_BA[dev_id].CCL_DST_WDMA + ISP_DMA_CTL_DMA_STRIDE));
+			writel(ccl_dst_wdma_label.dma_dummy.val,
+			(IVE_BLK_BA[dev_id].CCL_DST_WDMA + ISP_DMA_CTL_DMA_DUMMY));
+		}
+		#endif
 		writel(ccl_dst_wdma_label.base_addr.val,
 			(IVE_BLK_BA[dev_id].CCL_DST_WDMA + ISP_DMA_CTL_BASE_ADDR));
 		writel(ccl_dst_wdma_label.sys_control.val,
@@ -9350,7 +11622,17 @@ s32 ive_ccl(struct ive_device *ndev, ive_image_s *src_dst,
 		ccl_src_rdma_relabel.base_addr.reg_basel = srcAddr & 0xffffffff;
 		ccl_src_rdma_relabel.sys_control.reg_baseh = (srcAddr >> 32) & 0xffffffff;
 		ccl_src_rdma_relabel.sys_control.reg_base_sel = 1;
-
+		#ifdef MEDIA_V3
+		if ((src_dst->width & 0xF) != 0) {
+			ccl_src_rdma_relabel.dma_dummy.reg_byte_mode = 1;
+			ccl_src_rdma_relabel.sys_control.reg_stride_sel = 1;
+			ccl_src_rdma_relabel.dma_stride.reg_stride = src_dst->width;
+			writel(ccl_src_rdma_relabel.dma_stride.val,
+			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA_RELABEL + ISP_DMA_CTL_DMA_STRIDE));
+			writel(ccl_src_rdma_relabel.dma_dummy.val,
+			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA_RELABEL + ISP_DMA_CTL_DMA_DUMMY));
+		}
+		#endif
 		writel(ccl_src_rdma_relabel.base_addr.val,
 			(IVE_BLK_BA[dev_id].CCL_SRC_RDMA_RELABEL + ISP_DMA_CTL_BASE_ADDR));
 		writel(ccl_src_rdma_relabel.sys_control.val,
@@ -9359,7 +11641,17 @@ s32 ive_ccl(struct ive_device *ndev, ive_image_s *src_dst,
 		ccl_dst_wdma_relabel.base_addr.reg_basel = srcAddr & 0xffffffff;
 		ccl_dst_wdma_relabel.sys_control.reg_baseh = (srcAddr >> 32) & 0xffffffff;
 		ccl_dst_wdma_relabel.sys_control.reg_base_sel = 1;
-
+		#ifdef MEDIA_V3
+		if ((src_dst->width & 0xF) != 0) { //need verify
+			ccl_dst_wdma_relabel.dma_dummy.reg_byte_mode = 1;
+			ccl_dst_wdma_relabel.sys_control.reg_stride_sel = 1;
+			ccl_dst_wdma_relabel.dma_stride.reg_stride = src_dst->width;
+			writel(ccl_dst_wdma_relabel.dma_stride.val,
+			(IVE_BLK_BA[dev_id].CCL_DST_WDMA_RELABEL + ISP_DMA_CTL_DMA_STRIDE));
+			writel(ccl_dst_wdma_relabel.dma_dummy.val,
+			(IVE_BLK_BA[dev_id].CCL_DST_WDMA_RELABEL + ISP_DMA_CTL_DMA_DUMMY));
+		}
+		#endif
 		writel(ccl_dst_wdma_relabel.base_addr.val,
 			(IVE_BLK_BA[dev_id].CCL_DST_WDMA_RELABEL + ISP_DMA_CTL_BASE_ADDR));
 		writel(ccl_dst_wdma_relabel.sys_control.val,
@@ -9585,11 +11877,38 @@ hw_stbox_flt_and_eig_calc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	writel(ive_filterop_c->reg_st_candi_0.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_ST_CANDI_0));
 	writel(ive_filterop_c->reg_110.val,
-		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_reg_110));
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_110));
 	writel(ive_filterop_c->reg_st_eigval_0.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_ST_EIGVAL_0));
 	writel(ive_filterop_c->reg_st_eigval_1.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_ST_EIGVAL_1));
+#ifdef MEDIA_V3
+	ive_filterop_c->reg_4.reg_filterop_h_coef22 = mask[0];
+	ive_filterop_c->reg_4.reg_filterop_h_coef23 = mask[1];
+	ive_filterop_c->reg_4.reg_filterop_h_coef24 = mask[2];
+	ive_filterop_c->reg_4.reg_filterop_h_coef25 = mask[3];
+	ive_filterop_c->reg_5.reg_filterop_h_coef26 = mask[4];
+	ive_filterop_c->reg_5.reg_filterop_h_coef32 = mask[5];
+	ive_filterop_c->reg_5.reg_filterop_h_coef33 = mask[6];
+	ive_filterop_c->reg_5.reg_filterop_h_coef34 = mask[7];
+	ive_filterop_c->reg_6.reg_filterop_h_coef35 = mask[8];
+	ive_filterop_c->reg_6.reg_filterop_h_coef36 = mask[9];
+	ive_filterop_c->reg_6.reg_filterop_h_coef42 = mask[10];
+	ive_filterop_c->reg_6.reg_filterop_h_coef43 = mask[11];
+	ive_filterop_c->reg_7.reg_filterop_h_coef44 = mask[12];
+	ive_filterop_c->reg_7.reg_filterop_h_coef45 = mask[13];
+	ive_filterop_c->reg_7.reg_filterop_h_coef46 = mask[14];
+	ive_filterop_c->reg_7.reg_filterop_h_coef52 = mask[15];
+	ive_filterop_c->reg_8.reg_filterop_h_coef53 = mask[16];
+	ive_filterop_c->reg_8.reg_filterop_h_coef54 = mask[17];
+	ive_filterop_c->reg_8.reg_filterop_h_coef55 = mask[18];
+	ive_filterop_c->reg_8.reg_filterop_h_coef56 = mask[19];
+	ive_filterop_c->reg_9.reg_filterop_h_coef62 = mask[20];
+	ive_filterop_c->reg_9.reg_filterop_h_coef63 = mask[21];
+	ive_filterop_c->reg_9.reg_filterop_h_coef64 = mask[22];
+	ive_filterop_c->reg_9.reg_filterop_h_coef65 = mask[23];
+	ive_filterop_c->reg_10.reg_filterop_h_coef66 = mask[24];
+#else
 	ive_filterop_c->reg_4.reg_filterop_h_coef00 = mask[0];
 	ive_filterop_c->reg_4.reg_filterop_h_coef01 = mask[1];
 	ive_filterop_c->reg_4.reg_filterop_h_coef02 = mask[2];
@@ -9615,6 +11934,7 @@ hw_stbox_flt_and_eig_calc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	ive_filterop_c->reg_9.reg_filterop_h_coef42 = mask[22];
 	ive_filterop_c->reg_9.reg_filterop_h_coef43 = mask[23];
 	ive_filterop_c->reg_10.reg_filterop_h_coef44 = mask[24];
+#endif
 	ive_filterop_c->reg_10.reg_filterop_h_norm = 3;
 	writel(ive_filterop_c->reg_4.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
@@ -9725,7 +12045,11 @@ static s32 _hw_stcandi_corner(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	ive_filterop_c->reg_7.val = 0;
 	ive_filterop_c->reg_8.val = 0;
 	ive_filterop_c->reg_9.val = 0;
-	ive_filterop_c->reg_10.reg_filterop_h_coef44 = 0;
+#ifdef MEDIA_V3
+	ive_filterop_c->reg_10.reg_filterop_h_coef66 = 0;
+#else
+    ive_filterop_c->reg_10.reg_filterop_h_coef44 = 0;
+#endif
 	ive_filterop_c->reg_10.reg_filterop_h_norm = 0;
 	writel(ive_filterop_c->reg_4.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_4));
@@ -9748,6 +12072,9 @@ static s32 _hw_stcandi_corner(struct ive_device *ndev, ive_src_image_s *pstSrc,
 
 	set_isp_rdma(MOD_STCANDI, NULL, dev_id);
 	set_rdma_eigval(pstSrc, rdma_eigval_ctl_c, dev_id);
+
+	rdma_eigval_ctl_c->dma_stride.reg_stride = pstSrc->stride[0] * 2;
+	writel(rdma_eigval_ctl_c->dma_stride.val, (IVE_BLK_BA[dev_id].RDMA_EIGVAL + ISP_DMA_CTL_DMA_STRIDE));
 
 	ive_top_c->reg_3.reg_mapmux_rdma_sel = 1;
 	ive_top_c->reg_3.reg_ive_rdma_eigval_en = 1;
@@ -9938,8 +12265,63 @@ void stcandicorner_workaround(struct ive_device *ndev)
 
 irqreturn_t platform_ive_irq(struct ive_device *ndev, int dev_id)
 {
-	//pr_err("[IVE] got %s callback\n", __func__);
 	complete(&ndev->core[dev_id].frame_done);
 	stop_vld_time(ndev->cur_optype, ndev->core[dev_id].tile_num, &ndev->core[dev_id]);
 	return IRQ_HANDLED;
+}
+
+int ive_event_handler(void *data)
+{
+    struct ive_handler_ctx *ctx = (struct ive_handler_ctx *)data;
+    struct ive_device *ndev;
+    int dev_id;
+    u32 timeout = 0;
+
+    ndev = ctx->ndev;
+    dev_id = ctx->dev_id;
+
+    while (!kthread_should_stop()) {
+        // Waiting for hard interrupt wake-up
+        wait_event_interruptible(ctx->wait, ctx->evt != 0 || kthread_should_stop());
+
+        if (kthread_should_stop())
+            break;
+
+        if (ctx->evt == 1) {
+            ctx->evt = 0;
+
+            // 1. Acquire the lock
+            spin_lock(&ndev->core[dev_id].dev_lock);
+
+            // 2. Check use_count
+            if (ndev->use_count == 0) {
+                atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
+                spin_unlock(&ndev->core[dev_id].dev_lock);
+                continue;
+            }
+            // 3. Additional checks for GMM/GMM2 operators
+            if (ndev->core[dev_id].cur_optype == MOD_GMM || ndev->core[dev_id].cur_optype == MOD_GMM2) {
+                TRACE_IVE(IVE_DBG_INFO, "Core %d: GMM polling start\n", dev_id);
+                while (timeout < 10000) {
+                    if ((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_90) & IVE_TOP_REG_FRAME_DONE_GMM_MASK) &&
+                        (readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_98) & IVE_TOP_REG_INTR_STATUS_FILTEROP_WDMA_Y_MASK) &&
+                        ((readl(IVE_BLK_BA[dev_id].IVE_TOP + IVE_TOP_REG_IVE_GMM_DMA_IDLE) & IVE_TOP_REG_GMM_DMA_IDLE_MASK) == IVE_TOP_REG_GMM_DMA_IDLE_MASK)) {
+                        break;
+                    }
+                    usleep_range(10, 20);
+                    timeout++;
+                }
+
+                if (timeout >= 10000) {
+                    TRACE_IVE(IVE_DBG_ERR, "Core %d: GMM wait timeout!\n", dev_id);
+                }
+            }
+
+            platform_ive_irq(ndev, dev_id);
+
+            atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
+            spin_unlock(&ndev->core[dev_id].dev_lock);
+        }
+    }
+    return 0;
 }

@@ -17,7 +17,9 @@ ccflags-y += -I$(srctree)/drivers/pinctrl/cvitek/
 
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../../sys/Module.symvers
+ifneq ($(wildcard $(PWD)/../Module.symvers),)
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../Module.symvers
+endif
 else
 all:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules

@@ -5,7 +5,7 @@ static void set_pic_qp_by_delta(stRcInfo *pRcInfo, EncOpenParam *pOpenParam, int
     EncWave5Param *param = &pOpenParam->EncStdParam.waveParam;
     pRcInfo->picIMaxQp = (param->maxQpI > 0) ? CLIP3(0, 51, param->maxQpI - delta) : 51;
     pRcInfo->picIMinQp = (param->minQpI > 0) ? CLIP3(0, 51, param->minQpI + delta) : 0;
-    pRcInfo->picPMaxQp = (param->maxQpP > 0) ? CLIP3(0, 51, param->minQpP - delta) : 51;
+    pRcInfo->picPMaxQp = (param->maxQpP > 0) ? CLIP3(0, 51, param->maxQpP - delta) : 51;
     pRcInfo->picPMinQp = (param->minQpP > 0) ? CLIP3(0, 51, param->minQpP + delta) : 0;
 }
 

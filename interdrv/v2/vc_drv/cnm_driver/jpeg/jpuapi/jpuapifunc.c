@@ -914,8 +914,8 @@ int JpgDecQMatTabSetUp(JpgInst * pJpgInst,JpgDecInfo *jpg, int instRegIndex)
 
 int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int timeout)
 {
-    int dExtBitBufCurPos;
-    int dExtBitBufBaseAddr;
+    uint64_t dExtBitBufCurPos;
+    uint64_t dExtBitBufBaseAddr;
     int dMibStatus;
     struct timespec64 ts;
     Int64 elapse, cur;
@@ -925,7 +925,7 @@ int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int 
     dExtBitBufBaseAddr    = jpg->streamBufStartAddr;
 
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
-    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
+    JpuWriteBbcExtReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
@@ -953,7 +953,7 @@ int JpgDecGramSetup(JpgInst * pJpgInst, JpgDecInfo * jpg, int instRegIndex, int 
     dExtBitBufCurPos    = dExtBitBufCurPos + 1;
 
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_CUR_POS_REG, dExtBitBufCurPos);
-    JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
+    JpuWriteBbcExtReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_EXT_ADDR_REG, dExtBitBufBaseAddr + (dExtBitBufCurPos << 8));
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_INT_ADDR_REG, (dExtBitBufCurPos & 1) << 6);
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_DATA_CNT_REG, JPU_GBU_SIZE / 4);    // 64 * 4 byte == 32 * 8 byte
     JpuWriteInstReg(pJpgInst->coreIndex, instRegIndex, MJPEG_BBC_COMMAND_REG, (jpg->streamEndian << 1) | 0);
@@ -1240,8 +1240,7 @@ enum {
     SOF_Marker_ES    = 0xFFC1,            // Start of frame : Extended Sequential
 };
 
-
-int check_start_code(JpgDecInfo *jpg)
+static int check_start_code(JpgDecInfo *jpg)
 {
     if (show_bits(&jpg->gbc, 8) == 0xFF)
         return 1;
@@ -1249,8 +1248,7 @@ int check_start_code(JpgDecInfo *jpg)
         return 0;
 }
 
-
-int find_start_code(JpgDecInfo *jpg)
+static int find_start_code(JpgDecInfo *jpg)
 {
     unsigned int word = 0;
 
@@ -1273,7 +1271,7 @@ int find_start_code(JpgDecInfo *jpg)
     return word;
 }
 
-int find_start_soi_code(JpgDecInfo *jpg)
+static int find_start_soi_code(JpgDecInfo *jpg)
 {
     int word;
 
@@ -1300,9 +1298,7 @@ int find_start_soi_code(JpgDecInfo *jpg)
     return word;
 }
 
-
-
-int decode_app_header(JpgDecInfo *jpg)
+static int decode_app_header(JpgDecInfo *jpg)
 {
     int length;
 
@@ -1322,8 +1318,7 @@ int decode_app_header(JpgDecInfo *jpg)
     return 1;
 }
 
-
-int decode_dri_header(JpgDecInfo *jpg)
+static int decode_dri_header(JpgDecInfo *jpg)
 {
     //Length, Lr
     if (get_bits_left(&jpg->gbc) < 16*2)
@@ -1336,7 +1331,7 @@ int decode_dri_header(JpgDecInfo *jpg)
     return 1;
 }
 
-int decode_dqt_header(JpgDecInfo *jpg)
+static int decode_dqt_header(JpgDecInfo *jpg)
 {
     int Pq;
     int Tq;
@@ -1381,7 +1376,7 @@ int decode_dqt_header(JpgDecInfo *jpg)
     return 1;
 }
 
-int decode_dth_header(JpgDecInfo *jpg)
+static int decode_dth_header(JpgDecInfo *jpg)
 {
     int Tc;
     int Th;
@@ -1448,7 +1443,8 @@ int decode_dth_header(JpgDecInfo *jpg)
 
     return 1;
 }
-int decode_sof_header(JpgDecInfo *jpg)
+
+static int decode_sof_header(JpgDecInfo *jpg)
 {
     int samplePrecision;
     int sampleFactor;
@@ -1550,7 +1546,7 @@ int decode_sof_header(JpgDecInfo *jpg)
     return 1;
 }
 
-int decode_sos_header(JpgDecInfo *jpg)
+static int decode_sos_header(JpgDecInfo *jpg)
 {
     int i, j;
     int len;
@@ -2275,9 +2271,7 @@ JpgRet CheckJpgEncParam(JpgEncHandle handle, JpgEncParam * param)
     return JPG_RET_SUCCESS;
 }
 
-
-
-int JpgEncGenHuffTab(JpgEncInfo * pEncInfo, int tabNum)
+static int JpgEncGenHuffTab(JpgEncInfo * pEncInfo, int tabNum)
 {
     int p, i, l, lastp, si, maxsymbol;
     int ret = 0;
@@ -3076,25 +3070,6 @@ JpgRet JpgEnterLockEx(void)
 JpgRet JpgLeaveLockEx(void)
 {
     jdi_unlock();
-    return JPG_RET_SUCCESS;
-}
-
-
-JpgRet JpgSetClockGateEx(Uint32 on, Uint32 instIdx)
-{
-    JpgInst *inst;
-    jpu_instance_pool_t *jip;
-
-    jip = (jpu_instance_pool_t *)jdi_get_instance_pool();
-    if (!jip)
-        return JPG_RET_FAILURE;
-
-    inst = (JpgInst *)jip->instPendingInst[instIdx];
-    if(inst && !on)
-        return JPG_RET_SUCCESS;
-
-    jdi_set_clock_gate(inst->coreIndex, on);
-
     return JPG_RET_SUCCESS;
 }
 

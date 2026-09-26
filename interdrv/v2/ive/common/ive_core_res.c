@@ -24,7 +24,7 @@ static DEFINE_MUTEX(ive_drv_core_list_lock);
 
 static DECLARE_WAIT_QUEUE_HEAD(ive_drv_core_wait_queue);
 static LIST_HEAD(ive_drv_core_resource_list_head);
-static int next_id = 1;
+static int next_id = 0;
 static bool isCoreIdle = false;
 int ive_core_request_resource(int timeout) {
     ive_drv_core_list_t *res;
@@ -100,7 +100,7 @@ int ive_core_init_resources(unsigned int core_num) {
             return -ENOMEM;
         }
 
-        res->id = next_id--;
+        res->id = next_id++;
         res->is_used = false;
         INIT_LIST_HEAD(&res->list);
 

@@ -125,6 +125,7 @@ struct ldc_job {
 	struct ldc_data cap_data, out_data;
 	atomic_t job_state; //ldc_job_state
 	struct list_head node;//add to ldc_vdev job_list
+	struct list_head ctx_node;//add to ldc_file_ctx job_handles
 	struct list_head task_list;
 	atomic_t task_num;
 	gdc_identity_attr_s identity;
@@ -134,6 +135,7 @@ struct ldc_job {
 	bool job_done_evt;
 	enum ldc_job_devs_type devs_type; // job dev type
 	int proc_idx;
+	struct ldc_file_ctx *file_ctx;
 };
 
 struct ldc_vb_doneq {

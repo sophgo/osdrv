@@ -56,7 +56,7 @@ Uint32 venc_help_sei_encode(CodStd format, Uint8 *pSrc, Uint32 srcLen, Uint8 *pB
     spp_enc_deinit(spp);
     return put_bit_byte_size;
 }
-
+#if 0
 int get_stop_one_bit_idx(Uint8 byte)
 {
     int i;
@@ -68,7 +68,7 @@ int get_stop_one_bit_idx(Uint8 byte)
 
     return i;
 }
-
+#endif
 static void encode_vui_aspect_ratio_info(spp_enc_context spp,
                      VuiAspectRatio *pari)
 {

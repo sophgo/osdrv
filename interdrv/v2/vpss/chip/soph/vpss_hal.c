@@ -56,9 +56,13 @@ struct vpss_convert_to_bak {
 static struct vpss_task_ctx task_ctx;
 static struct vpss_device *vpss_dev;
 struct vpss_convert_to_bak convert_to_bak[VPSS_MAX];
-
-int work_mask = 0xff; //default vpss_v + vpss_t
-int avail_mask = 0xff;
+#ifdef CV84X6
+	int work_mask = 0xfff; //default vpss_t + vpss_d
+	int avail_mask = 0xfff;
+#else
+	int work_mask = 0xff; //default vpss_v + vpss_t
+	int avail_mask = 0xff;
+#endif
 int sche_thread_enable = 1;
 unsigned short reset_time[VPSS_MAX];
 unsigned char core_last_sign[VPSS_MAX] = {0};
@@ -83,8 +87,8 @@ static void show_hw_state(void)
 static int find_available_dev(u8 chn_num, struct vpss_hal_grp_cfg cfg, int after_core)
 {
 	int i;
-	int start_idx = VPSS_V0;
-	int end_idx = VPSS_V3;
+	int start_idx = 0;
+	int end_idx = 3;
 	//int dev_num = 4;
 	u8 mask = 0, mask_tmp;
 	u8 user_mask = BIT(chn_num) - 1;
@@ -113,7 +117,7 @@ static int find_available_dev(u8 chn_num, struct vpss_hal_grp_cfg cfg, int after
 		if(!IS_POWER_OF_TWO(work_mask))
 			return after_core;
 		else { // slt scene, single core, find alternative core
-			for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+			for (i = 0; i < VPSS_MAX; ++i) {
 				if ((avail_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)) {
 					if (cfg.addr[2] && core_last_sign[i])
 						continue;
@@ -126,7 +130,7 @@ static int find_available_dev(u8 chn_num, struct vpss_hal_grp_cfg cfg, int after
 	return -1;
 }
 
-static int job_check_hw_ready(bool is_fbd, u8 chn_num, struct vpss_hal_grp_cfg cfg)
+static int job_check_hw_ready(bool is_fbd, bool is_rgn, u8 chn_num, struct vpss_hal_grp_cfg cfg)
 {
 	int i, start_core, after_core;
 
@@ -141,11 +145,23 @@ static int job_check_hw_ready(bool is_fbd, u8 chn_num, struct vpss_hal_grp_cfg c
 
 	if (cfg.bm_scene) {
 		if (is_fbd) {
-			for (i = start_core; i < VPSS_MAX; ++i)
+			for (i = start_core; i < VPSS_MAX; ++i) {
+#ifdef CV84X6
+				if (i == VPSS_D0) continue;
+#endif
 				if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE))
 					return i;
+			}
+#ifdef CV84X6
+		} else if (is_rgn && (work_mask & BIT(16))) { // pld debug
+			if ((work_mask & BIT(VPSS_D0)) && (atomic_read(&vpss_dev->vpss_cores[VPSS_D0].state) == VIP_IDLE))
+				return VPSS_D0;
+#endif
 		} else {
-			for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+			for (i = 0; i < VPSS_MAX; ++i) {
+#ifdef CV84X6
+				if ((i == VPSS_D0) && (work_mask & BIT(16))) continue; // pld debug
+#endif
 				if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)) {
 					if (cfg.addr[2] && core_last_sign[i]) {
 						// the experiment shows that vpss_t has almost no related problems
@@ -160,7 +176,7 @@ static int job_check_hw_ready(bool is_fbd, u8 chn_num, struct vpss_hal_grp_cfg c
 		}
 		return -1;
 	}
-
+#ifndef CV84X6
 	if (chn_num == 1) {
 		for (i = start_core; i < VPSS_MAX; ++i) {
 			if ((work_mask & BIT(i)) && (atomic_read(&vpss_dev->vpss_cores[i].state) == VIP_IDLE)){
@@ -201,6 +217,7 @@ static int job_check_hw_ready(bool is_fbd, u8 chn_num, struct vpss_hal_grp_cfg c
 		if (is_fbd)
 			return -1;
 	}
+#endif
 
 	return find_available_dev(chn_num, cfg, after_core);
 }
@@ -285,6 +302,7 @@ static int job_try_schedule(struct vpss_job *job)
 	u8 dev_list[VPSS_MAX_CHN_NUM] = {false, false, false, false};
 	struct vpss_hw_cfg *cfg = &job->cfg;
 	bool is_fbd = cfg->grp_cfg.fbd_enable;
+	bool is_rgn = (cfg->chn_cfg->rgn_cfg->num_of_rgn > 0);
 	u8 chn_num = cfg->chn_num;
 	unsigned long flags;
 	int dev_idx, dev_idx_max;
@@ -307,13 +325,16 @@ static int job_try_schedule(struct vpss_job *job)
 	if (job->is_online)
 		dev_idx = 0;
 	else
-		dev_idx = job_check_hw_ready(is_fbd, chn_num, cfg->grp_cfg);
+		dev_idx = job_check_hw_ready(is_fbd, is_rgn, chn_num, cfg->grp_cfg);
 	if (dev_idx < 0) {
 		TRACE_VPSS(DBG_DEBUG, "Grp(%d), hw not ready.\n", job->grp_id);
 		show_hw_state();
 		spin_unlock_irqrestore(&vpss_dev->lock, flags);
 		return -1;
 	}
+
+	if (is_fbd)
+		img_reset(dev_idx);
 
 	convert_to_bak[dev_idx].enable = false;
 	if (check_convert_to_addr(cfg, chn_num)){
@@ -326,6 +347,9 @@ static int job_try_schedule(struct vpss_job *job)
 		job->tile_mode = 0;
 	} else {
 		job->is_tile = false;
+		/* not h-tiled: drop any tile bits left over by a previous job,
+		 * otherwise they get OR'd back in by the v-tile path below. */
+		job->tile_mode = 0;
 	}
 
 	if (cfg->grp_cfg.crop.height > VPSS_HW_LIMIT_HEIGHT) {
@@ -368,6 +392,8 @@ static int job_try_schedule(struct vpss_job *job)
 				((job->cfg.chn_cfg[chn_id].src_size.width >> 1) - 1);
 			vpss_dev->vpss_cores[i].tile_mode = sclr_tile_cal_size(i, out_l_end);
 			job->tile_mode |= vpss_dev->vpss_cores[i].tile_mode;
+		} else {
+			vpss_dev->vpss_cores[i].tile_mode = 0;
 		}
 
 		if (job->is_v_tile) {
@@ -425,8 +451,12 @@ static int job_try_schedule(struct vpss_job *job)
 		cfg->chn_enable[2], cfg->chn_enable[3], dev_list[0], dev_list[1],
 		dev_list[2], dev_list[3]);
 
-	for (i = dev_idx; i < dev_idx_max; i++)
+	for (i = dev_idx; i < dev_idx_max; i++) {
 		ktime_get_ts64(&vpss_dev->vpss_cores[i].ts_start);
+#ifdef CV84X6
+		vpss_dev->vpss_cores[i].sysc_cap_st_val = sclr_get_srsc_cap_value(12);
+#endif
+	}
 
 	img_start(dev_idx, chn_num);
 
@@ -434,7 +464,7 @@ static int job_try_schedule(struct vpss_job *job)
 }
 
 
-static void vpss_hal_reset(u32 vpss_dev_mask, bool is_online)
+void vpss_hal_reset(u32 vpss_dev_mask, bool is_online)
 {
 	unsigned long flags;
 	int i;
@@ -533,7 +563,15 @@ int vpss_hal_try_schedule(void)
 
 int vpss_hal_init(struct vpss_device *dev)
 {
+#ifdef CV84X6
 	int i, ret;
+	struct sched_param tsk;
+#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
+	int i, ret;
+#else
+	int i;
+#endif
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
     struct sched_param tsk = {
         .sched_priority = MAX_USER_RT_PRIO - 4,
@@ -543,6 +581,7 @@ int vpss_hal_init(struct vpss_device *dev)
         .sched_policy = SCHED_RR,
         .sched_priority = MAX_RT_PRIO - 4,
     };
+#endif
 #endif
 	vpss_dev = dev;
 	init_waitqueue_head(&task_ctx.wait);
@@ -567,6 +606,12 @@ int vpss_hal_init(struct vpss_device *dev)
 			"vpss_task_schedule");
 		if (IS_ERR(task_ctx.thread))
 			TRACE_VPSS(DBG_ERR, "failed to create vpss kthread\n");
+#ifdef CV84X6
+		tsk.sched_priority = MAX_USER_RT_PRIO - 4;
+		ret = sched_setscheduler(task_ctx.thread, SCHED_FIFO, &tsk);
+		if (ret)
+			TRACE_VPSS(DBG_WARN, "vpss schedule thread priority update failed: %d\n", ret);
+#else
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0))
 		ret = sched_setscheduler(task_ctx.thread, SCHED_FIFO, &tsk);
 		if (ret) {
@@ -574,6 +619,7 @@ int vpss_hal_init(struct vpss_device *dev)
 		}
 #else
         	sched_setattr_nocheck(task_ctx.thread, &tsk);
+#endif
 #endif
 	}
 
@@ -583,9 +629,11 @@ int vpss_hal_init(struct vpss_device *dev)
 void vpss_hal_deinit(void)
 {
 	int ret;
+#ifndef CV84X6
+	int i;
+#endif
 	struct vpss_job *job;
 	unsigned long flags;
-	int i;
 
 	if (sche_thread_enable) {
 		if (!task_ctx.thread) {
@@ -611,7 +659,7 @@ void vpss_hal_deinit(void)
 		list_del_init(&job->list);
 	}
 	spin_unlock_irqrestore(&task_ctx.task_lock, flags);
-
+#ifndef CV84X6
 	for (i = 0; i < 2; i++) {
 		if (task_ctx.cmdq_buf[i].cmdq_phy_addr) {
 			base_ion_free(task_ctx.cmdq_buf[i].cmdq_phy_addr);
@@ -620,7 +668,7 @@ void vpss_hal_deinit(void)
 			task_ctx.cmdq_buf[i].cmdq_buf_size = 0;
 		}
 	}
-
+#endif
 	vpss_dev = NULL;
 }
 
@@ -692,15 +740,22 @@ int vpss_hal_remove_job(struct vpss_job *job)
 				if (!(job->vpss_dev_mask & BIT(i)))
 					continue;
 				vpss_stauts(i);
+#ifndef CV84X6
 				vpss_dev->vpss_cores[i].timeout_cnt++;
+#endif
 				// BIT(10) always reset; BIT(11) never reset
+#ifndef CV84X6
 				// VPSS2 and VPSS3 need binding reset, manual set BIT(13) can reset
-				if(((BIT(10) & work_mask) ||
+				if(((BIT(VPSS_MAX) & work_mask) ||
 					(IS_POWER_OF_TWO((work_mask & 0xf0))) ||
-					(!reset_time[i] && !(BIT(11) & work_mask))) &&
-					(i != VPSS_V2 || (BIT(13) & work_mask))) {
+					(!reset_time[i] && !(BIT(VPSS_MAX + 1) & work_mask))) &&
+					(i != 2 || (BIT(VPSS_MAX + 3) & work_mask))) {
+#else
+				if(((BIT(VPSS_MAX) & work_mask) ||
+					(!reset_time[i] && !(BIT(VPSS_MAX + 1) & work_mask)))) {
+#endif
 					vpss_hal_reset(job->vpss_dev_mask, job->is_online);
-					TRACE_VPSS(DBG_DEBUG, "core(%d) ready.\n", i);
+					TRACE_VPSS(DBG_INFO, "core(%d) ready.\n", i);
 					reset_time[i] = 1000;
 				} else {
 					work_mask &= (~BIT(i));
@@ -742,7 +797,7 @@ int vpss_hal_remove_job(struct vpss_job *job)
 	return 0;
 }
 
-
+#ifndef CV84X6
 int vpss_hal_stitch_schedule(struct vpss_stitch_cfg *cfg)
 {
 	u8 dev_idx;
@@ -793,6 +848,7 @@ int vpss_hal_stitch_schedule(struct vpss_stitch_cfg *cfg)
 
 	return vpss_stitch_platform(dev_idx, cmdq_buf, cfg);
 }
+#endif
 
 int vpss_hal_direct_schedule(struct vpss_job *job){
 	return job_try_schedule(job);
@@ -930,6 +986,9 @@ static int vpss_job_restart(struct vpss_job *job){
 		job->tile_mode = 0;
 	} else {
 		job->is_tile = false;
+		/* not h-tiled: drop any tile bits left over by a previous job,
+		 * otherwise they get OR'd back in by the v-tile path below. */
+		job->tile_mode = 0;
 	}
 
 	if (cfg->grp_cfg.crop.height > VPSS_HW_LIMIT_HEIGHT) {
@@ -963,6 +1022,8 @@ static int vpss_job_restart(struct vpss_job *job){
 			vpss_dev->vpss_cores[i].tile_mode = sclr_tile_cal_size(i,
 				(job->cfg.chn_cfg[chn_id].src_size.width >> 1) - 1);
 			job->tile_mode |= vpss_dev->vpss_cores[i].tile_mode;
+		} else {
+			vpss_dev->vpss_cores[i].tile_mode = 0;
 		}
 
 		if (job->is_v_tile) {
@@ -1048,7 +1109,7 @@ static void vpss_job_finish(struct vpss_job *job)
 		return;
 	}
 
-	if ((job->is_v_tile) && (job->tile_mode & 0xc)) {
+	if ((job->is_v_tile) && (job->tile_mode & SCL_V_TILE_BOTH)) {
 		job->tile_mode &= ~(SCL_TILE_DOWN);
 
 		for (i = 0; i < VPSS_MAX; i++) {
@@ -1116,7 +1177,7 @@ static void vpss_job_finish(struct vpss_job *job)
 		atomic_set(&job->job_state, JOB_WORKING);
 		img_start(job->dev_idx_start, job->cfg.chn_num);
 		spin_unlock_irqrestore(&job->lock, flags_job);
-
+#ifndef CV84X6
 		//wake up isp for vi-vpss online tile mode
 		if (job->is_online && job->online_param.is_tile) {
 			struct base_exe_m_cb exe_cb;
@@ -1129,6 +1190,7 @@ static void vpss_job_finish(struct vpss_job *job)
 			exe_cb.data = NULL;
 			base_exe_module_cb(&exe_cb);
 		}
+#endif
 		return;
 	}
 
@@ -1180,6 +1242,7 @@ void vpss_irq_handler(struct vpss_core *core)
 {
 	u8 vpss_idx = core->vpss_type;
 	struct vpss_job *job = (struct vpss_job *)core->job;
+	static struct timespec64 last_end[VPSS_MAX] = {0};
 
 	if (!job) {
 		TRACE_VPSS(DBG_INFO, "vpss(%d), job canceled.\n", vpss_idx);
@@ -1193,10 +1256,16 @@ void vpss_irq_handler(struct vpss_core *core)
 	}
 
 	atomic_set(&core->state, VIP_END);
+#ifdef CV84X6
+	core->sysc_cap_end_val = sclr_get_srsc_cap_value(vpss_idx);
+	core->sysc_cap_dur_val[core->int_cnt%1000] = core->sysc_cap_end_val - core->sysc_cap_st_val;
+#endif
 	ktime_get_ts64(&core->ts_end);
 	core->hw_duration = get_diff_in_us(core->ts_start, core->ts_end);
 	core->hw_duration_total += core->hw_duration;
 	core->int_cnt++;
+	core->fps = 1000000 / get_diff_in_us(last_end[vpss_idx], core->ts_end);
+	last_end[vpss_idx] = core->ts_end;
 
 	if (job->is_tile) {
 		if (job->is_work_on_r_tile)
@@ -1259,7 +1328,7 @@ void vpss_hal_suspend(void)
 			//TODO: reset dev and job
 		}
 	}
-
+#ifndef CV84X6
 	//stop stitch
 	for (i = VPSS_D0; i <= VPSS_D1; i++) {
 		count = 20;
@@ -1273,10 +1342,11 @@ void vpss_hal_suspend(void)
 			//TODO: reset dev and job
 		}
 	}
+#endif
 }
 
 void vpss_hal_down_reg(unsigned char inst){
-	if(work_mask & BIT(12)) // BIT(12) always dump reg
+	if(work_mask & BIT(VPSS_MAX + 2)) // BIT(VPSS_MAX + 2) always dump reg
 		vpss_error_stauts(inst);
 }
 

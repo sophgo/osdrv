@@ -746,6 +746,17 @@ static int vo_set_bt_param(vo_dev dev, vo_bt_attr_s *bt_param)
 			sync_info[dev_ctx->pub_attr.intf_sync].hpw);
 	}
 
+	// What changed: Add pixelclock correction for the MS7024 conversion IC, rounding the
+	//               27027000/54054000/13513500Hz values produced by fractional field rates
+	//               (29.97/59.94) to 27000000/54000000/13500000Hz.
+	if (dv_timings.bt.pixelclock == 27027000) {
+		dv_timings.bt.pixelclock = 27000000;
+	} else if (dv_timings.bt.pixelclock == 54054000) {
+		dv_timings.bt.pixelclock = 54000000;
+	} else if (dv_timings.bt.pixelclock == 13513500) {
+		dv_timings.bt.pixelclock = 13500000;
+	}
+
 	if (dev_ctx->pub_attr.intf_type == VO_INTF_BT656 ||
 		dev_ctx->pub_attr.intf_type == VO_INTF_BT1120) {
 		cfg.bt_cfg.data_seq = bt_param->data_seq;
@@ -796,6 +807,98 @@ static int vo_get_bt_param(vo_dev dev, vo_bt_attr_s *bt_param)
 	}
 
 	memcpy(bt_param, &dev_ctx->bt_param, sizeof(*bt_param));
+
+	return 0;
+}
+
+static int vo_set_rgb_param(vo_dev dev, vo_rgb_attr_s *rgb_param)
+{
+	struct vo_dev_ctx *dev_ctx;
+	struct vo_disp_intf_cfg cfg;
+	struct vo_dv_timings dv_timings;
+	int ret = -1;
+
+	ret = check_vo_dev_valid(dev);
+	if (ret != 0)
+		return ret;
+
+	dev_ctx = &g_vo_ctx->dev_ctx[dev];
+
+	if (dev_ctx->pub_attr.intf_sync == VO_OUTPUT_USER) {
+		dv_timings.bt.pixelclock =
+			dev_ctx->pub_attr.sync_info.frame_rate *
+			(dev_ctx->pub_attr.sync_info.vbb +
+			(dev_ctx->pub_attr.sync_info.vact <<
+			!dev_ctx->pub_attr.sync_info.iop) +
+			dev_ctx->pub_attr.sync_info.vfb +
+			dev_ctx->pub_attr.sync_info.vpw) *
+			(dev_ctx->pub_attr.sync_info.hbb +
+			dev_ctx->pub_attr.sync_info.hact +
+			dev_ctx->pub_attr.sync_info.hfb +
+			dev_ctx->pub_attr.sync_info.hpw);
+	} else if (dev_ctx->pub_attr.intf_sync < VO_OUTPUT_USER) {
+		dv_timings.bt.pixelclock =
+			sync_info[dev_ctx->pub_attr.intf_sync].frame_rate *
+			(sync_info[dev_ctx->pub_attr.intf_sync].vbb +
+			(sync_info[dev_ctx->pub_attr.intf_sync].vact <<
+			!sync_info[dev_ctx->pub_attr.intf_sync].iop) +
+			sync_info[dev_ctx->pub_attr.intf_sync].vfb +
+			sync_info[dev_ctx->pub_attr.intf_sync].vpw) *
+			(sync_info[dev_ctx->pub_attr.intf_sync].hbb +
+			sync_info[dev_ctx->pub_attr.intf_sync].hact +
+			sync_info[dev_ctx->pub_attr.intf_sync].hfb +
+			sync_info[dev_ctx->pub_attr.intf_sync].hpw);
+	}
+
+	if (dev_ctx->pub_attr.intf_type == VO_INTF_PARALLEL_RGB) {
+		cfg.intf_type = VO_DISP_INTF_PARALLEL_RGB;
+		do_div(dv_timings.bt.pixelclock, 1000);
+		cfg.rgb_cfg.pixelclock = dv_timings.bt.pixelclock;
+		cfg.rgb_cfg.pins.pin_num = rgb_param->pin_num;
+		memcpy(&cfg.rgb_cfg.pins.d_pins, rgb_param->d_pins, sizeof(rgb_param->d_pins));
+
+		if (vo_set_interface(dev, &cfg) != 0) {
+			TRACE_VO(DBG_ERR, "VO INTF configure failured.\n");
+			return -1;
+		}
+	} else if (dev_ctx->pub_attr.intf_type == VO_INTF_SERIAL_RGB) {
+		cfg.intf_type = VO_DISP_INTF_SERIAL_RGB;
+		do_div(dv_timings.bt.pixelclock, 1000);
+		cfg.rgb_cfg.pixelclock = dv_timings.bt.pixelclock;
+		cfg.rgb_cfg.pins.pin_num = rgb_param->pin_num;
+		memcpy(&cfg.rgb_cfg.pins.d_pins, rgb_param->d_pins, sizeof(rgb_param->d_pins));
+
+		if (vo_set_interface(dev, &cfg) != 0) {
+			TRACE_VO(DBG_ERR, "VO INTF configure failured.\n");
+			return -1;
+		}
+	} else {
+		TRACE_VO(DBG_ERR, "not working under the rgb interface!\n");
+		return ERR_VO_ILLEGAL_PARAM;
+	}
+
+	memcpy(&dev_ctx->rgb_param, rgb_param, sizeof(*rgb_param));
+
+	return 0;
+}
+
+static int vo_get_rgb_param(vo_dev dev, vo_rgb_attr_s *rgb_param)
+{
+	struct vo_dev_ctx *dev_ctx;
+	int ret = -1;
+
+	ret = check_vo_dev_valid(dev);
+	if (ret != 0)
+		return ret;
+	dev_ctx = &g_vo_ctx->dev_ctx[dev];
+
+	if (dev_ctx->pub_attr.intf_type != VO_INTF_PARALLEL_RGB &&
+		dev_ctx->pub_attr.intf_type != VO_INTF_SERIAL_RGB) {
+		TRACE_VO(DBG_ERR, "not working under the rgb interface!\n");
+		return ERR_VO_ILLEGAL_PARAM;
+	}
+
+	memcpy(rgb_param, &dev_ctx->rgb_param, sizeof(*rgb_param));
 
 	return 0;
 }
@@ -3804,6 +3907,38 @@ long vo_sdk_ctrl(struct vo_core_dev *vdev, struct vo_ext_control *p)
 		rc = vo_get_bt_param(cfg.dev, &cfg.bt_param);
 		if (copy_to_user(p->ptr, &cfg, sizeof(struct vo_bt_param_cfg))) {
 			TRACE_VO(DBG_ERR, "VO_SDK_GET_BTPARAM copy_to_user failed.\n");
+			rc = -EFAULT;
+		}
+	}
+	break;
+
+		case VO_SDK_SET_RGBPARAM: {
+		struct vo_rgb_param_cfg cfg;
+		CHECK_STRUCT_SIZE(p->size, struct vo_rgb_param_cfg);
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_rgb_param_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_SET_RGBPARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_set_rgb_param(cfg.dev, &cfg.rgb_param);
+	}
+	break;
+
+	case VO_SDK_GET_RGBPARAM: {
+		struct vo_rgb_param_cfg cfg;
+		CHECK_STRUCT_SIZE(p->size, struct vo_rgb_param_cfg);
+
+		if (copy_from_user(&cfg, p->ptr, sizeof(struct vo_rgb_param_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_GET_RGBPARAM copy_from_user failed.\n");
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = vo_get_rgb_param(cfg.dev, &cfg.rgb_param);
+		if (copy_to_user(p->ptr, &cfg, sizeof(struct vo_rgb_param_cfg))) {
+			TRACE_VO(DBG_ERR, "VO_SDK_GET_RGBPARAM copy_to_user failed.\n");
 			rc = -EFAULT;
 		}
 	}

@@ -52,7 +52,12 @@
 #define MAX_NUM_INSTANCE                32
 
 #define MAX_NUM_SOPHON_SOC             	1
-#define MAX_NUM_VPU_CORE_CHIP           3		    // cv186x has 3 cores: 1 encoder and 2 decoder
+#if defined(MEDIA_V3)
+#define MAX_NUM_VPU_CORE_CHIP           5           /* cv84x6 has 5 cores: 1 encoder and 4 decoder */
+#define MAX_NUM_MMU_ENTRY               4096
+#else
+#define MAX_NUM_VPU_CORE_CHIP           3		    /* cv186x has 3 cores: 1 encoder and 2 decoder */
+#endif
 #define MAX_NUM_VPU_CORE                (MAX_NUM_VPU_CORE_CHIP*MAX_NUM_SOPHON_SOC)
 #define MAX_NUM_VCORE                   1
 
@@ -169,6 +174,25 @@
 
 
 #define VE_TOP_EXT_ADDR             0x21000010
+
+#if defined(MEDIA_V3)
+#define TOP_SET                  0x08
+#define TOP_ADDR_EXT             0x10
+#define TOP_MMU_CRTL             0x0C
+
+#define TOP_VE_BWC_R             0xB0
+#define TOP_VE_BWC_W             0xB4
+#define TOP_VD_BWC_R0            0xB0
+#define TOP_VD_BWC_R1            0xB4
+#define TOP_VD_BWC_W0            0xB8
+#define TOP_VD_BWC_W1            0xBC
+#define TOP_VD_BWC_W2            0xC0
+#define TOP_VD_BWL_AW            0x20
+#define TOP_VD_BWL_AR            0x24
+
+#define TOP_REG_CK_0            0x00
+#define TOP_REG_CK_1            0x04
+#endif
 
 #define VPU_STAT_CYCLES_CLK         575000000
 #endif  /* _VPU_CONFIG_H_ */

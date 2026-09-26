@@ -451,8 +451,8 @@ can easily know whether sequence decoding has been finished or not.
     int         bytePosFrameStart;  /**< This means the position of an SOI maker in bitstream buffer. */
     int         ecsPtr;             /**< This is a pointer to an entropy-coded segment of current frame. */
     Uint32      frameCycle;         /**< This variable reports the number of clock cycles taken to decode one frame. */ /* clock cycle */
-    Uint32      rdPtr;              /**< The position of read pointer in the bitstream buffer after completion of frame decoding */
-    Uint32      wrPtr;              /**< The position of write pointer in the bitstream buffer after completion of frame decoding */
+    Uint64      rdPtr;              /**< The position of read pointer in the bitstream buffer after completion of frame decoding */
+    Uint64      wrPtr;              /**< The position of write pointer in the bitstream buffer after completion of frame decoding */
 } JpgDecOutputInfo;
 
 

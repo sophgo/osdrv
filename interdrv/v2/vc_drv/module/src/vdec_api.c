@@ -12,6 +12,7 @@
 #include <linux/delay.h>
 #include <linux/semaphore.h>
 #include <uapi/linux/sched/types.h>
+#include <linux/moduleparam.h>
 #include <asm/io.h>
 
 #include "linux/comm_vdec.h"
@@ -28,6 +29,9 @@
 #include "vbq.h"
 #include "bind.h"
 #include "datastructure.h"
+#if defined(MEDIA_V3)
+#include "mmu.h"
+#endif
 
 #define IS_VALID_PA(pa) (((pa) != 0) && ((pa) != (PhysicalAddress)(-1)))
 #define EXTRA_FRAME_BUFFER_NUM 1
@@ -37,6 +41,24 @@
 #define MAX_VDEC_HANDLE 64
 #define MAX_TIMEOUT 6000
 extern wait_queue_head_t *tVdecWaitQueue;
+
+#define VDEC_MAX_WORKERS 4
+
+#if defined(MEDIA_V3)      /* cv84x2/cv84x6: 4 decode cores, one thread can't saturate */
+#define VDEC_NTHREAD_DEFAULT 2
+#else                      /* bm1688/cv186x: 2 decode cores, keep single thread */
+#define VDEC_NTHREAD_DEFAULT 1
+#endif
+
+int vdec_nthread = VDEC_NTHREAD_DEFAULT;
+module_param(vdec_nthread, int, 0444);
+MODULE_PARM_DESC(vdec_nthread, "VDEC per-core decode worker threads [1..4] (snapshotted at insmod; default 2 on cv84x2/cv84x6, 1 on bm1688; run-time sysfs change needs module reload)");
+
+
+static int vdec_nthread_active = 1;
+
+/* Decode core count (core 0 is encode); channel_index steps by this on one core, so shard by dividing first then mod. */
+#define VDEC_NDEC_CORES (MAX_NUM_VPU_CORE - 1)
 
 typedef struct _src_info {
     PhysicalAddress stream_addr;
@@ -113,27 +135,50 @@ typedef struct decoder_handle{
 
 typedef struct _handle_pool{
     DECODER_HANDLE *handle[MAX_VDEC_HANDLE];
+    int inuse[MAX_VDEC_HANDLE];
     int handle_count;
     struct mutex handle_mutex;
 }handle_pool;
 
 handle_pool vdec_handle_pool[MAX_NUM_VPU_CORE] = {0};
-void* thread_handle[MAX_NUM_VPU_CORE];
-static int core_idx[MAX_NUM_VPU_CORE] = {0,1,2};
+
+/* Per-worker thread arg (core + worker id) and handle. stop_thread stays per-core:
+ * all workers on a core share one stop flag. */
+struct vdec_worker_arg { int core_idx; int worker_id; };
+static struct vdec_worker_arg vdec_worker_args[MAX_NUM_VPU_CORE][VDEC_MAX_WORKERS];
+static void *thread_handle[MAX_NUM_VPU_CORE][VDEC_MAX_WORKERS];
 static int stop_thread[MAX_NUM_VPU_CORE] = {0};
 static int thread_decode(void *param);
 
 int vdec_init_handle_pool(void)
 {
-    int i;
+    int i, w;
     char thread_name[32] = {0};
+
+    /* Snapshot and clamp the knob to [1, VDEC_MAX_WORKERS]; all thread striding
+     * uses vdec_nthread_active afterwards (sysfs changes need a module reload). */
+    if (vdec_nthread < 1)
+        vdec_nthread_active = 1;
+    else if (vdec_nthread > VDEC_MAX_WORKERS)
+        vdec_nthread_active = VDEC_MAX_WORKERS;
+    else
+        vdec_nthread_active = vdec_nthread;
+
+    VLOG(INFO, "vdec: per-core decode workers = %d\n", vdec_nthread_active);
 
     for (i=1; i<MAX_NUM_VPU_CORE; i++) {
         mutex_init(&vdec_handle_pool[i].handle_mutex);
 
         stop_thread[i] = 0;
-        sprintf(thread_name, "vdec_core%d", core_idx[i]);
-        thread_handle[i] = osal_thread_create(thread_decode, &core_idx[i], thread_name);
+        for (w=0; w<vdec_nthread_active; w++) {
+            vdec_worker_args[i][w].core_idx  = i;
+            vdec_worker_args[i][w].worker_id = w;
+            if (vdec_nthread_active == 1)
+                sprintf(thread_name, "vdec_core%d", i);        /* original name, bm1688 stays equivalent */
+            else
+                sprintf(thread_name, "vdec_core%d_w%d", i, w);
+            thread_handle[i][w] = osal_thread_create(thread_decode, &vdec_worker_args[i][w], thread_name);
+        }
     }
 
     return 0;
@@ -141,17 +186,20 @@ int vdec_init_handle_pool(void)
 
 int vdec_deinit_handle_pool(void)
 {
-    int i;
+    int i, w;
 
     for (i=1; i<MAX_NUM_VPU_CORE; i++) {
         stop_thread[i] = 1;
-        kthread_stop(thread_handle[i]);
+        for (w=0; w<vdec_nthread_active; w++) {
+            if (thread_handle[i][w])
+                kthread_stop(thread_handle[i][w]);
+        }
     }
 
     return 0;
 }
 
-int vdec_insert_handle(DECODER_HANDLE *pst_handle)
+static int vdec_insert_handle(DECODER_HANDLE *pst_handle)
 {
     if (pst_handle == NULL)
         return -1;
@@ -163,7 +211,7 @@ int vdec_insert_handle(DECODER_HANDLE *pst_handle)
     return 0;
 }
 
-int vdec_remove_handle(DECODER_HANDLE *pst_handle)
+static int vdec_remove_handle(DECODER_HANDLE *pst_handle)
 {
     if (pst_handle == NULL)
         return -1;
@@ -178,17 +226,6 @@ int vdec_remove_handle(DECODER_HANDLE *pst_handle)
     return 0;
 }
 
-DECODER_HANDLE *vdec_get_handle(int core_idx, int chn_idx)
-{
-    DECODER_HANDLE *pst_handle;
-
-    mutex_lock(&vdec_handle_pool[core_idx].handle_mutex);
-    pst_handle = vdec_handle_pool[core_idx].handle[chn_idx];
-    mutex_unlock(&vdec_handle_pool[core_idx].handle_mutex);
-
-    return pst_handle;
-}
-
 int vdec_get_handle_count(int core_idx)
 {
     int count;
@@ -200,7 +237,52 @@ int vdec_get_handle_count(int core_idx)
     return count;
 }
 
-int add_user_cnt(vb_blk blk)
+static DECODER_HANDLE *vdec_acquire_handle(int core_idx, int chn_idx)
+{
+    DECODER_HANDLE *h;
+
+    mutex_lock(&vdec_handle_pool[core_idx].handle_mutex);
+    h = vdec_handle_pool[core_idx].handle[chn_idx];
+    if (h)
+        vdec_handle_pool[core_idx].inuse[chn_idx]++;
+    mutex_unlock(&vdec_handle_pool[core_idx].handle_mutex);
+
+    return h;
+}
+
+static void vdec_put_handle(int core_idx, int chn_idx)
+{
+    mutex_lock(&vdec_handle_pool[core_idx].handle_mutex);
+    if (vdec_handle_pool[core_idx].inuse[chn_idx] > 0)
+        vdec_handle_pool[core_idx].inuse[chn_idx]--;
+    mutex_unlock(&vdec_handle_pool[core_idx].handle_mutex);
+}
+
+static void vdec_wait_handle_idle(int core_idx, int chn_idx)
+{
+    unsigned long deadline = jiffies + msecs_to_jiffies(5000);
+    int warned = 0;
+    int busy;
+
+    /* Must not free the handle while a worker still holds it (inuse>0), or we
+     * reintroduce the use-after-free. Never return early: warn once for
+     * diagnosis if a worker looks stuck, but keep waiting until it is idle. */
+    do {
+        mutex_lock(&vdec_handle_pool[core_idx].handle_mutex);
+        busy = vdec_handle_pool[core_idx].inuse[chn_idx];
+        mutex_unlock(&vdec_handle_pool[core_idx].handle_mutex);
+        if (!busy)
+            break;
+        if (!warned && time_after(jiffies, deadline)) {
+            warned = 1;
+            VLOG(ERR, "core %d chn %d still busy after 5s, worker may be stuck\n",
+                 core_idx, chn_idx);
+        }
+        usleep_range(50, 100);
+    } while (busy);
+}
+
+static int add_user_cnt(vb_blk blk)
 {
     struct vb_s *vb;
 
@@ -216,7 +298,7 @@ int add_user_cnt(vb_blk blk)
     return 0;
 }
 
-int is_available(vb_blk blk)
+static int is_available(vb_blk blk)
 {
     struct vb_s *vb;
 
@@ -277,9 +359,14 @@ static int alloc_framebuffer(void *pHandle)
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
     FrameBufferFormat format;
     vb_blk blk;
+    vpu_buffer_t vb;
 
     if(pst_handle->frameBufFlag == 0) {
-        pst_handle->numOfDecFbc = pst_handle->seq_info->minFrameBufferCount + pst_handle->cmd_queue_depth;
+        /* Reserve only the SPS-required DPB frames plus any user-requested extra
+         * frames. The cmd_queue_depth framebuffers are not needed for correctness,
+         * so dropping them saves per-frame device memory (FBC + MV + FBC tables,
+         * and the linear/wtl buffer when enabled). */
+        pst_handle->numOfDecFbc = pst_handle->seq_info->minFrameBufferCount;
         pst_handle->numOfDecFbc += pst_handle->frame_buffer_count;
         if (pst_handle->numOfDecFbc > MAX_DPB_NUM) {
             pst_handle->numOfDecFbc = MAX_DPB_NUM;
@@ -329,7 +416,15 @@ static int alloc_framebuffer(void *pHandle)
             return RETCODE_FAILURE;
 
         add_user_cnt(blk);
-        pst_handle->pst_frame_buffer[i].bufY  = addr;
+        vb.phys_addr = addr;
+        vb.size = frameBufferSize;
+#ifdef MEDIA_V3
+        mmu_alloc_virt_addr(pst_handle->core_idx, &vb);
+        pst_handle->pst_frame_buffer[i].phys_addr_36bit = vb.phys_addr_36bit;
+        pst_handle->pst_frame_buffer[i].mmu_entry_index = vb.mmu_entry_index;
+        pst_handle->pst_frame_buffer[i].mmu_entry_num = vb.mmu_entry_num;
+#endif
+        pst_handle->pst_frame_buffer[i].bufY  = vb.phys_addr;
         pst_handle->pst_frame_buffer[i].bufCb = (PhysicalAddress)-1;
         pst_handle->pst_frame_buffer[i].bufCr = (PhysicalAddress)-1;
         pst_handle->pst_frame_buffer[i].updateFbInfo = TRUE;
@@ -338,6 +433,7 @@ static int alloc_framebuffer(void *pHandle)
         pst_handle->pst_frame_buffer[i].height = pst_handle->seq_info->picHeight;
         pst_handle->pst_frame_buffer[i].stride = stride;
         pst_handle->pst_frame_blk[i] = blk;
+        VLOG(INFO, "allocate fbc frame buffer. physaddr= 0x%lx ~ 0x%lx\n", vb.phys_addr, vb.phys_addr+frameBufferSize);
     }
 
     alloc_info.nv21    = 0;
@@ -386,7 +482,15 @@ static int alloc_framebuffer(void *pHandle)
                 return RETCODE_FAILURE;
 
             add_user_cnt(blk);
-            pst_handle->pst_frame_buffer[i].bufY  = addr;
+            vb.phys_addr = addr;
+            vb.size = frameBufferSize;
+#ifdef MEDIA_V3
+            mmu_alloc_virt_addr(pst_handle->core_idx, &vb);
+            pst_handle->pst_frame_buffer[i].phys_addr_36bit = vb.phys_addr_36bit;
+            pst_handle->pst_frame_buffer[i].mmu_entry_index = vb.mmu_entry_index;
+            pst_handle->pst_frame_buffer[i].mmu_entry_num   = vb.mmu_entry_num;
+#endif
+            pst_handle->pst_frame_buffer[i].bufY  = vb.phys_addr;
             pst_handle->pst_frame_buffer[i].bufCb = (PhysicalAddress)-1;
             pst_handle->pst_frame_buffer[i].bufCr = (PhysicalAddress)-1;
             pst_handle->pst_frame_buffer[i].updateFbInfo = TRUE;
@@ -395,6 +499,7 @@ static int alloc_framebuffer(void *pHandle)
             pst_handle->pst_frame_buffer[i].height = pst_handle->seq_info->picHeight;
             pst_handle->pst_frame_buffer[i].stride = stride;
             pst_handle->pst_frame_blk[i] = blk;
+            VLOG(INFO, "allocate linear frame buffer. physaddr= 0x%lx ~ 0x%lx\n", vb.phys_addr, vb.phys_addr+frameBufferSize);
         }
 
         alloc_info.cbcrInterleave = pst_handle->cbcr_interleave;
@@ -430,6 +535,7 @@ static int free_framebuffer(void *pHandle)
     struct vb_s *vb;
     int user_cnt;
     long mod_id;
+    vpu_buffer_t vdb;
 
     VPU_DecGiveCommand(pst_handle->handle, DEC_FREE_FRAME_BUFFER, NULL);
     VPU_DecGiveCommand(pst_handle->handle, DEC_RESET_FRAMEBUF_INFO, NULL);
@@ -440,6 +546,13 @@ static int free_framebuffer(void *pHandle)
 
         blk = pst_handle->pst_frame_blk[i];
         vb = (struct vb_s *)blk;
+#ifdef MEDIA_V3
+        vdb.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+        vdb.size = pst_handle->pst_frame_buffer[i].size;
+        vdb.mmu_entry_index = pst_handle->pst_frame_buffer[i].mmu_entry_index;
+        vdb.mmu_entry_num = pst_handle->pst_frame_buffer[i].mmu_entry_num;
+        mmu_free_virt_addr(pst_handle->core_idx, &vdb);
+#endif
         memset(&pst_handle->pst_frame_buffer[i], 0, sizeof(FrameBuffer));
         pst_handle->pst_frame_blk[i] = 0;
         do {
@@ -793,11 +906,16 @@ static int get_outputinfo(DECODER_HANDLE *pst_handle, int timeout)
             pst_handle->seq_status = SEQ_DECODE_FINISH;
 
         if(pst_handle->open_param->bitstreamMode == BS_MODE_PIC_END) {
-            TIMESTAMP_INFO *timestamp_decode;
-            timestamp_decode = (TIMESTAMP_INFO *)Queue_Dequeue(pst_handle->timestamp_decode);
-            if(timestamp_decode != NULL && pst_handle->output_info->indexFrameDecoded >= 0) {
-                pst_handle->timestamp_pool[pst_handle->output_info->indexFrameDecoded].pts = timestamp_decode->pts;
-                pst_handle->timestamp_pool[pst_handle->output_info->indexFrameDecoded].dts = timestamp_decode->dts;
+            /* Only a real decoded frame consumes a pts. A SKIP interrupt
+             * (indexFrameDecoded < 0) carries no frame, so dequeuing on it
+             * would misalign pts against the following frames. */
+            if (pst_handle->output_info->indexFrameDecoded >= 0) {
+                TIMESTAMP_INFO *timestamp_decode =
+                    (TIMESTAMP_INFO *)Queue_Dequeue(pst_handle->timestamp_decode);
+                if (timestamp_decode != NULL) {
+                    pst_handle->timestamp_pool[pst_handle->output_info->indexFrameDecoded].pts = timestamp_decode->pts;
+                    pst_handle->timestamp_pool[pst_handle->output_info->indexFrameDecoded].dts = timestamp_decode->dts;
+                }
             }
         }
 
@@ -906,7 +1024,10 @@ static int process_data(DECODER_HANDLE *pst_handle, int timeout)
 static int thread_decode(void *param)
 {
     int i;
-    int core_idx = *(int *)param;
+    struct vdec_worker_arg *warg = (struct vdec_worker_arg *)param;
+    int core_idx  = warg->core_idx;
+    int worker_id = warg->worker_id;
+    int stride    = vdec_nthread_active;
     DECODER_HANDLE *pst_handle;
 
     while(!stop_thread[core_idx]) {
@@ -915,12 +1036,22 @@ static int thread_decode(void *param)
             continue;
         }
 
+        /* Static sharding: worker w owns slots whose in-core ordinal
+         * (i/VDEC_NDEC_CORES) % stride == w (single-writer).
+         * stride==1 is the original full scan. */
         for (i=0; i<MAX_VDEC_HANDLE; i++) {
-            pst_handle = vdec_get_handle(core_idx, i);
+            if (((i / VDEC_NDEC_CORES) % stride) != worker_id)
+                continue;
+
+            /* acquire (read slot + inuse++) is mutually exclusive with remove_handle
+             * and holds inuse to block vdec_close's free; put when done. NULL means
+             * the slot was removed, so skip it. */
+            pst_handle = vdec_acquire_handle(core_idx, i);
             if (pst_handle == NULL)
                 continue;
 
             process_data(pst_handle, 30);
+            vdec_put_handle(core_idx, i);
         }
         usleep_range(5, 10);    // delay more to give idle time to OS;
     }
@@ -949,6 +1080,9 @@ int vdec_open(InitDecConfig *pInitDecCfg, void **pHandle)
     pus_bitCode = (Uint16*)bit_code;
     fw_size = sizeof(bit_code) / sizeof(bit_code[0]);
 reinit:
+#ifdef MEDIA_V3
+    mmu_set_config(core_idx, pInitDecCfg->mmuMode);
+#endif
     ret = VPU_InitWithBitcode(core_idx, pus_bitCode, fw_size);
     if ((ret == RETCODE_VPU_RESPONSE_TIMEOUT) && (reinit_count < 3)) {
         reinit_count++;
@@ -1061,6 +1195,17 @@ reinit:
             }
             else {
                 buf_info = (buffer_info_s *)pInitDecCfg->bitstream_buffer;
+#ifdef MEDIA_V3
+                if (mmu_is_enabled(core_idx)) {
+                    /* MMU enabled: attach + map user buffer in place, no cross-4G bounce */
+                    vb_buffer.phys_addr = buf_info[i].phys_addr;
+                    vb_buffer.size = buf_info[i].size;
+                    vb_buffer.virt_addr = (unsigned long)phys_to_virt(buf_info[i].phys_addr);
+                    vb_buffer.base = vb_buffer.virt_addr;
+                    vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+                }
+                else
+#endif
                 if(CheckTopAddr(core_idx, buf_info[i].phys_addr, buf_info[i].size)) {
                     vb_buffer.phys_addr = buf_info[i].phys_addr;
                     vb_buffer.size = buf_info[i].size;
@@ -1094,6 +1239,17 @@ reinit:
         }
         else {
             buf_info = (buffer_info_s *)pInitDecCfg->bitstream_buffer;
+#ifdef MEDIA_V3
+            if (mmu_is_enabled(core_idx)) {
+                /* MMU enabled: attach + map user buffer in place, no cross-4G bounce */
+                vb_buffer.phys_addr = buf_info[0].phys_addr;
+                vb_buffer.size = buf_info[0].size;
+                vb_buffer.virt_addr = (unsigned long)phys_to_virt(buf_info[0].phys_addr);
+                vb_buffer.base = vb_buffer.virt_addr;
+                vdi_attach_dma_memory(core_idx, &vb_buffer, 1);
+            }
+            else
+#endif
             if(CheckTopAddr(core_idx, buf_info[0].phys_addr, buf_info[0].size)) {
                 vb_buffer.phys_addr = buf_info[0].phys_addr;
                 vb_buffer.size = buf_info[0].size;
@@ -1174,7 +1330,9 @@ fail:
         return ret;
 
     for (i=0; i<pst_handle->cmd_queue_depth; i++) {
-        vb_buffer.size = pst_handle->open_param->bitstreamBufferSize;
+        /* use real bitstream_size (open_param->bitstreamBufferSize is 0 for PIC_END, would leak);
+         * MMU entry + real phys are recovered from the VDI pool inside vdi_free/dettach. */
+        vb_buffer.size = pst_handle->bitstream_size;
         vb_buffer.phys_addr = pst_handle->bitstream_buffer[i];
         if (vb_buffer.phys_addr) {
             if(pst_handle->bsBufFlag[i] == 0)
@@ -1230,7 +1388,12 @@ int vdec_close(void *pHandle)
         down(&pst_handle->sem_release);
     }
 
+    vdec_remove_handle(pst_handle);
+
+    vdec_wait_handle_idle(pst_handle->core_idx, pst_handle->channel_index);
+
     for (i=0; i<pst_handle->cmd_queue_depth; i++) {
+        /* MMU entry + real phys are recovered from the VDI pool inside vdi_free/dettach */
         vb.size = pst_handle->bitstream_size;
         vb.phys_addr = pst_handle->bitstream_buffer[i];
         if (vb.phys_addr) {
@@ -1416,7 +1579,7 @@ int vdec_decode_frame(void *pHandle, DecOnePicCfg *pdopc, int timeout_ms)
     return ret;
 }
 
-int get_user_pic(void *pHandle, DispFrameCfg *pdfc)
+static int get_user_pic(void *pHandle, DispFrameCfg *pdfc)
 {
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
     vdi_update_channel_frames(pst_handle->core_idx, pst_handle->handle->instIndex, OUT_FRAME, 1);
@@ -1425,7 +1588,7 @@ int get_user_pic(void *pHandle, DispFrameCfg *pdfc)
     return 0;
 }
 
-int get_codec_pic(void *pHandle, DispFrameCfg *pdfc)
+static int get_codec_pic(void *pHandle, DispFrameCfg *pdfc)
 {
     FRAME_INFO *frame_info;
     DECODER_HANDLE *pst_handle = (DECODER_HANDLE *)pHandle;
@@ -1452,9 +1615,15 @@ int get_codec_pic(void *pHandle, DispFrameCfg *pdfc)
             pdfc->strideC = pdfc->strideY;
         else
             pdfc->strideC = pdfc->strideY >> 1;
+#ifdef MEDIA_V3
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[index_frame].bufY, &pdfc->phyAddr[0]);
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[index_frame].bufCb, &pdfc->phyAddr[1]);
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[index_frame].bufCr, &pdfc->phyAddr[2]);
+#else
         pdfc->phyAddr[0] = pst_handle->pst_frame_buffer[index_frame].bufY;
         pdfc->phyAddr[1] = pst_handle->pst_frame_buffer[index_frame].bufCb;
         pdfc->phyAddr[2] = pst_handle->pst_frame_buffer[index_frame].bufCr;
+#endif
         pdfc->addr[0] = (void *)phys_to_virt(pdfc->phyAddr[0]);
         pdfc->addr[1] = (void *)phys_to_virt(pdfc->phyAddr[1]);
         pdfc->addr[2] = (void *)phys_to_virt(pdfc->phyAddr[2]);
@@ -1471,10 +1640,17 @@ int get_codec_pic(void *pHandle, DispFrameCfg *pdfc)
             pdfc->strideC = pdfc->strideY;
         else
             pdfc->strideC = pdfc->strideY >> 1;
+#ifdef MEDIA_V3
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[index_frame].bufY, &pdfc->phyAddr[0]);
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[index_frame].bufCb, &pdfc->phyAddr[1]);
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->fb_info->vbFbcYTbl[index_frame].phys_addr, &pdfc->phyAddr[2]);
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->fb_info->vbFbcCTbl[index_frame].phys_addr, &pdfc->phyAddr[3]);
+#else
         pdfc->phyAddr[0] = pst_handle->pst_frame_buffer[index_frame].bufY;
         pdfc->phyAddr[1] = pst_handle->pst_frame_buffer[index_frame].bufCb;
         pdfc->phyAddr[2] = pst_handle->fb_info->vbFbcYTbl[index_frame].phys_addr;
         pdfc->phyAddr[3] = pst_handle->fb_info->vbFbcCTbl[index_frame].phys_addr;
+#endif
         pdfc->addr[0] = (void *)phys_to_virt(pdfc->phyAddr[0]);
         pdfc->addr[1] = (void *)phys_to_virt(pdfc->phyAddr[1]);
         pdfc->addr[2] = (void *)phys_to_virt(pdfc->phyAddr[2]);
@@ -1553,10 +1729,18 @@ void vdec_release_frame(void *pHandle, void *arg, PhysicalAddress addr)
         return ;
 
     if (pst_handle->open_param->wtlEnable) {
+#ifdef MEDIA_V3
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[frame_idx + pst_handle->numOfDecFbc].bufY, &_addr);
+#else
         _addr = pst_handle->pst_frame_buffer[frame_idx + pst_handle->numOfDecFbc].bufY;
+#endif
         blk = pst_handle->pst_frame_blk[frame_idx + pst_handle->numOfDecFbc];
     } else {
+#ifdef MEDIA_V3
+        mmu_get_phys_addr(pst_handle->core_idx, pst_handle->pst_frame_buffer[frame_idx].bufY, &_addr);
+#else
         _addr = pst_handle->pst_frame_buffer[frame_idx].bufY;
+#endif
         blk = pst_handle->pst_frame_blk[frame_idx];
     }
 
@@ -1566,10 +1750,10 @@ void vdec_release_frame(void *pHandle, void *arg, PhysicalAddress addr)
 
     vb = (struct vb_s *)blk;
 
-    if (atomic_read(&vb->usr_cnt) == 1)
+    if (atomic_read(&vb->usr_cnt) <= 1)
         return ;
 
-    vb_release_block(blk);
+    atomic_add_unless(&vb->usr_cnt, -1, 1);
 
     return ;
 }
@@ -1709,6 +1893,10 @@ int disable_user_pic(void *pHandle)
         pst_handle->wait_decoded_finish  = 0;
     }
     vdec_remove_handle(pst_handle);
+    /* After unlinking, wait for this slot's inuse to reach zero (blocking a worker
+     * that may still be in process_data) before Close/Open rebuilds the firmware
+     * instance, to avoid concurrent access to the handle. */
+    vdec_wait_handle_idle(pst_handle->core_idx, pst_handle->channel_index);
 
     do {
         VPU_DecFrameBufferFlush(pst_handle->handle, NULL, NULL);

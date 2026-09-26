@@ -85,11 +85,27 @@ struct ive_ioctl_erode_arg {
 	unsigned char instant;
 };
 
+struct ive_ioctl_erode_ext_arg {
+	ive_handle ive_handle;
+	ive_src_image_s src;
+	ive_dst_image_s dst;
+	ive_erode_ext_ctrl ctrl;
+	unsigned char instant;
+};
+
 struct ive_ioctl_dilate_arg {
 	ive_handle ive_handle;
 	ive_src_image_s src;
 	ive_dst_image_s dst;
 	ive_dilate_ctrl_s ctrl;
+	unsigned char instant;
+};
+
+struct ive_ioctl_dilate_ext_arg {
+	ive_handle ive_handle;
+	ive_src_image_s src;
+	ive_dst_image_s dst;
+	ive_dilate_ext_ctrl ctrl;
 	unsigned char instant;
 };
 
@@ -170,12 +186,29 @@ struct ive_ioctl_filter_arg {
 	unsigned char instant;
 };
 
+struct ive_ioctl_filter_ext_arg {
+	ive_handle ive_handle;
+	ive_src_image_s src;
+	ive_dst_image_s dst;
+	ive_filter_ext_ctrl ctrl;
+	unsigned char instant;
+};
+
 struct ive_ioctl_sobel_arg {
 	ive_handle ive_handle;
 	ive_src_image_s src;
 	ive_dst_image_s dst_h;
 	ive_dst_image_s dst_v;
 	ive_sobel_ctrl_s ctrl;
+	unsigned char instant;
+};
+
+struct ive_ioctl_sobel_ext_arg {
+	ive_handle ive_handle;
+	ive_src_image_s src;
+	ive_dst_image_s dst_h;
+	ive_dst_image_s dst_v;
+	ive_sobel_ext_ctrl ctrl;
 	unsigned char instant;
 };
 
@@ -208,6 +241,14 @@ struct ive_ioctl_filter_and_csc_arg {
 	ive_src_image_s src;
 	ive_dst_image_s dst;
 	ive_filter_and_csc_ctrl_s ctrl;
+	unsigned char instant;
+};
+
+struct ive_ioctl_filter_and_csc_ext_arg {
+	ive_handle ive_handle;
+	ive_src_image_s src;
+	ive_dst_image_s dst;
+	ive_filter_and_csc_ext_ctrl ctrl;
 	unsigned char instant;
 };
 

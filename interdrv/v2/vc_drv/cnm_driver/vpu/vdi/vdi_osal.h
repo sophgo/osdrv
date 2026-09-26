@@ -117,7 +117,6 @@ size_t osal_fputs(const char *s, osal_file_t fp);
 size_t osal_strlen(const char * str);
 int osal_strcmp(const char * str1, const char * str2);
 int osal_sprintf(char * str, const char * format, ...);
-int osal_atoi(const char * str);
 char * osal_strtok(char * str, const char * delimiters);
 unsigned long osal_strtoul(const char *cp, char **endp, unsigned int base);
 char * osal_strcpy(char * destination, const char * source);

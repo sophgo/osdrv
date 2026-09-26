@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/reset.h>
 #include <linux/platform_device.h>
+#include <linux/version.h>
 
 /* #include "pinctrl-cv186x.h" */
 
@@ -290,7 +291,11 @@ static int keyscan_register_cdev(struct cvi_keyscan *keypad)
 	int ret;
 	// int rc;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 	keyscan_class = class_create(THIS_MODULE, "cvi-keyscan");
+#else
+	keyscan_class = class_create("cvi-keyscan");
+#endif
 	if (IS_ERR(keyscan_class)) {
 		pr_err("create class failed\n");
 		return PTR_ERR(keyscan_class);
@@ -436,6 +441,7 @@ err_out:
 	return ret;
 }
 
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 static int keyscan_remove(struct platform_device *pdev)
 {
 	struct cvi_keyscan *keypad = platform_get_drvdata(pdev);
@@ -446,6 +452,17 @@ static int keyscan_remove(struct platform_device *pdev)
 	pr_debug("cvi_keyscan_remove\n");
 	return 0;
 }
+#else
+static void keyscan_remove(struct platform_device *pdev)
+{
+	struct cvi_keyscan *keypad = platform_get_drvdata(pdev);
+
+	keyscan_unregister_cdev(keypad);
+	input_unregister_device(keypad->input_dev);
+	clk_disable_unprepare(keypad->clk);
+	pr_debug("cvi_keyscan_remove\n");
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int keyscan_suspend(struct device *dev)

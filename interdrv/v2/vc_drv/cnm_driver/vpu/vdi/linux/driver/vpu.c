@@ -24,6 +24,7 @@
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/sched.h>
 #include <linux/version.h>
 #include <linux/kfifo.h>
@@ -36,7 +37,6 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/clk-provider.h>
-#include <linux/vmalloc.h>
 
 #include "vpuconfig.h"
 #include "vpuerror.h"
@@ -90,7 +90,6 @@
 
 #define IS_BIT_SET(x, i) ((i) >= 0 && (i) < MAX_NUM_INSTANCE ? ((x) >> (i)) & 1ULL : 0)
 #define SET_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) |= (1ULL << (i)); } while (0)
-#define CLEAR_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) &= ~(1ULL << (i)); } while (0)
 
 typedef struct vpu_drv_context_t {
     struct fasync_struct *async_queue;
@@ -164,7 +163,13 @@ static const char *const vpu_clk_name[11] = {
 };
 
 static vpu_power_ctrl vpu_pw_ctl = {0};
+#if defined(MEDIA_V3)
+static int s_vpu_reg_phy_base[MAX_NUM_VPU_CORE] = {0x22010000, 0x23010000, 0x23110000, 0x23210000, 0x23310000};
+static int s_vpu_top_phy_base[MAX_NUM_VPU_CORE] = {0x22000000, 0x23000000, 0x23100000, 0x23200000, 0x23300000};
+static int s_vpu_mmu_entry_base[MAX_NUM_VPU_CORE] = {0x22050000, 0x23050000, 0x23150000, 0x23250000, 0x23350000};
+#else
 static int s_vpu_reg_phy_base[MAX_NUM_VPU_CORE] = {0x21010000, 0x23010000, 0x24010000};
+#endif
 
 static osal_mutex_t core_mutex[MAX_NUM_VPU_CORE];
 static osal_mutex_t disp_mutex[MAX_NUM_VPU_CORE];
@@ -200,7 +205,11 @@ struct clk *s_vpu_clk;
 #endif
 
 #ifdef VPU_SUPPORT_ISR
+#if defined(MEDIA_V3)
+static int s_vpu_irq[MAX_NUM_VPU_CORE] = {115, 119, 123, 127, 131};
+#else
 static int s_vpu_irq[MAX_NUM_VPU_CORE] = {45,39,42};
+#endif
 #endif
 
 #define MAX_VPU_STAT_WIN_SIZE  10
@@ -238,7 +247,7 @@ typedef struct vpu_statistic_info {
     uint64_t vpu_stat_cycles[MAX_NUM_VPU_CORE];
     int vpu_working_array[MAX_NUM_VPU_CORE][MAX_VPU_STAT_WIN_SIZE];
     int vpu_stat_enable[MAX_NUM_VPU_CORE];
-    uint32_t vpu_channel_flag[MAX_NUM_VPU_CORE];
+    uint32_t vdec_channel_flag[MAX_NUM_VPU_CORE];
     channel_info vpu_channel_info[MAX_NUM_VPU_CORE][MAX_NUM_INSTANCE];
 }vpu_statistic_info_t;
 
@@ -246,6 +255,10 @@ typedef struct vpu_statistic_info {
 static vpu_statistic_info_t s_vpu_usage_info = {0};
 static struct task_struct *s_vpu_monitor_task = NULL;
 vpudrv_buffer_t s_vpu_register[MAX_NUM_VPU_CORE] = {0};
+#if defined(MEDIA_V3)
+vpudrv_buffer_t s_vpu_top_register[MAX_NUM_VPU_CORE] = {0};
+vpudrv_buffer_t s_vpu_mmu_entry[MAX_NUM_VPU_CORE] = {0};
+#endif
 static struct file *gfilp[MAX_NUM_VPU_CORE];
 static int *s_interrupt_flag;
 static wait_queue_head_t *s_interrupt_wait_q;
@@ -364,7 +377,7 @@ void vpu_update_resolution(int coreIdx, int instance, int width, int height)
 {
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_height = height;
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_width = width;
-    SET_BIT(s_vpu_usage_info.vpu_channel_flag[coreIdx], instance);
+    SET_BIT(s_vpu_usage_info.vdec_channel_flag[coreIdx], instance);
 
 }
 
@@ -403,7 +416,7 @@ void vpu_clear_stat_info(int coreIdx)
     s_vpu_usage_info.vpu_total_time_in_ms[coreIdx] = 0;
     s_vpu_usage_info.vpu_status_index[coreIdx] = 0;
     s_vpu_usage_info.vpu_instant_usage[coreIdx] = 0;
-    s_vpu_usage_info.vpu_channel_flag[coreIdx] = 0;
+    s_vpu_usage_info.vdec_channel_flag[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_working_array[coreIdx], 0, MAX_VPU_STAT_WIN_SIZE*sizeof(int));
     s_vpu_usage_info.vpu_stat_enable[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_channel_info[coreIdx], 0, MAX_NUM_INSTANCE * sizeof(channel_info));
@@ -991,8 +1004,6 @@ long vpu_close_instance(vpudrv_inst_info_t *inst_info)
         if (vil->inst_idx == inst_info->inst_idx && vil->core_idx == inst_info->core_idx) {
             s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]--; /* flag just for that vpu is in opened or closed */
             inst_info->inst_open_count = s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]; /* counting the current open instance number */
-            memset(&s_vpu_usage_info.vpu_channel_info[vil->core_idx][vil->inst_idx], 0, sizeof(channel_info));
-            CLEAR_BIT(s_vpu_usage_info.vpu_channel_flag[vil->core_idx], vil->inst_idx);
             list_del(&vil->list);
             kfree(vil);
             // dev->crst_cxt[inst_info->core_idx].instcall[inst_info->inst_idx] = 0;
@@ -1244,19 +1255,15 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
     atomic_inc(&s_vpu_usage_info.vpu_busy_status[core_idx]);
 
     ret = wait_event_interruptible_timeout(s_interrupt_wait_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] != 0, usecs_to_jiffies(info->timeout));
-    if (!ret) {
+    if (ret == 0) {
         ret = -ETIME;
         atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
-        //VLOG(TRACE, "[VPUDRV][-]VDI_IOCTL_WAIT_INTERRUPT timeout = %d \n", info.timeout);
         return ret;
     }
-
-    // if (signal_pending(current)) {
-    //     VLOG(ERR, "[VPUDRV] signal_pending failed\n");
-    //     ret = -ERESTARTSYS;
-    //     atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
-    //     return ret;
-    // }
+    if (ret < 0) {
+        atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
+        return ret;
+    }
 
     intr_reason_in_q = 0;
     interrupt_flag_in_q = kfifo_out_spinlocked(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], &intr_reason_in_q, sizeof(u32), &s_kfifo_lock);
@@ -1269,9 +1276,7 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
     VLOG(TRACE, "[VPUDRV] inst_index(%d), s_interrupt_flag(%d), reason(0x%08lx)\n", intr_inst_index, s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index], dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index]);
     info->intr_reason = dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index];
-    if (kfifo_is_empty(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index])) {
-        s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
-    }
+    s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
     dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
 
     if (info->intr_reason & (1<<INT_WAVE5_DEC_PIC)) {
@@ -1327,25 +1332,41 @@ ssize_t vpu_op_write(const char *buf, size_t len)
 
     return 0;
 }
-extern struct mutex s_top_lock;
-int vpu_top_reset_idx[MAX_NUM_VPU_CORE] = {17, 9, 13};
+
 void vpu_top_reset(unsigned long core_idx)
 {
-    unsigned int *top_reg_virt_addr;
     unsigned int reg_val;
+#ifdef MEDIA_V3
+    reg_val = platform_readl(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET);
+    reg_val |= 1;
+    platform_writel(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET, reg_val);
 
-    mutex_lock(&s_top_lock);
+    reg_val &= ~(1);
+    platform_writel(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET, reg_val);
+#else
+    unsigned int *top_reg_virt_addr;
     top_reg_virt_addr = (unsigned int *)platform_ioremap(0x28103000, 4);
     reg_val = platform_readl(0x28103000, top_reg_virt_addr);
 
-    reg_val &= ~(1 << vpu_top_reset_idx[core_idx]);
+    if (core_idx == 0)
+        reg_val &= ~(1<<17);//vesys_ve
+    else if (core_idx == 1)
+        reg_val &= ~(1<<9);//vdsys0_vd
+    else if (core_idx == 2)
+        reg_val &= ~(1<<13);//vdsys1_vd
     platform_writel(0x28103000, top_reg_virt_addr, reg_val);
 
-    reg_val |= (1 << vpu_top_reset_idx[core_idx]);
+    if (core_idx == 0)
+        reg_val |= (1<<17);//vesys_ve
+    else if (core_idx == 1)
+        reg_val |= (1<<9);//vdsys0_vd
+    else if (core_idx == 2)
+        reg_val |= (1<<13);//vdsys1_vd
     platform_writel(0x28103000, top_reg_virt_addr, reg_val);
 
     platform_iounmap((void *)top_reg_virt_addr);
-    mutex_unlock(&s_top_lock);
+#endif
+    osal_msleep(1);
 }
 
 // reference vpu_release
@@ -1495,14 +1516,11 @@ static int vpuinfo_show(struct seq_file *m, void *v)
         s_vpu_usage_info.vpu_instant_usage[i], s_vpu_usage_info.vpu_total_time_in_ms[i]?(s_vpu_usage_info.vpu_working_time_in_ms[i]*100/s_vpu_usage_info.vpu_total_time_in_ms[i]):0,
         s_vpu_usage_info.vpu_realtime_fps[i], atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
 
-    // encoder
-    for (j = 0; j < MAX_NUM_INSTANCE; j++) {
-        if (IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], j)) {
-            channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
-            success_not_get = info.frames_not_get;
-            seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
-                        j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
-        }
+    for (j = 0; j < s_vpu_usage_info.vpu_open_ref_count[i]; j++) {
+        channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
+        success_not_get = info.in_frame - info.out_frame - info.frames_fail;
+        seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
+                    j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
     }
 
     // decoder
@@ -1514,7 +1532,7 @@ static int vpuinfo_show(struct seq_file *m, void *v)
 
 
         for(vdec_chn_idx = 0, vdec_instance_num = 0; vdec_chn_idx < MAX_NUM_INSTANCE; vdec_chn_idx++) {
-            if(IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], vdec_chn_idx)) {
+            if(IS_BIT_SET(s_vpu_usage_info.vdec_channel_flag[i], vdec_chn_idx)) {
                 channel_info info = s_vpu_usage_info.vpu_channel_info[i][vdec_chn_idx];
                 success_not_get = info.in_frame - info.out_frame - info.frames_fail;
                 seq_printf(m, "\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n", \
@@ -1602,7 +1620,6 @@ int vpu_drv_platform_init(struct platform_device *pdev)
     int ret = 0;
     int i;
     struct resource *res = NULL;
-    int irq = -1;
 
     VLOG(INFO, "[VPUDRV][+] vpu_drv_platform_init\n");
     s_interrupt_wait_q = vzalloc(MAX_NUM_VPU_CORE*MAX_NUM_INSTANCE*sizeof(wait_queue_head_t));
@@ -1638,15 +1655,25 @@ int vpu_drv_platform_init(struct platform_device *pdev)
         }
         s_vpu_register[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_register[i].phys_addr, s_vpu_register[i].size);
 
-#ifdef VPU_SUPPORT_ISR
-        if (pdev)
-            irq = platform_get_irq(pdev, i + MAX_NUM_JPU_CORE);//platform_get_resource(pdev, IORESOURCE_IRQ, i + MAX_NUM_JPU_CORE);
+#if defined(MEDIA_V3)
+        s_vpu_top_register[i].phys_addr = s_vpu_top_phy_base[i];
+        s_vpu_top_register[i].size = VPU_REG_SIZE;
+        s_vpu_top_register[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_top_register[i].phys_addr, s_vpu_top_register[i].size);
 
-        if (irq > 0) {/* if platform driver is implemented */
-            s_vpu_irq[i] = irq;
+        s_vpu_mmu_entry[i].phys_addr = s_vpu_mmu_entry_base[i];
+        s_vpu_mmu_entry[i].size = VPU_REG_SIZE;
+        s_vpu_mmu_entry[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_mmu_entry[i].phys_addr, s_vpu_mmu_entry[i].size);
+#endif
+
+#ifdef VPU_SUPPORT_ISR
+        if (pdev) {
+            ret = platform_get_irq(pdev, i + MAX_NUM_JPU_CORE);
+            if (ret < 0) {
+                VLOG(ERR, "[VPUDRV] : fail to get vpu irq %d, err:%d\n", i, ret);
+                return ret;
+            }
+            s_vpu_irq[i] = ret;
             VLOG(INFO, "[VPUDRV] : vpu irq number get from platform driver %d irq=0x%x\n", i, s_vpu_irq[i]);
-        } else {
-            VLOG(ERR, "[VPUDRV] : vpu irq number get from defined value irq=0x%x\n", s_vpu_irq[i]);
         }
 
         ret = request_irq(s_vpu_irq[i], vpu_irq_handler, IRQF_TRIGGER_NONE, "VPU_CODEC_IRQ", (void *)(&s_vpu_drv_context[i]));
@@ -1708,6 +1735,14 @@ int vpu_drv_platform_exit(void)
 
         if (s_vpu_register[i].virt_addr)
             platform_iounmap((void *)s_vpu_register[i].virt_addr);
+
+#if defined(MEDIA_V3)
+        if(s_vpu_top_register[i].virt_addr)
+            platform_iounmap((void *)s_vpu_top_register[i].virt_addr);
+
+        if(s_vpu_mmu_entry[i].virt_addr)
+            platform_iounmap((void *)s_vpu_mmu_entry[i].virt_addr);
+#endif
     }
 
     if (entry) {
@@ -1987,6 +2022,11 @@ static int wave_sleep_wake(u32 core, int mode)
 
         codeBase = s_common_memory[core].phys_addr;
         codeSize = (WAVE5_MAX_CODE_BUF_SIZE&~0xfff);
+
+#if defined(MEDIA_V3)
+        originValue = platform_readl(s_vpu_top_register[core].phys_addr + TOP_ADDR_EXT, s_vpu_top_register[core].virt_addr + TOP_ADDR_EXT);
+        platform_writel(s_vpu_top_register[core].phys_addr + TOP_ADDR_EXT, s_vpu_top_register[core].virt_addr + TOP_ADDR_EXT, (codeBase>>32) | originValue);
+#else
         if (core == 0) {
             unsigned int *reg_addr = platform_ioremap(VE_TOP_EXT_ADDR, 4);
             originValue = platform_readl(VE_TOP_EXT_ADDR, reg_addr);
@@ -1997,6 +2037,7 @@ static int wave_sleep_wake(u32 core, int mode)
             WriteVpuFIORegister(core, 0x8EC0, codeBase>>32);
             WriteVpuFIORegister(core, 0x8EC4, codeBase>>32);
         }
+#endif
 
         remapSize = (W_REMAP_MAX_SIZE>>12) & 0x1ff;
         val = 0x80000000 | (WAVE_UPPER_PROC_AXI_ID<<20) | (W_REMAP_INDEX0<<12) | (0<<16) | (1<<11) | remapSize;

@@ -443,6 +443,10 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time =
 			(u32)(end_time - proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time);
 
+		if (proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].top_id < LDC_DEV_MAX_CNT)
+			proc_ctx->gdc_core_status[proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].top_id].core_all_hw_time
+				+= proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time;
+
 		if (state == LDC_TASK_STATE_DONE)
 			proc_ctx->tsk_status.success++;
 		else if (state == LDC_TASK_STATE_CANCLE)

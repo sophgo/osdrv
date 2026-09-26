@@ -1,17 +1,38 @@
 #ifndef _SCL_REG_H_
 #define _SCL_REG_H_
 
-
-// #define REG_VPSS_V_BASE 0x68080000
-// #define REG_VPSS_T1_BASE 0x23020000
-// #define REG_VPSS_T2_BASE 0x24020000
-// #define REG_VPSS_D_BASE 0x67010000
-#define REG_TOP_RESET_BASE 0x28103000
-#define REG_VI_STS_BASE 0x680be000
-#define REG_VO_SYS_BASE 0x67000000
-#define REG_VPSS_BASE(x) (x < 4 ? reg_base_vi : (x < 6 ? reg_base_vd0 : (x < 8 ? reg_base_vd1 : reg_base_vo)))
-#define REG_VPSS_IP_IDX(x) (x < 4 ? x : (x < 6 ? (x - 4) : (x < 8 ? (x - 6) : (x - 8))))
-#define REG_VPSS_SIZE(x) ((x < 4 || x > 7) ? 0X4000 : 0X10000)
+#ifdef CV84X6
+	// #define REG_VPSS_T1_BASE 0x23020000
+	// #define REG_VPSS_T2_BASE 0x23120000
+	// #define REG_VPSS_T3_BASE 0x23220000
+	// #define REG_VPSS_T4_BASE 0x23320000
+	// #define REG_VPSS_D_BASE 0x67110000
+	#define REG_VD0_STS_BASE 0x23000000
+	#define REG_VD1_STS_BASE 0x23100000
+	#define REG_VD2_STS_BASE 0x23200000
+	#define REG_VD3_STS_BASE 0x23300000
+	#define REG_VO_SYS_BASE 0x67000000
+	#define REG_VE_SYS_BASE 0x22000000
+	#define REG_SYSC_CAP_BASE 0x22060000
+	#define REG_VPSS_BASE(x) (x < 3 ? reg_base_vd0 : \
+		(x < 6 ? reg_base_vd1 : \
+		(x < 9 ? reg_base_vd2 : \
+		(x < 12 ? reg_base_vd3 : \
+		reg_base_vo))))
+	#define REG_VPSS_IP_IDX(x) (x < 3 ? x : (x < 6 ? (x - 3) : (x < 9 ? (x - 6) : (x < 12 ? (x - 9) : 0))))
+	#define REG_VPSS_SIZE(x) 0X10000
+#else
+	// #define REG_VPSS_V_BASE 0x68080000
+	// #define REG_VPSS_T1_BASE 0x23020000
+	// #define REG_VPSS_T2_BASE 0x24020000
+	// #define REG_VPSS_D_BASE 0x67010000
+	#define REG_TOP_RESET_BASE 0x28103000
+	#define REG_VI_STS_BASE 0x680be000
+	#define REG_VO_SYS_BASE 0x67000000
+	#define REG_VPSS_BASE(x) (x < 4 ? reg_base_vi : (x < 6 ? reg_base_vd0 : (x < 8 ? reg_base_vd1 : reg_base_vo)))
+	#define REG_VPSS_IP_IDX(x) (x < 4 ? x : (x < 6 ? (x - 4) : (x < 8 ? (x - 6) : (x - 8))))
+	#define REG_VPSS_SIZE(x) ((x < 4 || x > 7) ? 0X4000 : 0X10000)
+#endif
 
 #define REG_TOP_OFFSET 0X0
 #define REG_CMDQ_OFFSET 0X1000
@@ -259,5 +280,9 @@
 #define REG_SCL_MAP_CONV_TIME_OUT(x) (REG_SCL_FBD_BASE(x) + 0x2c)
 #define REG_SCL_MAP_CONV_ENDIAN(x) (REG_SCL_FBD_BASE(x) + 0x30)
 #define REG_SCL_MAP_CONV_BIT_DEPTH(x) (REG_SCL_FBD_BASE(x) + 0x34)
+#define REG_SCL_MAP_CONV_OFF_BASE_Y_35_32(x) (REG_SCL_FBD_BASE(x) + 0x48)
+#define REG_SCL_MAP_CONV_OFF_BASE_C_35_32(x) (REG_SCL_FBD_BASE(x) + 0x4c)
+#define REG_SCL_MAP_CONV_COMP_BASE_Y_35_32(x) (REG_SCL_FBD_BASE(x) + 0x54)
+#define REG_SCL_MAP_CONV_COMP_BASE_C_35_32(x) (REG_SCL_FBD_BASE(x) + 0x58)
 
 #endif  // _SCL_REG_H_

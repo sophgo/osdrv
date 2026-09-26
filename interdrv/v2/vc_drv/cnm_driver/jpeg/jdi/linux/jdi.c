@@ -9,7 +9,7 @@
 //
 // Description  :
 //-----------------------------------------------------------------------------
-#if defined(linux) || defined(__linux)
+#if defined(linux) || defined(__linux) || defined(ANDROID)
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -18,6 +18,7 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 
+#include "driver/jpu.h"
 #include "../jdi.h"
 #include "jpulog.h"
 #include "jpuapifunc.h"
@@ -31,15 +32,43 @@
 typedef void *  		MUTEX_HANDLE;
 #endif
 
-#define JDI_DRAM_PHYSICAL_BASE          0x00
-#define JDI_DRAM_PHYSICAL_SIZE          (4*1024*1024*1024)
-#define JDI_SYSTEM_ENDIAN               JDI_LITTLE_ENDIAN
-#define JDI_NUM_LOCK_HANDLES            4
+extern int jpu_get_register_info(int core_idx, jpudrv_buffer_t *arg);
+extern int jpu_reset(int core_idx);
+extern int jpu_wait_interrupt(jpudrv_intr_info_t *arg);
+extern int jpu_free_memory(jpudrv_buffer_t *arg);
+extern int jpu_alloc_memory(jpudrv_buffer_t *arg);
+extern int jpu_invalidate_cache(jpudrv_buffer_t *arg);
+extern int jpu_flush_cache(jpudrv_buffer_t *arg);
+extern int jpu_core_release_resource(int id);
+extern int jpu_core_request_resource(int timeout);
+extern int jpu_open_device(void);
+extern int jpu_get_instancepool(jpudrv_buffer_t* arg);
+extern int jpu_open_instance(jpudrv_inst_info_t *instInfo);
+extern int jpu_close_instance(jpudrv_inst_info_t *instInfo);
+extern int jpu_set_clock_gate(int core_idx, int *enable);
+extern uint32_t jpu_get_extension_address(int core_idx);
+extern void jpu_set_extension_address(int core_idx, uint32_t addr);
+extern void jpu_sw_top_reset(int core_idx);
+extern void jpu_lock(void);
+extern void jpu_unlock(void);
 
 static Uint32 jdi_core_stat_fps[MAX_NUM_JPU_CORE] = {0};
 static Uint64 jdi_core_stat_lastts[MAX_NUM_JPU_CORE] = {0};
 static int jpu_show_fps = 0;
 module_param(jpu_show_fps, uint, 0644);
+
+
+/***********************************************************************************
+*
+***********************************************************************************/
+#define JDI_DRAM_PHYSICAL_BASE          0x00
+#define JDI_DRAM_PHYSICAL_SIZE          (4*1024*1024*1024)
+#define JDI_SYSTEM_ENDIAN               JDI_LITTLE_ENDIAN
+#ifdef MEDIA_V3
+#define JDI_NUM_LOCK_HANDLES            3
+#else
+#define JDI_NUM_LOCK_HANDLES            4
+#endif
 
 typedef struct jpudrv_buffer_pool_t
 {
@@ -87,7 +116,7 @@ int jdi_get_task_num(void)
 
     jdi = s_jdi_info;
 
-    if (jdi == NULL || jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00) {
+    if (jdi->jpu_fd == -1 || jdi->jpu_fd == 0x00) {
         return 0;
     }
 
@@ -300,6 +329,76 @@ unsigned long jdi_read_register(int core_idx, unsigned long addr)
 
     // JLOG(INFO, "jdi_read_register core[%d] reg_addr:0x%x\n", core_idx, addr);
     return platform_read_register(addr + jdi->jdb_register[core_idx].phys_addr, (unsigned int *)(addr + jdi->jdb_register[core_idx].virt_addr));
+}
+
+void jdi_write_bbc_register_ext(int core_idx, int inst_idx, uint32_t addr, uint64_t data)
+{
+    uint32_t low_32bits;
+    uint8_t  high_8bits;
+    uint32_t high_val;
+    uint32_t shift;
+
+    low_32bits = (uint32_t)(data & 0xFFFFFFFF);
+    high_8bits = (uint8_t)((data >> 32) & 0xFF);
+
+    switch (addr) {
+        case MJPEG_BBC_BAS_ADDR_REG:
+            JpuWriteInstReg(core_idx, inst_idx, MJPEG_BBC_BAS_ADDR_REG, low_32bits);
+            JpuWriteInstReg(core_idx, inst_idx, MJPEG_BBC_HIG_BAS_ADDR_REG, (uint32_t)high_8bits);
+            return;
+        case MJPEG_BBC_EXT_ADDR_REG:
+            shift = 24;
+            break;
+        case MJPEG_BBC_RD_PTR_REG:
+            shift = 16;
+            break;
+        case MJPEG_BBC_WR_PTR_REG:
+            shift = 8;
+            break;
+        case MJPEG_BBC_END_ADDR_REG:
+            shift = 0;
+            break;
+        default:
+            JpuWriteInstReg(core_idx, inst_idx, addr, (uint32_t)data);
+            return;
+    }
+
+    high_val = JpuReadInstReg(core_idx, inst_idx, MJPEG_BBC_HIG_ADDR_REG);
+    high_val = (high_val & ~(0xFF << shift)) |
+                         ((uint32_t)(high_8bits << shift));
+    JpuWriteInstReg(core_idx, inst_idx, MJPEG_BBC_HIG_ADDR_REG, high_val);
+    JpuWriteInstReg(core_idx, inst_idx, addr, low_32bits);
+}
+
+uint64_t jdi_read_bbc_register_ext(int core_idx, int inst_idx, uint32_t addr)
+{
+    uint32_t low_32bits;
+    uint8_t  high_8bits;
+    uint32_t high_val;
+    uint32_t shift;
+
+    low_32bits = JpuReadInstReg(core_idx, inst_idx, addr);
+    switch (addr) {
+        case MJPEG_BBC_EXT_ADDR_REG:
+            shift = 24;
+            break;
+        case MJPEG_BBC_RD_PTR_REG:
+            shift = 16;
+            break;
+        case MJPEG_BBC_WR_PTR_REG:
+            shift = 8;
+            break;
+        case MJPEG_BBC_END_ADDR_REG:
+            shift = 0;
+            break;
+        default:
+            return (uint64_t)low_32bits;
+    }
+
+    high_val = JpuReadInstReg(core_idx, inst_idx, MJPEG_BBC_HIG_ADDR_REG);
+    high_8bits = (high_val >> shift) & 0xFF;
+
+    return (((uint64_t)(high_8bits << 32)) | (uint64_t)low_32bits);
 }
 
 size_t jdi_write_memory(unsigned long addr, unsigned char *data, size_t len, int endian)
@@ -622,7 +721,7 @@ int jdi_set_clock_gate(int core_idx, int enable)
         return -1;
 
     jdi->clock_state[core_idx] = enable;
-    ret = jpu_set_clock_gate(core_idx, &enable);
+    jpu_set_clock_gate(core_idx, &enable);
     return ret;
 }
 
@@ -673,7 +772,11 @@ int jdi_wait_inst_ctrl_busy(int core_idx, int timeout, unsigned int addr_flag_re
 
 static u64 jdi_get_current_time(void)
 {
-    return jpu_get_current_time();
+    struct timespec64 ts;
+
+    ktime_get_ts64(&ts);
+
+    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // in ms
 }
 
 
@@ -847,15 +950,7 @@ void jdi_release_core(int coreidx)
 
 int jdi_request_core(int timeout)
 {
-    int core_idx;
-
-    core_idx = jpu_core_request_resource(timeout);
-    if (core_idx >= 0) {
-        jpu_clear_stat_info(core_idx);
-        s_jpu_usage_info.jpu_laster_time[core_idx] = jdi_get_current_time();
-    }
-
-    return core_idx;
+    return jpu_core_request_resource(timeout);
 }
 
 void jpu_update_stat_cycles(int coreIdx, int hwCycles)

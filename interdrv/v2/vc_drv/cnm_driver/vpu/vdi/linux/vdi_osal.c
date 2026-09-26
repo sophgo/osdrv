@@ -344,49 +344,6 @@ int osal_sprintf (char * str, const char * format, ...)
     return ret;
 }
 
-long long strtoi(const char *str, int minus)
-{
-    long long num = 0;
-    int flag = minus ? -1 : 1;
-
-    while (*str != '\0') {
-        if (*str >= '0' && *str <= '9') {
-            num = num * 10 + flag * (*str - '0');
-            ++str;
-        } else {
-            break;
-        }
-    }
-
-    return num;
-}
-
-int osal_atoi(const char * str)
-{
-    int num = 0;
-    int minus = false;
-
-    if (str != NULL && *str != '\0') {
-        while (*str == ' ') {
-            ++str;
-            continue;
-        }
-
-        if (*str == '+') {
-            ++str;
-        } else if (*str == '-') {
-            ++str;
-            minus = true;
-        }
-
-        if (*str != '\0') {
-            num = strtoi(str, minus);
-        }
-    }
-
-    return num;
-}
-
 char * osal_strtok(char * str, const char * delimiters)
 {
     static char *rembmberLastString;

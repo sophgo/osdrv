@@ -847,13 +847,13 @@ static int kssp_input_task(void *arg)
 				unsigned char first_chunk = AUDIO_SSP_CHUNK_NUMBERS - cur_pt;
 				unsigned char second_chunk = target_input_cnt - first_chunk;
 
-				memcpy(cur_mic_in_addr, &test_bytes,
+				memset(cur_mic_in_addr, 0x01,
 					first_chunk * AUDIO_SSP_SINGLE_CHUNK_SIZE_BYTES);
-				memcpy(gstSspBufTblAddr.pmic_in_vir, &test_bytes,
+				memset(gstSspBufTblAddr.pmic_in_vir, 0x01,
 					second_chunk * AUDIO_SSP_SINGLE_CHUNK_SIZE_BYTES);
 			} else {
 				//buffer will not loop back, need only once copy
-				memcpy(cur_mic_in_addr, &test_bytes,
+				memset(cur_mic_in_addr, 0x01,
 					target_input_cnt * AUDIO_SSP_SINGLE_CHUNK_SIZE_BYTES);
 			}
 			//update indicator to occupy and update wpt

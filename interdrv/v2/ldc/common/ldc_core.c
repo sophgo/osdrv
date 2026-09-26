@@ -12,6 +12,7 @@
 #include <linux/interrupt.h>
 #include <linux/version.h>
 #include <linux/compat.h>
+#include <linux/sched.h>
 
 #include <linux/comm_video.h>
 #include <linux/ldc_uapi.h>
@@ -155,8 +156,8 @@ void ldc_enable_dev_clk(int coreid, bool en)
 
 static int ldc_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	struct ldc_vdev *wdev =
-		container_of(filp->private_data, struct ldc_vdev, miscdev);
+	struct ldc_file_ctx *ctx = filp->private_data;
+	struct ldc_vdev *wdev = ctx->wdev;
 	unsigned long vm_start = vma->vm_start;
 	unsigned int vm_size = vma->vm_end - vma->vm_start;
 	unsigned int offset = vma->vm_pgoff << PAGE_SHIFT;
@@ -179,10 +180,21 @@ static int ldc_mmap(struct file *filp, struct vm_area_struct *vma)
 	return 0;
 }
 
+static int ldc_check_job_owner(struct ldc_file_ctx *ctx, unsigned long long handle)
+{
+	if (!ldc_ctx_contains_job(ctx, handle)) {
+		TRACE_LDC(DBG_ERR, "job handle(0x%llx) not owned by process(%d)\n",
+			  handle, ctx->tgid);
+		return ERR_GDC_ILLEGAL_PARAM;
+	}
+
+	return 0;
+}
+
 static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	struct ldc_vdev *wdev =
-		container_of(filp->private_data, struct ldc_vdev, miscdev);
+	struct ldc_file_ctx *ctx = filp->private_data;
+	struct ldc_vdev *wdev = ctx->wdev;
 	char stack_kdata[128];
 	char *kdata = stack_kdata;
 	int ret = 0;
@@ -235,6 +247,8 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			CHECK_IOCTL_CMD(cmd, struct gdc_handle_data);
 
 			ret = ldc_begin_job(wdev, data);
+			if (!ret)
+				ret = ldc_ctx_bind_job(ctx, data->handle);
 			break;
 		}
 		case LDC_END_JOB: {
@@ -244,7 +258,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				      (unsigned long long)data->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_handle_data);
 
-			ret = ldc_end_job(wdev, data->handle);
+			ret = ldc_check_job_owner(ctx, data->handle);
+			if (!ret)
+				ret = ldc_end_job(wdev, data->handle);
 			break;
 		}
 		case LDC_CANCEL_JOB: {
@@ -254,7 +270,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				      (unsigned long long)data->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_handle_data);
 
-			ret = ldc_cancel_job(wdev, data->handle);
+			ret = ldc_check_job_owner(ctx, data->handle);
+			if (!ret)
+				ret = ldc_cancel_job(wdev, data->handle);
 			break;
 		}
 		case LDC_GET_WORK_JOB: {
@@ -274,7 +292,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				      (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_rotation_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_rotation_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_LDC_TASK: {
@@ -284,7 +304,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				      (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_ldc_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_ldc_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_COR_TASK: {
@@ -294,7 +316,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_cor_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_cor_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_WAR_TASK: {
@@ -304,7 +328,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_warp_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_warp_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_AFF_TASK: {
@@ -314,7 +340,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_affine_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_affine_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_LDC_LDC_TASK: {
@@ -324,7 +352,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_ldc_ldc_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_ldc_ldc_task(wdev, attr);
 			break;
 		}
 		case LDC_ADD_DWA_ROT_TASK: {
@@ -334,7 +364,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)attr->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_task_attr);
 
-			ret = ldc_add_dwa_rot_task(wdev, attr);
+			ret = ldc_check_job_owner(ctx, attr->handle);
+			if (!ret)
+				ret = ldc_add_dwa_rot_task(wdev, attr);
 			break;
 		}
 		case LDC_SET_JOB_IDENTITY: {
@@ -344,7 +376,9 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					  (unsigned long long)identity->handle);
 			CHECK_IOCTL_CMD(cmd, struct gdc_identity_attr);
 
-			ret = ldc_set_identity(wdev, identity);
+			ret = ldc_check_job_owner(ctx, identity->handle);
+			if (!ret)
+				ret = ldc_set_identity(wdev, identity);
 			break;
 		}
 		case LDC_GET_CHN_FRM: {
@@ -355,7 +389,7 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 			CHECK_IOCTL_CMD(cmd, struct gdc_chn_frm_cfg);
 
-			ret = ldc_get_chn_frame(wdev, identity, video_frame, milli_sec);
+			ret = ldc_get_chn_frame(wdev, ctx, identity, video_frame, milli_sec);
 			break;
 		}
 		// case LDC_SET_BUF_WRAP: {
@@ -383,17 +417,11 @@ static long ldc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		case LDC_SUSPEND: {
-			struct ldc_vdev *dev
-				= container_of(filp->private_data, struct ldc_vdev, miscdev);
-
-			ret = ldc_suspend(dev->miscdev.this_device);
+			ret = ldc_suspend(wdev->miscdev.this_device);
 			break;
 		}
 		case LDC_RESUME: {
-			struct ldc_vdev *dev
-				= container_of(filp->private_data, struct ldc_vdev, miscdev);
-
-			ret = ldc_resume(dev->miscdev.this_device);
+			ret = ldc_resume(wdev->miscdev.this_device);
 			break;
 		}
 		default:
@@ -416,6 +444,7 @@ static int ldc_open(struct inode *inode, struct file *filp)
 {
 	struct ldc_vdev *dev =
 		container_of(filp->private_data, struct ldc_vdev, miscdev);
+	struct ldc_file_ctx *ctx;
 	int i;
 
 	if (!dev) {
@@ -423,11 +452,17 @@ static int ldc_open(struct inode *inode, struct file *filp)
 		return -ENODEV;
 	}
 
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return -ENOMEM;
+
+	ctx->wdev = dev;
+	ctx->tgid = current->tgid;
+	INIT_LIST_HEAD(&ctx->job_handles);
+	filp->private_data = ctx;
+
 	i = atomic_inc_return(&ldc_open_count);
-	if (i > 1) {
-		pr_info("ldc_open: open %d times\n", i);
-		return 0;
-	}
+	pr_info("ldc_open: open %d times by process(%d)\n", i, ctx->tgid);
 
 	TRACE_LDC(DBG_INFO, "ldc_open\n");
 
@@ -436,20 +471,21 @@ static int ldc_open(struct inode *inode, struct file *filp)
 
 static int ldc_release(struct inode *inode, struct file *filp)
 {
-	struct ldc_vdev *dev
-		= container_of(filp->private_data, struct ldc_vdev, miscdev);
+	struct ldc_file_ctx *ctx = filp->private_data;
 	int i;
 
-	if (!dev) {
-		pr_err("Cannot find stitch private data\n");
+	if (!ctx) {
+		pr_err("cannot find ldc file context\n");
 		return -ENODEV;
 	}
 
+	ldc_file_ctx_release(ctx);
+
 	i = atomic_dec_return(&ldc_open_count);
-	if (i) {
-		pr_info("ldc_close: open %d times\n", i);
-		return 0;
-	}
+	pr_info("ldc_close: close %d times, process(%d)\n", i, ctx->tgid);
+
+	filp->private_data = NULL;
+	kfree(ctx);
 
 	TRACE_LDC(DBG_INFO, "ldc_release.\n");
 	return 0;

@@ -231,7 +231,7 @@ static int set_vdec_fps_toproc(vdec_chn VdChn, unsigned char bSendStream)
     return s32Ret;
 }
 
-int vdec_init_handle(void)
+static int vdec_init_handle(void)
 {
     int s32Ret = 0;
 
@@ -568,6 +568,9 @@ int drv_vdec_create_chn(vdec_chn VdChn, const vdec_chn_attr_s *pstAttr)
         pInitDecCfg->Ctable_buffer = pstAttr->stBufferInfo.Ctable_buffer;
         pInitDecCfg->numOfDecFbc = pstAttr->stBufferInfo.numOfDecFbc;
         pInitDecCfg->numOfDecwtl = pstAttr->stBufferInfo.numOfDecwtl;
+#ifdef MEDIA_V3
+        pInitDecCfg->mmuMode = pstAttr->u32MmuMode;
+#endif
 
         s32Ret = vdec_open(pInitDecCfg, &pChnHandle->pHandle);
         if (s32Ret != 0) {
@@ -679,6 +682,7 @@ int drv_vdec_set_chn_param(vdec_chn VdChn, const vdec_chn_param_s *pstParam)
         config.u.dec.iVerScaleMode = pstChnParam->stVdecPictureParam.u32VDownSampling;
         config.u.dec.iDataLen = pChnHandle->ChnAttr.u32StreamBufSize;
         config.s32ChnNum = pChnHandle->VdChn;
+        config.u.dec.frame_buffer_vb_pool = pChnHandle->bHasVbPool ? pChnHandle->vbPool.hPicVbPool : VB_INVALID_POOLID;
         /* Open JPU Devices */
         s32Ret = jpeg_dec_set_param(pChnHandle->pHandle, config);
         if (s32Ret != 0) {

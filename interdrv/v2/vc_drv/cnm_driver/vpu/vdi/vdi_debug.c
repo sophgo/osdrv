@@ -13,14 +13,10 @@
 #include "vdi_debug.h"
 #include "vdi_osal.h"
 #include "vpuapifunc.h"
+#include "vpu.h"
 #include "coda9/coda9_regdefine.h"
 #include "wave/wave5_regdefine.h"
 #include "wave/wave6_regdefine.h"
-
-extern void vpu_update_stat_cycles(int coreIdx, int hwCycles);
-extern void vpu_update_resolution(int coreIdx, int instance, int width, int height);
-
-extern void vpu_update_frame_status(int coreIdx, int instance, FrameStatus status, int frame_num);
 
 static Uint32 vdi_core_stat_fps[MAX_NUM_VPU_CORE] = {0};
 static Uint32 vdi_core_stat_fps_non_intra[MAX_NUM_VPU_CORE] = {0};

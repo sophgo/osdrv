@@ -58,6 +58,7 @@ long vpss_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		memset(kdata + in_size, 0, ksize - in_size);
 
 	switch (cmd) {
+#ifndef CV84X6
 	case VPSS_CREATE_GROUP:
 	{
 		struct vpss_crt_grp_cfg *cfg =
@@ -679,6 +680,7 @@ long vpss_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		vfree(input);
 		break;
 	}
+#endif
 
 	case VPSS_BM_SEND_FRAME:
 	{

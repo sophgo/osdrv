@@ -220,19 +220,24 @@ static void __maybe_unused _audio_clock_f(hdmi_tx_dev_t *dev, u8 value)
 	dev_write_mask(AUD_INPUTCLKFS, AUD_INPUTCLKFS_IFSFACTOR_MASK, value);
 }
 
-static void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
+void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
 {
 	int dma_channel = 0;
 	u32 high_bit;
 
-	pr_debug("start_addr:%llx, stop_addr:%llx\n", audio->start_addr, audio->stop_addr);
 	dma_channel = audio_channel_count(dev, audio) + 1;
 
 	dev_write_mask(AHB_DMA_STOP, 0x1, 0x1);
 	high_bit = audio->start_addr >> 32;
 	extern_axi_to_36bit(high_bit);
 
-	dev_write(IH_AHBDMAAUD_STAT0, 0x0);
+	/* Clear AHBDMA interrupt status: W1C (write-1-to-clear). Writing 0 does NOT clear.
+	 * Must read and write back the bits to clear, else stale INTDONE fires immediately after unmask.
+	 */
+	{
+		u8 stat = dev_read(IH_AHBDMAAUD_STAT0);
+		dev_write(IH_AHBDMAAUD_STAT0, stat);
+	}
 	dev_write_mask(AHB_DMA_CONF0, ENABLE_HLOCK_MASK, 0x1);      //enable_hlock
 	dev_write_mask(AHB_DMA_CONF0, INSERT_PCUV_MASK, 0x1);       //insert PCUV
 	dev_write_mask(AHB_DMA_CONF0, SELECT_BURST_TYPE_MASK, 0x0); //Select the desired burst type
@@ -252,8 +257,13 @@ static void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio)
 	dev_write(AHB_DMA_CONF2, 0x3);  // loop config
 #endif
 
-	dev_write_mask(AHB_DMA_START, AHB_DMA_START_MASK, 0x1);     //Order the AHB DMA to start reading
+	/* 🔧 Enable DMA interrupts before starting DMA 
+	 * irq_mask_all() called in probe has masked these interrupts
+	 */
+	dev_write(AHB_DMA_MASK, 0x00);              // Clear all DMA interrupt masks (bit7=done_mask)
+	dev_write(IH_MUTE_AHBDMAAUD_STAT0, 0x00);   // Unmute all AHBDMA interrupts
 
+	dev_write_mask(AHB_DMA_START, AHB_DMA_START_MASK, 0x1);     //Order the AHB DMA to start reading
 }
 /**********************************************
  * External functions

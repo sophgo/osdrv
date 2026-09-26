@@ -424,6 +424,11 @@ static int jpege_ioctl(void *ctx, int op, void *arg)
         return 0;
     }
 
+    if (!pEncCtx->ext.jpeg.handle) {
+        DRV_VENC_ERR("jpeg handle is NULL, currOp = 0x%X\n", currOp);
+        return -EINVAL;
+    }
+
     status = jpeg_ioctl(pEncCtx->ext.jpeg.handle, currOp, arg);
     if (status != 0) {
         DRV_VENC_ERR("jpeg_ioctl, currOp = 0x%X, status = %d\n",
@@ -514,7 +519,9 @@ static int vid_enc_open(void *handle, void *pchnctx)
 
     if (pEncCtx->ext.vid.setInitCfgRc)
         pEncCtx->ext.vid.setInitCfgRc(pInitEncCfg, pChnHandle);
-
+#ifdef MEDIA_V3
+    pInitEncCfg->mmuMode = pChnAttr->stVencAttr.u32MmuMode;
+#endif
 
     pEncCtx->ext.vid.pHandle = internal_venc_open(pInitEncCfg);
     if (!pEncCtx->ext.vid.pHandle) {
@@ -697,6 +704,7 @@ static int h264e_map_nalu_type(venc_pack_s *ppack, int NalType)
     }
 
     DRV_VENC_DBG("enH264EType = %d\n", ppack->DataType.enH264EType);
+
     return 0;
 }
 
@@ -877,11 +885,15 @@ static int vid_enc_close(void *ctx)
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
 
     if (pEncCtx->ext.vid.pHandle) {
+        DRV_VENC_INFO("vid_enc_close: pHandle=%px, close\n", pEncCtx->ext.vid.pHandle);
         status = internal_venc_close(pEncCtx->ext.vid.pHandle);
+        pEncCtx->ext.vid.pHandle = NULL;
         if (status < 0) {
             DRV_VENC_ERR("venc_close, status = %d\n", status);
             return status;
         }
+    } else {
+        DRV_VENC_WARN("vid_enc_close: pHandle already NULL\n");
     }
     pEncCtx->ext.vid.pHandle = NULL;
     return status;
@@ -895,7 +907,7 @@ static int vid_enc_enc_one_pic(void *ctx,
 {
     int status = 0;
     venc_enc_ctx *pEncCtx = (venc_enc_ctx *)ctx;
-    EncOnePicCfg encOnePicCfg;
+    EncOnePicCfg encOnePicCfg = {0};
     unsigned char mtable[MO_TBL_SIZE];
     EncOnePicCfg *pPicCfg = &encOnePicCfg;
     DRVFRAMEBUF srcInfo, *psi = &srcInfo;
@@ -941,6 +953,11 @@ static int vid_enc_enc_one_pic(void *ctx,
         pPicCfg->picMotionMap = mtable;
     }
 
+    if (pEncCtx->ext.vid.pHandle == NULL) {
+        DRV_VENC_ERR("internal_venc_enc_one_pic with NULL handle\n");
+        return DRV_ERR_VENC_NULL_PTR;
+    }
+
     status = internal_venc_enc_one_pic(pEncCtx->ext.vid.pHandle, pPicCfg,
                   s32MilliSec);
 
@@ -964,6 +981,11 @@ static int vid_enc_get_stream(void *ctx, venc_stream_s *pstStream,
     unsigned int idx = 0;
     int totalPacks = 0;
     unsigned int encHwTimeus = 0;
+
+    if (pEncCtx->ext.vid.pHandle == NULL) {
+        DRV_VENC_ERR("internal_venc_get_stream with NULL handle\n");
+        return DRV_ERR_VENC_NULL_PTR;
+    }
 
     status = internal_venc_get_stream(pEncCtx->ext.vid.pHandle, pStreamInfo,
                   s32MilliSec);
@@ -1017,6 +1039,9 @@ static int vid_enc_get_stream(void *ctx, venc_stream_s *pstStream,
         ppack->releasFrameIdx = pqpacks->encSrcIdx;
         ppack->u64CustomMapPhyAddr = pqpacks->u64CustomMapAddr;
         ppack->u32AvgCtuQp = pqpacks->u32AvgCtuQp;
+#ifdef MEDIA_V3
+        ppack->u64RealPhyAddr = pqpacks->mmuInfo.u64RealPhyAddr;
+#endif
         encHwTimeus = pqpacks->u32EncHwTime;
         status = pEncCtx->ext.vid.mapNaluType(
             ppack, pqpacks->NalType);
@@ -1063,6 +1088,12 @@ static int vid_enc_release_stream(void *ctx, venc_stream_s *pstStream)
         }
     }
 
+    if (pEncCtx->ext.vid.pHandle == NULL) {
+        DRV_VENC_ERR("internal_venc_release_stream with NULL handle\n");
+        vfree(vencPack);
+        return DRV_ERR_VENC_NULL_PTR;
+    }
+
     status = internal_venc_release_stream(pEncCtx->ext.vid.pHandle, vencPack, pstStream->u32PackCount);
     if (status != 0) {
         DRV_VENC_ERR("internal_venc_release_stream, status = %d\n", status);
@@ -1084,6 +1115,11 @@ static int vid_enc_ioctl(void *ctx, int op, void *arg)
     if (currOp == 0) {
         DRV_VENC_WARN("op = 0x%X, currOp = 0x%X\n", op, currOp);
         return 0;
+    }
+
+    if (!pEncCtx->ext.vid.pHandle) {
+        DRV_VENC_ERR("pHandle is NULL, currOp = 0x%X\n", currOp);
+        return -EINVAL;
     }
 
     status = internal_venc_ioctl(pEncCtx->ext.vid.pHandle, currOp, arg);

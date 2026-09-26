@@ -2,7 +2,7 @@ arch_cvitek_chip := $(patsubst "%",%,$(CHIP_ARCH_L))
 
 SPACC_PATH = $(arch_cvitek_chip)
 
-$(arch_cvitek_chip)_spacc-objs = $(SPACC_PATH)/$(arch_cvitek_chip)_spacc.o
+$(arch_cvitek_chip)_spacc-objs = $(SPACC_PATH)/spacc.o
 
 obj-m += $(arch_cvitek_chip)_spacc.o
 

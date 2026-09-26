@@ -9,5 +9,9 @@ int32_t base_ion_cache_invalidate(uint64_t addr_p, void *addr_v, uint32_t len);
 int32_t base_ion_cache_flush(uint64_t addr_p, void *addr_v, uint32_t len);
 int32_t base_ion_dump(void);
 
+#ifdef __KERNEL__
+void base_ion_cleanup_tgid(pid_t tgid);
+#endif
+
 
 #endif

@@ -16,7 +16,6 @@
 #include "venc.h"
 #include "vdec.h"
 
-//#include "vpuconfig.h"
 #include "vc_drv_proc.h"
 
 extern venc_context *handle;

@@ -65,6 +65,7 @@ struct vpss_core {
 	struct clk *clk_vpss;
 	struct timespec64 ts_start;
 	struct timespec64 ts_end;
+	u16 fps;
 	u32 hw_duration;
 	u32 hw_duration_total;
 	u32 duty_ratio;
@@ -77,6 +78,11 @@ struct vpss_core {
 	u32 start_cnt;
 	u32 int_cnt;
 	u16 timeout_cnt;
+#ifdef CV84X6
+	u32 sysc_cap_st_val;
+	u32 sysc_cap_end_val;
+	u32 sysc_cap_dur_val[1000];
+#endif
 	void *job;
 };
 

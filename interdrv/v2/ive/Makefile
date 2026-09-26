@@ -15,10 +15,14 @@ ccflags-y += -I$(src)/common -I$(src)/hal/$(CVIARCH_L) -I$(src)/hal/$(CVIARCH_L)
 ccflags-y += -I$(PWD)/../base/ -I$(srctree)/drivers/staging/android
 ccflags-y += -I$(PWD)/../base/chip/$(CVIARCH_L)
 
-ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
+ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare -Wno-missing-prototypes
 
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../base/Module.symvers
+# CV84X6 (bm1684x2) defines MEDIA_V3 for IVE extended API compatibility
+ifeq ($(CHIP), cv84x6)
+ccflags-y += -DMEDIA_V3
+endif
 
 else
 all:

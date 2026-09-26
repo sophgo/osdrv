@@ -226,6 +226,9 @@ int vi_sdk_qbuf(mmf_chn_s chn, void *data)
 			   , vb_handle2phys_addr(blk)
 			   , DEFAULT_ALIGN);
 
+	((struct vb_s *)blk)->buf.stride[0] = VI_ALIGN(size.width);
+	((struct vb_s *)blk)->buf.stride[1] = VI_ALIGN(size.width);
+
 	((struct vb_s *)blk)->buf.offset_top = 0;
 	((struct vb_s *)blk)->buf.offset_right = size.width - g_vi_ctx->chn_attr[buf_chn].size.width;
 	((struct vb_s *)blk)->buf.offset_left = 0;

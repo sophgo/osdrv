@@ -13,8 +13,23 @@
 #include "wave/wave5.h"
 #include "wave/wave5_regdefine.h"
 #include <linux/dma-mapping.h>
+#include <linux/moduleparam.h>
 #include "vdi_debug.h"
 #include "platform.h"
+
+/* Tunable flag: force the decoder task buffer to a single VLC buffer per instance.
+ * 0        = stock heuristic (solo core => 2 or VLC_BUF_NUM * vlcBufSize, shared core =>
+ *            1 * vlcBufSize), byte-equivalent with the original driver (default).
+ * non-zero = every instance uses 1 * vlcBufSize regardless of vdi_get_task_num(). This
+ *            reclaims the per-core task-buffer over-allocation on multi-instance
+ *            workloads (aggregate throughput unchanged); a truly single channel then
+ *            runs at lower throughput.
+ * Read at framebuffer register time, so a value written via
+ * /sys/module/soph_vc_drv/parameters/vlc_cnt takes effect on the next channel without
+ * reloading the ko. */
+static uint vlc_cnt = 0;
+module_param(vlc_cnt, uint, 0644);
+MODULE_PARM_DESC(vlc_cnt, "force decoder task buf to a single VLC buffer per instance: 0=stock heuristic (default, byte-equivalent), non-zero=always 1 VLC buffer");
 
 Uint32 Wave5VpuIsInit(Uint32 coreIdx)
 {
@@ -222,6 +237,10 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
         return RETCODE_INSUFFICIENT_RESOURCE;
     }
 
+#if defined(MEDIA_V3)
+    originValue = vdi_read_top_register(coreIdx, TOP_ADDR_EXT);
+    vdi_write_top_register(coreIdx, TOP_ADDR_EXT, (codeBase>>32) | originValue);
+#else
     if (coreIdx == 0) {
         unsigned int *reg_addr = platform_ioremap(VE_TOP_EXT_ADDR, 4);
         originValue = platform_readl(VE_TOP_EXT_ADDR, reg_addr);
@@ -232,6 +251,7 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
         vdi_fio_write_register(coreIdx, 0x8EC0, codeBase>>32);
         vdi_fio_write_register(coreIdx, 0x8EC4, codeBase>>32);
     }
+#endif
 
     tempBase = vb.phys_addr + WAVE5_TEMPBUF_OFFSET;
     tempSize = WAVE5_TEMPBUF_SIZE;
@@ -316,6 +336,7 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     VpuWriteReg(coreIdx, W5_VPU_BUSY_STATUS,      1);
     VpuWriteReg(coreIdx, W5_COMMAND,              W5_INIT_VPU);
     VpuWriteReg(coreIdx, W5_VPU_REMAP_CORE_START, 1);
+    VLOG(TRACE, "try vdi_wait_vpu_busy\n");
     if (vdi_wait_vpu_busy(coreIdx, __VPU_BUSY_TIMEOUT, W5_VPU_BUSY_STATUS) == -1) {
         vdi_hw_reset(coreIdx);
         VLOG(INFO, "VPU init(W5_VPU_REMAP_CORE_START) timeout\n");
@@ -325,9 +346,10 @@ RetCode Wave5VpuInit(Uint32 coreIdx, void* firmware, Uint32 size)
     regVal = VpuReadReg(coreIdx, W5_RET_SUCCESS);
     if (regVal == 0) {
         Uint32 reasonCode = VpuReadReg(coreIdx, W5_RET_FAIL_REASON);
-        VLOG(INFO, "VPU init(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
+        VLOG(ERR, "VPU init(W5_RET_SUCCESS) failed(%d) REASON CODE(%08x)\n", regVal, reasonCode);
         return RETCODE_FAILURE;
     }
+    VLOG(INFO, "VPU INIT END\n");
 
     ret = SetupWave5Properties(coreIdx);
     return ret;
@@ -684,6 +706,7 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
     Uint32       endian, yuvFormat = 0;
     Uint32       addrY, addrCb, addrCr;
     Uint32       mvColSize, fbcYTblSize, fbcCTblSize;
+    Uint32       vlcNum = 1;
     vpu_buffer_t vbBuffer;
     Uint32       colorFormat  = 0;
     Uint32       initPicWidth = 0, initPicHeight = 0;
@@ -808,11 +831,15 @@ RetCode Wave5VpuDecRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Tile
         }
         picSize = (initPicWidth<<16)|(initPicHeight);
 
-        // Allocate TaskBuffer
-        if (pDecInfo->openParam.cmdQueueDepth == 1)
-            vbBuffer.size       = (Uint32)((pDecInfo->vlcBufSize * 2) + (pDecInfo->paramBufSize * pDecInfo->openParam.cmdQueueDepth));
+        // Allocate TaskBuffer: paramBufSize * cmdQueueDepth is fixed; only the VLC buffer
+        // count varies. Stock heuristic gives a solo core deeper VLC pipelining
+        // (2 or VLC_BUF_NUM); a shared core (task_num > 1) uses a single VLC buffer.
+        // The vlc_cnt flag forces the single-VLC-buffer path for every instance.
+        if (!vlc_cnt && vdi_get_task_num(inst->coreIdx) <= 1)
+            vlcNum = (pDecInfo->openParam.cmdQueueDepth == 1) ? 2 : VLC_BUF_NUM;
         else
-            vbBuffer.size       = (Uint32)((pDecInfo->vlcBufSize * VLC_BUF_NUM) + (pDecInfo->paramBufSize * pDecInfo->openParam.cmdQueueDepth));
+            vlcNum = 1;
+        vbBuffer.size = (Uint32)((pDecInfo->vlcBufSize * vlcNum) + (pDecInfo->paramBufSize * pDecInfo->openParam.cmdQueueDepth));
         vbBuffer.phys_addr  = 0;
         if (vdi_allocate_dma_memory(inst->coreIdx, &vbBuffer, "DEC_TASK", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
@@ -1449,6 +1476,10 @@ RetCode Wave5VpuReInit(Uint32 coreIdx, void* firmware, Uint32 size)
     if (vdi_get_instance_num(coreIdx) == 0) {
         Uint32 hwOption = 0;
 
+#if defined(MEDIA_V3)
+        originValue = vdi_read_top_register(coreIdx, TOP_ADDR_EXT);
+        vdi_write_top_register(coreIdx, TOP_ADDR_EXT, (codeBase>>32) | originValue);
+#else
         if (coreIdx == 0) {
             unsigned int *reg_addr = platform_ioremap(VE_TOP_EXT_ADDR, 4);
             originValue = platform_readl(VE_TOP_EXT_ADDR, reg_addr);
@@ -1459,7 +1490,7 @@ RetCode Wave5VpuReInit(Uint32 coreIdx, void* firmware, Uint32 size)
             vdi_fio_write_register(coreIdx, 0x8EC0, codeBase>>32);
             vdi_fio_write_register(coreIdx, 0x8EC4, codeBase>>32);
         }
-
+#endif
         VpuWriteMem(coreIdx, codeBase, (unsigned char*)firmware, size*2, VDI_128BIT_LITTLE_ENDIAN);
         vdi_set_bit_firmware_to_pm(coreIdx, (Uint16*)firmware);
 
@@ -2762,6 +2793,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
         if (vdi_allocate_dma_memory(inst->coreIdx, &vbMV, "ENC_MV", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
+        vdi_clear_memory(inst->coreIdx, vbMV.phys_addr, vbMV.size, 0);
         pEncInfo->vbMV[idx] = vbMV;
     }
 
@@ -2800,6 +2832,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
         if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcYTbl, "ENC_FBCY_TBL", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
+        vdi_clear_memory(inst->coreIdx, vbFbcYTbl.phys_addr, vbFbcYTbl.size, 0);
         pEncInfo->vbFbcYTbl[idx] = vbFbcYTbl;
     }
 
@@ -2838,6 +2871,7 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
         if (vdi_allocate_dma_memory(inst->coreIdx, &vbFbcCTbl, "ENC_FBCC_TBL", inst->instIndex) < 0)
             return RETCODE_INSUFFICIENT_RESOURCE;
 
+        vdi_clear_memory(inst->coreIdx, vbFbcCTbl.phys_addr, vbFbcCTbl.size, 0);
         pEncInfo->vbFbcCTbl[idx] = vbFbcCTbl;
     }
 
@@ -2852,12 +2886,18 @@ RetCode Wave5VpuEncRegisterFramebuffer(CodecInst* inst, FrameBuffer* fbArr, Uint
     if (vdi_allocate_dma_memory(coreIdx, &vbSubSamBuf, "ENC_SUBSAMBUF", inst->instIndex) < 0)
         return RETCODE_INSUFFICIENT_RESOURCE;
 
+    vdi_clear_memory(coreIdx, vbSubSamBuf.phys_addr, vbSubSamBuf.size, 0);
     pEncInfo->vbSubSamBuf[0]   = vbSubSamBuf;
 
-    if (pOpenParam->cmdQueueDepth == 1)
-        vbTask.size      = (Uint32)((pEncInfo->vlcBufSize * 2) + (pEncInfo->paramBufSize * pOpenParam->cmdQueueDepth));
-    else
-        vbTask.size      = (Uint32)((pEncInfo->vlcBufSize * VLC_BUF_NUM) + (pEncInfo->paramBufSize * pOpenParam->cmdQueueDepth));
+    if(vdi_get_task_num(coreIdx) <= 1) {
+        if (pOpenParam->cmdQueueDepth == 1)
+            vbTask.size      = (Uint32)((pEncInfo->vlcBufSize * 2) + (pEncInfo->paramBufSize * pOpenParam->cmdQueueDepth));
+        else
+            vbTask.size      = (Uint32)((pEncInfo->vlcBufSize * VLC_BUF_NUM) + (pEncInfo->paramBufSize * pOpenParam->cmdQueueDepth));
+    }
+    else {
+        vbTask.size       = (Uint32)(pEncInfo->vlcBufSize + (pEncInfo->paramBufSize * pEncInfo->openParam.cmdQueueDepth));
+    }
     vbTask.phys_addr = 0;
     if (pEncInfo->vbTask.size == 0) {
         if (vdi_allocate_dma_memory(coreIdx, &vbTask, "ENC_TASK", inst->instIndex) < 0)
@@ -3650,7 +3690,7 @@ RetCode Wave5VpuEncGetSrcBufFlag(CodecInst* instance, Uint32* flag) {
     return RETCODE_SUCCESS;
 }
 
-RetCode Wave5VpuEncCheckCommonParamValid(EncOpenParam* pop)
+static RetCode Wave5VpuEncCheckCommonParamValid(EncOpenParam* pop)
 {
     RetCode ret = RETCODE_SUCCESS;
     Int32   low_delay = 0, i = 0;
@@ -3855,7 +3895,7 @@ RetCode Wave5VpuEncCheckCommonParamValid(EncOpenParam* pop)
     return ret;
 }
 
-RetCode Wave5VpuEncCheckRcParamValid(EncOpenParam* pop)
+static RetCode Wave5VpuEncCheckRcParamValid(EncOpenParam* pop)
 {
     RetCode       ret = RETCODE_SUCCESS;
     EncWave5Param* param = &pop->EncStdParam.waveParam;
@@ -3885,7 +3925,7 @@ RetCode Wave5VpuEncCheckRcParamValid(EncOpenParam* pop)
     return ret;
 }
 
-RetCode Wave5VpuEncCheckCustomGopParamValid(EncOpenParam* pop)
+static RetCode Wave5VpuEncCheckCustomGopParamValid(EncOpenParam* pop)
 {
     RetCode       ret = RETCODE_SUCCESS;
     CustomGopParam* gopParam;

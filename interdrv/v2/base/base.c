@@ -84,6 +84,7 @@ static int base_release(struct inode *inode, struct file *filp)
 		return 0;
 	}
 	vb_release();
+	base_ion_cleanup_tgid(current->tgid);
 	bind_deinit();
 	TRACE_BASE(DBG_DEBUG, "base release ok\n");
 

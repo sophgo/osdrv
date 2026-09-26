@@ -16,8 +16,8 @@
 #include <linux/semaphore.h>
 #include <linux/clk.h>
 #include "ive_core_res.h"
-
-
+#include <linux/kthread.h>
+#include <linux/delay.h>
 
 #define MAX_TILES 9
 #define IVE_DEV_MAX 2
@@ -131,6 +131,14 @@ struct ive_profiling_info {
 	uint32_t time_vld_diff_us[MAX_TILES];
 	uint32_t time_tile_diff_us;
 };
+
+struct ive_handler_ctx {
+    wait_queue_head_t wait;      // Wait queue for waking up threads
+    volatile int evt;            // Event flag
+    struct ive_device *ndev;     // Device pointer
+    int dev_id;                  // Core ID
+};
+
 typedef void (*ive_timer_cb)(void *data);
 void start_vld_time(int optype, struct ive_dev_core *core);
 void stop_vld_time(int optype, int tile_num, struct ive_dev_core *core);

@@ -23,6 +23,9 @@
 #include "venc_rc.h"
 #include "platform.h"
 #include "cdma.h"
+#if defined(MEDIA_V3)
+#include "mmu.h"
+#endif
 
 extern wait_queue_head_t *tVencWaitQueue;
 static DEFINE_MUTEX(__venc_init_mutex);
@@ -34,6 +37,7 @@ static DEFINE_MUTEX(__venc_init_mutex);
 #define MAX_HEADER_RETRY 100  // max retries for ENC_PUT_VIDEO_HEADER queueing
 
 #define VENC_HEADER_BUF_SIZE (1024*1024)
+#define VENC_HEADER_VB_NUM   8
 #define VENC_DEFAULT_BISTREAM_SIZE (4*1024*1024)
 #define VENC_BUFF_FULL_EXTERN_SIZE (1024*1024)
 
@@ -124,6 +128,14 @@ typedef struct encoder_handle
     int frame_idx;
     int header_encoded;
     PhysicalAddress bitstream_buffer[MAX_SRC_BUFFER_NUM];
+#ifdef MEDIA_V3
+    vpu_buffer_t bitstream_vb[MAX_SRC_BUFFER_NUM];
+    vpu_buffer_t header_vb_buffer;
+    vpu_buffer_t header_vb_tbl[VENC_HEADER_VB_NUM];
+    // source-frame MMU mappings keyed by src_idx, plane [0]=Y [1]=Cb [2]=Cr;
+    // freed in release_frame_idx once the VPU is done reading the source frame.
+    vpu_buffer_t src_frame_vb[MAX_SRC_BUFFER_NUM][3];
+#endif
     void *thread_handle;
     int stop_thread;
     Queue *free_stream_buffer;
@@ -168,6 +180,54 @@ typedef struct encoder_handle
     FrameBuffer *framebuf_list;
 } ENCODER_HANDLE;
 
+#ifdef MEDIA_V3
+// header MMU metadata table: persists across user-space round-trip (venc_pack_s
+// does not carry mmuInfo back), so release_stream can rebuild vpu_buffer_t by phys_addr.
+static int venc_header_vb_tbl_find(ENCODER_HANDLE *h, PhysicalAddress phys)
+{
+    int i;
+    for (i = 0; i < VENC_HEADER_VB_NUM; i++) {
+        if (h->header_vb_tbl[i].phys_addr == phys)
+            return i;
+    }
+    return -1;
+}
+
+static void venc_header_vb_tbl_insert(ENCODER_HANDLE *h, vpu_buffer_t *vb)
+{
+    int i;
+    for (i = 0; i < VENC_HEADER_VB_NUM; i++) {
+        if (h->header_vb_tbl[i].phys_addr == 0) {
+            h->header_vb_tbl[i] = *vb;
+            return;
+        }
+    }
+    VLOG(ERR, "header_vb_tbl full, cannot track hw=0x%x\n", vb->phys_addr);
+}
+
+static void venc_header_vb_tbl_clear(ENCODER_HANDLE *h, PhysicalAddress phys)
+{
+    int i;
+    for (i = 0; i < VENC_HEADER_VB_NUM; i++) {
+        if (h->header_vb_tbl[i].phys_addr == phys) {
+            memset(&h->header_vb_tbl[i], 0, sizeof(vpu_buffer_t));
+            return;
+        }
+    }
+}
+#endif
+
+static PhysicalAddress venc_hw2phys(unsigned long core_idx, PhysicalAddress hw_addr)
+{
+#ifdef MEDIA_V3
+    PhysicalAddress pa = hw_addr;
+    mmu_get_phys_addr(core_idx, hw_addr, &pa);
+    return pa;
+#else
+    return hw_addr;
+#endif
+}
+
 static int get_vpu_rcmode(int cvi_rcmode)
 {
     int host_rcmode = VENC_RC_CNM;
@@ -207,7 +267,7 @@ static int get_avc_profile(int profile)
     return vpu_avc_profile;
 }
 
-void set_open_param(EncOpenParam *pst_open_param, InitEncConfig *pst_init_cfg)
+static void set_open_param(EncOpenParam *pst_open_param, InitEncConfig *pst_init_cfg)
 {
     EncWave5Param *param = &pst_open_param->EncStdParam.waveParam;
     int frameRateDiv = 0, frameRateRes = 0;
@@ -470,6 +530,83 @@ void set_open_param(EncOpenParam *pst_open_param, InitEncConfig *pst_init_cfg)
     param->disableDeblk = 0;
 }
 
+#ifdef MEDIA_V3
+// MMU FORCE mode: every address the VPU issues (including the source frame it
+// reads) goes through the MMU entry table, so the user's raw source phys addr
+// must be mapped. Source frames come from a small fixed pool that is reused
+// cyclically, so we map each plane ONCE (keyed by its real phys addr) and cache
+// the mapping in src_frame_vb[src_idx][plane]. Re-mapping every frame fragments
+// the MMU free-block list and eventually fails with "Can't get mmu free block",
+// corrupting the frame the VPU then reads. Mappings live until the channel is
+// torn down (venc_unmap_src_frame in the close path).
+static void venc_map_src_plane(ENCODER_HANDLE *pst_handle, vpu_buffer_t *vb,
+                               PhysicalAddress *pbuf, int size,
+                               const char *tag, int src_idx)
+{
+    PhysicalAddress real = *pbuf;
+
+    if (real == 0)
+        return;
+
+    /* Source frame is produced by the CPU into a CACHED buffer; the non-coherent
+     * VPU reads it through the MMU straight from DDR. Clean the CPU cache to DDR
+     * EVERY frame (the buffer is rewritten each frame) or the VPU encodes stale
+     * pixels -> corrupted output. Flush by physical (PIPT) so it covers whatever
+     * mapping the producer used. */
+    vdi_flush_ion_cache(real, (void *)phys_to_virt(real), size);
+
+    // cache hit: this plane's real phys addr is already mapped -> reuse vpu addr
+    if (vb->mmu_entry_num > 0 && vb->phys_addr_36bit == real) {
+        *pbuf = vb->phys_addr;
+        return;
+    }
+
+    // stale mapping for a different phys addr (pool slot re-allocated) -> drop it
+    if (vb->mmu_entry_num > 0)
+        mmu_free_virt_addr(pst_handle->core_idx, vb);
+
+    memset(vb, 0, sizeof(*vb));
+    vb->phys_addr = real;
+    vb->size = size;
+    if (mmu_alloc_virt_addr(pst_handle->core_idx, vb) == 0)
+        *pbuf = vb->phys_addr;
+}
+
+static void venc_map_src_frame(ENCODER_HANDLE *pst_handle, int src_idx, FrameBuffer *pst_fb)
+{
+    int y_size = pst_fb->stride * pst_fb->height;
+    int c_size = pst_fb->cbcrInterleave ? (y_size / 2) : (y_size / 4);
+
+    if (src_idx < 0 || src_idx >= MAX_SRC_BUFFER_NUM)
+        return;
+
+    venc_map_src_plane(pst_handle, &pst_handle->src_frame_vb[src_idx][0],
+                       &pst_fb->bufY, y_size, "Y", src_idx);
+    venc_map_src_plane(pst_handle, &pst_handle->src_frame_vb[src_idx][1],
+                       &pst_fb->bufCb, c_size, "Cb", src_idx);
+    if (!pst_fb->cbcrInterleave)
+        venc_map_src_plane(pst_handle, &pst_handle->src_frame_vb[src_idx][2],
+                           &pst_fb->bufCr, c_size, "Cr", src_idx);
+}
+
+static void venc_unmap_src_frame(ENCODER_HANDLE *pst_handle, int src_idx)
+{
+    int p;
+    vpu_buffer_t *vb;
+
+    if (src_idx < 0 || src_idx >= MAX_SRC_BUFFER_NUM)
+        return;
+
+    for (p = 0; p < 3; p++) {
+        vb = &pst_handle->src_frame_vb[src_idx][p];
+        if (vb->mmu_entry_num > 0) {
+            mmu_free_virt_addr(pst_handle->core_idx, vb);
+            memset(vb, 0, sizeof(*vb));
+        }
+    }
+}
+#endif
+
 static int get_frame_idx(void * handle, PhysicalAddress addr)
 {
     int idx;
@@ -502,10 +639,13 @@ static void release_frame_idx(void * handle, int srcIdx)
     }
 
     VLOG(INFO, "release srcIdx:%d\n", srcIdx);
+    // NOTE: source-frame MMU mappings are NOT freed here. They are cached and
+    // reused across frames (see venc_map_src_frame) and only torn down when the
+    // channel closes. Freeing per-frame fragments the MMU free-block list.
     pst_handle->input_frame[srcIdx].buffer_addr = 0;
 }
 
-static int  alloc_framebuffer(void * handle)
+static int  alloc_framebuffer(void * handle, int min_recon_frame_count)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -547,27 +687,46 @@ static int  alloc_framebuffer(void * handle)
     }
     vdi_update_resolution(pst_handle->core_idx, pst_handle->handle->instIndex, pst_open_param->picWidth, pst_open_param->picHeight);
 
-    pst_handle->pst_frame_buffer = (FrameBuffer *)vzalloc(pst_handle->min_recon_frame_count * sizeof(FrameBuffer));
+    pst_handle->pst_frame_buffer = (FrameBuffer *)vzalloc(min_recon_frame_count * sizeof(FrameBuffer));
+    if (pst_handle->pst_frame_buffer == NULL) {
+        VLOG(ERR, "Failed to allocate pst_frame_buffer (count:%d)\n", min_recon_frame_count);
+        return RETCODE_FAILURE;
+    }
+
     stride = VPU_GetFrameBufStride(pst_handle->handle, fbWidth, fbHeight,
         FORMAT_420, 0, map_type);
     frame_size = VPU_GetFrameBufSize(pst_handle->handle, pst_handle->core_idx, stride,
         fbHeight, map_type, FORMAT_420, 0, NULL);
     vb_buffer.size = frame_size;
 
-    for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
+    for (i = 0; i < min_recon_frame_count; i++) {
         ret = vdi_allocate_dma_memory(pst_handle->core_idx, &vb_buffer, "ENC_RECON_BUF", 0);
-        if(ret != RETCODE_SUCCESS) {
+        if (ret != RETCODE_SUCCESS) {
+            VLOG(ERR, "Failed to alloc recon dma buf[%d], rolling back %d bufs\n", i, i);
+            while (i-- > 0) {
+                vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+                vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
+                vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+            }
+            vfree(pst_handle->pst_frame_buffer);
+            pst_handle->pst_frame_buffer = NULL;
             return ret;
         }
+        vdi_clear_memory(pst_handle->core_idx, vb_buffer.phys_addr, vb_buffer.size, 0);
         pst_handle->pst_frame_buffer[i].bufY = vb_buffer.phys_addr;
         pst_handle->pst_frame_buffer[i].bufCb = (PhysicalAddress) - 1;
         pst_handle->pst_frame_buffer[i].bufCr = (PhysicalAddress) - 1;
         pst_handle->pst_frame_buffer[i].updateFbInfo = 1;
         pst_handle->pst_frame_buffer[i].size = vb_buffer.size;
+#ifdef MEDIA_V3
+        pst_handle->pst_frame_buffer[i].phys_addr_36bit = vb_buffer.phys_addr_36bit;
+        pst_handle->pst_frame_buffer[i].mmu_entry_index = vb_buffer.mmu_entry_index;
+        pst_handle->pst_frame_buffer[i].mmu_entry_num = vb_buffer.mmu_entry_num;
+#endif
     }
 
     ret = VPU_EncRegisterFrameBuffer(pst_handle->handle, pst_handle->pst_frame_buffer,
-        pst_handle->min_recon_frame_count, stride, fbHeight, map_type);
+        min_recon_frame_count, stride, fbHeight, map_type);
     if (ret != RETCODE_SUCCESS) {
         VLOG(ERR, "Failed VPU_EncRegisterFrameBuffer(ret:%d)\n", ret);
         return ret;
@@ -594,10 +753,17 @@ static int alloc_bitstream_buf(void *handle)
             vb_buffer.phys_addr = pst_handle->bitstream_buffer[i];
             vb_buffer.virt_addr = (unsigned long)phys_to_virt(vb_buffer.phys_addr);
             vb_buffer.base = vb_buffer.virt_addr;
+#ifdef MEDIA_V3
+            if (mmu_alloc_virt_addr(pst_handle->core_idx, &vb_buffer) != 0) {
+                VLOG(ERR, "Failed to mmu_alloc_virt_addr for bitstream_buffer[%d]\n", i);
+                return -1;
+            }
+            pst_handle->bitstream_buffer[i] = vb_buffer.phys_addr;
+            pst_handle->bitstream_vb[i] = vb_buffer;
+#endif
 
             vdi_insert_extern_memory(pst_handle->core_idx, &vb_buffer, ENC_BS, 0);
             Queue_Enqueue(pst_handle->free_stream_buffer, &pst_handle->bitstream_buffer[i]);
-            VLOG(INFO, "bitstream buf index:%d, phys:0x%lx\n", i, pst_handle->bitstream_buffer[i]);
         }
     } else {
         memset(&vb_buffer, 0, sizeof(vpu_buffer_t));
@@ -609,6 +775,9 @@ static int alloc_bitstream_buf(void *handle)
                 return -1;
             }
             pst_handle->bitstream_buffer[i] = vb_buffer.phys_addr;
+#ifdef MEDIA_V3
+            pst_handle->bitstream_vb[i] = vb_buffer;
+#endif
             Queue_Enqueue(pst_handle->free_stream_buffer, &vb_buffer.phys_addr);
         }
     }
@@ -780,7 +949,7 @@ static int venc_insert_userdata(void *handle)
     return ret;
 }
 
-Int32 venc_write_vui_rbsp_data(void *handle,  Uint8 *pVuiRbspBuf, int32_t vui_len)
+static Int32 venc_write_vui_rbsp_data(void *handle,  Uint8 *pVuiRbspBuf, int32_t vui_len)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -901,7 +1070,7 @@ static void venc_process_bsbuf_full(void *handle)
                             pst_bsfull_info->extra_vb_buffer.phys_addr,
                             pst_bsfull_info->extra_vb_buffer.size);
 #endif
-            vdi_flush_ion_cache(vb_buffer.phys_addr, (void *)vb_buffer.virt_addr, vb_buffer.size);
+            vdi_flush_ion_cache(venc_hw2phys(pst_handle->core_idx, vb_buffer.phys_addr), (void *)vb_buffer.virt_addr, vb_buffer.size);
             vdi_free_dma_memory(pst_handle->core_idx, &pst_bsfull_info->extra_vb_buffer, ENC_BS, 0);
             osal_memcpy(&pst_bsfull_info->extra_vb_buffer, &vb_buffer, sizeof(vpu_buffer_t));
         }
@@ -919,6 +1088,7 @@ static void venc_process_bsbuf_full(void *handle)
 
     // step 4
 #ifdef PLATFORM_SOC
+    ptr_read &= 0xFFFFFFFF;
     vdi_read_memory(pst_handle->core_idx, ptr_read
             , (unsigned char *)(pst_bsfull_info->extra_vb_buffer.virt_addr + pst_bsfull_info->bs_size)
             , cur_encoded_size,  VPU_STREAM_ENDIAN);
@@ -962,6 +1132,7 @@ static void venc_release_exten_buf(void *handle)
             }
         }
     }
+    mutex_unlock(&pst_handle->extra_buf_lock);
 }
 
 static int pic_type_to_nal_type(int picType)
@@ -988,13 +1159,14 @@ static int venc_process_frame_done(void* handle, int async_mode)
     int retry_times = 0;
     int ret;
     vpu_buffer_t header_vb_buffer;
+    PhysicalAddress bs_phys = 0;
 
     memset(&output_info, 0, sizeof(EncOutputInfo));
     do {
         ret = VPU_EncGetOutputInfo(pst_handle->handle, &output_info);
         if (ret != RETCODE_SUCCESS) {
-            VLOG(TRACE, "VPU_EncGetOutputInfo ret:%d, pictype:0x%x, streamSize:%d\n"
-                , ret, output_info.picType, output_info.bitstreamSize);
+            VLOG(ERR, "VPU_EncGetOutputInfo ret:%d, pictype:0x%x, streamSize:%d, reason:0x%x\n"
+                , ret, output_info.picType, output_info.bitstreamSize, output_info.errorReason);
             retry_times++;
             osal_msleep(1);
             continue;
@@ -1021,14 +1193,23 @@ static int venc_process_frame_done(void* handle, int async_mode)
                 if (pst_handle->header_cache_ref == 0) {
                     header_vb_buffer.phys_addr = pst_handle->header_cache_pack.u64PhyAddr;
                     header_vb_buffer.size = VENC_HEADER_BUF_SIZE;
+#ifdef MEDIA_V3
+                    header_vb_buffer.phys_addr_36bit = pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr;
+                    header_vb_buffer.mmu_entry_index = pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex;
+                    header_vb_buffer.mmu_entry_num = pst_handle->header_cache_pack.mmuInfo.mmuEntryNum;
+#endif
                     vdi_free_dma_memory(pst_handle->core_idx, &header_vb_buffer, 0, 0);
+#ifdef MEDIA_V3
+                    venc_header_vb_tbl_clear(pst_handle, header_vb_buffer.phys_addr);
+#endif
                 }
 
                 memset(&pst_handle->header_cache_pack, 0, sizeof(stPack));
             }
 
+            bs_phys = venc_hw2phys(pst_handle->core_idx, output_info.bitstreamBuffer);
             pst_handle->header_cache_pack.u64PhyAddr = output_info.bitstreamBuffer;
-            pst_handle->header_cache_pack.addr = phys_to_virt(output_info.bitstreamBuffer);
+            pst_handle->header_cache_pack.addr = phys_to_virt(bs_phys);
             pst_handle->header_cache_pack.len = output_info.bitstreamSize;
             pst_handle->header_cache_pack.encSrcIdx = RECON_IDX_FLAG_HEADER_ONLY;
             pst_handle->header_cache_pack.NalType =
@@ -1037,7 +1218,12 @@ static int venc_process_frame_done(void* handle, int async_mode)
             pst_handle->header_cache_pack.u64PTS = 0;
             pst_handle->header_cache_pack.u64DTS = 0;
             pst_handle->header_cache_pack.bUsed = FALSE;
-            vdi_invalidate_ion_cache(pst_handle->header_cache_pack.u64PhyAddr
+#ifdef MEDIA_V3
+            pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr = pst_handle->header_vb_buffer.phys_addr_36bit;
+            pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex = pst_handle->header_vb_buffer.mmu_entry_index;
+            pst_handle->header_cache_pack.mmuInfo.mmuEntryNum = pst_handle->header_vb_buffer.mmu_entry_num;
+#endif
+            vdi_invalidate_ion_cache(bs_phys
                         , pst_handle->header_cache_pack.addr
                         , pst_handle->header_cache_pack.len);
             VLOG(INFO, "header done\n");
@@ -1061,8 +1247,9 @@ static int venc_process_frame_done(void* handle, int async_mode)
             }
         }
 
-        vdi_invalidate_ion_cache(output_info.bitstreamBuffer
-                                , phys_to_virt(output_info.bitstreamBuffer)
+        bs_phys = venc_hw2phys(pst_handle->core_idx, output_info.bitstreamBuffer);
+        vdi_invalidate_ion_cache(bs_phys
+                                , phys_to_virt(bs_phys)
                                 , output_info.bitstreamSize);
 
         // drop this packet
@@ -1103,21 +1290,27 @@ static int venc_process_frame_done(void* handle, int async_mode)
             remain_encoded_size = MAX(output_info.bitstreamSize - pst_extra_buf_info->bs_size, 0);
 #ifdef PLATFORM_SOC
             osal_memcpy((void *)(pst_extra_buf_info->extra_vb_buffer.virt_addr + pst_extra_buf_info->bs_size),
-                        phys_to_virt(output_info.bitstreamBuffer),
+                        phys_to_virt(bs_phys),
                         remain_encoded_size);
 #else
             pcie_memcpy_c2c(pst_extra_buf_info->extra_vb_buffer.phys_addr + pst_extra_buf_info->bs_size,
-                            output_info.bitstreamBuffer,
+                            bs_phys,
                             remain_encoded_size);
 #endif
             pst_extra_buf_info->bs_size = output_info.bitstreamSize;
 
-            vdi_flush_ion_cache(pst_extra_buf_info->extra_vb_buffer.phys_addr
-                            , phys_to_virt(pst_extra_buf_info->extra_vb_buffer.phys_addr)
+            vdi_flush_ion_cache(venc_hw2phys(pst_handle->core_idx, pst_extra_buf_info->extra_vb_buffer.phys_addr)
+                            , (void *)pst_extra_buf_info->extra_vb_buffer.virt_addr
                             , pst_extra_buf_info->bs_size);
             encode_pack.u64PhyAddr = pst_extra_buf_info->extra_vb_buffer.phys_addr;
             encode_pack.addr = (void *)pst_extra_buf_info->extra_vb_buffer.virt_addr;
             encode_pack.len = pst_extra_buf_info->bs_size;
+#ifdef MEDIA_V3
+            // extra buffer is also MMU-mapped; hand userspace the real DDR phys,
+            // otherwise bmlib_mmap gets a VPU MMU addr and rejects it.
+            encode_pack.mmuInfo.u64RealPhyAddr =
+                venc_hw2phys(pst_handle->core_idx, pst_extra_buf_info->extra_vb_buffer.phys_addr);
+#endif
 
             pst_extra_free_buf = osal_calloc(1, sizeof(drv_venc_extra_buf_info));
             osal_memcpy(&pst_extra_free_buf->extra_vb_buffer, &pst_extra_buf_info->extra_vb_buffer, sizeof(vpu_buffer_t));
@@ -1130,8 +1323,13 @@ static int venc_process_frame_done(void* handle, int async_mode)
             Queue_Enqueue(pst_handle->free_stream_buffer, &output_info.bitstreamBuffer);
         } else {
             encode_pack.u64PhyAddr = output_info.bitstreamBuffer;
-            encode_pack.addr = phys_to_virt(output_info.bitstreamBuffer);
+            encode_pack.addr = phys_to_virt(bs_phys);
             encode_pack.len = output_info.bitstreamSize;
+#ifdef MEDIA_V3
+            // u64PhyAddr stays the VPU hw addr (used to recycle the buffer in
+            // release_stream). The real DDR phys the user must mmap is bs_phys.
+            encode_pack.mmuInfo.u64RealPhyAddr = bs_phys;
+#endif
         }
 
         encode_pack.encSrcIdx = output_info.encSrcIdx;
@@ -1242,7 +1440,17 @@ static int thread_wait_interrupt(void *param)
     return 0;
 }
 
-static int venc_free_framebuffer(FrameBuffer *pst_fb)
+// vdi_free_dma_memory under MEDIA_V3 uses vb->phys_addr_36bit to call base_ion_free,
+// but callers only fill phys_addr. Populate it here (== phys_addr, see mmu_alloc_virt_addr).
+static void venc_free_dma_mem(unsigned long core_idx, vpu_buffer_t *vb, int memTypes, int instIndex)
+{
+#ifdef MEDIA_V3
+    vb->phys_addr_36bit = vb->phys_addr;
+#endif
+    vdi_free_dma_memory(core_idx, vb, memTypes, instIndex);
+}
+
+static int venc_free_framebuffer(unsigned long core_idx, FrameBuffer *pst_fb)
 {
     vpu_buffer_t vb_buffer;
 
@@ -1255,7 +1463,7 @@ static int venc_free_framebuffer(FrameBuffer *pst_fb)
     if(pst_fb->bufY) {
         vb_buffer.size = pst_fb->stride * pst_fb->height;
         vb_buffer.phys_addr = pst_fb->bufY;
-        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+        venc_free_dma_mem(core_idx, &vb_buffer, 0, 0);
     }
 
     if(pst_fb->bufCb) {
@@ -1264,13 +1472,13 @@ static int venc_free_framebuffer(FrameBuffer *pst_fb)
         else
             vb_buffer.size = pst_fb->stride * pst_fb->height / 4;
         vb_buffer.phys_addr = pst_fb->bufCb;
-        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+        venc_free_dma_mem(core_idx, &vb_buffer, 0, 0);
     }
 
     if(pst_fb->bufCr && !pst_fb->cbcrInterleave) {
         vb_buffer.size = pst_fb->stride * pst_fb->height / 4;
         vb_buffer.phys_addr = pst_fb->bufCr;
-        vdi_free_dma_memory(0, &vb_buffer, 0, 0);
+        venc_free_dma_mem(core_idx, &vb_buffer, 0, 0);
     }
 
     return 0;
@@ -1297,16 +1505,26 @@ void *internal_venc_open(InitEncConfig *pInitEncCfg)
     int fw_size;
     Uint16 *pus_bitCode;
     int reinit_count = 0;
+    VpuAttr product_attr;
 
     pus_bitCode = (Uint16 *)bit_code;
     fw_size = ARRAY_SIZE(bit_code);
 reinit:
+#ifdef MEDIA_V3
+    mmu_set_config(0, pInitEncCfg->mmuMode);
+#endif
     ret = VPU_InitWithBitcode(0, pus_bitCode, fw_size);
     if ((ret == RETCODE_VPU_RESPONSE_TIMEOUT) && (reinit_count < 3)) {
         reinit_count++;
         goto reinit;
     } else if ((ret != RETCODE_SUCCESS) && (ret != RETCODE_CALLED_BEFORE)) {
         VLOG(ERR, "Failed to VPU_InitWithBitcode()\n");
+        return NULL;
+    }
+
+    ret = PrintVpuProductInfo(0, &product_attr);
+    if (ret == RETCODE_VPU_RESPONSE_TIMEOUT) {
+        VLOG(ERR, "PrintVpuProductInfo failed! ret = %08x\n", ret);
         return NULL;
     }
 
@@ -1353,9 +1571,21 @@ reinit:
 int internal_venc_close(void *handle)
 {
     ENCODER_HANDLE *pst_handle = handle;
-    drv_enc_param *pEncParam = &pst_handle->enc_param;
+    drv_enc_param *pEncParam;
     UserDataList *userdataNode = NULL;
     UserDataList *n;
+    vpu_buffer_t vb_buffer;
+    int i;
+
+    if (pst_handle == NULL) {
+        VLOG(ERR, "internal_venc_close with NULL handle\n");
+        return -1;
+    }
+
+    pEncParam = &pst_handle->enc_param;
+    VLOG(INFO, "internal_venc_close: handle=%px frame_buf=%px src_cnt=%d recon_cnt=%d\n",
+        pst_handle, pst_handle->pst_frame_buffer,
+        pst_handle->min_src_frame_count, pst_handle->min_recon_frame_count);
 
     if (pst_handle->thread_handle != NULL) {
         pst_handle->stop_thread = 1;
@@ -1363,7 +1593,68 @@ int internal_venc_close(void *handle)
         pst_handle->thread_handle = NULL;
     }
 
-    Queue_Destroy(pst_handle->stream_packs);
+    // safety net: free recon frame buffers if venc_op_stop didn't run
+    // MUST be before VPU_DeInit, which releases vdi and makes vdi_free_dma_memory a no-op
+    if (pst_handle->pst_frame_buffer != NULL) {
+        for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
+            if (pst_handle->pst_frame_buffer[i].size == 0)
+                continue;
+            vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+            vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
+            VLOG(INFO, "free recon[%d] phy=%px size=%u\n",
+                i, (void *)vb_buffer.phys_addr, vb_buffer.size);
+#ifdef MEDIA_V3
+            vb_buffer.phys_addr_36bit = pst_handle->pst_frame_buffer[i].phys_addr_36bit;
+            vb_buffer.mmu_entry_index = pst_handle->pst_frame_buffer[i].mmu_entry_index;
+            vb_buffer.mmu_entry_num = pst_handle->pst_frame_buffer[i].mmu_entry_num;
+            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+#else
+            venc_free_dma_mem(pst_handle->core_idx, &vb_buffer, 0, 0);
+#endif
+        }
+        vfree(pst_handle->pst_frame_buffer);
+        pst_handle->pst_frame_buffer = NULL;
+    }
+
+    if (pst_handle->framebuf_list) {
+        // framebuf_list is sized min_src_frame_count+1 (indexed by src_idx),
+        // NOT min_recon_frame_count -- using the latter leaks DMA or over-reads
+        for (i = 0; i <= pst_handle->min_src_frame_count; i++) {
+            if (pst_handle->framebuf_list[i].bufY) {
+                venc_free_framebuffer(pst_handle->core_idx, &pst_handle->framebuf_list[i]);
+                osal_memset(&pst_handle->framebuf_list[i], 0, sizeof(FrameBuffer));
+            }
+        }
+        osal_free(pst_handle->framebuf_list);
+        pst_handle->framebuf_list = NULL;
+    }
+
+#ifdef MEDIA_V3
+    // Safety net: free any source-frame MMU mappings still outstanding if the
+    // channel is torn down before the VPU released all in-flight frames.
+    for (i = 0; i < MAX_SRC_BUFFER_NUM; i++)
+        venc_unmap_src_frame(pst_handle, i);
+#endif
+
+    if (pEncParam->vbVuiRbsp.size) {
+        venc_free_dma_mem(pst_handle->core_idx, &pEncParam->vbVuiRbsp, ENC_ETC, 0);
+        pEncParam->vbVuiRbsp.size = 0;
+        pEncParam->vbVuiRbsp.phys_addr = 0UL;
+    }
+
+    if (pst_handle->stream_packs) {
+        Queue_Destroy(pst_handle->stream_packs);
+        pst_handle->stream_packs = NULL;
+    }
+    if (pst_handle->free_stream_buffer) {
+        Queue_Destroy(pst_handle->free_stream_buffer);
+        pst_handle->free_stream_buffer = NULL;
+    }
+    if (pst_handle->customMapBuffer) {
+        Queue_Destroy(pst_handle->customMapBuffer);
+        pst_handle->customMapBuffer = NULL;
+    }
+    VLOG(INFO, "internal_venc_close: queues destroyed\n");
     VPU_DeInit(pst_handle->core_idx);
 
     list_for_each_entry_safe(userdataNode, n, &pEncParam->userdataList, list) {
@@ -1380,13 +1671,20 @@ int internal_venc_close(void *handle)
     return 0;
 }
 
-int venc_op_stop(void *handle, void *arg)
+static int venc_op_stop(void *handle, void *arg)
 {
     int i;
     vpu_buffer_t vb_buffer;
     ENCODER_HANDLE *pst_handle = handle;
-    drv_enc_param *pEncParam = &pst_handle->enc_param;
+    drv_enc_param *pEncParam;
     int int_reason = 0;
+
+    if (pst_handle == NULL) {
+        VLOG(ERR, "venc_op_stop: handle is NULL\n");
+        return -1;
+    }
+
+    pEncParam = &pst_handle->enc_param;
 
     if (pst_handle->thread_handle != NULL) {
         pst_handle->stop_thread = 1;
@@ -1394,41 +1692,59 @@ int venc_op_stop(void *handle, void *arg)
         pst_handle->thread_handle = NULL;
     }
 
-    while (VPU_EncClose(pst_handle->handle) == RETCODE_VPU_STILL_RUNNING) {
-        if ((int_reason = VPU_WaitInterruptEx(pst_handle->handle, 1000*1000)) == -1) {
-            VLOG(ERR, "NO RESPONSE FROM VPU_EncClose2()\n");
-            break;
-        }
-        else if (int_reason > 0) {
-            VPU_ClearInterruptEx(pst_handle->handle, int_reason);
-            if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
-                EncOutputInfo   outputInfo;
-                VLOG(INFO, "VPU_EncClose() : CLEAR REMAIN INTERRUPT\n");
-                VPU_EncGetOutputInfo(pst_handle->handle, &outputInfo);
-                continue;
+    if (pst_handle->handle != NULL) {
+        while (VPU_EncClose(pst_handle->handle) == RETCODE_VPU_STILL_RUNNING) {
+            if ((int_reason = VPU_WaitInterruptEx(pst_handle->handle, 1000*1000)) == -1) {
+                VLOG(ERR, "NO RESPONSE FROM VPU_EncClose2()\n");
+                break;
             }
+            else if (int_reason > 0) {
+                VPU_ClearInterruptEx(pst_handle->handle, int_reason);
+                if (int_reason & (1 << INT_WAVE5_ENC_PIC)) {
+                    EncOutputInfo   outputInfo;
+                    VLOG(INFO, "VPU_EncClose() : CLEAR REMAIN INTERRUPT\n");
+                    VPU_EncGetOutputInfo(pst_handle->handle, &outputInfo);
+                    continue;
+                }
+            }
+            osal_msleep(10);
         }
-        osal_msleep(10);
     }
 
     if (pst_handle->header_cache_pack.len > 0 && pst_handle->header_cache_pack.u64PhyAddr) {
         vb_buffer.phys_addr = pst_handle->header_cache_pack.u64PhyAddr;
         vb_buffer.size = VENC_HEADER_BUF_SIZE;
+#ifdef MEDIA_V3
+        vb_buffer.phys_addr_36bit = pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr;
+        vb_buffer.mmu_entry_index = pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex;
+        vb_buffer.mmu_entry_num = pst_handle->header_cache_pack.mmuInfo.mmuEntryNum;
         vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+        venc_header_vb_tbl_clear(pst_handle, vb_buffer.phys_addr);
+#else
+        venc_free_dma_mem(pst_handle->core_idx, &vb_buffer, 0, 0);
+#endif
         memset(&pst_handle->header_cache_pack, 0, sizeof(stPack));
         pst_handle->header_encoded = 0;
     }
 
-    for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
-        if (pst_handle->pst_frame_buffer[i].size == 0)
-            continue;
-        vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
-        vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
-        vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
-    }
     if (pst_handle->pst_frame_buffer != NULL) {
+        for (i = 0; i < pst_handle->min_recon_frame_count; i++) {
+            if (pst_handle->pst_frame_buffer[i].size == 0)
+                continue;
+            vb_buffer.phys_addr = pst_handle->pst_frame_buffer[i].bufY;
+            vb_buffer.size = pst_handle->pst_frame_buffer[i].size;
+#ifdef MEDIA_V3
+            vb_buffer.phys_addr_36bit = pst_handle->pst_frame_buffer[i].phys_addr_36bit;
+            vb_buffer.mmu_entry_index = pst_handle->pst_frame_buffer[i].mmu_entry_index;
+            vb_buffer.mmu_entry_num = pst_handle->pst_frame_buffer[i].mmu_entry_num;
+            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+#else
+            venc_free_dma_mem(pst_handle->core_idx, &vb_buffer, 0, 0);
+#endif
+        }
         vfree(pst_handle->pst_frame_buffer);
         pst_handle->pst_frame_buffer = NULL;
+        pst_handle->min_recon_frame_count = 0;
     }
 
     if (!pst_handle->use_extern_bs_buf) {
@@ -1438,7 +1754,11 @@ int venc_op_stop(void *handle, void *arg)
 
             vb_buffer.phys_addr = pst_handle->bitstream_buffer[i];
             vb_buffer.size = pst_handle->open_param.bitstreamBufferSize;
-            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, ENC_BS, 0);
+#ifdef MEDIA_V3
+            vdi_free_dma_memory(pst_handle->core_idx, &pst_handle->bitstream_vb[i], ENC_BS, 0);
+#else
+            venc_free_dma_mem(pst_handle->core_idx, &vb_buffer, ENC_BS, 0);
+#endif
         }
     } else {
         for (i = 0; i < pst_handle->min_src_frame_count; i++) {
@@ -1448,32 +1768,38 @@ int venc_op_stop(void *handle, void *arg)
             vb_buffer.phys_addr = pst_handle->bitstream_buffer[i];
             vb_buffer.size = pst_handle->open_param.bitstreamBufferSize;
             vdi_remove_extern_memory(pst_handle->core_idx, &vb_buffer, ENC_BS, 0);
+#ifdef MEDIA_V3
+            mmu_free_virt_addr(pst_handle->core_idx, &pst_handle->bitstream_vb[i]);
+#endif
         }
     }
     // enable alloc_bitstream_buf
     pst_handle->bitstream_buffer[0] = 0L;
+    pst_handle->min_src_frame_count = 0;
 
-    while(Queue_Get_Cnt(pst_handle->customMapBuffer) > 0) {
+    while(pst_handle->customMapBuffer && Queue_Get_Cnt(pst_handle->customMapBuffer) > 0) {
         PhysicalAddress *phys_addr = Queue_Dequeue(pst_handle->customMapBuffer);
         if (phys_addr && *phys_addr) {
             vb_buffer.phys_addr = *phys_addr;
             vb_buffer.size = pst_handle->customMapBufferSize;
-            vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, ENC_ETC, 0);
+            venc_free_dma_mem(pst_handle->core_idx, &vb_buffer, ENC_ETC, 0);
         } else {
             VLOG(ERR, "customMapBuffer phys_addr is 0\n",__func__,__LINE__);
         }
     }
 
     if (pEncParam->vbVuiRbsp.size) {
-        vdi_free_dma_memory(pst_handle->core_idx, &pEncParam->vbVuiRbsp, ENC_ETC, 0);
+        venc_free_dma_mem(pst_handle->core_idx, &pEncParam->vbVuiRbsp, ENC_ETC, 0);
         pEncParam->vbVuiRbsp.size = 0;
         pEncParam->vbVuiRbsp.phys_addr = 0UL;
     }
 
     if(pst_handle->framebuf_list){
-        for(i = 0; i < pst_handle->min_recon_frame_count; i++) {
+        // framebuf_list is sized min_src_frame_count+1 (indexed by src_idx),
+        // NOT min_recon_frame_count -- using the latter leaks DMA or over-reads
+        for(i = 0; i <= pst_handle->min_src_frame_count; i++) {
             if(pst_handle->framebuf_list[i].bufY) {
-                venc_free_framebuffer(&pst_handle->framebuf_list[i]);
+                venc_free_framebuffer(pst_handle->core_idx, &pst_handle->framebuf_list[i]);
                 osal_memset(&pst_handle->framebuf_list[i], 0, sizeof(FrameBuffer));
             }
         }
@@ -1481,14 +1807,29 @@ int venc_op_stop(void *handle, void *arg)
         pst_handle->framebuf_list = NULL;
     }
 
+    pst_handle->min_recon_frame_count = 0;
+
+#ifdef MEDIA_V3
+    // Safety net: free any source-frame MMU mappings still outstanding if the
+    // channel is torn down before the VPU released all in-flight frames.
+    for (i = 0; i < MAX_SRC_BUFFER_NUM; i++)
+        venc_unmap_src_frame(pst_handle, i);
+#endif
+
     Queue_Flush(pst_handle->stream_packs);
-    Queue_Destroy(pst_handle->customMapBuffer);
-    Queue_Destroy(pst_handle->free_stream_buffer);
+    if (pst_handle->customMapBuffer) {
+        Queue_Destroy(pst_handle->customMapBuffer);
+        pst_handle->customMapBuffer = NULL;   // must NULL it, else internal_venc_close double-free
+    }
+    if (pst_handle->free_stream_buffer) {
+        Queue_Destroy(pst_handle->free_stream_buffer);
+        pst_handle->free_stream_buffer = NULL;   // must NULL it, else internal_venc_close double-free
+    }
 
     return 0;
 }
 
-int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wait, BOOL is_publish)
+static int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wait, BOOL is_publish)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOutputInfo output_info;
@@ -1497,6 +1838,7 @@ int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wai
     int int_reason = 0;
     int ret = 0;
     int retry_times = 0;
+    PhysicalAddress bs_phys = 0;
 
     if (pst_handle->open_param.bitstreamFormat == STD_HEVC)
         pst_enc_param->headerType = CODEOPT_ENC_VPS | CODEOPT_ENC_SPS | CODEOPT_ENC_PPS;
@@ -1565,12 +1907,21 @@ int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wai
                         if (pst_handle->header_cache_pack.len > 0 && pst_handle->header_cache_pack.u64PhyAddr) {
                             header_vb_buffer.phys_addr = pst_handle->header_cache_pack.u64PhyAddr;
                             header_vb_buffer.size = VENC_HEADER_BUF_SIZE;
+#ifdef MEDIA_V3
+                            header_vb_buffer.phys_addr_36bit = pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr;
+                            header_vb_buffer.mmu_entry_index = pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex;
+                            header_vb_buffer.mmu_entry_num = pst_handle->header_cache_pack.mmuInfo.mmuEntryNum;
+#endif
                             vdi_free_dma_memory(pst_handle->core_idx, &header_vb_buffer, 0, 0);
+#ifdef MEDIA_V3
+                            venc_header_vb_tbl_clear(pst_handle, header_vb_buffer.phys_addr);
+#endif
                             memset(&pst_handle->header_cache_pack, 0, sizeof(stPack));
                         }
 
+                        bs_phys = venc_hw2phys(pst_handle->core_idx, output_info.bitstreamBuffer);
                         pst_handle->header_cache_pack.u64PhyAddr = output_info.bitstreamBuffer;
-                        pst_handle->header_cache_pack.addr = phys_to_virt(output_info.bitstreamBuffer);
+                        pst_handle->header_cache_pack.addr = phys_to_virt(bs_phys);
                         pst_handle->header_cache_pack.len = output_info.bitstreamSize;
                         pst_handle->header_cache_pack.encSrcIdx = RECON_IDX_FLAG_HEADER_ONLY;
                         pst_handle->header_cache_pack.NalType =
@@ -1579,7 +1930,12 @@ int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wai
                         pst_handle->header_cache_pack.u64PTS = 0;
                         pst_handle->header_cache_pack.u64DTS = 0;
                         pst_handle->header_cache_pack.bUsed = FALSE;
-                        vdi_invalidate_ion_cache(pst_handle->header_cache_pack.u64PhyAddr
+#ifdef MEDIA_V3
+                        pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr = pst_handle->header_vb_buffer.phys_addr_36bit;
+                        pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex = pst_handle->header_vb_buffer.mmu_entry_index;
+                        pst_handle->header_cache_pack.mmuInfo.mmuEntryNum = pst_handle->header_vb_buffer.mmu_entry_num;
+#endif
+                        vdi_invalidate_ion_cache(bs_phys
                                     , pst_handle->header_cache_pack.addr
                                     , pst_handle->header_cache_pack.len);
                     }
@@ -1595,7 +1951,7 @@ int build_encode_header(void *handle, EncHeaderParam *pst_enc_param, BOOL is_wai
     return ret;
 }
 
-int venc_get_encode_header(void *handle, void *arg)
+static int venc_get_encode_header(void *handle, void *arg)
 {
     int ret;
     ENCODER_HANDLE *pst_handle = handle;
@@ -1753,6 +2109,13 @@ static int venc_build_enc_param(ENCODER_HANDLE *pst_handle, EncOnePicCfg *pPicCf
         cb_szie = pst_fb->stride * pst_fb->height / 2;
     else
         cb_szie = pst_fb->stride * pst_fb->height / 4;
+#ifdef MEDIA_V3
+    if (mmu_is_enabled(pst_handle->core_idx)) {
+        // MMU enabled: the user source frame is a raw physical address the VPU
+        // cannot reach through the MMU. Map it (cached, freed on channel close).
+        venc_map_src_frame(pst_handle, src_idx, pst_fb);
+    } else
+#endif
     if(!CheckTopAddr(0, pst_fb->bufY, y_szie) ||
         !CheckTopAddr(0, pst_fb->bufCb, cb_szie) ||
         (pst_fb->cbcrInterleave ? 0 : !CheckTopAddr(0, pst_fb->bufCr, cb_szie)))
@@ -1903,6 +2266,10 @@ int internal_venc_enc_one_pic(void *handle, EncOnePicCfg *pPicCfg, int s32MilliS
             VLOG(ERR, "fail to allocate header buffer\n" );
             return RETCODE_FAILURE;
         }
+#ifdef MEDIA_V3
+        pst_handle->header_vb_buffer = header_vb_buffer;
+        venc_header_vb_tbl_insert(pst_handle, &header_vb_buffer);
+#endif
 
         if (!pst_handle->thread_handle) {
             is_wait_interrupt = 1;
@@ -1916,6 +2283,9 @@ int internal_venc_enc_one_pic(void *handle, EncOnePicCfg *pPicCfg, int s32MilliS
         ret = build_encode_header(pst_handle, &encHeaderParam, is_wait_interrupt, is_publish);
         if (ret != RETCODE_SUCCESS) {
             vdi_free_dma_memory(pst_handle->core_idx, &header_vb_buffer, 0, 0);
+#ifdef MEDIA_V3
+            venc_header_vb_tbl_clear(pst_handle, header_vb_buffer.phys_addr);
+#endif
             VLOG(ERR, "Failed ENC_PUT_VIDEO_HEADER(ret:%d)\n", ret);
             return ret;
         }
@@ -2073,20 +2443,37 @@ int internal_venc_release_stream(void *handle, stPack *pstPack, unsigned int pac
     drv_venc_extra_buf_info *n;
     vpu_buffer_t vb_buffer;
     int extra_buf_flag = 0;
+#ifdef MEDIA_V3
+    int tbl_idx = -1;
+#endif
 
     if (!pstPack || packCnt == 0)
         return 0;
 
     for (i=0; i < packCnt; i++) {
-        if (pstPack[i].NalType == NAL_SEI) {
+        if ((pstPack[i].NalType == NAL_SEI) && !vdi_is_dma_memory(pst_handle->core_idx, pstPack[i].u64PhyAddr)) {
             osal_kfree(pstPack[i].addr);
-        } else if (pstPack[i].NalType == NAL_VPS || pstPack[i].NalType == NAL_SPS) {
+        } else if (pstPack[i].NalType == NAL_VPS || pstPack[i].NalType == NAL_SPS || pstPack[i].NalType == NAL_SEI) {
             pst_handle->header_cache_ref--;
             // release older header cache
             if ((pstPack[i].u64PhyAddr != pst_handle->header_cache_pack.u64PhyAddr) && (pst_handle->header_cache_ref == 0)) {
                 vb_buffer.phys_addr = pstPack[i].u64PhyAddr;
                 vb_buffer.size = VENC_HEADER_BUF_SIZE;
+#ifdef MEDIA_V3
+                tbl_idx = venc_header_vb_tbl_find(pst_handle, pstPack[i].u64PhyAddr);
+                if (tbl_idx < 0) {
+                    VLOG(ERR, "mmu_free header(release_stream[%d]): meta miss hw=0x%x, skip free\n",
+                         i, pstPack[i].u64PhyAddr);
+                } else {
+                    vb_buffer.phys_addr_36bit = pst_handle->header_vb_tbl[tbl_idx].phys_addr_36bit;
+                    vb_buffer.mmu_entry_index = pst_handle->header_vb_tbl[tbl_idx].mmu_entry_index;
+                    vb_buffer.mmu_entry_num = pst_handle->header_vb_tbl[tbl_idx].mmu_entry_num;
+                    vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+                    memset(&pst_handle->header_vb_tbl[tbl_idx], 0, sizeof(vpu_buffer_t));
+                }
+#else
                 vdi_free_dma_memory(pst_handle->core_idx, &vb_buffer, 0, 0);
+#endif
             }
         } else {
             extra_buf_flag = 0;
@@ -2114,7 +2501,7 @@ int internal_venc_release_stream(void *handle, stPack *pstPack, unsigned int pac
     return 0;
 }
 
-int venc_op_set_rc_param(void *handle, void *arg)
+static int venc_op_set_rc_param(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     RcParam *prcp = (RcParam *)arg;
@@ -2160,7 +2547,7 @@ int venc_op_set_rc_param(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_start(void *handle, void *arg)
+static int venc_op_start(void *handle, void *arg)
 {
     int ret;
     ENCODER_HANDLE *pst_handle = handle;
@@ -2238,17 +2625,22 @@ int venc_op_start(void *handle, void *arg)
             goto ERR_VPU_ENC_OPEN;
         }
 
-        pst_handle->min_recon_frame_count = init_info.minFrameBufferCount;
-        pst_handle->min_src_frame_count = init_info.minSrcFrameCount + pst_handle->cmd_queue_depth;
+        {
+            int min_recon = init_info.minFrameBufferCount;
+            int min_src = init_info.minSrcFrameCount + pst_handle->cmd_queue_depth;
 
-        VLOG(INFO, "gop_preset:%d, cmdqueue:%d, min_recon_cnt:%d, min_src_cnt:%d\n"
-            , pst_handle->open_param.EncStdParam.waveParam.gopPresetIdx, pst_handle->cmd_queue_depth
-            , pst_handle->min_recon_frame_count, pst_handle->min_src_frame_count);
+            VLOG(INFO, "gop_preset:%d, cmdqueue:%d, min_recon_cnt:%d, min_src_cnt:%d\n"
+                , pst_handle->open_param.EncStdParam.waveParam.gopPresetIdx, pst_handle->cmd_queue_depth
+                , min_recon, min_src);
 
-        ret = alloc_framebuffer(pst_handle);
-        if ( ret != RETCODE_SUCCESS) {
-            VLOG(ERR, "Failed to alloc_framebuffer\n");
-            goto ERR_VPU_ENC_OPEN;
+            ret = alloc_framebuffer(pst_handle, min_recon);
+            if (ret != RETCODE_SUCCESS) {
+                VLOG(ERR, "Failed to alloc_framebuffer\n");
+                goto ERR_VPU_ENC_OPEN;
+            }
+
+            pst_handle->min_recon_frame_count = min_recon;
+            pst_handle->min_src_frame_count = min_src;
         }
 
         // additional is for store header and header_backup
@@ -2268,16 +2660,18 @@ int venc_op_start(void *handle, void *arg)
     }
 
 ERR_VPU_ENC_OPEN:
+    pst_handle->min_recon_frame_count = 0;
+    pst_handle->min_src_frame_count = 0;
     VPU_EncClose(pst_handle->handle);
     return RETCODE_FAILURE;
 }
 
-int venc_op_get_fd(void *handle, void *arg)
+static int venc_op_get_fd(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_set_request_idr(void *handle, void *arg)
+static int venc_op_set_request_idr(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
 
@@ -2285,7 +2679,7 @@ int venc_op_set_request_idr(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_enable_idr(void *handle, void *arg)
+static int venc_op_set_enable_idr(void *handle, void *arg)
 {
     BOOL bEnable = *(unsigned char *)arg;
     ENCODER_HANDLE *pst_handle = handle;
@@ -2310,7 +2704,7 @@ int venc_op_set_enable_idr(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_chn_attr(void *handle, void *arg)
+static int venc_op_set_chn_attr(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2341,7 +2735,7 @@ int venc_op_set_chn_attr(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_chn_resolution(void *handle, void *arg)
+static int venc_op_set_chn_resolution(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2353,7 +2747,7 @@ int venc_op_set_chn_resolution(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_ref(void *handle, void *arg)
+static int venc_op_set_ref(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2413,7 +2807,7 @@ int venc_op_set_ref(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_roi(void *handle, void *arg)
+static int venc_op_set_roi(void *handle, void *arg)
 {
     RoiParam *roiParam = (RoiParam *)arg;
     ENCODER_HANDLE *pst_handle = (ENCODER_HANDLE *)handle;
@@ -2454,7 +2848,7 @@ int venc_op_set_roi(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_get_roi(void *handle, void *arg)
+static int venc_op_get_roi(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     RoiParam *roiParam = (RoiParam *)arg;
@@ -2479,22 +2873,22 @@ int venc_op_get_roi(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_framelost(void *handle, void *arg)
+static int venc_op_set_framelost(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_get_vbinfo(void *handle, void *arg)
+static int venc_op_get_vbinfo(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_set_vbbuffer(void *handle, void *arg)
+static int venc_op_set_vbbuffer(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_encode_userdata(void *handle, void *arg)
+static int venc_op_encode_userdata(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     UserData *pSrc = (UserData *)arg;
@@ -2548,13 +2942,13 @@ int venc_op_encode_userdata(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_pred(void *handle, void *arg)
+static int venc_op_set_pred(void *handle, void *arg)
 {
     // wave521 not support
     return 0;
 }
 
-int venc_op_set_h264_entropy(void *handle, void *arg)
+static int venc_op_set_h264_entropy(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2576,7 +2970,7 @@ int venc_op_set_h264_entropy(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_predunit(void *handle, void *arg)
+static int venc_op_set_h265_predunit(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2594,7 +2988,7 @@ int venc_op_set_h265_predunit(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_get_h265_predunit(void *handle, void *arg)
+static int venc_op_get_h265_predunit(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2612,7 +3006,7 @@ int venc_op_get_h265_predunit(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_search_window(void *handle, void *arg)
+static int venc_op_set_search_window(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2640,7 +3034,7 @@ int venc_op_set_search_window(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_get_search_window(void *handle, void *arg)
+static int venc_op_get_search_window(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2660,7 +3054,7 @@ int venc_op_get_search_window(void *handle, void *arg)
 }
 
 
-int venc_op_set_h264_trans(void *handle, void *arg)
+static int venc_op_set_h264_trans(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2678,7 +3072,7 @@ int venc_op_set_h264_trans(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_trans(void *handle, void *arg)
+static int venc_op_set_h265_trans(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2696,12 +3090,12 @@ int venc_op_set_h265_trans(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_reg_reconBuf(void *handle, void *arg)
+static int venc_op_reg_reconBuf(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_set_pixelformat(void *handle, void *arg)
+static int venc_op_set_pixelformat(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     InPixelFormat *pInFormat = (InPixelFormat *)arg;
@@ -2713,7 +3107,7 @@ int venc_op_set_pixelformat(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_show_chninfo(void *handle, void *arg)
+static int venc_op_show_chninfo(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     struct seq_file *m = (struct seq_file *)arg;
@@ -2728,17 +3122,17 @@ int venc_op_show_chninfo(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_user_rcinfo(void *handle, void *arg)
+static int venc_op_set_user_rcinfo(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_set_superframe(void *handle, void *arg)
+static int venc_op_set_superframe(void *handle, void *arg)
 {
     return 0;
 }
 
-int venc_op_set_h264_vui(void *handle, void *arg)
+static int venc_op_set_h264_vui(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     H264Vui *pSrc = (H264Vui *)arg;
@@ -2752,7 +3146,7 @@ int venc_op_set_h264_vui(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_vui(void *handle, void *arg)
+static int venc_op_set_h265_vui(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     H265Vui *pSrc = (H265Vui *)arg;
@@ -2766,7 +3160,7 @@ int venc_op_set_h265_vui(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_frame_param(void *handle, void *arg)
+static int venc_op_set_frame_param(void *handle, void *arg)
 {
     return 0;
 }
@@ -2786,7 +3180,7 @@ static int venc_op_wait_encode_done(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h264_split(void *handle, void *arg)
+static int venc_op_set_h264_split(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2798,7 +3192,7 @@ int venc_op_set_h264_split(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_split(void *handle, void *arg)
+static int venc_op_set_h265_split(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2810,7 +3204,7 @@ int venc_op_set_h265_split(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h264_dblk(void *handle, void *arg)
+static int venc_op_set_h264_dblk(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2825,7 +3219,7 @@ int venc_op_set_h264_dblk(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_dblk(void *handle, void *arg)
+static int venc_op_set_h265_dblk(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2840,7 +3234,7 @@ int venc_op_set_h265_dblk(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h264_intrapred(void *handle, void *arg)
+static int venc_op_set_h264_intrapred(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2851,7 +3245,7 @@ int venc_op_set_h264_intrapred(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_custommap(void *handle, void *arg)
+static int venc_op_set_custommap(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     WaveCustomMapOpt *pCustomOpt = (WaveCustomMapOpt *)arg;
@@ -2863,7 +3257,7 @@ int venc_op_set_custommap(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_get_initialinfo(void *handle, void *arg)
+static int venc_op_get_initialinfo(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     VencIntialInfo *pEncInitialInfo = (VencIntialInfo *)arg;
@@ -2877,7 +3271,7 @@ int venc_op_get_initialinfo(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_h265_sao(void *handle, void *arg)
+static int venc_op_set_h265_sao(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     EncOpenParam *pst_open_param = &pst_handle->open_param;
@@ -2899,7 +3293,7 @@ int venc_op_set_h265_sao(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_bindmode(void *handle, void *arg)
+static int venc_op_set_bindmode(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     int *pSrc = (int *)arg;
@@ -2914,7 +3308,7 @@ int venc_op_set_bindmode(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_set_extern_bs_buf(void *handle, void *arg)
+static int venc_op_set_extern_bs_buf(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     VencExternBuf *pst_bs_buf = (VencExternBuf *)arg;
@@ -2938,7 +3332,7 @@ int venc_op_set_extern_bs_buf(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_get_bs_packs_num(void *handle, void *arg)
+static int venc_op_get_bs_packs_num(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     int32_t *packs_cnt = (int32_t *)arg;
@@ -2952,14 +3346,22 @@ int venc_op_get_bs_packs_num(void *handle, void *arg)
     return 0;
 }
 
-int venc_op_release_header(void *handle, void *arg)
+static int venc_op_release_header(void *handle, void *arg)
 {
     ENCODER_HANDLE *pst_handle = handle;
     if (pst_handle->header_cache_pack.len > 0 && pst_handle->header_cache_pack.u64PhyAddr) {
         vpu_buffer_t header_vb_buffer;
         header_vb_buffer.phys_addr = pst_handle->header_cache_pack.u64PhyAddr;
         header_vb_buffer.size = VENC_HEADER_BUF_SIZE;
+#ifdef MEDIA_V3
+        header_vb_buffer.phys_addr_36bit = pst_handle->header_cache_pack.mmuInfo.u64RealPhyAddr;
+        header_vb_buffer.mmu_entry_index = pst_handle->header_cache_pack.mmuInfo.mmuEntryIndex;
+        header_vb_buffer.mmu_entry_num = pst_handle->header_cache_pack.mmuInfo.mmuEntryNum;
+#endif
         vdi_free_dma_memory(pst_handle->core_idx, &header_vb_buffer, 0, 0);
+#ifdef MEDIA_V3
+        venc_header_vb_tbl_clear(pst_handle, header_vb_buffer.phys_addr);
+#endif
         memset(&pst_handle->header_cache_pack, 0, sizeof(stPack));
         return 0;
     } else {

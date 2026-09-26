@@ -6,8 +6,8 @@
 #include <linux/platform_device.h>
 #include <linux/mod_devicetable.h>
 #include "vc_drv.h"
+#include <linux/atomic.h>
 #include "h265_interface.h"
-#include "jpuconfig.h"
 
 static const struct of_device_id cvi_vc_drv_match_table[] = {
     { .compatible = "cvitek,cvi_vc_drv" },
@@ -27,7 +27,7 @@ struct drv_vc_chn_info
     int channel_index;
     int is_encode;
     int is_jpeg;
-    unsigned int ref_cnt;
+    atomic_t ref_cnt;
     int is_channel_exist;
 };
 
@@ -50,60 +50,19 @@ struct clk_ctrl_info {
     int enable;
 };
 
-#ifdef VC_DRIVER_TEST
-extern int jpeg_dec_test(u_long arg);
-extern int jpeg_enc_test(u_long arg);
-#endif
-
-int jpeg_platform_init(struct platform_device *pdev);
-void jpeg_platform_exit(void);
-int vpu_drv_platform_init(struct platform_device *pdev);
-int vpu_drv_platform_exit(void);
-extern void drv_venc_deinit(void);
-extern int drv_venc_init(void);
-int vdec_drv_init(void);
-void vdec_drv_deinit(void);
-
-
-extern int venc_proc_init(struct device *dev);
-extern int venc_proc_deinit(void);
-
-extern int h265e_proc_init(struct device *dev);
-extern int h265e_proc_deinit(void);
-extern int codecinst_proc_init(struct device *dev);
-extern int codecinst_proc_deinit(void);
-extern int h264e_proc_init(struct device *dev);
-extern int h264e_proc_deinit(void);
-extern int jpege_proc_init(struct device *dev);
-extern int jpege_proc_deinit(void);
-extern int rc_proc_init(struct device *dev);
-extern int rc_proc_deinit(void);
-extern int vdec_proc_init(struct device *dev);
-extern int vdec_proc_deinit(void);
-
-#if defined(CONFIG_PM)
-int vpu_drv_suspend(struct platform_device *pdev, pm_message_t state);
-int vpu_drv_resume(struct platform_device *pdev);
-int jpeg_drv_suspend(struct platform_device *pdev, pm_message_t state);
-int jpeg_drv_resume(struct platform_device *pdev);
-#endif
-void jpu_clk_disable(int core_idx);
-void jpu_clk_enable(int core_idx);
 static int _vc_drv_open(struct inode *inode, struct file *filp);
 static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg);
 static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg);
 static int _vc_drv_venc_release(struct inode *inode, struct file *filp);
 static int _vc_drv_vdec_release(struct inode *inode, struct file *filp);
-
-static unsigned int _vc_drv_poll(struct file *filp,
-                    struct poll_table_struct *wait);
-static unsigned int _vdec_drv_poll(struct file *filp,
-                    struct poll_table_struct *wait);
-
-extern int drv_venc_get_left_streamframes(int VeChn);
-int vdec_get_output_frame_count(vdec_chn VdChn);
-//extern unsigned long vpu_get_interrupt_reason(int coreIdx);
-//extern unsigned long jpu_get_interrupt_flag(int chnIdx);
+static unsigned int _vc_drv_poll(struct file *filp, struct poll_table_struct *wait);
+static unsigned int _vdec_drv_poll(struct file *filp, struct poll_table_struct *wait);
+int vc_drv_plat_probe(struct platform_device *pdev);
+void vc_drv_plat_remove(struct platform_device *pdev);
+#if defined(CONFIG_PM)
+int _vc_drv_suspend(struct platform_device *pdev, pm_message_t state);
+int _vc_drv_resume(struct platform_device *pdev);
+#endif
 
 #ifdef CONFIG_COMPAT
 static long _vc_drv_compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -169,7 +128,7 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
             pstChnInfo = &venc_chn_info[minor];
             filp->private_data = &venc_chn_info[minor];
         }
-        pstChnInfo->ref_cnt++;
+        atomic_inc(&pstChnInfo->ref_cnt);
         pstChnInfo->channel_index = minor;
         spin_unlock_irqrestore(&vc_spinlock, flags);
         return 0;
@@ -1384,11 +1343,6 @@ static long _vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
         vpu_free_extern_memory(&vdb);
         s32Ret = 0;
     } break;
-#ifdef VC_DRIVER_TEST
-    case DRV_VC_VENC_ENC_JPEG_TEST: {
-        s32Ret = jpeg_enc_test(arg);
-    } break;
-#endif
     default: {
         pr_err("venc un-handle cmd id: %x\n", cmd);
     } break;
@@ -1423,7 +1377,7 @@ static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
             pstChnInfo = &vdec_chn_info[minor];
             filp->private_data = &vdec_chn_info[minor];
         }
-        pstChnInfo->ref_cnt++;
+        atomic_inc(&pstChnInfo->ref_cnt);
         pstChnInfo->channel_index = minor;
         spin_unlock_irqrestore(&vc_spinlock, flags);
 
@@ -1880,11 +1834,7 @@ static long _vc_drv_vdec_ioctl(struct file *filp, u_int cmd, u_long arg)
             s32Ret = -1;
         }
     } break;
-#ifdef VC_DRIVER_TEST
-    case DRV_VC_VDEC_DEC_JPEG_TEST: {
-        s32Ret = jpeg_dec_test(arg);
-    } break;
-#endif
+
     case DRV_VC_VDEC_FRAME_ADD_USER: {
         video_frame_info_s stFrameInfo;
 
@@ -2013,29 +1963,46 @@ static unsigned int _vdec_drv_poll(struct file *filp,
 static int _vc_drv_venc_release(struct inode *inode, struct file *filp)
 {
     struct drv_vc_chn_info *pstChnInfo = (struct drv_vc_chn_info *)filp->private_data;
-    unsigned long   flags;
+    unsigned long flags;
 
-    if(pstChnInfo && pstChnInfo->channel_index >= 0) {
+    if (!pstChnInfo || pstChnInfo->channel_index < 0)
+        return 0;
+
+    if (!atomic_dec_and_test(&pstChnInfo->ref_cnt))
+        return 0;
+
+    if (down_interruptible(&vencSemArry[pstChnInfo->channel_index])) {
+        pr_warn("venc release chn%d: sem interrupted, forced cleanup\n",
+                pstChnInfo->channel_index);
+        pstChnInfo->is_channel_exist = false;
         spin_lock_irqsave(&vc_spinlock, flags);
-        pstChnInfo->ref_cnt--;
-        spin_unlock_irqrestore(&vc_spinlock, flags);
-        if(!pstChnInfo->ref_cnt) {
-            if(pstChnInfo->is_channel_exist) {
-                drv_venc_stop_recvframe(pstChnInfo->channel_index);
-                drv_venc_destroy_chn(pstChnInfo->channel_index);
-                pstChnInfo->is_channel_exist = false;
-            }
-            spin_lock_irqsave(&vc_spinlock, flags);
-            if (pstChnInfo->is_jpeg) {
-                jpegEncChnBitMap[pstChnInfo->channel_index] = 0;
-                pstChnInfo->is_jpeg = false;
-            } else {
-                vencChnBitMap &= ~(1<<pstChnInfo->channel_index);
-            }
-            spin_unlock_irqrestore(&vc_spinlock, flags);
-            filp->private_data = NULL;
+        if (pstChnInfo->is_jpeg) {
+            jpegEncChnBitMap[pstChnInfo->channel_index] = 0;
+            pstChnInfo->is_jpeg = false;
+        } else {
+            vencChnBitMap &= ~(1 << pstChnInfo->channel_index);
         }
+        spin_unlock_irqrestore(&vc_spinlock, flags);
+        filp->private_data = NULL;
+        return 0;
     }
+
+    if (pstChnInfo->is_channel_exist) {
+        drv_venc_stop_recvframe(pstChnInfo->channel_index);
+        drv_venc_destroy_chn(pstChnInfo->channel_index);
+        pstChnInfo->is_channel_exist = false;
+    }
+
+    spin_lock_irqsave(&vc_spinlock, flags);
+    if (pstChnInfo->is_jpeg) {
+        jpegEncChnBitMap[pstChnInfo->channel_index] = 0;
+        pstChnInfo->is_jpeg = false;
+    } else {
+        vencChnBitMap &= ~(1 << pstChnInfo->channel_index);
+    }
+    spin_unlock_irqrestore(&vc_spinlock, flags);
+    up(&vencSemArry[pstChnInfo->channel_index]);
+    filp->private_data = NULL;
 
     return 0;
 }
@@ -2043,28 +2010,45 @@ static int _vc_drv_venc_release(struct inode *inode, struct file *filp)
 static int _vc_drv_vdec_release(struct inode *inode, struct file *filp)
 {
     struct drv_vc_chn_info *pstChnInfo = (struct drv_vc_chn_info *)filp->private_data;
-    unsigned long   flags;
+    unsigned long flags;
 
-    if(pstChnInfo && pstChnInfo->channel_index >= 0) {
+    if (!pstChnInfo || pstChnInfo->channel_index < 0)
+        return 0;
+
+    if (!atomic_dec_and_test(&pstChnInfo->ref_cnt))
+        return 0;
+
+    if (down_interruptible(&vdecSemArry[pstChnInfo->channel_index])) {
+        pr_warn("vdec release chn%d: sem interrupted, forced cleanup\n",
+                pstChnInfo->channel_index);
+        pstChnInfo->is_channel_exist = false;
         spin_lock_irqsave(&vc_spinlock, flags);
-        pstChnInfo->ref_cnt--;
-        spin_unlock_irqrestore(&vc_spinlock, flags);
-        if(!pstChnInfo->ref_cnt) {
-            if(pstChnInfo->is_channel_exist) {
-                drv_vdec_destroy_chn(pstChnInfo->channel_index);
-                pstChnInfo->is_channel_exist = false;
-            }
-            spin_lock_irqsave(&vc_spinlock, flags);
-            if (pstChnInfo->is_jpeg) {
-                jpegDecChnBitMap[pstChnInfo->channel_index] = 0;
-                pstChnInfo->is_jpeg = false;
-            } else {
-                vdecChnBitMap &= ~((uint64_t)1<<pstChnInfo->channel_index);
-            }
-            spin_unlock_irqrestore(&vc_spinlock, flags);
-            filp->private_data = NULL;
+        if (pstChnInfo->is_jpeg) {
+            jpegDecChnBitMap[pstChnInfo->channel_index] = 0;
+            pstChnInfo->is_jpeg = false;
+        } else {
+            vdecChnBitMap &= ~((uint64_t)1 << pstChnInfo->channel_index);
         }
+        spin_unlock_irqrestore(&vc_spinlock, flags);
+        filp->private_data = NULL;
+        return 0;
     }
+
+    if (pstChnInfo->is_channel_exist) {
+        drv_vdec_destroy_chn(pstChnInfo->channel_index);
+        pstChnInfo->is_channel_exist = false;
+    }
+
+    spin_lock_irqsave(&vc_spinlock, flags);
+    if (pstChnInfo->is_jpeg) {
+        jpegDecChnBitMap[pstChnInfo->channel_index] = 0;
+        pstChnInfo->is_jpeg = false;
+    } else {
+        vdecChnBitMap &= ~((uint64_t)1 << pstChnInfo->channel_index);
+    }
+    spin_unlock_irqrestore(&vc_spinlock, flags);
+    up(&vdecSemArry[pstChnInfo->channel_index]);
+    filp->private_data = NULL;
 
     return 0;
 }
@@ -2116,6 +2100,7 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
     for( i = 0; i <VENC_MAX_CHN_NUM; i++) {
         init_waitqueue_head(&tVencWaitQueue[i]);
         sema_init(&vencSemArry[i], 1);
+        atomic_set(&venc_chn_info[i].ref_cnt, 0);
     }
 
     /* get the major number of the character device */
@@ -2148,6 +2133,7 @@ static int _vc_drv_register_cdev(struct vc_drv_device *vdev)
     for (i = 0; i < VDEC_MAX_CHN_NUM; i++) {
         init_waitqueue_head(&tVdecWaitQueue[i]);
         sema_init(&vdecSemArry[i], 1);
+        atomic_set(&vdec_chn_info[i].ref_cnt, 0);
     }
 
     return err;
@@ -2237,12 +2223,9 @@ static struct platform_driver vc_plat_driver = {
     #endif
 };
 #endif
-int vc_drv_init(void)
+static int vc_drv_init(void)
 {
     int ret = 0;
-#ifdef VC_SUPPORT_CLOCK_CONTROL
-    int core;
-#endif
     struct vc_drv_device *vdev;
 
     vdev = vzalloc( sizeof(*vdev));
@@ -2263,23 +2246,13 @@ int vc_drv_init(void)
 #ifdef PLATFORM_SOC
     ret = platform_driver_register(&vc_plat_driver);
 #endif
-#ifdef VC_SUPPORT_CLOCK_CONTROL
-    for (core = 0; core < MAX_NUM_VPU_CORE; core++) {
-        vpu_clk_enable(core);
-        vpu_clk_disable(core);
-    }
 
-    for (core = 0; core < MAX_NUM_JPU_CORE; core++) {
-        jpu_clk_enable(core);
-        jpu_clk_disable(core);
-    }
-#endif
     pr_info("_vc_drv_init result = 0x%x\n", ret);
 
     return ret;
 }
 
-void vc_drv_exit(void)
+static void vc_drv_exit(void)
 {
     struct vc_drv_device *vdev = pVcDrvDevice;
 

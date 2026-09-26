@@ -1794,9 +1794,13 @@ void disp_set_intf(u8 inst, enum vo_disp_intf intf)
 		disp_set_vo_type_sel(inst, DISP_VO_SEL_BT656);
 	else if (intf == VO_DISP_INTF_BT1120) {
 		disp_set_vo_type_sel(inst, DISP_VO_SEL_BT1120);
+	} else if (intf == VO_DISP_INTF_PARALLEL_RGB) {
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_RGB);
+	} else if (intf == VO_DISP_INTF_SERIAL_RGB) {
+		disp_set_vo_type_sel(inst, DISP_VO_SEL_SERIAL_RGB);
 	}
 
-	//to do: prgb/srgb i80(sw_i80/hw_mcu)
+	//to do: i80(sw_i80/hw_mcu)
 }
 EXPORT_SYMBOL_GPL(disp_set_intf);
 

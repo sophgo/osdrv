@@ -150,6 +150,9 @@ typedef struct _InitEncConfig_ {
     int s32MirrorDirection;
     int s32CmdQueueDepth;
     int s32EncMode;
+#ifdef MEDIA_V3
+    int mmuMode;
+#endif
 } InitEncConfig;
 
 typedef struct _EncOnePicCfg_ {
@@ -198,6 +201,14 @@ typedef struct _BufInfo {
     int size;
 } BufInfo;
 
+#ifdef MEDIA_V3
+typedef struct _MmuInfo {
+    uint64_t u64RealPhyAddr;
+    int mmuEntryIndex;
+    int mmuEntryNum;
+} MmuInfo;
+#endif
+
 #define MAX_NUM_PACKS 16
 #define H26X_BLOCK_MODE (-1)
 #define RET_VDEC_LOCK_TIMEOUT (-2)
@@ -215,6 +226,9 @@ typedef struct _stPack_ {
     uint64_t u64CustomMapAddr;
     uint32_t u32AvgCtuQp;
     uint32_t u32EncHwTime;
+#ifdef MEDIA_V3
+    MmuInfo mmuInfo;
+#endif
 } stPack;
 
 typedef struct _stStreamPack_ {
@@ -720,6 +734,9 @@ typedef struct _InitDecConfig_ {
     void* Ctable_buffer;
     unsigned int numOfDecFbc;
     unsigned int numOfDecwtl;
+#ifdef MEDIA_V3
+    unsigned int mmuMode;
+#endif
 } InitDecConfig;
 
 typedef struct _DecOnePicCfg_ {

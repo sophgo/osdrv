@@ -16,7 +16,6 @@
 #else
 #include <linux/types.h>
 #include <linux/delay.h>
-#include <linux/version.h>
 
 #endif	// ENV_CVITEST
 
@@ -42,10 +41,18 @@ static struct sclr_border_cfg g_bd_cfg[SCL_MAX_INST];
 static struct sclr_border_vpp_cfg g_bd_vpp_cfg[SCL_MAX_INST][BORDER_VPP_MAX];
 static struct sclr_odma_cfg g_odma_cfg[SCL_MAX_INST];
 static struct sclr_fbd_cfg g_fbd_cfg[SCL_MAX_INST];
+#ifdef CV84X6
+static uintptr_t reg_base_vd0, reg_base_vd1, reg_base_vd2, reg_base_vd3, reg_base_vo;
+static uintptr_t vd_sys_reg_base[4], vo_sys_reg_base, ve_sys_reg_base, sysc_cap_reg_base;
+static u32 reset_mask[SCL_MAX_INST] = {BIT(1), BIT(2), BIT(3), BIT(1), BIT(2), BIT(3), BIT(1), BIT(2), BIT(3), BIT(1), BIT(2), BIT(3), BIT(3)};
+static u32 sysc_cap_offset[SCL_MAX_INST] = {0x104, 0x108, 0x10c, 0x114, 0x118, 0x11c, 0x124, 0x128, 0x12c, 0x134, 0x138, 0x13c, 0x18c};
+static s8 sysc_cap_enable = 1;
+#else
 static uintptr_t reg_base_vi, reg_base_vd0, reg_base_vd1, reg_base_vo;
 static uintptr_t top_rst_reg_base, vi_sys_reg_base, vo_sys_reg_base;
 static u32 reset_mask[SCL_MAX_INST] = {BIT(16), BIT(17), BIT(18), BIT(19), BIT(10), BIT(11), BIT(14), BIT(15), BIT(4), BIT(5)};
 static u32 reset_apb_mask[4] = {BIT(11), BIT(12), BIT(13), BIT(14)}; //only vi apb reset bit pos differ in sw reset
+#endif
 static uintptr_t reg_base = 0;
 /****************************************************************************
  * Initial info
@@ -429,25 +436,92 @@ static int scl_coef_bicubic_opencv[128][4] = {
 /****************************************************************************
  * Interfaces
  ****************************************************************************/
-void sclr_set_base_addr(void *vi_base, void *vd0_base, void *vd1_base, void *vo_base)
+#ifdef CV84X6
+void _reg_write_mask(uintptr_t addr, u32 mask, u32 data)
 {
-	reg_base_vi = (uintptr_t)vi_base;
-	reg_base_vd0 = (uintptr_t)vd0_base;
-	reg_base_vd1 = (uintptr_t)vd1_base;
-	reg_base_vo = (uintptr_t)vo_base;
+	u32 value;
+
+	value = readl_relaxed((void __iomem *)addr) & ~mask;
+	value |= (data & mask);
+	writel(value, (void __iomem *)addr);
+}
+#endif
+
+void sclr_set_base_addr(void **base)
+{
+#ifdef CV84X6
+	reg_base_vd0 = (uintptr_t)base[0];
+	reg_base_vd1 = (uintptr_t)base[1];
+	reg_base_vd2 = (uintptr_t)base[2];
+	reg_base_vd3 = (uintptr_t)base[3];
+	reg_base_vo = (uintptr_t)base[4];
+#else
+	reg_base_vi = (uintptr_t)base[0];
+	reg_base_vd0 = (uintptr_t)base[1];
+	reg_base_vd1 = (uintptr_t)base[2];
+	reg_base_vo = (uintptr_t)base[3];
+#endif
 }
 
 void sclr_init_sys_top_addr(void)
 {
+#ifdef CV84X6
+	vd_sys_reg_base[0] = (uintptr_t)ioremap(REG_VD0_STS_BASE + 0x8, 0x4);
+	vd_sys_reg_base[1] = (uintptr_t)ioremap(REG_VD1_STS_BASE + 0x8, 0x4);
+	vd_sys_reg_base[2] = (uintptr_t)ioremap(REG_VD2_STS_BASE + 0x8, 0x4);
+	vd_sys_reg_base[3] = (uintptr_t)ioremap(REG_VD3_STS_BASE + 0x8, 0x4);
+	if (sysc_cap_enable != 0) {
+		sysc_cap_reg_base = (uintptr_t)ioremap(REG_SYSC_CAP_BASE, 0x190);
+		ve_sys_reg_base = (uintptr_t)ioremap(REG_VE_SYS_BASE + 0x8, 0x4);
+		_reg_write_mask(reg_base + ve_sys_reg_base, BIT(8), BIT(8));
+		iounmap((void *)ve_sys_reg_base);
+	}
+#else
 	top_rst_reg_base = (uintptr_t)ioremap(REG_TOP_RESET_BASE, 0x4);
 	vi_sys_reg_base = (uintptr_t)ioremap(REG_VI_STS_BASE, 0x8);
-	vo_sys_reg_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x8);
+#endif
+	vo_sys_reg_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x10);
+#ifdef CV84X6
+	_reg_write(vo_sys_reg_base + 0x0c, true);
+	TRACE_VPSS(DBG_DEBUG, "vpss_d set axi rt\n");
+#endif
 }
+
+#ifdef CV84X6
+u32 sclr_get_srsc_cap_value(u8 inst)
+{
+	u32 value;
+	if (sysc_cap_enable == 0)
+		return 0;
+	if (inst > VPSS_T11)
+		_reg_write_mask(reg_base + sysc_cap_reg_base + 0x4, BIT(3), BIT(3));
+
+	value = _reg_read(reg_base + sysc_cap_reg_base + sysc_cap_offset[inst]);
+
+	if (inst > VPSS_T11)
+		_reg_write_mask(reg_base + sysc_cap_reg_base + 0x4, BIT(3), 0);
+	return value;
+}
+
+void sclr_sysc_cap_enable(s8 value)
+{
+	sysc_cap_enable = value;
+}
+#endif
 
 void sclr_deinit_sys_top_addr(void)
 {
+#ifdef CV84X6
+	iounmap((void *)vd_sys_reg_base[0]);
+	iounmap((void *)vd_sys_reg_base[1]);
+	iounmap((void *)vd_sys_reg_base[2]);
+	iounmap((void *)vd_sys_reg_base[3]);
+	if (sysc_cap_enable != 0)
+		iounmap((void *)sysc_cap_reg_base);
+#else
 	iounmap((void *)top_rst_reg_base);
 	iounmap((void *)vi_sys_reg_base);
+#endif
 	iounmap((void *)vo_sys_reg_base);
 }
 
@@ -605,6 +679,130 @@ void sclr_update_coef(u8 inst, enum sclr_algorithm coef)
 	}
 
 	g_sc_cfg[inst].coef = coef;
+}
+
+static void sclr_update_area_coef_unidir(u8 inst, u8 is_hor)
+{
+	u8 i = 0;
+	u32 fac_13bit = 0, mask = 0x1, current_fac = g_sc_cfg[inst].fac.h_fac >> 10;
+	u32 stride = 0;
+
+	if (is_hor)
+		fac_13bit = (g_sc_cfg[inst].sc.crop.w << 13) / g_sc_cfg[inst].sc.dst.w;
+	else {
+		fac_13bit = (g_sc_cfg[inst].sc.crop.h << 13) / g_sc_cfg[inst].sc.dst.h;
+		current_fac = g_sc_cfg[inst].fac.v_fac >> 10;
+		mask = 0x4;
+	}
+
+	if (g_sc_cfg[inst].coef == SCL_COEF_AREA) {
+		if (current_fac == fac_13bit)
+			return;
+		if ((current_fac <= (1 << 13)) && (fac_13bit <= (1 << 13)))
+			return;
+		if ((current_fac >= (4 << 13)) && (fac_13bit >= (4 << 13)))
+			return;
+	} else if ((g_sc_cfg[inst].coef == SCL_COEF_BILINEAR) && (fac_13bit <= (1 << 13)))
+		return;
+
+	stride = 8192*32/fac_13bit;
+
+	if (fac_13bit <= (1 << 13)) {
+		int bilinear_coef[4] = {0, 1024, 0, 0};
+
+		for (i = 0; i < 128; ++i) {
+			bilinear_coef[1] -= 4;
+			bilinear_coef[2] += 4;
+
+			_reg_write(reg_base + REG_SCL_COEF1(inst),
+				   (bilinear_coef[1] << 16) |
+				   (bilinear_coef[0] & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF2(inst),
+				   (bilinear_coef[3] << 16) |
+				   (bilinear_coef[2] & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF0(inst), (mask << 8) | i);
+		}
+	} else if (fac_13bit <= (2 << 13)) {
+		int area_coef[4] = {(8192-(8192<<13)/fac_13bit)/2, (8192<<13)/fac_13bit,
+			(8192-(8192<<13)/fac_13bit)/2, 0};
+		for (i = 0; i < 128; ++i) {
+			area_coef[2] += stride;
+			if (area_coef[0] >= stride)
+				area_coef[0] -= stride;
+			else
+				area_coef[1] -= stride;
+			_reg_write(reg_base + REG_SCL_COEF1(inst),
+				   ((area_coef[1] >> 3) << 16) |
+				   ((area_coef[0] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF2(inst),
+				   ((area_coef[3] >> 3) << 16) |
+				   ((area_coef[2] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF0(inst), (mask << 8) | i);
+		}
+	} else if (fac_13bit <= (3 << 13)) {
+		int area_coef[4] = {(8192-(8192<<13)/fac_13bit)/2, (8192<<13)/fac_13bit,
+			(8192-(8192<<13)/fac_13bit)/2, 0};
+		for (i = 0; i < 128; ++i) {
+			area_coef[0] -= stride;
+			if (area_coef[2] <= ((8192<<13)/fac_13bit - stride))
+				area_coef[2] += stride;
+			else
+				area_coef[3] += stride;
+			_reg_write(reg_base + REG_SCL_COEF1(inst),
+				   ((area_coef[1] >> 3) << 16) |
+				   ((area_coef[0] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF2(inst),
+				   ((area_coef[3] >> 3) << 16) |
+				   ((area_coef[2] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF0(inst), (mask << 8) | i);
+		}
+	} else if (fac_13bit < (4 << 13)) {
+		int area_coef[4] = {((fac_13bit-(2<<13))<<13)/2/fac_13bit, (8192<<13)/fac_13bit,
+			(8192<<13)/fac_13bit, ((fac_13bit-(2<<13))<<13)/2/fac_13bit};
+		for (i = 127; i > 0; --i) {
+			if (area_coef[0] <= ((8192<<13)/fac_13bit - stride)) {
+				area_coef[0] += stride;
+				area_coef[3] -= stride;
+			}
+			_reg_write(reg_base + REG_SCL_COEF1(inst),
+				   ((area_coef[1] >> 3) << 16) |
+				   ((area_coef[0] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF2(inst),
+				   ((area_coef[3] >> 3) << 16) |
+				   ((area_coef[2] >> 3) & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF0(inst), (mask << 8) | i);
+		}
+	} else {
+		int area_coef[4] = {256, 256, 256, 256};
+
+		for (i = 0; i < 128; ++i) {
+			_reg_write(reg_base + REG_SCL_COEF1(inst),
+				   (area_coef[1] << 16) |
+				   (area_coef[0] & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF2(inst),
+				   (area_coef[3] << 16) |
+				   (area_coef[2] & 0x0fff));
+			_reg_write(reg_base + REG_SCL_COEF0(inst), (mask << 8) | i);
+		}
+	}
+}
+
+/**
+ * sclr_update_area_coef - setup sclr's scaling coef
+ *
+ * @param inst: (0~3), the instance of scaler which want to be configured.
+ */
+static void sclr_update_area_coef(u8 inst)
+{
+	if (inst >= SCL_MAX_INST) {
+		TRACE_VPSS(DBG_ERR, "inst=%d err.\n", inst);
+		return;
+	}
+
+	sclr_update_area_coef_unidir(inst, 1);
+	sclr_update_area_coef_unidir(inst, 0);
+
+	g_sc_cfg[inst].coef = SCL_COEF_AREA;
 }
 
 /**
@@ -801,8 +999,10 @@ void sclr_set_scale(u8 inst)
 		sclr_set_scale_mode(inst, true, false, true);
 		_reg_write_mask(reg_base + REG_SCL_SC_CFG(inst), 0xc00, 0xc00);
 		if(g_sc_cfg[inst].sc.algorithm != SCL_COEF_NEAREST){
-			fac.h_pos = (fac.h_fac >= (1 << 23)) ? ((fac.h_fac - (1 << 23)) >> 1) : (((1 << 23) - fac.h_fac) >> 1);
-			fac.v_pos = (fac.v_fac >= (1 << 23)) ? ((fac.v_fac - (1 << 23)) >> 1) : (((1 << 23) - fac.v_fac) >> 1);
+			fac.h_pos = (fac.h_fac >= (1 << 23)) ?
+				((fac.h_fac - (1 << 23)) >> 1) : (((1 << 23) - fac.h_fac) >> 1);
+			fac.v_pos = (fac.v_fac >= (1 << 23)) ?
+				((fac.v_fac - (1 << 23)) >> 1) : (((1 << 23) - fac.v_fac) >> 1);
 			if(fac.h_fac < (1 << 23)){
 				_reg_write_mask(reg_base + REG_SCL_SC_CFG(inst), BIT(6), BIT(6));
 				fac.h_pos |= BIT(31);
@@ -1020,7 +1220,7 @@ bool sclr_img_reg_shadow_mask(u8 inst, bool mask)
 
 	return is_masked;
 }
-
+#ifndef CV84X6
 static void vpss_v_sw_top_reset(u8 inst)
 {
 	_reg_write_mask(vi_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
@@ -1030,7 +1230,7 @@ static void vpss_v_sw_top_reset(u8 inst)
 
 	return;
 }
-
+#endif
 static void vpss_d_sw_top_reset(u8 inst)
 {
 	_reg_write_mask(vo_sys_reg_base, reset_mask[inst], reset_mask[inst]);// sw reset
@@ -1043,17 +1243,25 @@ static void vpss_d_sw_top_reset(u8 inst)
 
 static void vpss_t_sw_top_reset(u8 inst)
 {
+#ifdef CV84X6
+	_reg_write_mask(vd_sys_reg_base[(inst/3)], reset_mask[inst], reset_mask[inst]);
+	_reg_write_mask(vd_sys_reg_base[(inst/3)], reset_mask[inst], 0);// sw + apb reset
+#else
 	_reg_write_mask(top_rst_reg_base, reset_mask[inst], 0);// sw + apb reset
 	_reg_write_mask(top_rst_reg_base, reset_mask[inst], reset_mask[inst]);
-
+#endif
 	return;
 }
 
 void sclr_vpss_sw_top_reset(u8 inst)
 {
+#ifdef CV84X6
+	if(inst <= VPSS_T11)
+#else
 	if(inst <= VPSS_V3)
 		vpss_v_sw_top_reset(inst);
 	else if(inst <= VPSS_T3)
+#endif
 		vpss_t_sw_top_reset(inst);
 	else
 		vpss_d_sw_top_reset(inst);
@@ -1065,23 +1273,46 @@ void sclr_vpss_sw_top_reset(u8 inst)
 
 void sclr_img_reset(u8 inst)
 {
+#ifdef CV84X6
+	_reg_write_mask(reg_base + REG_SCL_IMG_DBG(inst), 0x00040000, BIT(18)); // img reset
+	_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), BIT(2)); // fbd reset
+#else
 	_reg_write(reg_base + REG_SCL_IMG_DBG(inst), 0xfffff); // img reset
 	if(inst > VPSS_V3)
 		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), BIT(2)); // fbd reset
+#endif
 }
 
 void sclr_img_start(u8 inst)
 {
-	_reg_write(reg_base + REG_SCL_IMG_DBG(inst), 0xfffff); // img reset
+#ifdef CV84X6
+	u32 ctrl_dbg;
 
+	sclr_img_reset(inst);
+	_reg_write_mask(reg_base + REG_SCL_MAP_CONV_STATUS(inst), BIT(0), 0);
+	if(_reg_read(reg_base + REG_SCL_MAP_CONV_CTRL(inst)) & BIT(2))
+		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), 0); // fbd init
+	_reg_write_mask(reg_base + REG_SCL_TOP_IMG_CTRL(inst), 0x00000003, BIT(1)); // sc start
+
+	if(g_fbd_cfg[inst].enable){
+		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(0), BIT(0)); // fbd start
+	}
+
+	ctrl_dbg = _reg_read(reg_base + REG_SCL_MAP_CONV_CTRL(inst));
+	TRACE_VPSS(DBG_DEBUG,
+		"vpss(%d) fbd kick: ctrl=0x%x status=0x%x\n",
+		inst, ctrl_dbg,
+		_reg_read(reg_base + REG_SCL_MAP_CONV_STATUS(inst)));
+#else
+	_reg_write(reg_base + REG_SCL_IMG_DBG(inst), 0xfffff); // img reset
 	if((inst > VPSS_V3) && (_reg_read(reg_base + REG_SCL_MAP_CONV_CTRL(inst)) & BIT(2)))
 		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(2), 0); // fbd init
-
 	_reg_write_mask(reg_base + REG_SCL_TOP_IMG_CTRL(inst), BIT(1), BIT(1)); // sc start
 
 	if(g_fbd_cfg[inst].enable){
 		_reg_write_mask(reg_base + REG_SCL_MAP_CONV_CTRL(inst), BIT(0), BIT(0)); // fbd start
 	}
+#endif
 }
 
 void sclr_slave_ready(u8 inst)
@@ -1245,8 +1476,11 @@ void sclr_img_dup2fancy_bypass(u8 inst, bool enable)
  *
  * @param inst: (0~3), the instance of scaler which want to be configured.
  * @param cfg: cir's settings.
+ * @param update: true if the cached settings are to be replaced as well. The
+ *	tile passes set it to false, so that the frame's settings survive for
+ *	the tile which comes next.
  */
-void sclr_cir_set_cfg(u8 inst, struct sclr_cir_cfg *cfg)
+void sclr_cir_set_cfg(u8 inst, struct sclr_cir_cfg *cfg, bool update)
 {
 	if (cfg->mode == SCL_CIR_DISABLE) {
 		_reg_write_mask(reg_base + REG_SCL_CFG(inst), 0x20, 0x20);
@@ -1269,7 +1503,21 @@ void sclr_cir_set_cfg(u8 inst, struct sclr_cir_cfg *cfg)
 		_reg_write_mask(reg_base + REG_SCL_CFG(inst), 0x20, 0x00);
 	}
 
-	g_cir_cfg[inst] = *cfg;
+	if (update)
+		g_cir_cfg[inst] = *cfg;
+}
+
+/**
+ * sclr_cir_get_cfg - get scl-circle's configurations.
+ *
+ * @param inst: (0~3), the instance of scaler which want to be configured.
+ */
+struct sclr_cir_cfg *sclr_cir_get_cfg(u8 inst)
+{
+	if (inst < SCL_MAX_INST)
+		return &g_cir_cfg[inst];
+
+	return NULL;
 }
 
 /****************************************************************************
@@ -1613,7 +1861,11 @@ void sclr_get_csc(u8 inst, struct sclr_csc_matrix *cfg)
 void sclr_core_set_cfg(u8 inst, struct sclr_core_cfg *cfg)
 {
 	sclr_ctrl_set_scale(inst, &cfg->sc);
-	sclr_update_coef(inst, cfg->sc.algorithm);
+	if (cfg->sc.algorithm == SCL_COEF_AREA)
+		sclr_update_area_coef(inst);
+	else
+		sclr_update_coef(inst, cfg->sc.algorithm);
+	g_sc_cfg[inst].fac = cfg->sc.fac;
 }
 
 void sclr_core_checksum_en(u8 inst, bool enable)
@@ -2268,20 +2520,27 @@ struct sclr_csc_matrix *sclr_get_csc_mtrx(enum sclr_csc csc)
 
 int sclr_set_fbd(u8 inst, struct sclr_fbd_cfg *cfg, bool is_update)
 {
+#ifndef CV84X6
 	if (inst >= SCL_MAX_INST || inst < VPSS_T0)
 		return -EINVAL;
-
+	_reg_write(reg_base + REG_SCL_TOP_FBD_HIGNDDR(inst), cfg->offset_base_y >> 32);
+#else
+	_reg_write(reg_base + REG_SCL_MAP_CONV_OFF_BASE_Y_35_32(inst), cfg->offset_base_y >> 32);
+	_reg_write(reg_base + REG_SCL_MAP_CONV_OFF_BASE_C_35_32(inst), cfg->offset_base_c >> 32);
+	_reg_write(reg_base + REG_SCL_MAP_CONV_COMP_BASE_Y_35_32(inst), cfg->comp_base_y >> 32);
+	_reg_write(reg_base + REG_SCL_MAP_CONV_COMP_BASE_C_35_32(inst), cfg->comp_base_c >> 32);
+#endif
 	_reg_write(reg_base + REG_SCL_MAP_CONV_OFF_BASE_Y(inst), cfg->offset_base_y & 0xfffffff0);
 	_reg_write(reg_base + REG_SCL_MAP_CONV_OFF_BASE_C(inst), cfg->offset_base_c & 0xfffffff0);
 	_reg_write(reg_base + REG_SCL_MAP_CONV_COMP_BASE_Y(inst), cfg->comp_base_y & 0xfffffff0);
 	_reg_write(reg_base + REG_SCL_MAP_CONV_COMP_BASE_C(inst), cfg->comp_base_c & 0xfffffff0);
-	_reg_write(reg_base + REG_SCL_TOP_FBD_HIGNDDR(inst), cfg->offset_base_y >> 32);
 	_reg_write(reg_base + REG_SCL_MAP_CONV_CROP_POS(inst), (cfg->crop.x << 16) | (cfg->crop.y));
 	_reg_write(reg_base + REG_SCL_MAP_CONV_CROP_SIZE(inst), (cfg->crop.w << 16) | (cfg->crop.h));
 	_reg_write(reg_base + REG_SCL_MAP_CONV_COMP_STRIDE(inst), (cfg->stride_y << 16) | (cfg->stride_c));
 	_reg_write(reg_base + REG_SCL_MAP_CONV_OFF_STRIDE(inst), (cfg->height_y << 16) | (cfg->height_c));
 	_reg_write(reg_base + REG_SCL_MAP_CONV_ENDIAN(inst), (cfg->endian << 4) | (cfg->endian));
-	_reg_write(reg_base + REG_SCL_MAP_CONV_BIT_DEPTH(inst), (cfg->mono_en << 12) | (cfg->otbg_64x64_en << 8) | (cfg->depth_y << 2) | (cfg->depth_c));
+	_reg_write(reg_base + REG_SCL_MAP_CONV_BIT_DEPTH(inst),
+		(cfg->mono_en << 12) | (cfg->otbg_64x64_en << 8) | (cfg->depth_y << 2) | (cfg->depth_c));
 	_reg_write_mask(reg_base + REG_SCL_MAP_CONV_OUT_CTRL(inst), 0x770000, (cfg->out_mode_y << 20) | (cfg->out_mode_c) << 16);
 	if(is_update)
 		g_fbd_cfg[inst] = *cfg;
@@ -2577,8 +2836,9 @@ void sclr_engine_cmdq(u8 inst, struct sclr_ctrl_cfg *cfgs, u8 cnt,
 	u32 flag_num = 1;	// 0: sc_str_flag, sc_stp_flag
 	union sclr_top_cfg_01 cfg_01;
 	u32 buflen;
-
+#ifndef CV84X6
 	base_ion_cache_invalidate(cmdq_phy_addr, cmdq_vir_addr, cmdq_buf_size);
+#endif
 	memset(cmdq_vir_addr, 0, cmdq_buf_size);
 	_reg_write(reg_base + REG_SCL_TOP_CMDQ_START(inst), 0x18000);
 	_reg_write(reg_base + REG_SCL_TOP_CMDQ_STOP(inst), 0x18000);
@@ -2626,7 +2886,9 @@ void sclr_engine_cmdq(u8 inst, struct sclr_ctrl_cfg *cfgs, u8 cnt,
 		TRACE_VPSS(DBG_ERR, "sc(%d) cmdq buf size is too small.\n", inst);
 
 	//TRACE_VPSS(DBG_DEBUG, "use buf len(%d) cmd_idx(%d).\n", buflen, cmd_idx);
+#ifndef CV84X6
 	base_ion_cache_flush(cmdq_phy_addr, cmdq_vir_addr, buflen);
+#endif
 
 	cmdq_intr_ctrl(REG_SCL_CMDQ_BASE(inst), 0x02);
 	cmdq_engine(REG_SCL_CMDQ_BASE(inst), (uintptr_t)cmdq_phy_addr,
@@ -2655,7 +2917,9 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 	u32 out_l_width = (out_size.w >> 1) & ~0x01; // make sure op on even pixels.
 	u32 h_sc_fac = cfg->fac.h_fac;
 	u32 h_pos = cfg->fac.h_pos;
-	if(cfg->algorithm != SCL_COEF_BICUBIC && cfg->algorithm != SCL_COEF_NEAREST && (in_size.w < out_size.w))
+	if(cfg->algorithm != SCL_COEF_BICUBIC &&
+		cfg->algorithm != SCL_COEF_NEAREST &&
+		(in_size.w < out_size.w))
 		h_pos = (((1 << 23) - h_sc_fac) >> 1);
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		h_pos = 1 << 22;
@@ -2672,7 +2936,8 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 	// right tile no mirror
 	R_first_phase = L_last_phase + h_sc_fac;
 	R_first_pixel = (R_first_phase >> fix) + ((cfg->mir_enable) ? 0 : 1);
-	cfg->tile.r_ini_phase = R_first_phase - ((R_first_pixel - 2) << fix) + h_pos * ((in_size.w < out_size.w) ? -1 : 1);
+	cfg->tile.r_ini_phase = R_first_phase -
+		((R_first_pixel - 2) << fix) + h_pos * ((in_size.w < out_size.w) ? -1 : 1);
 	cfg->tile.src_r_offset = R_first_pixel - 2;
 	cfg->tile.src_r_width = crop_size.w - cfg->tile.src_r_offset;
 #else
@@ -2687,7 +2952,9 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 	u64 L_last_phase = 0, R_first_phase = 0;
 	u16 L_last_pixel = 0, R_first_pixel = 0;
 	u8 mode = SCL_TILE_BOTH;
-	if(cfg->algorithm != SCL_COEF_BICUBIC && cfg->algorithm != SCL_COEF_NEAREST && (crop_size.w < out_size.w))
+	if(cfg->algorithm != SCL_COEF_BICUBIC &&
+		cfg->algorithm != SCL_COEF_NEAREST &&
+		(crop_size.w < out_size.w))
 		h_pos = (((1 << 23) - h_sc_fac) >> 1);
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		h_pos = 1 << 22;
@@ -2719,7 +2986,8 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 			cfg->tile.src_r_width = 0;
 			mode = SCL_TILE_LEFT;
 		} else {
-			u64 src_l = MAX((u64)src_l_last_pixel_max - cfg->crop.x - ((cfg->mir_enable) ? 0 : 1), MAX((2*h_sc_fac)>>fix, 2));
+			u64 src_l = MAX((u64)src_l_last_pixel_max - cfg->crop.x -
+				((cfg->mir_enable) ? 0 : 1), MAX((2*h_sc_fac)>>fix, 2));
 			if(cfg->crop.w - src_l < 2)
 				src_l = cfg->crop.w - 2;
 			if(((cfg->crop.w - src_l) << fix) / h_sc_fac < 2)
@@ -2733,7 +3001,8 @@ u8 sclr_tile_cal_size(u8 inst, u16 out_l_end)
 			// right tile no mirror
 			R_first_phase = L_last_phase;
 			R_first_pixel = (R_first_phase >> fix) + ((cfg->mir_enable) ? 0 : 1);
-			cfg->tile.r_ini_phase = R_first_phase - (((R_first_pixel - 2) & ~0x1) << fix) + h_pos * ((crop_size.w < out_size.w || cfg->algorithm == SCL_COEF_NEAREST) ? -1 : 1);
+			cfg->tile.r_ini_phase = R_first_phase - (((R_first_pixel - 2) & ~0x1) << fix) +
+				h_pos * ((crop_size.w < out_size.w || cfg->algorithm == SCL_COEF_NEAREST) ? -1 : 1);
 			cfg->tile.src_r_offset = (R_first_pixel - 2) & ~0x1;
 			cfg->tile.src_r_width = crop_size.w - cfg->tile.src_r_offset;
 			if (!out_l_width)
@@ -2805,7 +3074,9 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 	u32 out_l_width = (out_size.h >> 1) & ~0x01; // make sure op on even pixels.
 	u32 v_sc_fac = cfg->fac.v_fac;
 	u32 v_pos = cfg->fac.v_pos;
-	if(cfg->algorithm != SCL_COEF_BICUBIC && cfg->algorithm != SCL_COEF_NEAREST && (crop_size.h < out_size.h))
+	if(cfg->algorithm != SCL_COEF_BICUBIC &&
+		cfg->algorithm != SCL_COEF_NEAREST &&
+		(crop_size.h < out_size.h))
 		v_pos = (((1 << 23) - v_sc_fac) >> 1);
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		v_pos = 1 << 22;
@@ -2822,7 +3093,8 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 	// right tile no mirror
 	R_first_phase = L_last_phase;
 	R_first_pixel = (R_first_phase >> fix);
-	cfg->v_tile.r_ini_phase = R_first_phase - ((R_first_pixel - 2) << fix) + v_pos * ((crop_size.h < out_size.h) ? -1 : 1);
+	cfg->v_tile.r_ini_phase = R_first_phase -
+		((R_first_pixel - 2) << fix) + v_pos * ((crop_size.h < out_size.h) ? -1 : 1);
 	cfg->v_tile.src_r_offset = R_first_pixel - 2;
 	cfg->v_tile.src_r_width = crop_size.h - cfg->v_tile.src_r_offset;
 #else
@@ -2837,7 +3109,9 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 	u64 L_last_phase = 0, R_first_phase = 0;
 	u16 L_last_pixel = 0, R_first_pixel = 0;
 	u8 mode = SCL_TILE_BOTH;
-	if(cfg->algorithm != SCL_COEF_BICUBIC && cfg->algorithm != SCL_COEF_NEAREST && (crop_size.h < out_size.h))
+	if(cfg->algorithm != SCL_COEF_BICUBIC &&
+		cfg->algorithm != SCL_COEF_NEAREST &&
+		(crop_size.h < out_size.h))
 		v_pos = (((1 << 23) - v_sc_fac) >> 1);
 	else if (cfg->algorithm == SCL_COEF_NEAREST)
 		v_pos = 1 << 22;
@@ -2882,7 +3156,8 @@ u8 sclr_v_tile_cal_size(u8 inst, u16 out_l_end)
 			// right tile no mirror
 			R_first_phase = L_last_phase;
 			R_first_pixel = (R_first_phase >> fix);
-			cfg->v_tile.r_ini_phase = R_first_phase - (((R_first_pixel - 2) & ~0x1) << fix) + v_pos * ((crop_size.h < out_size.h || cfg->algorithm == SCL_COEF_NEAREST) ? -1 : 1);
+			cfg->v_tile.r_ini_phase = R_first_phase - (((R_first_pixel - 2) & ~0x1) << fix) +
+				v_pos * ((crop_size.h < out_size.h || cfg->algorithm == SCL_COEF_NEAREST) ? -1 : 1);
 			cfg->v_tile.src_r_offset = (R_first_pixel - 2) & ~0x1;
 			cfg->v_tile.src_r_width = crop_size.h - cfg->v_tile.src_r_offset;
 			mode = SCL_TILE_BOTH;
@@ -3010,9 +3285,149 @@ static void _gop_v_tile_shift(struct sclr_gop_ow_cfg *gop_ow_cfg, u16 left_heigh
 }
 
 /**
+ * _gop_h_tile_filter - apply the left/right tile split to a gop window.
+ *
+ * When both the h-tile and the v-tile are enabled, the h-side function
+ * (sclr_left_tile/sclr_right_tile) and the v-side one
+ * (sclr_top_tile/sclr_down_tile) are called for the same pass and both
+ * rebuild the whole gop config from the untouched g_gop_cfg shadow and
+ * write the same registers, so the one called last wins. Since the v-side
+ * function is always the last one, it has to apply the h-side split as
+ * well, otherwise the window is composited on a tile which does not own
+ * it.
+ *
+ * @param inst: the instance of sc
+ * @param gop_cfg: gop's config, its ow enable bit is cleared when the
+ *	window does not belong to the tile being configured.
+ * @param gop_ow_cfg: the window, updated to the tile's local coordinates.
+ * @param ow_inst: (0~7), the instance of ow.
+ * @param is_right: true if this pass writes the right tile.
+ * @return: true if the window belongs to this tile, false if it is dropped.
+ */
+static bool _gop_h_tile_filter(u8 inst, struct sclr_gop_cfg *gop_cfg,
+	struct sclr_gop_ow_cfg *gop_ow_cfg, u8 ow_inst, u8 is_right)
+{
+	struct sclr_scale_cfg *sc = &(sclr_get_cfg(inst)->sc);
+
+	if (is_right) {
+		// gop-window on left tile: it was handled by the left tile pass
+		if (gop_ow_cfg->end.x <= sc->tile.out_l_width) {
+			gop_cfg->gop_ctrl.raw &= ~BIT(ow_inst);
+			return false;
+		}
+		// gop-window on right tile: ok to go
+		if (gop_ow_cfg->start.x >= sc->tile.out_l_width) {
+			gop_ow_cfg->start.x -= sc->tile.out_l_width;
+			gop_ow_cfg->end.x -= sc->tile.out_l_width;
+		} else {
+			// gop-window on both tile: workaround
+			_gop_tile_shift(gop_ow_cfg, sc->tile.out_l_width,
+				sc->tile.out.w, true);
+		}
+	} else {
+		// gop-window on right tile: it is handled by the right tile pass
+		if (gop_ow_cfg->start.x >= sc->tile.out_l_width) {
+			gop_cfg->gop_ctrl.raw &= ~BIT(ow_inst);
+			return false;
+		}
+		// gop-window on both tile: workaround
+		if (gop_ow_cfg->end.x > sc->tile.out_l_width)
+			_gop_tile_shift(gop_ow_cfg, sc->tile.out_l_width,
+				sc->tile.out.w, false);
+	}
+
+	return true;
+}
+
+/**
+ * _cir_tile_filter - move the circle into the tile being configured.
+ *
+ * The circle is programmed once per job, in the coordinates of the whole
+ * output frame, while a tile pass renders into a raster which only covers its
+ * own tile. A circle left in frame coordinates is therefore drawn once per
+ * tile, at the wrong place, so its center has to be moved to the tile's local
+ * origin and its drawing window has to be narrowed to the tile here. A circle
+ * which does not overlap the tile at all is bypassed for this pass.
+ *
+ * @param inst: the instance of sc
+ * @param h_tile: true if this pass renders a h-tile (left/right split).
+ * @param is_right: true if the h-tile of this pass is the right one.
+ * @param v_tile: true if this pass renders a v-tile (top/down split).
+ * @param is_down: true if the v-tile of this pass is the down one.
+ */
+static void _cir_tile_filter(u8 inst, bool h_tile, bool is_right,
+	bool v_tile, bool is_down)
+{
+	struct sclr_scale_cfg *sc = &(sclr_get_cfg(inst)->sc);
+	struct sclr_cir_cfg cir_cfg = *sclr_cir_get_cfg(inst);
+	u16 l_width = sc->tile.out_l_width;
+	u16 t_height = sc->v_tile.out_l_width;
+	bool outside = false;
+
+	// the frame has no circle to place
+	if (cir_cfg.mode != SCL_CIR_SHAPE && cir_cfg.mode != SCL_CIR_LINE)
+		return;
+
+	if (h_tile) {
+		if (is_right) {
+			// circle on left tile: it was drawn by the left tile pass
+			if (cir_cfg.center.x + cir_cfg.radius <= l_width) {
+				outside = true;
+			} else {
+				cir_cfg.center.x -= l_width;
+				cir_cfg.rect.w = sc->tile.out.w - l_width;
+			}
+		} else {
+			// circle on right tile: it is drawn by the right tile pass
+			if (cir_cfg.center.x >= l_width + cir_cfg.radius) {
+				outside = true;
+			} else {
+				cir_cfg.rect.w = l_width;
+			}
+		}
+	}
+
+	if (v_tile) {
+		if (is_down) {
+			// circle on top tile: it was drawn by the top tile pass
+			if (cir_cfg.center.y + cir_cfg.radius <= t_height) {
+				outside = true;
+			} else {
+				cir_cfg.center.y -= t_height;
+				cir_cfg.rect.h = sc->v_tile.out.h - t_height;
+			}
+		} else {
+			// circle on down tile: it is drawn by the down tile pass
+			if (cir_cfg.center.y >= t_height + cir_cfg.radius) {
+				outside = true;
+			} else {
+				cir_cfg.rect.h = t_height;
+			}
+		}
+	}
+
+	cir_cfg.rect.x = 0;
+	cir_cfg.rect.y = 0;
+
+	if (outside) {
+		/*
+		 * The circle of this frame is owned by another tile, so it has to
+		 * be dropped here. Park it outside of the drawing window as well:
+		 * the bypass bit is only written by sc_update, so the geometry of
+		 * the previous pass would otherwise stay valid for this one.
+		 */
+		cir_cfg.center.x = cir_cfg.rect.w + cir_cfg.radius;
+		cir_cfg.center.y = cir_cfg.rect.h + cir_cfg.radius;
+		cir_cfg.mode = SCL_CIR_DISABLE;
+	}
+
+	sclr_cir_set_cfg(inst, &cir_cfg, false);
+}
+
+/**
  * sclr_left_tile - update parameters for left tile
  *
- * @param inst: (0~3), the instance of sc
+ * @param inst: the instance of sc
  * @param src_l_w: width of left tile from img
  * @return: true if success; false if no need or something wrong
  */
@@ -3110,6 +3525,8 @@ bool sclr_left_tile(u8 inst, u16 src_l_w)
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
 
+	_cir_tile_filter(inst, true, false, false, false);
+
 	sclr_reg_force_up(inst);
 	return true;
 }
@@ -3185,6 +3602,18 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_right)
 				TRACE_VPSS(DBG_DEBUG, "gop(%d) starty(%d) endy(%d), tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.y, gop_ow_cfg.end.y, sc->v_tile.out_l_width);
 
+				/*
+				 * This pass may cover the h-tile as well: is_right marks
+				 * the right tile passes and sc->tile_enable is still set
+				 * while the left tile is being processed. The h-side
+				 * split has to be applied here too, because the h-side
+				 * function is called before this one and its gop writes
+				 * are overwritten below.
+				 */
+				if ((is_right || sc->tile_enable) &&
+					!_gop_h_tile_filter(inst, &gop_cfg, &gop_ow_cfg, i, is_right))
+					continue;
+
 				// gop-window on right tile: pass
 				if (gop_ow_cfg.start.y >= sc->v_tile.out_l_width) {
 					gop_cfg.gop_ctrl.raw &= ~BIT(i);
@@ -3204,6 +3633,13 @@ bool sclr_top_tile(u8 inst, u16 src_l_h, u8 is_right)
 		TRACE_VPSS(DBG_DEBUG, "gop_cfg:%#x\n", gop_cfg.gop_ctrl.raw);
 		sclr_gop_set_cfg(inst, j, &gop_cfg, false);
 	}
+
+	/*
+	 * This pass may cover the h-tile as well: is_right marks the right
+	 * tile passes and sc->tile_enable is still set while the left tile is
+	 * being processed, so the circle has to be placed on the h-tile too.
+	 */
+	_cir_tile_filter(inst, (is_right || sc->tile_enable), is_right, true, false);
 
 	sclr_reg_force_up(inst);
 	return true;
@@ -3281,7 +3717,8 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 		if(cover_cfg.start.b.enable){
 			if((cover_cfg.img_size.w + cover_cfg.start.b.x) < sc->tile.out_l_width)
 				cover_cfg.img_size.w = 0;
-			else if((cover_cfg.img_size.w + cover_cfg.start.b.x) > sc->tile.out_l_width && cover_cfg.start.b.x < sc->tile.out_l_width)
+			else if((cover_cfg.img_size.w + cover_cfg.start.b.x) > sc->tile.out_l_width &&
+				cover_cfg.start.b.x < sc->tile.out_l_width)
 				cover_cfg.img_size.w = cover_cfg.img_size.w + cover_cfg.start.b.x - sc->tile.out_l_width;
 			if(cover_cfg.start.b.x < sc->tile.out_l_width)
 				cover_cfg.start.b.x = 0;
@@ -3345,7 +3782,8 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 				border_vpp_cfg.outside_end.x = 0;
 			else
 				border_vpp_cfg.outside_end.x -= sc->tile.out_l_width;
-			if(border_vpp_cfg.inside_start.x == border_vpp_cfg.inside_end.x && border_vpp_cfg.outside_start.x == border_vpp_cfg.outside_end.x)
+			if(border_vpp_cfg.inside_start.x == border_vpp_cfg.inside_end.x
+				&& border_vpp_cfg.outside_start.x == border_vpp_cfg.outside_end.x)
 				border_vpp_cfg.cfg.b.enable = false;
 			if(is_need_fill){
 				border_vpp_cfg.inside_start.y = border_vpp_cfg.outside_end.y + 1;
@@ -3353,11 +3791,16 @@ bool sclr_right_tile(u8 inst, u16 src_offset)
 				border_vpp_cfg.inside_end.y = border_vpp_cfg.inside_start.y;
 				border_vpp_cfg.outside_end.y += 1;
 			}
-			TRACE_VPSS(DBG_DEBUG, "right_tile: border_vpp(%d) inside_start_x(%d) inside_end_x(%d) outside_start_x(%d) outside_end_x(%d), tile_l_width(%d)\n",
-				j, border_vpp_cfg.inside_start.x, border_vpp_cfg.inside_end.x, border_vpp_cfg.outside_start.x, border_vpp_cfg.outside_end.x, sc->tile.out_l_width);
+			TRACE_VPSS(DBG_DEBUG, "right_tile: border_vpp(%d) inside_start_x(%d) \
+				inside_end_x(%d) outside_start_x(%d) outside_end_x(%d), tile_l_width(%d)\n",
+				j, border_vpp_cfg.inside_start.x, border_vpp_cfg.inside_end.x,
+				border_vpp_cfg.outside_start.x, border_vpp_cfg.outside_end.x, sc->tile.out_l_width);
 		}
 		sclr_border_vpp_set_cfg(inst, j, &border_vpp_cfg, true);
 	}
+
+	_cir_tile_filter(inst, true, true, false, false);
+
 	sclr_reg_force_up(inst);
 
 	sc->tile_enable = false;
@@ -3410,6 +3853,19 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 	else
 		sclr_set_scale_phase(inst, sc->fac.h_pos, sc->v_tile.r_ini_phase);
 
+	/*
+	 * The vertical split never moves start_x: the down tile has to stay on
+	 * the column the horizontal pass wrote to.  It can not just inherit the
+	 * cached odma start_x either, because the border/bgcolor pass programs a
+	 * full-frame odma (start_x == 0) so that the background gets filled over
+	 * the whole frame, and the bottom-left tile would then land at x=0
+	 * instead of the tile origin.  So restore the column origin explicitly.
+	 */
+	if (sc->tile_enable)
+		odma_cfg->mem.start_x = is_right ? sc->tile.dma_r_x : sc->tile.dma_l_x;
+	else if (!is_right)
+		odma_cfg->mem.start_x = sc->v_tile.dma_l_x;
+
 	odma_cfg->mem.start_y = sc->v_tile.dma_r_y;
 	odma_cfg->mem.width = dst.w;
 	odma_cfg->mem.height = dst.h;
@@ -3431,7 +3887,8 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 		if(cover_cfg.start.b.enable){
 			if((cover_cfg.img_size.h + cover_cfg.start.b.y) < sc->v_tile.out_l_width)
 				cover_cfg.img_size.h = 0;
-			else if((cover_cfg.img_size.h + cover_cfg.start.b.y) > sc->v_tile.out_l_width && cover_cfg.start.b.y < sc->v_tile.out_l_width)
+			else if((cover_cfg.img_size.h + cover_cfg.start.b.y) > sc->v_tile.out_l_width &&
+				cover_cfg.start.b.y < sc->v_tile.out_l_width)
 				cover_cfg.img_size.h = cover_cfg.img_size.h + cover_cfg.start.b.y - sc->v_tile.out_l_width;
 			if(cover_cfg.start.b.y < sc->v_tile.out_l_width)
 				cover_cfg.start.b.y = 0;
@@ -3451,6 +3908,18 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				gop_ow_cfg = gop_cfg.ow_cfg[i];
 				TRACE_VPSS(DBG_DEBUG, "gop(%d) starty(%d) endy(%d), v_tile_l_width(%d)\n",
 					i, gop_ow_cfg.start.y, gop_ow_cfg.end.y, sc->v_tile.out_l_width);
+
+				/*
+				 * This pass may cover the h-tile as well: is_right marks
+				 * the right tile passes and sc->tile_enable is still set
+				 * while the left tile is being processed. The h-side
+				 * split has to be applied here too, because the h-side
+				 * function is called before this one and its gop writes
+				 * are overwritten below.
+				 */
+				if ((is_right || sc->tile_enable) &&
+					!_gop_h_tile_filter(inst, &gop_cfg, &gop_ow_cfg, i, is_right))
+					continue;
 
 				// gop-window on left tile: pass
 				if (gop_ow_cfg.end.y <= sc->v_tile.out_l_width) {
@@ -3495,7 +3964,8 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				border_vpp_cfg.outside_end.y = 0;
 			else
 				border_vpp_cfg.outside_end.y -= sc->v_tile.out_l_width;
-			if(border_vpp_cfg.inside_start.y == border_vpp_cfg.inside_end.y && border_vpp_cfg.outside_start.y == border_vpp_cfg.outside_end.y)
+			if(border_vpp_cfg.inside_start.y == border_vpp_cfg.inside_end.y &&
+				border_vpp_cfg.outside_start.y == border_vpp_cfg.outside_end.y)
 				border_vpp_cfg.cfg.b.enable = false;
 			if(is_need_fill){
 				border_vpp_cfg.inside_start.x = border_vpp_cfg.outside_end.x + 1;
@@ -3503,11 +3973,20 @@ bool sclr_down_tile(u8 inst, u16 src_offset, u8 is_right)
 				border_vpp_cfg.inside_end.x = border_vpp_cfg.inside_start.x;
 				border_vpp_cfg.outside_end.x += 1;
 			}
-			TRACE_VPSS(DBG_DEBUG, "down_tile: border_vpp(%d) inside_start_y(%d) inside_end_y(%d) outside_start_y(%d) outside_end_y(%d), tile_l_width(%d)\n",
-				j, border_vpp_cfg.inside_start.y, border_vpp_cfg.inside_end.y, border_vpp_cfg.outside_start.y, border_vpp_cfg.outside_end.y, sc->v_tile.out_l_width);
+			TRACE_VPSS(DBG_DEBUG, "down_tile: border_vpp(%d) inside_start_y(%d) \
+				inside_end_y(%d) outside_start_y(%d) outside_end_y(%d), tile_l_width(%d)\n",
+				j, border_vpp_cfg.inside_start.y, border_vpp_cfg.inside_end.y,
+				border_vpp_cfg.outside_start.y, border_vpp_cfg.outside_end.y, sc->v_tile.out_l_width);
 		}
 		sclr_border_vpp_set_cfg(inst, j, &border_vpp_cfg, false);
 	}
+
+	/*
+	 * This pass may cover the h-tile as well: is_right marks the right
+	 * tile passes and sc->tile_enable is still set while the left tile is
+	 * being processed, so the circle has to be placed on the h-tile too.
+	 */
+	_cir_tile_filter(inst, (is_right || sc->tile_enable), is_right, true, true);
 	sclr_reg_force_up(inst);
 	return true;
 }

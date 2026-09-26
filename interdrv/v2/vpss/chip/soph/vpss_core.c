@@ -12,6 +12,7 @@
 #include <linux/compat.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-buf.h>
+#include <linux/version.h>
 
 #include "base_ctx.h"
 
@@ -38,30 +39,66 @@
 #define VPSS_DEV_NAME "soph-vpss"
 
 u32 vpss_log_lv = DBG_WARN;
-int hw_mask = 0x3ff; //default vpss_v + vpss_t + vpss_d
 
 static atomic_t open_count = ATOMIC_INIT(0);
 struct device *device;
+#ifdef CV84X6
+#define REG_NUM 5
+int hw_mask = 0x1fff; //default vpss_t + vpss_d
+static const char *const vpss_name[] = {"vpss_t0", "vpss_t1", "vpss_t2",
+										"vpss_t3", "vpss_t4", "vpss_t5",
+										"vpss_t6", "vpss_t7", "vpss_t8",
+										"vpss_t9", "vpss_t10", "vpss_t11",
+										"vpss_d"};
+static const char *const vpss_clk_name[VPSS_MAX][3] = {
+				{"clk_vd0_sys2", "clk_vd0_apb_vpss0", "clk_vpss_t0"},
+				{"clk_vd0_sys2", "clk_vd0_apb_vpss1", "clk_vpss_t1"},
+				{"clk_vd0_sys2", "clk_vd0_apb_vpss2", "clk_vpss_t2"},
+				{"clk_vd1_sys2", "clk_vd1_apb_vpss0", "clk_vpss_t3"},
+				{"clk_vd1_sys2", "clk_vd1_apb_vpss1", "clk_vpss_t4"},
+				{"clk_vd1_sys2", "clk_vd1_apb_vpss2", "clk_vpss_t5"},
+				{"clk_vd2_sys2", "clk_vd2_apb_vpss0", "clk_vpss_t6"},
+				{"clk_vd2_sys2", "clk_vd2_apb_vpss1", "clk_vpss_t7"},
+				{"clk_vd2_sys2", "clk_vd2_apb_vpss2", "clk_vpss_t8"},
+				{"clk_vd3_sys2", "clk_vd3_apb_vpss0", "clk_vpss_t9"},
+				{"clk_vd3_sys2", "clk_vd3_apb_vpss1", "clk_vpss_t10"},
+				{"clk_vd3_sys2", "clk_vd3_apb_vpss2", "clk_vpss_t11"},
+				{"clk_vo_sys1", NULL, "clk_vpss_d0"}};
+#else
+#define REG_NUM 4
+int hw_mask = 0x3ff; //default vpss_v + vpss_t + vpss_d
 static const char *const vpss_name[] = {"vpss_v0", "vpss_v1", "vpss_v2",
 										"vpss_v3", "vpss_t0", "vpss_t1",
 										"vpss_t2", "vpss_t3", "vpss_d0",
 										"vpss_d1"};
 static const char *const vpss_clk_name[VPSS_MAX][3] = {
-					{"clk_vi_sys3", NULL, "clk_vpss_v0"},
-					{"clk_vi_sys3", NULL, "clk_vpss_v1"},
-					{"clk_vi_sys3", NULL, "clk_vpss_v2"},
-					{"clk_vi_sys3", NULL, "clk_vpss_v3"},
-					{"clk_vd0_sys2", "clk_vd0_apb_vpss0", "clk_vpss_t0"},
-					{"clk_vd0_sys2", "clk_vd0_apb_vpss1", "clk_vpss_t1"},
-					{"clk_vd1_sys2", "clk_vd1_apb_vpss0", "clk_vpss_t2"},
-					{"clk_vd1_sys2", "clk_vd1_apb_vpss1", "clk_vpss_t3"},
-					{"clk_vo_sys1", NULL, "clk_vpss_d0"},
-					{"clk_vo_sys1", NULL, "clk_vpss_d1"}};
+				{"clk_vi_sys3", NULL, "clk_vpss_v0"},
+				{"clk_vi_sys3", NULL, "clk_vpss_v1"},
+				{"clk_vi_sys3", NULL, "clk_vpss_v2"},
+				{"clk_vi_sys3", NULL, "clk_vpss_v3"},
+				{"clk_vd0_sys2", "clk_vd0_apb_vpss0", "clk_vpss_t0"},
+				{"clk_vd0_sys2", "clk_vd0_apb_vpss1", "clk_vpss_t1"},
+				{"clk_vd1_sys2", "clk_vd1_apb_vpss0", "clk_vpss_t2"},
+				{"clk_vd1_sys2", "clk_vd1_apb_vpss1", "clk_vpss_t3"},
+				{"clk_vo_sys1", NULL, "clk_vpss_d0"},
+				{"clk_vo_sys1", NULL, "clk_vpss_d1"}};
+#endif
 
 module_param(vpss_log_lv, int, 0644);
 
 module_param(hw_mask, int, 0644);
 
+#ifdef CV84X6
+u32 get_diff_in_us(struct timespec64 t1, struct timespec64 t2)
+{
+	struct timespec64 ts_delta = timespec64_sub(t2, t1);
+	u64 ts_ns;
+
+	ts_ns = timespec64_to_ns(&ts_delta);
+	do_div(ts_ns, 1000);
+	return ts_ns;
+}
+#endif
 
 static void vpss_timer_core_update(void *data)
 {
@@ -70,26 +107,30 @@ static void vpss_timer_core_update(void *data)
 	struct vpss_device *dev = (struct vpss_device *)data;
 	struct timespec64 cur_time;
 	static struct timespec64 pre_time = {0};
+	static u32 pre_int[VPSS_MAX] = {0};
 
 	ktime_get_ts64(&cur_time);
 	duration = get_diff_in_us(pre_time, cur_time);
 	pre_time = cur_time;
 
 	if (duration < 1000000 || duration > 2000000) {
-		for (i = VPSS_V0; i < VPSS_MAX; ++i)
+		for (i = 0; i < VPSS_MAX; ++i)
 			dev->vpss_cores[i].hw_duration_total = 0;
 		return;
 	}
 
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		dev->vpss_cores[i].duty_ratio = (dev->vpss_cores[i].hw_duration_total * 100) / duration;
 		 // In units of 10 milliseconds
 		dev->vpss_cores[i].duty_ratio_long += (dev->vpss_cores[i].hw_duration_total / 10000);
 		dev->vpss_cores[i].hw_duration_total = 0;
+		if (dev->vpss_cores[i].int_cnt == pre_int[i])
+			dev->vpss_cores[i].fps = 0;
+		pre_int[i] = dev->vpss_cores[i].int_cnt;
 	}
 }
-
-static int vpss_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
+#ifndef CV84X6
+int vpss_core_cb(void *dev, enum enum_modules_id caller, u32 cmd, void *arg)
 {
 	//struct vpss_device *vpss_dev = (struct vpss_device *)dev;
 	int rc = -1;
@@ -280,7 +321,7 @@ static int vpss_core_register_cb(struct vpss_device *dev)
 
 	return base_reg_module_cb(&reg_cb);
 }
-
+#endif
 
 static irqreturn_t vpss_isr(int irq, void *data)
 {
@@ -340,7 +381,7 @@ static void vpss_dev_init(struct vpss_device *dev)
 	/* initialize locks */
 	spin_lock_init(&dev->lock);
 
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
 		core->vpss_type = i;
 		spin_lock_init(&core->vpss_lock);
@@ -381,7 +422,7 @@ static void vpss_dev_deinit(struct vpss_device *dev)
 	vpss_deinit();
 	vpss_hal_deinit();
 
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
 
 		if (core->clk_src)
@@ -392,7 +433,7 @@ static void vpss_dev_deinit(struct vpss_device *dev)
 			clk_unprepare(core->clk_vpss);
 	}
 }
-
+#ifndef CV84X6
 static void vpss_set_sys_config(void)
 {
 	vi_sys_set_offline(VI_SYS_AXI_BUS_VPSS0, true);
@@ -408,13 +449,13 @@ static void vpss_set_sys_config(void)
 	VO_SYS_CLK_RATIO_CONFIG(VPSS0, 0x10); //set full-speed clock
 	VO_SYS_CLK_RATIO_CONFIG(VPSS1, 0x10);
 }
-
+#endif
 static int vpss_init_resources(struct platform_device *pdev)
 {
 	int rc = 0;
 	int irq_num;
 	struct resource *res = NULL;
-	void *reg_base[4];
+	void *reg_base[REG_NUM];
 	struct vpss_device *dev;
 	int i;
 
@@ -445,7 +486,12 @@ static int vpss_init_resources(struct platform_device *pdev)
 			return -EINVAL;
 		}
 	}
-	sclr_set_base_addr(reg_base[0], reg_base[1], reg_base[2], reg_base[3]);
+	sclr_set_base_addr(reg_base);
+
+#ifdef CV84X6
+	if ((hw_mask & 0x10000) == 0x10000)
+		sclr_sysc_cap_enable(0);
+#endif
 
 	sclr_init_sys_top_addr();
 
@@ -463,6 +509,7 @@ static int vpss_init_resources(struct platform_device *pdev)
 	}
 
 	/* clk */
+#ifndef CV84X6
 	for (i = 0; i < VPSS_MAX; ++i) {
 		dev->vpss_cores[i].clk_src = devm_clk_get(&pdev->dev, vpss_clk_name[i][0]);
 		if (IS_ERR(dev->vpss_cores[i].clk_src)) {
@@ -486,6 +533,7 @@ static int vpss_init_resources(struct platform_device *pdev)
 			dev->vpss_cores[i].clk_vpss = NULL;
 		}
 	}
+#endif
 
 	return rc;
 }
@@ -511,7 +559,7 @@ static int vpss_open(struct inode *inode, struct file *filep)
 		return 0;
 	}
 
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
 		if (core->clk_apb)
 			clk_enable(core->clk_apb);
@@ -541,13 +589,16 @@ static int vpss_release(struct inode *inode, struct file *filep)
 		TRACE_VPSS(DBG_INFO, "vpss_close: open %d times\n", i);
 		return 0;
 	}
+#ifndef CV84X6
 	vpss_release_grp();
+#endif
 	vpss_mode_deinit();
 
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		core = &dev->vpss_cores[i];
 		core->duty_ratio = 0;
 		core->hw_duration_total = 0;
+		core->fps = 0;
 
 		if (core->clk_apb)
 			clk_disable(core->clk_apb);
@@ -640,15 +691,18 @@ static int vpss_probe(struct platform_device *pdev)
 			goto err_irq;
 		}
 	}
-
+#ifndef CV84X6
 	/* scaler register cb */
 	if (vpss_core_register_cb(dev)) {
 		dev_err(&pdev->dev, "Failed to register vpss cb, err %d\n", rc);
 		goto err_irq;
 	}
+#endif
 
 	vpss_dev_init(dev);
+#ifndef CV84X6
 	vpss_set_sys_config();
+#endif
 
 	device = &pdev->dev;
 
@@ -675,29 +729,28 @@ err_dev:
  * bmd_remove - device remove method.
  * @pdev: Pointer of platform device.
  */
-static void vpss_remove(struct platform_device *pdev)
+static int vpss_remove_ex(struct platform_device *pdev)
 {
 	struct vpss_device *dev;
 	int i;
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "invalid param");
-		// return -EINVAL;
-		return;
+		return -EINVAL;
 	}
 
 	dev = dev_get_drvdata(&pdev->dev);
 	if (!dev) {
 		dev_err(&pdev->dev, "Can not get vpss drvdata");
-		// return -EINVAL;
-		return;
+		return -EINVAL;
 	}
 
 	vpss_dev_deinit(dev);
-	/* scaler rm cb */
+#ifndef CV84X6
 	if (vpss_core_rm_cb()) {
 		dev_err(&pdev->dev, "Failed to rm vpss cb\n");
 	}
+#endif
 	for (i = 0; i < VPSS_MAX; ++i)
 		devm_free_irq(&pdev->dev, dev->vpss_cores[i].irq_num, &dev->vpss_cores[i]);
 
@@ -709,14 +762,17 @@ static void vpss_remove(struct platform_device *pdev)
 
 	TRACE_VPSS(DBG_WARN, "vpss remove done\n");
 
-	// return 0;
+	return 0;
 }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
-static int vpss_remove_ex(struct platform_device *pdev)
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+static int vpss_remove(struct platform_device *pdev)
 {
-    vpss_remove(pdev);
-    return 0;
+	return vpss_remove_ex(pdev);
+}
+#else
+static void vpss_remove(struct platform_device *pdev)
+{
+	vpss_remove_ex(pdev);
 }
 #endif
 
@@ -750,10 +806,12 @@ static int vpss_resume(struct device *dev)
 
 	/*step 1 turn on clock*/
 	vpss_clk_enable();
+#ifndef CV84X6
 	vpss_set_sys_config();
+#endif
 
 	/*step 2 register reset*/
-	for (i = VPSS_V0; i < VPSS_MAX; ++i) {
+	for (i = 0; i < VPSS_MAX; ++i) {
 		if (hw_mask & BIT(i)) {
 			core = &vpss_dev->vpss_cores[i];
 
@@ -804,11 +862,7 @@ static struct platform_device vpss_pdev = {
 
 static struct platform_driver vpss_pdrv = {
 	.probe      = vpss_probe,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
-	.remove     = vpss_remove_ex,
-#else
 	.remove     = vpss_remove,
-#endif
 	.driver     = {
 		.name		= "vpss",
 		.owner		= THIS_MODULE,
@@ -886,9 +940,8 @@ fail_detach:
 MODULE_DESCRIPTION("Cvitek Video Driver");
 MODULE_AUTHOR("weiyong.luo");
 MODULE_LICENSE("GPL");
-module_init(vpss_core_init);
-module_exit(vpss_core_exit);
 #if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
-
+module_init(vpss_core_init);
+module_exit(vpss_core_exit);

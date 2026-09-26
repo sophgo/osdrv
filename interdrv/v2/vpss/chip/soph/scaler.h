@@ -62,6 +62,24 @@ struct sclr_status {
 	u8 rsv : 2;
 };
 
+#ifdef CV84X6
+enum vpss_dev{
+	VPSS_T0 = 0,
+	VPSS_T1,
+	VPSS_T2,
+	VPSS_T3,
+	VPSS_T4,
+	VPSS_T5,
+	VPSS_T6,
+	VPSS_T7,
+	VPSS_T8,
+	VPSS_T9,
+	VPSS_T10,
+	VPSS_T11,
+	VPSS_D0,
+	VPSS_MAX,
+};
+#else
 enum vpss_dev{
 	VPSS_V0 = 0,
 	VPSS_V1,
@@ -75,6 +93,7 @@ enum vpss_dev{
 	VPSS_D1,
 	VPSS_MAX,
 };
+#endif
 
 enum sclr_input {
 	SCL_INPUT_ISP,
@@ -183,6 +202,7 @@ enum sclr_algorithm {
 	SCL_COEF_BILINEAR,
 	SCL_COEF_NEAREST,
 	SCL_COEF_BICUBIC_OPENCV,
+	SCL_COEF_AREA,
 	SCL_COEF_MAX
 };
 
@@ -702,6 +722,7 @@ struct sclr_core_cfg {
 	struct sclr_scale_cfg sc;
 	struct sclr_tile_cfg tile;
 	enum sclr_algorithm coef;
+	struct sclr_fac_cfg fac;
 	struct sclr_cover_cfg cover_cfg[SCL_MAX_COVER_INST];
 };
 
@@ -799,7 +820,7 @@ struct sclr_fbd_cfg {
 };
 
 
-void sclr_set_base_addr(void *vi_base, void *vd0_base, void *vd1_base, void *vo_base);
+void sclr_set_base_addr(void **base);
 void sclr_init_sys_top_addr(void);
 void sclr_deinit_sys_top_addr(void);
 void sclr_reg_force_up(u8 inst);
@@ -848,7 +869,8 @@ struct sclr_oenc_cfg *sclr_oenc_get_cfg(void);
 void sclr_cover_set_cfg(u8 inst, u8 cover_w_inst, struct sclr_cover_cfg *cover_cfg, bool update);
 void sclr_img_set_trig(u8 inst, enum sclr_img_trig_src trig_src);
 void sclr_img_get_sb_default(struct sclr_img_in_sb_cfg *cfg);
-void sclr_cir_set_cfg(u8 inst, struct sclr_cir_cfg *cfg);
+void sclr_cir_set_cfg(u8 inst, struct sclr_cir_cfg *cfg, bool update);
+struct sclr_cir_cfg *sclr_cir_get_cfg(u8 inst);
 void sclr_odma_set_cfg(u8 inst, struct sclr_odma_cfg *cfg);
 struct sclr_odma_cfg *sclr_odma_get_cfg(u8 inst);
 void sclr_odma_set_fmt(u8 inst, enum sclr_format fmt);
@@ -925,5 +947,10 @@ int vpss_dwa_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fm
 int vpss_stitch_online_single(enum vpss_dev inst, int w, int h, enum sclr_format fmt_out, u64 src_addr);
 int sclr_img_validate_cb_cfg(struct sclr_img_in_sb_cfg *cfg);
 bool sclr_img_reg_shadow_mask(u8 inst, bool mask);
+
+#ifdef CV84X6
+u32 sclr_get_srsc_cap_value(u8 inst);
+void sclr_sysc_cap_enable(s8 value);
+#endif
 
 #endif  //_SCL_H_
