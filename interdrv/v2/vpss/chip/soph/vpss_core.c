@@ -509,7 +509,7 @@ static int vpss_init_resources(struct platform_device *pdev)
 	}
 
 	/* clk */
-#ifndef CV84X6
+#if 0
 	for (i = 0; i < VPSS_MAX; ++i) {
 		dev->vpss_cores[i].clk_src = devm_clk_get(&pdev->dev, vpss_clk_name[i][0]);
 		if (IS_ERR(dev->vpss_cores[i].clk_src)) {
