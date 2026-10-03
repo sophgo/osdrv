@@ -916,23 +916,69 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    /* The pool is mutated by vdi_allocate/free_dma_memory() under
+     * vmem_lock(); hold the same lock across the lookup AND the copy
+     * below.  Without it, a concurrent free/alloc can hand us a torn
+     * or already-reclaimed slot and the memcpy runs off the end of
+     * the mapping (data abort in __memcpy, ESR 0x96000047). */
+    vmem_lock(core_idx);
+
+    /* Exact base match first: callers pass back the phys_addr that
+     * vdi_allocate_dma_memory() returned and stored in this pool, so
+     * that is the real key.  The interval scan below is only a
+     * fallback for a genuine interior address. */
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
-        if (vdi->vpu_buffer_pool[i].inuse == 1)
+        if (vdi->vpu_buffer_pool[i].inuse == 1 &&
+            vdi->vpu_buffer_pool[i].vdb.phys_addr == (unsigned long)addr)
         {
             vdb = vdi->vpu_buffer_pool[i].vdb;
-            if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
-                break;
-			vdb.size = 0;
+            break;
+        }
+    }
+
+    /* interval fallback: only for a genuine interior address */
+    if (i == MAX_VPU_BUFFER_POOL)
+    {
+        for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+        {
+            if (vdi->vpu_buffer_pool[i].inuse == 1)
+            {
+                vdb = vdi->vpu_buffer_pool[i].vdb;
+                if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
+                    break;
+                vdb.size = 0;
+            }
         }
     }
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
 
+#ifdef PLATFORM_SOC
+    /* Never let this copy run past the end of the slot it matched:
+     * out-of-range addressing is exactly what faults inside
+     * __memcpy, so reject it up front instead.  Check addr >= phys_addr
+     * explicitly first: without it the unsigned subtraction below wraps
+     * for an address below the base. */
+    if (addr < (unsigned long)vdb.phys_addr ||
+        (addr - (unsigned long)vdb.phys_addr) + (unsigned long)len > (unsigned long)vdb.size) {
+        VLOG(ERR, "address 0x%08x len 0x%x exceeds matched slot size 0x%lx!!!\n",
+             (int)addr, len, (unsigned long)vdb.size);
+        vmem_unlock(core_idx);
+        return -1;
+    }
+#endif
+
     zero = (Uint8*)osal_malloc(len);
+    if (!zero) {
+        VLOG(ERR, "[VDI] fail to allocate %d bytes for clear\n", len);
+        vmem_unlock(core_idx);
+        return -1;
+    }
     osal_memset((void*)zero, 0x00, len);
 
 #ifdef PLATFORM_SOC
@@ -941,16 +987,23 @@ int vdi_clear_memory(unsigned long core_idx, PhysicalAddress addr, int len, int 
 #else
     pcie_memcpy_s2d(addr, zero, len);
 #endif
+#ifdef MEDIA_V3
+    /* Read the real 36-bit physical HERE, while the lock still protects
+     * slot i: mmu_alloc_virt_addr() clobbered phys_addr with the
+     * MMU-virtual address, but cache maintenance goes through
+     * phys_to_virt() on the physical.  Reading it after the unlock let a
+     * concurrent alloc/free recycle the slot and hand back the wrong
+     * physical.  The offset math above already consumed the MMU-virtual
+     * phys_addr, so overwriting it here is safe. */
+    if (vdb.is_cached && vdi->vpu_buffer_pool[i].phys_addr_36bit)
+        vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
+#endif
+    /* unlock on BOTH paths: the lock is taken unconditionally above, so
+     * releasing it only inside the PLATFORM_SOC branch would leak it on
+     * the PCIe build and deadlock every later pool operation. */
+    vmem_unlock(core_idx);
 
     if (vdb.is_cached) {
-#ifdef MEDIA_V3
-        /* mmu_alloc_virt_addr() clobbered phys_addr with the VPU MMU-virtual
-         * address; cache maintenance goes through phys_to_virt() on the
-         * physical, so it must use the real 36-bit physical saved in the pool
-         * (the MMU-virtual address would fault in phys_to_virt). */
-        if (vdi->vpu_buffer_pool[i].phys_addr_36bit)
-            vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
-#endif
         if (vpu_flush_dcache(&vdb) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
@@ -980,23 +1033,69 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    /* The pool is mutated by vdi_allocate/free_dma_memory() under
+     * vmem_lock(); hold the same lock across the lookup AND the copy
+     * below.  Without it, a concurrent free/alloc can hand us a torn
+     * or already-reclaimed slot and the memcpy runs off the end of
+     * the mapping (data abort in __memcpy, ESR 0x96000047). */
+    vmem_lock(core_idx);
+
+    /* Exact base match first: callers pass back the phys_addr that
+     * vdi_allocate_dma_memory() returned and stored in this pool, so
+     * that is the real key.  The interval scan below is only a
+     * fallback for a genuine interior address. */
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
-        if (vdi->vpu_buffer_pool[i].inuse == 1)
+        if (vdi->vpu_buffer_pool[i].inuse == 1 &&
+            vdi->vpu_buffer_pool[i].vdb.phys_addr == (unsigned long)addr)
         {
             vdb = vdi->vpu_buffer_pool[i].vdb;
-            if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
-                break;
-			vdb.size = 0;
+            break;
+        }
+    }
+
+    /* interval fallback: only for a genuine interior address */
+    if (i == MAX_VPU_BUFFER_POOL)
+    {
+        for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+        {
+            if (vdi->vpu_buffer_pool[i].inuse == 1)
+            {
+                vdb = vdi->vpu_buffer_pool[i].vdb;
+                if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
+                    break;
+                vdb.size = 0;
+            }
         }
     }
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
 
+#ifdef PLATFORM_SOC
+    /* Never let this copy run past the end of the slot it matched:
+     * out-of-range addressing is exactly what faults inside
+     * __memcpy, so reject it up front instead.  Check addr >= phys_addr
+     * explicitly first: without it the unsigned subtraction below wraps
+     * for an address below the base. */
+    if (addr < (unsigned long)vdb.phys_addr ||
+        (addr - (unsigned long)vdb.phys_addr) + (unsigned long)len > (unsigned long)vdb.size) {
+        VLOG(ERR, "address 0x%08x len 0x%x exceeds matched slot size 0x%lx!!!\n",
+             (int)addr, len, (unsigned long)vdb.size);
+        vmem_unlock(core_idx);
+        return -1;
+    }
+#endif
+
     zero = (Uint8*)osal_malloc(len);
+    if (!zero) {
+        VLOG(ERR, "[VDI] fail to allocate %d bytes for set\n", len);
+        vmem_unlock(core_idx);
+        return -1;
+    }
     osal_memset((void*)zero, data, len);
 
 #ifdef PLATFORM_SOC
@@ -1005,16 +1104,16 @@ int vdi_set_memory(unsigned long core_idx, PhysicalAddress addr, int len, int en
 #else
 	pcie_memcpy_s2d(addr, zero, len);
 #endif
+#ifdef MEDIA_V3
+    /* read 36-bit phys while slot i is still lock-protected (see
+     * vdi_clear_memory) */
+    if (vdb.is_cached && vdi->vpu_buffer_pool[i].phys_addr_36bit)
+        vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
+#endif
+    /* unlock on BOTH paths (see vdi_clear_memory) */
+    vmem_unlock(core_idx);
 
     if (vdb.is_cached) {
-#ifdef MEDIA_V3
-        /* mmu_alloc_virt_addr() clobbered phys_addr with the VPU MMU-virtual
-         * address; cache maintenance goes through phys_to_virt() on the
-         * physical, so it must use the real 36-bit physical saved in the pool
-         * (the MMU-virtual address would fault in phys_to_virt). */
-        if (vdi->vpu_buffer_pool[i].phys_addr_36bit)
-            vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
-#endif
         if (vpu_flush_dcache(&vdb) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
         }
@@ -1046,21 +1145,62 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    /* The pool is mutated by vdi_allocate/free_dma_memory() under
+     * vmem_lock(); hold the same lock across the lookup AND the copy
+     * below.  Without it, a concurrent free/alloc can hand us a torn
+     * or already-reclaimed slot and the memcpy runs off the end of
+     * the mapping (data abort in __memcpy, ESR 0x96000047). */
+    vmem_lock(core_idx);
+
+    /* Exact base match first: callers pass back the phys_addr that
+     * vdi_allocate_dma_memory() returned and stored in this pool, so
+     * that is the real key.  The interval scan below is only a
+     * fallback for a genuine interior address. */
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
-        if (vdi->vpu_buffer_pool[i].inuse == 1)
+        if (vdi->vpu_buffer_pool[i].inuse == 1 &&
+            vdi->vpu_buffer_pool[i].vdb.phys_addr == (unsigned long)addr)
         {
             vdb = vdi->vpu_buffer_pool[i].vdb;
-            if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
-                break;
-            vdb.size = 0;
+            break;
+        }
+    }
+
+    /* interval fallback: only for a genuine interior address */
+    if (i == MAX_VPU_BUFFER_POOL)
+    {
+        for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+        {
+            if (vdi->vpu_buffer_pool[i].inuse == 1)
+            {
+                vdb = vdi->vpu_buffer_pool[i].vdb;
+                if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
+                    break;
+                vdb.size = 0;
+            }
         }
     }
 
     if (!vdb.size) {
         VLOG(ERR, "address 0x%08x is not mapped address!!!\n", (int)addr);
+        vmem_unlock(core_idx);
         return -1;
     }
+
+#ifdef PLATFORM_SOC
+    /* Never let this copy run past the end of the slot it matched:
+     * out-of-range addressing is exactly what faults inside
+     * __memcpy, so reject it up front instead.  Check addr >= phys_addr
+     * explicitly first: without it the unsigned subtraction below wraps
+     * for an address below the base. */
+    if (addr < (unsigned long)vdb.phys_addr ||
+        (addr - (unsigned long)vdb.phys_addr) + (unsigned long)len > (unsigned long)vdb.size) {
+        VLOG(ERR, "address 0x%08x len 0x%x exceeds matched slot size 0x%lx!!!\n",
+             (int)addr, len, (unsigned long)vdb.size);
+        vmem_unlock(core_idx);
+        return -1;
+    }
+#endif
 
     swap_endian(core_idx, data, len, endian);
 #ifdef PLATFORM_SOC
@@ -1069,15 +1209,15 @@ int vdi_write_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char
 #else
     pcie_memcpy_s2d(addr, data, len);
 #endif
-    if (vdb.is_cached) {
 #ifdef MEDIA_V3
-        /* mmu_alloc_virt_addr() clobbered phys_addr with the VPU MMU-virtual
-         * address; cache maintenance goes through phys_to_virt() on the
-         * physical, so it must use the real 36-bit physical saved in the pool
-         * (the MMU-virtual address would fault in phys_to_virt). */
-        if (vdi->vpu_buffer_pool[i].phys_addr_36bit)
-            vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
+    /* read 36-bit phys while slot i is still lock-protected (see
+     * vdi_clear_memory) */
+    if (vdb.is_cached && vdi->vpu_buffer_pool[i].phys_addr_36bit)
+        vdb.phys_addr = vdi->vpu_buffer_pool[i].phys_addr_36bit;
 #endif
+    /* unlock on BOTH paths (see vdi_clear_memory) */
+    vmem_unlock(core_idx);
+    if (vdb.is_cached) {
         if (vpu_flush_dcache(&vdb) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb.phys_addr, vdb.size);
             return -1;
@@ -1092,7 +1232,6 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
     vdi_info_t *vdi;
     vpudrv_buffer_t vdb;
     int i;
-    PhysicalAddress match_base = 0;
 #ifdef PLATFORM_SOC
     unsigned long offset;
 #endif
@@ -1107,23 +1246,63 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
 
     osal_memset(&vdb, 0x00, sizeof(vpudrv_buffer_t));
 
+    /* The pool is mutated by vdi_allocate/free_dma_memory() under
+     * vmem_lock(); hold the same lock across the lookup AND the copy
+     * below.  Without it, a concurrent free/alloc can hand us a torn
+     * or already-reclaimed slot and the memcpy runs off the end of
+     * the mapping (data abort in __memcpy, ESR 0x96000047). */
+    vmem_lock(core_idx);
+
+    /* Exact base match first: callers pass back the phys_addr that
+     * vdi_allocate_dma_memory() returned and stored in this pool, so
+     * that is the real key.  The interval scan below is only a
+     * fallback for a genuine interior address. */
     for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
     {
-        if (vdi->vpu_buffer_pool[i].inuse == 1)
+        if (vdi->vpu_buffer_pool[i].inuse == 1 &&
+            vdi->vpu_buffer_pool[i].vdb.phys_addr == (unsigned long)addr)
         {
             vdb = vdi->vpu_buffer_pool[i].vdb;
-            if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
+            break;
+        }
+    }
+
+    /* interval fallback: only for a genuine interior address */
+    if (i == MAX_VPU_BUFFER_POOL)
+    {
+        for (i=0; i<MAX_VPU_BUFFER_POOL; i++)
+        {
+            if (vdi->vpu_buffer_pool[i].inuse == 1)
             {
-                match_base = vdb.phys_addr;
-                break;
+                vdb = vdi->vpu_buffer_pool[i].vdb;
+                if (addr >= vdb.phys_addr && addr < (vdb.phys_addr + vdb.size))
+                {
+                    break;
+                }
+                vdb.size = 0;
             }
-            vdb.size = 0;
         }
     }
 
     if (!vdb.size) {
+        vmem_unlock(core_idx);
         return -1;
     }
+
+#ifdef PLATFORM_SOC
+    /* Never let this copy run past the end of the slot it matched:
+     * out-of-range addressing is exactly what faults inside
+     * __memcpy, so reject it up front instead.  Check addr >= phys_addr
+     * explicitly first: without it the unsigned subtraction below wraps
+     * for an address below the base. */
+    if (addr < (unsigned long)vdb.phys_addr ||
+        (addr - (unsigned long)vdb.phys_addr) + (unsigned long)len > (unsigned long)vdb.size) {
+        VLOG(ERR, "address 0x%08x len 0x%x exceeds matched slot size 0x%lx!!!\n",
+             (int)addr, len, (unsigned long)vdb.size);
+        vmem_unlock(core_idx);
+        return -1;
+    }
+#endif
 
     if (vdb.is_cached) {
         vpudrv_buffer_t vdb_cache = vdb;
@@ -1138,15 +1317,18 @@ int vdi_read_memory(unsigned long core_idx, PhysicalAddress addr, unsigned char 
 #endif
         if (vpu_invalidate_dcache(&vdb_cache) < 0) {
             VLOG(ERR, "[VDI] fail to fluch dcache mem addr 0x%lx size=%d\n", vdb_cache.phys_addr, vdb_cache.size);
+            vmem_unlock(core_idx);
             return -1;
         }
     }
 #ifdef PLATFORM_SOC
-    offset = addr - (unsigned long)match_base;
+    offset = addr - (unsigned long)vdb.phys_addr;
     osal_memcpy(data, (const void *)((unsigned long)vdb.virt_addr+offset), len);
 #else
     pcie_memcpy_d2s(data, addr, len);
 #endif
+    /* unlock on BOTH paths (see vdi_clear_memory) */
+    vmem_unlock(core_idx);
     swap_endian(core_idx, data, len,  endian);
 
     return len;
