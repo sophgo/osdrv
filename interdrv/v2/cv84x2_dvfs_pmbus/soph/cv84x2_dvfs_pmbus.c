@@ -1181,6 +1181,16 @@ static int cv84x2_dvfs_pmbus_probe(struct platform_device *pdev)
 	d->cpu_rail_page = 0;
 	d->tpu_rail_page = 1;
 
+	/* pmic address: child node "pmic/reg" > legacy "pmic-addr" > default */
+	{
+		struct device_node *child = of_get_child_by_name(np, "pmic");
+
+		if (child) {
+			if (!of_property_read_u32(child, "reg", &val))
+				d->pmic_addr = (u8)val;
+			of_node_put(child);
+		}
+	}
 	if (!of_property_read_u32(np, "pmic-addr", &val))
 		d->pmic_addr = (u8)val;
 	if (!of_property_read_u32(np, "cpu-rail-page", &val))
