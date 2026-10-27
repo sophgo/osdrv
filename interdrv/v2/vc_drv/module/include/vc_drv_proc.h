@@ -17,6 +17,7 @@
 #define VDEC_PROC_NAME PROC_PATH"vdec"
 #define VPUINFO_PROC_NAME PROC_PATH"vpuinfo"
 #define JPUINFO_PROC_NAME PROC_PATH"jpuinfo"
+#define VCBW_PROC_NAME PROC_PATH"vcbw"
 
 #define VIDEO_PROC_PERMS (0644)
 #define VIDEO_PROC_PARENT (NULL)
@@ -46,5 +47,7 @@ int rc_proc_init(struct device *dev);
 int rc_proc_deinit(void);
 int vdec_proc_init(struct device *dev);
 int vdec_proc_deinit(void);
+int vc_bw_init(struct device *dev);
+void vc_bw_exit(void);
 
 #endif /* __VC_DRV_PROC_H__ */

@@ -24,6 +24,7 @@
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/sched.h>
 #include <linux/version.h>
 #include <linux/kfifo.h>
@@ -36,7 +37,6 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/clk-provider.h>
-#include <linux/vmalloc.h>
 
 #include "vpuconfig.h"
 #include "vpuerror.h"
@@ -56,7 +56,21 @@
 #include "platform.h"
 
 #define VPU_PRODUCT_CODE_REGISTER                 (0x1044)
-#define VPU_STAT_CYCLES                           (575000000)
+/* Tick counter clock per core in Hz, = bclk of each core (wave517 spec:
+ * "based on bclk the time of each stage can be calculated"; wave511 ds:
+ * bclk = clock for BPU in V-CORE and V-CPU, tick counter lives in this domain).
+ * X2 cv84x6 (MEDIA_V3), ND bin: core0 = VE 650M (ve_src1, ND ACLK),
+ * core1-4 = VD 800M (vd_src1; factory mpll3=2000 runs 1000M, two-step PLL
+ * downshift to design/ND bin gives 1600/2 = 800M).
+ * A2 cv186x: all cores 575M (clk_src1_vesys/vdsys, per DE3.0-Athena2_Clock;
+ * 105 board tick regression: VD 575.6M / VE 577.9M). */
+static const unsigned long s_vpu_stat_cycles_hz[MAX_NUM_VPU_CORE] = {
+#if defined(MEDIA_V3)
+    650000000UL, 800000000UL, 800000000UL, 800000000UL, 800000000UL
+#else
+    575000000UL, 575000000UL, 575000000UL
+#endif
+};
 /* if the driver want to use interrupt service from kernel ISR */
 #if defined(SUPPORT_INTERRUPT) && defined(PLATFORM_SOC)
 #define VPU_SUPPORT_ISR
@@ -90,7 +104,6 @@
 
 #define IS_BIT_SET(x, i) ((i) >= 0 && (i) < MAX_NUM_INSTANCE ? ((x) >> (i)) & 1ULL : 0)
 #define SET_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) |= (1ULL << (i)); } while (0)
-#define CLEAR_BIT(x, i) do { if ((i) >= 0 && (i) < MAX_NUM_INSTANCE) (x) &= ~(1ULL << (i)); } while (0)
 
 typedef struct vpu_drv_context_t {
     struct fasync_struct *async_queue;
@@ -145,10 +158,44 @@ typedef enum {
 
 typedef struct _vpu_power_ctl_ {
     struct clk *ve_clk[3];
+#if defined(MEDIA_V3)
+    struct clk *ve_axi_clk;
+    struct clk *ve_fab_200m;
+    struct clk *ve_fab_1p2g;
+#endif
     struct clk *vd_core0_clk[4];
     struct clk *vd_core1_clk[4];
+#if defined(MEDIA_V3)
+    struct clk *vd_core2_clk[4];
+    struct clk *vd_core3_clk[4];
+#endif
 } vpu_power_ctrl;
 
+#if defined(MEDIA_V3)
+/* cv84x6 has 4 VD cores; each owns src0/src1/src2/axi0 gates.
+ * A2-equivalent names map: src0=src0, src1=src1, apb_vd=src2, vdsys_vd=axi0. */
+static const char *const vpu_clk_name[19] = {
+    "ve_src0",
+    "ve_src1",
+    "apb_vesys_ve",
+    "vd0_src0",
+    "vd0_src1",
+    "vd0_apb_vd",
+    "vd0_vdsys_vd",
+    "vd1_src0",
+    "vd1_src1",
+    "vd1_apb_vd",
+    "vd1_vdsys_vd",
+    "vd2_src0",
+    "vd2_src1",
+    "vd2_apb_vd",
+    "vd2_vdsys_vd",
+    "vd3_src0",
+    "vd3_src1",
+    "vd3_apb_vd",
+    "vd3_vdsys_vd",
+};
+#else
 static const char *const vpu_clk_name[11] = {
     "ve_src0",
     "ve_src1",
@@ -162,9 +209,16 @@ static const char *const vpu_clk_name[11] = {
     "vd1_apb_vd",
     "vd1_vdsys_vd",
 };
+#endif
 
 static vpu_power_ctrl vpu_pw_ctl = {0};
+#if defined(MEDIA_V3)
+static int s_vpu_reg_phy_base[MAX_NUM_VPU_CORE] = {0x22010000, 0x23010000, 0x23110000, 0x23210000, 0x23310000};
+static int s_vpu_top_phy_base[MAX_NUM_VPU_CORE] = {0x22000000, 0x23000000, 0x23100000, 0x23200000, 0x23300000};
+static int s_vpu_mmu_entry_base[MAX_NUM_VPU_CORE] = {0x22050000, 0x23050000, 0x23150000, 0x23250000, 0x23350000};
+#else
 static int s_vpu_reg_phy_base[MAX_NUM_VPU_CORE] = {0x21010000, 0x23010000, 0x24010000};
+#endif
 
 static osal_mutex_t core_mutex[MAX_NUM_VPU_CORE];
 static osal_mutex_t disp_mutex[MAX_NUM_VPU_CORE];
@@ -200,7 +254,11 @@ struct clk *s_vpu_clk;
 #endif
 
 #ifdef VPU_SUPPORT_ISR
+#if defined(MEDIA_V3)
+static int s_vpu_irq[MAX_NUM_VPU_CORE] = {115, 119, 123, 127, 131};
+#else
 static int s_vpu_irq[MAX_NUM_VPU_CORE] = {45,39,42};
+#endif
 #endif
 
 #define MAX_VPU_STAT_WIN_SIZE  10
@@ -236,9 +294,13 @@ typedef struct vpu_statistic_info {
     uint64_t vpu_stat_lasttime[MAX_NUM_VPU_CORE];
 
     uint64_t vpu_stat_cycles[MAX_NUM_VPU_CORE];
+    uint64_t vpu_stat_frames[MAX_NUM_VPU_CORE];
+    uint64_t vpu_stat_cycles_total[MAX_NUM_VPU_CORE];
+    uint64_t vpu_stat_frames_total[MAX_NUM_VPU_CORE];
+    uint32_t vpu_hw_time_per_frame_cur[MAX_NUM_VPU_CORE];
     int vpu_working_array[MAX_NUM_VPU_CORE][MAX_VPU_STAT_WIN_SIZE];
     int vpu_stat_enable[MAX_NUM_VPU_CORE];
-    uint32_t vpu_channel_flag[MAX_NUM_VPU_CORE];
+    uint32_t vdec_channel_flag[MAX_NUM_VPU_CORE];
     channel_info vpu_channel_info[MAX_NUM_VPU_CORE][MAX_NUM_INSTANCE];
 }vpu_statistic_info_t;
 
@@ -246,6 +308,10 @@ typedef struct vpu_statistic_info {
 static vpu_statistic_info_t s_vpu_usage_info = {0};
 static struct task_struct *s_vpu_monitor_task = NULL;
 vpudrv_buffer_t s_vpu_register[MAX_NUM_VPU_CORE] = {0};
+#if defined(MEDIA_V3)
+vpudrv_buffer_t s_vpu_top_register[MAX_NUM_VPU_CORE] = {0};
+vpudrv_buffer_t s_vpu_mmu_entry[MAX_NUM_VPU_CORE] = {0};
+#endif
 static struct file *gfilp[MAX_NUM_VPU_CORE];
 static int *s_interrupt_flag;
 static wait_queue_head_t *s_interrupt_wait_q;
@@ -359,12 +425,15 @@ typedef enum {
 void vpu_update_stat_cycles(int coreIdx, int hwCycles)
 {
     s_vpu_usage_info.vpu_stat_cycles[coreIdx] += hwCycles;
+    s_vpu_usage_info.vpu_stat_cycles_total[coreIdx] += hwCycles;
+    s_vpu_usage_info.vpu_stat_frames[coreIdx]++;
+    s_vpu_usage_info.vpu_stat_frames_total[coreIdx]++;
 }
 void vpu_update_resolution(int coreIdx, int instance, int width, int height)
 {
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_height = height;
     s_vpu_usage_info.vpu_channel_info[coreIdx][instance].pic_width = width;
-    SET_BIT(s_vpu_usage_info.vpu_channel_flag[coreIdx], instance);
+    SET_BIT(s_vpu_usage_info.vdec_channel_flag[coreIdx], instance);
 
 }
 
@@ -398,12 +467,16 @@ void vpu_update_frame_status(int coreIdx, int instance, FrameStatus status, int 
 void vpu_clear_stat_info(int coreIdx)
 {
     s_vpu_usage_info.vpu_stat_cycles[coreIdx] = 0;
+    s_vpu_usage_info.vpu_stat_frames[coreIdx] = 0;
+    s_vpu_usage_info.vpu_stat_cycles_total[coreIdx] = 0;
+    s_vpu_usage_info.vpu_stat_frames_total[coreIdx] = 0;
+    s_vpu_usage_info.vpu_hw_time_per_frame_cur[coreIdx] = 0;
     s_vpu_usage_info.vpu_realtime_fps[coreIdx] = 0;
     s_vpu_usage_info.vpu_working_time_in_ms[coreIdx] = 0;
     s_vpu_usage_info.vpu_total_time_in_ms[coreIdx] = 0;
     s_vpu_usage_info.vpu_status_index[coreIdx] = 0;
     s_vpu_usage_info.vpu_instant_usage[coreIdx] = 0;
-    s_vpu_usage_info.vpu_channel_flag[coreIdx] = 0;
+    s_vpu_usage_info.vdec_channel_flag[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_working_array[coreIdx], 0, MAX_VPU_STAT_WIN_SIZE*sizeof(int));
     s_vpu_usage_info.vpu_stat_enable[coreIdx] = 0;
     memset(s_vpu_usage_info.vpu_channel_info[coreIdx], 0, MAX_NUM_INSTANCE * sizeof(channel_info));
@@ -437,9 +510,18 @@ static int vpu_check_usage_info(vpu_statistic_info_t *vpu_usage_info)
             continue;
         }
 
-        vpu_woking_time_ms = (uint64_t)vpu_usage_info->vpu_stat_cycles[i]*1000/VPU_STAT_CYCLES;
+        vpu_woking_time_ms = (uint64_t)vpu_usage_info->vpu_stat_cycles[i]*1000/s_vpu_stat_cycles_hz[i];
         vpu_woking_time_ms = (vpu_woking_time_ms > VPU_INFO_STAT_INTERVAL) ? VPU_INFO_STAT_INTERVAL: vpu_woking_time_ms;
+        /* busy us per frame this window: same chained-frameCycle source as
+         * usage, so under DDR contention it grows while usage stays 100% */
+        if (vpu_usage_info->vpu_stat_frames[i])
+            vpu_usage_info->vpu_hw_time_per_frame_cur[i] =
+                (u32)(vpu_usage_info->vpu_stat_cycles[i] * 1000000ULL /
+                      s_vpu_stat_cycles_hz[i] / vpu_usage_info->vpu_stat_frames[i]);
+        else
+            vpu_usage_info->vpu_hw_time_per_frame_cur[i] = 0;
         vpu_usage_info->vpu_stat_cycles[i] = 0;
+        vpu_usage_info->vpu_stat_frames[i] = 0;
 
         vpu_usage_info->vpu_working_time_in_ms[i] += vpu_woking_time_ms;
         vpu_usage_info->vpu_total_time_in_ms[i] += VPU_INFO_STAT_INTERVAL;
@@ -530,6 +612,31 @@ int vpu_register_clk(struct platform_device *pdev)
         }
     }
 
+#if defined(MEDIA_V3)
+    /* clk_vesys_ve (VE_AXI) is shared with the JPEG cores (dts maps their
+     * "jpeg_src" onto the same gate). VENC hard-depends on it too but used
+     * to rely on the bootloader leaving it on; once the JPEG side balances
+     * its own refcount the gate really closes and every later
+     * VPU_InitWithBitcode() fails. CCF dedups the two devm_clk_get calls to
+     * one handle, so enable_count stays balanced across both drivers. */
+    vpu_pw_ctl.ve_axi_clk = devm_clk_get(&pdev->dev, "clk_vesys_ve");
+    if (IS_ERR(vpu_pw_ctl.ve_axi_clk)) {
+        dev_err(&pdev->dev, "failed to get ve_axi_clk\n");
+        return -1;
+    }
+
+    vpu_pw_ctl.ve_fab_200m = devm_clk_get(&pdev->dev, "ve_fab_200m");
+    if (IS_ERR(vpu_pw_ctl.ve_fab_200m)) {
+        dev_err(&pdev->dev, "failed to get ve_fab_200m\n");
+        return -1;
+    }
+    vpu_pw_ctl.ve_fab_1p2g = devm_clk_get(&pdev->dev, "ve_fab_1p2g");
+    if (IS_ERR(vpu_pw_ctl.ve_fab_1p2g)) {
+        dev_err(&pdev->dev, "failed to get ve_fab_1p2g\n");
+        return -1;
+    }
+#endif
+
     for (i = 0; i < 4; i++) {
         vpu_pw_ctl.vd_core0_clk[i] = devm_clk_get(&pdev->dev, vpu_clk_name[i + 3]);
         if (IS_ERR(vpu_pw_ctl.vd_core0_clk[i])) {
@@ -542,6 +649,20 @@ int vpu_register_clk(struct platform_device *pdev)
             dev_err(&pdev->dev, "failed to get vd_core1_clk %d\n", i);
             return -1;
         }
+
+#if defined(MEDIA_V3)
+        vpu_pw_ctl.vd_core2_clk[i] = devm_clk_get(&pdev->dev, vpu_clk_name[i + 11]);
+        if (IS_ERR(vpu_pw_ctl.vd_core2_clk[i])) {
+            dev_err(&pdev->dev, "failed to get vd_core2_clk %d\n", i);
+            return -1;
+        }
+
+        vpu_pw_ctl.vd_core3_clk[i] = devm_clk_get(&pdev->dev, vpu_clk_name[i + 15]);
+        if (IS_ERR(vpu_pw_ctl.vd_core3_clk[i])) {
+            dev_err(&pdev->dev, "failed to get vd_core3_clk %d\n", i);
+            return -1;
+        }
+#endif
     }
     return 0;
 }
@@ -880,7 +1001,11 @@ int vpu_op_open(int core_idx)
 
         s_vpu_drv_context[core_idx].open_count++;
 #ifdef VC_SUPPORT_CLOCK_CONTROL
-        vpu_clk_enable(core_idx);
+        /* vpu_op_close() drops the clocks on last close only, so enable on
+         * first open only; a per-open enable would leak one CCF
+         * enable_count per session and the gates would never gate off. */
+        if (s_vpu_drv_context[core_idx].open_count == 1)
+            vpu_clk_enable(core_idx);
 #endif
 
         mutex_unlock(&s_vpu_lock);
@@ -991,8 +1116,6 @@ long vpu_close_instance(vpudrv_inst_info_t *inst_info)
         if (vil->inst_idx == inst_info->inst_idx && vil->core_idx == inst_info->core_idx) {
             s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]--; /* flag just for that vpu is in opened or closed */
             inst_info->inst_open_count = s_vpu_usage_info.vpu_open_ref_count[vil->core_idx]; /* counting the current open instance number */
-            memset(&s_vpu_usage_info.vpu_channel_info[vil->core_idx][vil->inst_idx], 0, sizeof(channel_info));
-            CLEAR_BIT(s_vpu_usage_info.vpu_channel_flag[vil->core_idx], vil->inst_idx);
             list_del(&vil->list);
             kfree(vil);
             // dev->crst_cxt[inst_info->core_idx].instcall[inst_info->inst_idx] = 0;
@@ -1244,19 +1367,15 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
     atomic_inc(&s_vpu_usage_info.vpu_busy_status[core_idx]);
 
     ret = wait_event_interruptible_timeout(s_interrupt_wait_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] != 0, usecs_to_jiffies(info->timeout));
-    if (!ret) {
+    if (ret == 0) {
         ret = -ETIME;
         atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
-        //VLOG(TRACE, "[VPUDRV][-]VDI_IOCTL_WAIT_INTERRUPT timeout = %d \n", info.timeout);
         return ret;
     }
-
-    // if (signal_pending(current)) {
-    //     VLOG(ERR, "[VPUDRV] signal_pending failed\n");
-    //     ret = -ERESTARTSYS;
-    //     atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
-    //     return ret;
-    // }
+    if (ret < 0) {
+        atomic_dec(&s_vpu_usage_info.vpu_busy_status[core_idx]);
+        return ret;
+    }
 
     intr_reason_in_q = 0;
     interrupt_flag_in_q = kfifo_out_spinlocked(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index], &intr_reason_in_q, sizeof(u32), &s_kfifo_lock);
@@ -1269,9 +1388,7 @@ long vpu_wait_interrupt(vpudrv_intr_info_t *info)
 
     VLOG(TRACE, "[VPUDRV] inst_index(%d), s_interrupt_flag(%d), reason(0x%08lx)\n", intr_inst_index, s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index], dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index]);
     info->intr_reason = dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index];
-    if (kfifo_is_empty(&s_interrupt_pending_q[core_idx*MAX_NUM_INSTANCE+intr_inst_index])) {
-        s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
-    }
+    s_interrupt_flag[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
     dev->interrupt_reason[core_idx*MAX_NUM_INSTANCE+intr_inst_index] = 0;
 
     if (info->intr_reason & (1<<INT_WAVE5_DEC_PIC)) {
@@ -1327,25 +1444,41 @@ ssize_t vpu_op_write(const char *buf, size_t len)
 
     return 0;
 }
-extern struct mutex s_top_lock;
-int vpu_top_reset_idx[MAX_NUM_VPU_CORE] = {17, 9, 13};
+
 void vpu_top_reset(unsigned long core_idx)
 {
-    unsigned int *top_reg_virt_addr;
     unsigned int reg_val;
+#ifdef MEDIA_V3
+    reg_val = platform_readl(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET);
+    reg_val |= 1;
+    platform_writel(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET, reg_val);
 
-    mutex_lock(&s_top_lock);
+    reg_val &= ~(1);
+    platform_writel(s_vpu_top_register[core_idx].phys_addr + TOP_SET, s_vpu_top_register[core_idx].virt_addr + TOP_SET, reg_val);
+#else
+    unsigned int *top_reg_virt_addr;
     top_reg_virt_addr = (unsigned int *)platform_ioremap(0x28103000, 4);
     reg_val = platform_readl(0x28103000, top_reg_virt_addr);
 
-    reg_val &= ~(1 << vpu_top_reset_idx[core_idx]);
+    if (core_idx == 0)
+        reg_val &= ~(1<<17);//vesys_ve
+    else if (core_idx == 1)
+        reg_val &= ~(1<<9);//vdsys0_vd
+    else if (core_idx == 2)
+        reg_val &= ~(1<<13);//vdsys1_vd
     platform_writel(0x28103000, top_reg_virt_addr, reg_val);
 
-    reg_val |= (1 << vpu_top_reset_idx[core_idx]);
+    if (core_idx == 0)
+        reg_val |= (1<<17);//vesys_ve
+    else if (core_idx == 1)
+        reg_val |= (1<<9);//vdsys0_vd
+    else if (core_idx == 2)
+        reg_val |= (1<<13);//vdsys1_vd
     platform_writel(0x28103000, top_reg_virt_addr, reg_val);
 
     platform_iounmap((void *)top_reg_virt_addr);
-    mutex_unlock(&s_top_lock);
+#endif
+    osal_msleep(1);
 }
 
 // reference vpu_release
@@ -1491,30 +1624,33 @@ static int vpuinfo_show(struct seq_file *m, void *v)
 {
     int i = 0, j = 0, vdec_chn_idx = 0, vdec_instance_num;
     int success_not_get = 0;
-    seq_printf(m, "{\"venc_coreid\":%d, \"link_num\":%d, \"usage(instant|long)\":%d%%|%llu%%, \"fps\":%d, \"status:%s\"}\n", i, s_vpu_usage_info.vpu_open_ref_count[i],
+    seq_printf(m, "{\"venc_coreid\":%d, \"link_num\":%d, \"usage(instant|long)\":%d%%|%llu%%, \"fps\":%d, \"hw_time_per_frame_avg\":%llu, \"hw_time_per_frame_cur\":%u, \"status:%s\"}\n", i, s_vpu_usage_info.vpu_open_ref_count[i],
         s_vpu_usage_info.vpu_instant_usage[i], s_vpu_usage_info.vpu_total_time_in_ms[i]?(s_vpu_usage_info.vpu_working_time_in_ms[i]*100/s_vpu_usage_info.vpu_total_time_in_ms[i]):0,
-        s_vpu_usage_info.vpu_realtime_fps[i], atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
+        s_vpu_usage_info.vpu_realtime_fps[i],
+        s_vpu_usage_info.vpu_stat_frames_total[i]?(s_vpu_usage_info.vpu_stat_cycles_total[i]*1000000ULL/s_vpu_stat_cycles_hz[i]/s_vpu_usage_info.vpu_stat_frames_total[i]):0,
+        s_vpu_usage_info.vpu_hw_time_per_frame_cur[i],
+        atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
 
-    // encoder
-    for (j = 0; j < MAX_NUM_INSTANCE; j++) {
-        if (IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], j)) {
-            channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
-            success_not_get = info.frames_not_get;
-            seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
-                        j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
-        }
+    for (j = 0; j < s_vpu_usage_info.vpu_open_ref_count[i]; j++) {
+        channel_info info = s_vpu_usage_info.vpu_channel_info[i][j];
+        success_not_get = info.in_frame - info.out_frame - info.frames_fail;
+        seq_printf(m,"\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n",
+                    j, info.pic_width, info.pic_height, info.in_frame, info.out_frame, info.frames_fail, success_not_get);
     }
 
     // decoder
     for(i = 1; i < MAX_NUM_VPU_CORE; i++) {
 
-        seq_printf(m, "{\"vdec_coreid\":%d, \"link_num\":%d, \"usage(instant|long)\":%d%%|%llu%%, \"fps\":%d, \"status:%s\"}\n", i, s_vpu_usage_info.vpu_open_ref_count[i], \
+        seq_printf(m, "{\"vdec_coreid\":%d, \"link_num\":%d, \"usage(instant|long)\":%d%%|%llu%%, \"fps\":%d, \"hw_time_per_frame_avg\":%llu, \"hw_time_per_frame_cur\":%u, \"status:%s\"}\n", i, s_vpu_usage_info.vpu_open_ref_count[i], \
                 s_vpu_usage_info.vpu_instant_usage[i], s_vpu_usage_info.vpu_total_time_in_ms[i]?(s_vpu_usage_info.vpu_working_time_in_ms[i]*100/s_vpu_usage_info.vpu_total_time_in_ms[i]):0, \
-                s_vpu_usage_info.vpu_realtime_fps[i], atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
+                s_vpu_usage_info.vpu_realtime_fps[i], \
+                s_vpu_usage_info.vpu_stat_frames_total[i]?(s_vpu_usage_info.vpu_stat_cycles_total[i]*1000000ULL/s_vpu_stat_cycles_hz[i]/s_vpu_usage_info.vpu_stat_frames_total[i]):0, \
+                s_vpu_usage_info.vpu_hw_time_per_frame_cur[i], \
+                atomic_read(&s_vpu_usage_info.vpu_busy_status[i]) > 0 ? "Engaged" : "IDLE");
 
 
         for(vdec_chn_idx = 0, vdec_instance_num = 0; vdec_chn_idx < MAX_NUM_INSTANCE; vdec_chn_idx++) {
-            if(IS_BIT_SET(s_vpu_usage_info.vpu_channel_flag[i], vdec_chn_idx)) {
+            if(IS_BIT_SET(s_vpu_usage_info.vdec_channel_flag[i], vdec_chn_idx)) {
                 channel_info info = s_vpu_usage_info.vpu_channel_info[i][vdec_chn_idx];
                 success_not_get = info.in_frame - info.out_frame - info.frames_fail;
                 seq_printf(m, "\t{\"channel\" : %d, \"res\" : %dx%d, \"in_frames\" : %d, \"out_frames\" : %d, \"fail_frames\" : %d, \"success_not_get\" : %d\"}, \n", \
@@ -1602,7 +1738,6 @@ int vpu_drv_platform_init(struct platform_device *pdev)
     int ret = 0;
     int i;
     struct resource *res = NULL;
-    int irq = -1;
 
     VLOG(INFO, "[VPUDRV][+] vpu_drv_platform_init\n");
     s_interrupt_wait_q = vzalloc(MAX_NUM_VPU_CORE*MAX_NUM_INSTANCE*sizeof(wait_queue_head_t));
@@ -1638,15 +1773,25 @@ int vpu_drv_platform_init(struct platform_device *pdev)
         }
         s_vpu_register[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_register[i].phys_addr, s_vpu_register[i].size);
 
-#ifdef VPU_SUPPORT_ISR
-        if (pdev)
-            irq = platform_get_irq(pdev, i + MAX_NUM_JPU_CORE);//platform_get_resource(pdev, IORESOURCE_IRQ, i + MAX_NUM_JPU_CORE);
+#if defined(MEDIA_V3)
+        s_vpu_top_register[i].phys_addr = s_vpu_top_phy_base[i];
+        s_vpu_top_register[i].size = VPU_REG_SIZE;
+        s_vpu_top_register[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_top_register[i].phys_addr, s_vpu_top_register[i].size);
 
-        if (irq > 0) {/* if platform driver is implemented */
-            s_vpu_irq[i] = irq;
+        s_vpu_mmu_entry[i].phys_addr = s_vpu_mmu_entry_base[i];
+        s_vpu_mmu_entry[i].size = VPU_REG_SIZE;
+        s_vpu_mmu_entry[i].virt_addr = (unsigned long)platform_ioremap(s_vpu_mmu_entry[i].phys_addr, s_vpu_mmu_entry[i].size);
+#endif
+
+#ifdef VPU_SUPPORT_ISR
+        if (pdev) {
+            ret = platform_get_irq(pdev, i + MAX_NUM_JPU_CORE);
+            if (ret < 0) {
+                VLOG(ERR, "[VPUDRV] : fail to get vpu irq %d, err:%d\n", i, ret);
+                return ret;
+            }
+            s_vpu_irq[i] = ret;
             VLOG(INFO, "[VPUDRV] : vpu irq number get from platform driver %d irq=0x%x\n", i, s_vpu_irq[i]);
-        } else {
-            VLOG(ERR, "[VPUDRV] : vpu irq number get from defined value irq=0x%x\n", s_vpu_irq[i]);
         }
 
         ret = request_irq(s_vpu_irq[i], vpu_irq_handler, IRQF_TRIGGER_NONE, "VPU_CODEC_IRQ", (void *)(&s_vpu_drv_context[i]));
@@ -1708,6 +1853,14 @@ int vpu_drv_platform_exit(void)
 
         if (s_vpu_register[i].virt_addr)
             platform_iounmap((void *)s_vpu_register[i].virt_addr);
+
+#if defined(MEDIA_V3)
+        if(s_vpu_top_register[i].virt_addr)
+            platform_iounmap((void *)s_vpu_top_register[i].virt_addr);
+
+        if(s_vpu_mmu_entry[i].virt_addr)
+            platform_iounmap((void *)s_vpu_mmu_entry[i].virt_addr);
+#endif
     }
 
     if (entry) {
@@ -1741,12 +1894,60 @@ void vpu_clk_put(struct clk *clk)
 void vpu_clk_enable(int core_idx)
 {
     int i = 0;
+    struct clk **clk_arr = NULL;
+
     if (core_idx == 0) {
-        for (i = 0; i < 3; i++) {
-            if (!__clk_is_enabled(vpu_pw_ctl.ve_clk[i]))
-                clk_prepare_enable(vpu_pw_ctl.ve_clk[i]);
-        }
-    } else if (core_idx == 1) {
+#if defined(MEDIA_V3)
+        /* cv84x6: SRC0/1/2+AXI+FAB_1P2G shared with JPEG via one dts node; CCF merges enable_count. */
+        for (i = 0; i < 3; i++)
+            clk_prepare_enable(vpu_pw_ctl.ve_clk[i]);
+        clk_prepare_enable(vpu_pw_ctl.ve_axi_clk);
+        clk_prepare_enable(vpu_pw_ctl.ve_fab_1p2g);
+        /* fab_200m: vesys reg-bus clk, always-on (gating hangs the board). */
+        if (!IS_ERR_OR_NULL(vpu_pw_ctl.ve_fab_200m) &&
+            !__clk_is_enabled(vpu_pw_ctl.ve_fab_200m))
+            clk_prepare_enable(vpu_pw_ctl.ve_fab_200m);
+#else
+        /* cv186x: ve_clk[] are VE-private gates (ve_src0/ve_src1/apb_vesys_ve),
+         * safe to gate on demand. Plain paired calls — no __clk_is_enabled
+         * guards: the bootloader leaves the gates on with CCF count 0, so a
+         * guarded enable is a no-op while the guarded disable still fires and
+         * drives the enable_count negative ("already disabled" splat).
+         * ve_axi_vesys (the shared VE/JPEG bus gate) is deliberately not
+         * managed here; the bootloader leaves it on. */
+        for (i = 0; i < 3; i++)
+            clk_prepare_enable(vpu_pw_ctl.ve_clk[i]);
+#endif
+        return;
+    }
+
+#if defined(MEDIA_V3)
+    /* cv84x6: core 1..4 are independent VD cores */
+    switch (core_idx) {
+    case 1:
+        clk_arr = vpu_pw_ctl.vd_core0_clk;
+        break;
+    case 2:
+        clk_arr = vpu_pw_ctl.vd_core1_clk;
+        break;
+    case 3:
+        clk_arr = vpu_pw_ctl.vd_core2_clk;
+        break;
+    case 4:
+        clk_arr = vpu_pw_ctl.vd_core3_clk;
+        break;
+    default:
+        return;
+    }
+    /* cv84x6: VD domain gates are shared by VPSS t-cores (and board testing
+     * found hidden consumers on src0/src1/axi0 as well). Always-on policy:
+     * guarded enable here, vpu_clk_disable() never gates them off. */
+    for (i = 0; i < 4; i++) {
+        if (!IS_ERR_OR_NULL(clk_arr[i]) && !__clk_is_enabled(clk_arr[i]))
+            clk_prepare_enable(clk_arr[i]);
+    }
+#else
+    if (core_idx == 1) {
         for (i = 0; i < 4; i++) {
             if (!__clk_is_enabled(vpu_pw_ctl.vd_core0_clk[i]))
                 clk_prepare_enable(vpu_pw_ctl.vd_core0_clk[i]);
@@ -1757,18 +1958,45 @@ void vpu_clk_enable(int core_idx)
                 clk_prepare_enable(vpu_pw_ctl.vd_core1_clk[i]);
         }
     }
+#endif
 }
 
 void vpu_clk_disable(int core_idx)
 {
     int i;
-    if (core_idx == 0) {
-        for (i = 0; i < 3; i++) {
-            if (__clk_is_enabled(vpu_pw_ctl.ve_clk[i]))
-                clk_disable_unprepare(vpu_pw_ctl.ve_clk[i]);
-        }
+    struct clk **clk_arr = NULL;
 
-    } else if (core_idx == 1){
+    if (core_idx == 0) {
+#if defined(MEDIA_V3)
+        /* paired disable of the 5 shared gates; fab_200m stays always-on. */
+        clk_disable_unprepare(vpu_pw_ctl.ve_fab_1p2g);
+        clk_disable_unprepare(vpu_pw_ctl.ve_axi_clk);
+        for (i = 0; i < 3; i++)
+            clk_disable_unprepare(vpu_pw_ctl.ve_clk[i]);
+#else
+        /* cv186x: plain paired disable (cf. vpu_clk_enable()). */
+        for (i = 0; i < 3; i++)
+            clk_disable_unprepare(vpu_pw_ctl.ve_clk[i]);
+#endif
+        return;
+    }
+
+#if defined(MEDIA_V3)
+    /* cv84x6: only vdN_src2 (clk_arr[2], "vdN_apb_vd") is refcount-disabled
+     * here. The VPSS t-cores in the same VD domain declare only src2 in their
+     * dts clocks, but board testing (141, dailytest vd module) proved they
+     * also hard-depend on src0/src1/axi0 staying enabled: the first decoder
+     * close that really gated those off hung t0-t8 (work_mask collapsed to
+     * 3584) and twice watchdog-reset the whole board. They are
+     * once-enabled-stay-on, like the pre-B3 behaviour. */
+    /* cv84x6: VD domain gates are shared by VPSS t-cores (and board testing
+     * found hidden consumers on src0/src1/axi0 as well). Always-on policy:
+     * never gate them off here (cf. vpu_clk_enable()). */
+    (void)clk_arr;
+    (void)i;
+    return;
+#else
+    if (core_idx == 1){
         for (i = 0; i < 4; i++) {
             if (__clk_is_enabled(vpu_pw_ctl.vd_core0_clk[i]))
                 clk_disable_unprepare(vpu_pw_ctl.vd_core0_clk[i]);
@@ -1779,6 +2007,7 @@ void vpu_clk_disable(int core_idx)
                 clk_disable_unprepare(vpu_pw_ctl.vd_core1_clk[i]);
         }
     }
+#endif
 }
 
 int vpu_get_suspend_state(void)
@@ -1987,6 +2216,11 @@ static int wave_sleep_wake(u32 core, int mode)
 
         codeBase = s_common_memory[core].phys_addr;
         codeSize = (WAVE5_MAX_CODE_BUF_SIZE&~0xfff);
+
+#if defined(MEDIA_V3)
+        originValue = platform_readl(s_vpu_top_register[core].phys_addr + TOP_ADDR_EXT, s_vpu_top_register[core].virt_addr + TOP_ADDR_EXT);
+        platform_writel(s_vpu_top_register[core].phys_addr + TOP_ADDR_EXT, s_vpu_top_register[core].virt_addr + TOP_ADDR_EXT, (codeBase>>32) | originValue);
+#else
         if (core == 0) {
             unsigned int *reg_addr = platform_ioremap(VE_TOP_EXT_ADDR, 4);
             originValue = platform_readl(VE_TOP_EXT_ADDR, reg_addr);
@@ -1997,6 +2231,7 @@ static int wave_sleep_wake(u32 core, int mode)
             WriteVpuFIORegister(core, 0x8EC0, codeBase>>32);
             WriteVpuFIORegister(core, 0x8EC4, codeBase>>32);
         }
+#endif
 
         remapSize = (W_REMAP_MAX_SIZE>>12) & 0x1ff;
         val = 0x80000000 | (WAVE_UPPER_PROC_AXI_ID<<20) | (W_REMAP_INDEX0<<12) | (0<<16) | (1<<11) | remapSize;

@@ -14,9 +14,27 @@
 
 #include "../config.h"
 
+#ifdef MEDIA_V3
+#define MAX_NUM_JPU_CORE                3
+#define MAX_JPEG_NUM_INSTANCE           384
+#define MAX_NUM_REGISTER_SET            3 //fixed value(do not modified)
+#define MAX_FRAME_JPU                   3 // the number of frame buffers for JPEG
+#else
 #define MAX_NUM_JPU_CORE                4
 #define MAX_JPEG_NUM_INSTANCE           512
 #define MAX_NUM_REGISTER_SET            4 //fixed value(do not modified)
+#define MAX_FRAME_JPU                   4 // the number of frame buffers for JPEG
+#endif
+
+/* Tick counter clock in MHz = cclk of JPEG cores.
+ * X2 cv84x6 (MEDIA_V3): 800M (ND bin keeps 800M, chip-side decision).
+ * A2 cv186x: clk_vesys_jpeg_* 650M. */
+#ifdef MEDIA_V3
+#define JPU_STAT_CYCLES_MHZ             800
+#else
+#define JPU_STAT_CYCLES_MHZ             650
+#endif
+
 #define MAX_JPEG_INST_HANDLE_SIZE       64
 
 #define JPU_FRAME_ENDIAN                JDI_LITTLE_ENDIAN
@@ -28,8 +46,6 @@
 
 #define MAX_MJPG_PIC_WIDTH              32768
 #define MAX_MJPG_PIC_HEIGHT             32768
-
-#define MAX_FRAME_JPU 					4 // the number of frame buffers for JPEG
 
 
 #define MAX_FRAME                       (8)

@@ -17,6 +17,10 @@ endif
 subdir-ccflags-y += -I$(PWD)/common/
 subdir-ccflags-y += -I$(srctree)/drivers/pinctrl/cvitek
 
+ifeq ($(CHIP), bm1688)
+subdir-ccflags-y += -DSARADC_CHIP_BM1688
+endif
+
 subdir-ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
 
 all:

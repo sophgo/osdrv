@@ -38,6 +38,22 @@
 #define JpuWriteInstReg(CORE, INST_IDX, ADDR, DATA)         jdi_write_register(CORE, ((unsigned long)(INST_IDX * NPT_REG_SIZE) + ADDR), DATA)
 #define JpuReadInstReg(CORE, INST_IDX, ADDR )		        jdi_read_register(CORE, ((unsigned long)INST_IDX*NPT_REG_SIZE)+ADDR ) // system register write 	with instance index
 
+#ifdef MEDIA_V3
+#define JpuWriteBbcExtReg(CORE, INST_IDX, ADDR, DATA)       jdi_write_bbc_register_ext(CORE, INST_IDX, ADDR, DATA)
+#define JpuReadBbcExtReg(CORE, INST_IDX, ADDR )	            jdi_read_bbc_register_ext(CORE, INST_IDX, ADDR) // system bbc register write 40bit reg with instance index
+#else
+#define JpuWriteBbcExtReg(CORE, INST_IDX, ADDR, DATA)       JpuWriteInstReg(CORE, INST_IDX, ADDR, DATA)
+#define JpuReadBbcExtReg(CORE, INST_IDX, ADDR )	            JpuReadInstReg(CORE, INST_IDX, ADDR)
+#endif
+
+#ifdef MEDIA_V3
+#define JpuWriteBbcExtReg(CORE, INST_IDX, ADDR, DATA)       jdi_write_bbc_register_ext(CORE, INST_IDX, ADDR, DATA)
+#define JpuReadBbcExtReg(CORE, INST_IDX, ADDR )	            jdi_read_bbc_register_ext(CORE, INST_IDX, ADDR) // system bbc register write 40bit reg with instance index
+#else
+#define JpuWriteBbcExtReg(CORE, INST_IDX, ADDR, DATA)       JpuWriteInstReg(CORE, INST_IDX, ADDR, DATA)
+#define JpuReadBbcExtReg(CORE, INST_IDX, ADDR )	            JpuReadInstReg(CORE, INST_IDX, ADDR)
+#endif
+
 #define JpuWriteReg(CORE, ADDR, DATA )                      jdi_write_register(CORE, ADDR, DATA ) // system register write
 #define JpuReadReg(CORE, ADDR )                             jdi_read_register(CORE, ADDR )           // system register write
 
@@ -114,6 +130,8 @@ void jdi_sw_top_reset(int core_idx);
 
 void jdi_write_register(int core_idx, unsigned long addr, unsigned int data);
 unsigned long jdi_read_register(int core_idx, unsigned long addr);
+void jdi_write_bbc_register_ext(int core_idx, int inst_idx, uint32_t addr, uint64_t data);
+uint64_t jdi_read_bbc_register_ext(int core_idx, int inst_idx, uint32_t addr);
 
 size_t jdi_write_memory(unsigned long addr, unsigned char *data, size_t len, int endian);
 size_t jdi_read_memory(unsigned long addr, unsigned char *data, size_t len, int endian);

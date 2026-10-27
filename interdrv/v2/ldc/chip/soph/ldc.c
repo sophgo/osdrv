@@ -116,6 +116,9 @@ const unsigned char vcoeff_tap[COEFFICIENT_PHASE_NUM][4] = {
  * Interfaces
  ****************************************************************************/
 void ldc_dump_register(int top_id);
+#ifdef CV84X6
+void vo_sys_reg_write_mask(uintptr_t addr, u32 mask, u32 data);
+#endif
 extern bool ldc_dump_reg;
 
 void ldc_set_base_addr(void *base, int top_id)
@@ -182,6 +185,19 @@ void ldc_disable(int top_id)
  */
 void ldc_reset(int top_id)
 {
+#ifdef CV84X6
+	unsigned int mask;
+
+	if (top_id != DEV_LDC_0)
+		return;
+
+	/* VO SYS IP/APB reset, LDC is bit1 (same as cv84x2) */
+	mask = 1 << (top_id + 1);
+	vo_sys_reg_write_mask(0x0, mask, mask);
+	vo_sys_reg_write_mask(0x4, mask, mask);
+	vo_sys_reg_write_mask(0x0, mask, 0x0);
+	vo_sys_reg_write_mask(0x4, mask, 0x0);
+#else
 	union vi_sys_reset mask;
 	union vi_sys_reset_apb mask_apb;
 
@@ -204,6 +220,7 @@ void ldc_reset(int top_id)
 		return;
 	vi_sys_toggle_reset(mask);
 	vi_sys_toggle_reset_apb(mask_apb);
+#endif
 }
 
 /**
@@ -426,6 +443,10 @@ void ldc_engine(const struct ldc_cfg *cfg, int top_id)
 		_reg_write(reg_base[top_id] + REG_LDC_DST_BASE_C, (cfg->dst_c_base >> LDC_BASE_ADDR_SHIFT) & 0x7ffffff);
 
 		_reg_write(reg_base[top_id] + REG_LDC_EXTEND_HADDR, cfg->extend_haddr);
+#ifdef CV84X6
+		_reg_write(reg_base[top_id] + REG_LDC_EXTEND_HADDR_R, cfg->extend_haddr_r);
+		_reg_write(reg_base[top_id] + REG_LDC_EXTEND_HADDR_R1, cfg->extend_haddr_r1);
+#endif
 
 		_reg_write(reg_base[top_id] + REG_LDC_DST_MODE, cfg->dst_mode);
 
@@ -478,6 +499,11 @@ void ldc_engine_cmdq(int top_id, const void *cmdq_addr, struct ldc_cfg **cfgs, u
 
 		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_DST_BASE_Y, cfg->dst_y_base >> LDC_BASE_ADDR_SHIFT);
 		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_DST_BASE_C, cfg->dst_c_base >> LDC_BASE_ADDR_SHIFT);
+#ifdef CV84X6
+		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_EXTEND_HADDR, cfg->extend_haddr);
+		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_EXTEND_HADDR_R, cfg->extend_haddr_r);
+		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_EXTEND_HADDR_R1, cfg->extend_haddr_r1);
+#endif
 		cmdq_set_package(&cmd_start[cmd_idx++].reg, ldc_apb_base + REG_LDC_DST_MODE, cfg->dst_mode);
 
 		// Enable cmdq interrupt
@@ -682,6 +708,11 @@ void ldc_dump_register(int top_id)
 		TRACE_LDC(DBG_DEBUG, "LDC_DST_BASE_C=0x%08x\n", val);
 		TRACE_LDC(DBG_DEBUG, "    addr=0x%08x\n", val << LDC_BASE_ADDR_SHIFT);
 
+#ifdef CV84X6
+		TRACE_LDC(DBG_DEBUG, "LDC_ADDR_EXTEND_W=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_EXTEND_HADDR));
+		TRACE_LDC(DBG_DEBUG, "LDC_ADDR_EXTEND_R=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_EXTEND_HADDR_R));
+		TRACE_LDC(DBG_DEBUG, "LDC_ADDR_EXTEND_R1=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_EXTEND_HADDR_R1));
+#endif
 		TRACE_LDC(DBG_DEBUG, "LDC_DST_MODE=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_DST_MODE));
 		TRACE_LDC(DBG_DEBUG, "LDC_IRQEN=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_IRQEN));
 		TRACE_LDC(DBG_DEBUG, "LDC_START=0x%08x\n", _reg_read(reg_base[top_id] + REG_LDC_START));

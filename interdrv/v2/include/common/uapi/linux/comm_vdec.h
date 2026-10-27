@@ -93,6 +93,7 @@ typedef struct _vdec_chn_attr_s {
 		stVdecVideoAttr; /* structure with video ( h264/h265) */
 	};
 	vdec_buffer_info_s stBufferInfo;
+	unsigned int u32MmuMode;
 } vdec_chn_attr_s;
 
 typedef struct _vdec_stream_s {

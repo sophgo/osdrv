@@ -200,5 +200,11 @@ u8 audio_iec_word_length(hdmi_tx_dev_t *dev, audio_params_t * params);
  */
 u8 audio_is_channel_en(hdmi_tx_dev_t *dev, audio_params_t * params, u8 channel);
 
+/**
+ * Configure and start AHBDMA for audio playback
+ * @param dev pointer to the hdmi_tx_dev structure
+ * @param audio pointer to the audio parameters structure
+ */
+void audio_ahbdma(hdmi_tx_dev_t *dev, audio_params_t * audio);
 
 #endif /* AUDIO_H_ */

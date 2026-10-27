@@ -16,6 +16,9 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/vmalloc.h>
+#if defined(MEDIA_V3)
+#include "mmu.h"
+#endif
 
 #define INVALID_CORE_INDEX_RETURN_ERROR(_coreIdx)  \
     if (_coreIdx >= MAX_NUM_VPU_CORE) \
@@ -894,6 +897,7 @@ RetCode VPU_DecGetBitstreamBuffer(DecHandle handle, PhysicalAddress* prdPtr, Phy
     PhysicalAddress rdPtr;
     PhysicalAddress wrPtr;
     PhysicalAddress tempPtr;
+    PhysicalAddress roomRd;
     int             room;
     Int32           coreIdx;
     VpuAttr*        pAttr;
@@ -931,12 +935,20 @@ RetCode VPU_DecGetBitstreamBuffer(DecHandle handle, PhysicalAddress* prdPtr, Phy
 
     tempPtr = rdPtr;
 
+    /* ProductVpuDecGetRdPtr() returns a VPU_MapToAddr40Bit()'d rd (0x17_<mmu-va>);
+     * mixing that into signed-int room overflows -> ~4GB ->
+     * ring backpressure defeated -> bitstream overwrite -> silent AXI hang.
+     * Gate is a no-op when rd already sits inside [start,end] (MMU off / bm1688). */
+    roomRd = tempPtr;
+    if (roomRd > pDecInfo->streamBufEndAddr)
+        roomRd &= 0xFFFFFFFFULL;
+
     if (pDecInfo->openParam.bitstreamMode != BS_MODE_PIC_END) {
-        if (wrPtr < tempPtr) {
-            room = tempPtr - wrPtr - pAttr->bitstreamBufferMargin*2;
+        if (wrPtr < roomRd) {
+            room = roomRd - wrPtr - pAttr->bitstreamBufferMargin*2;
         }
         else {
-            room = (pDecInfo->streamBufEndAddr - wrPtr) + (tempPtr - pDecInfo->streamBufStartAddr) - pAttr->bitstreamBufferMargin*2;
+            room = (pDecInfo->streamBufEndAddr - wrPtr) + (roomRd - pDecInfo->streamBufStartAddr) - pAttr->bitstreamBufferMargin*2;
         }
         room--;
     }
@@ -944,8 +956,12 @@ RetCode VPU_DecGetBitstreamBuffer(DecHandle handle, PhysicalAddress* prdPtr, Phy
         room = (pDecInfo->streamBufEndAddr - wrPtr);
     }
 
-    if (prdPtr) *prdPtr = tempPtr;
-    if (pwrPtr) *pwrPtr = wrPtr;
+    if (prdPtr) {
+        *prdPtr = tempPtr;
+    }
+    if (pwrPtr) {
+        *pwrPtr = wrPtr;
+    }
     if (size)   *size   = room;
 
     return RETCODE_SUCCESS;
@@ -981,7 +997,8 @@ RetCode VPU_DecUpdateBitstreamBuffer(DecHandle handle, int size)
     }
 
     if (size > 0) {
-        Uint32      room    = 0;
+        Uint32          room    = 0;
+        PhysicalAddress guardRd;
 
         if (running == TRUE) {
             rdPtr = VpuReadReg(pCodecInst->coreIdx, pDecInfo->streamRdPtrRegAddr);
@@ -989,8 +1006,16 @@ RetCode VPU_DecUpdateBitstreamBuffer(DecHandle handle, int size)
         } else
             rdPtr = pDecInfo->streamRdPtr;
 
-        if (wrPtr < rdPtr) {
-            if (rdPtr <= wrPtr + size) {
+        /* rd is VPU_MapToAddr40Bit()'d (0x17_<mmu-va>) while
+         * wr is a 32-bit mmu-va, so this overrun guard would be permanently dead.
+         * Normalise a local copy;
+         * gate is a no-op when rd already sits inside [start,end] (MMU off / bm1688) */
+        guardRd = rdPtr;
+        if (guardRd > pDecInfo->streamBufEndAddr)
+            guardRd &= 0xFFFFFFFFULL;
+
+        if (wrPtr < guardRd) {
+            if (guardRd <= wrPtr + size) {
                 return RETCODE_INVALID_PARAM;
             }
         }
@@ -1431,8 +1456,12 @@ RetCode VPU_DecGetOutputInfo(DecHandle handle, DecOutputInfo* info)
 
         maxDecIndex = (pDecInfo->numFbsForDecoding > pDecInfo->numFbsForWTL) ? pDecInfo->numFbsForDecoding : pDecInfo->numFbsForWTL;
 
-        if (0 <= info->indexFrameDisplay && info->indexFrameDisplay < (int)maxDecIndex)
+        if (0 <= info->indexFrameDisplay && info->indexFrameDisplay < (int)maxDecIndex) {
             info->dispFrame = pDecInfo->frameBufPool[val+info->indexFrameDisplay];
+#ifdef MEDIA_V3
+            info->dispFrame.bufY = info->dispFrame.phys_addr_36bit;
+#endif
+        }
     }
 
     info->rdPtr            = pDecInfo->streamRdPtr;

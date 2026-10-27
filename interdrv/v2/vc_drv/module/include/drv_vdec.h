@@ -89,7 +89,9 @@ int drv_vdec_set_user_pic(vdec_chn VdChn, const video_frame_info_s *usr_pic);
 int drv_vdec_enable_user_pic(vdec_chn VdChn, unsigned char instant);
 int drv_vdec_disable_user_pic(vdec_chn VdChn);
 int drv_vdec_set_display_mode(vdec_chn VdChn, video_display_mode_e display_mode);
-
+int vdec_get_output_frame_count(vdec_chn VdChn);
+int vdec_drv_init(void);
+void vdec_drv_deinit(void);
 #ifdef __cplusplus
 #if __cplusplus
 }

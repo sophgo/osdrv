@@ -1605,6 +1605,11 @@ It enables source frame data with long burst length to be loaded for reducing DM
     int sequenceNo;     /**< A sequence number that the frame belongs to. It increases by 1 every time a sequence changes in decoder.  */
 
     BOOL updateFbInfo;  /**< If this is TRUE, VPU updates API-internal framebuffer information when any of the information is changed. */
+#ifdef MEDIA_V3
+    PhysicalAddress phys_addr_36bit;  /* the real physical address in cv84x2 */
+    int mmu_entry_index;
+    int mmu_entry_num;
+#endif
 } FrameBuffer;
 
 /**

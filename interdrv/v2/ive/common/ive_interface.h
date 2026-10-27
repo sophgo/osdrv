@@ -16,12 +16,17 @@
 #include <linux/semaphore.h>
 #include <linux/clk.h>
 #include "ive_core_res.h"
-
-
+#include <linux/kthread.h>
+#include <linux/delay.h>
 
 #define MAX_TILES 9
+#ifdef MEDIA_V3
+#define IVE_DEV_MAX 3
+#define IVE_DEV_USE_MAX 3
+#else
 #define IVE_DEV_MAX 2
 #define IVE_DEV_USE_MAX 1
+#endif
 #define IVE_SYNC_IO_WAIT_TIMEOUT_MS (1000*10)
 #define IVE_IDLE_WAIT_TIMEOUT_MS    (1000*5)
 #define IVE_EOF_WAIT_TIMEOUT_MS     (1000*1)
@@ -54,6 +59,9 @@ enum ive_clk_state {
 enum ive_dev_type {
 	DEV_IVE_0 = 0,
 	DEV_IVE_1,
+#ifdef MEDIA_V3
+	DEV_IVE_2,
+#endif
 	DEV_IVE_MAX,
 };
 
@@ -84,6 +92,8 @@ struct ive_dev_core {
 	u32 hw_duration;
 	u32 hw_duration_total;
 	u32 duty_ratio;
+	u32 start_count;
+	u32 end_count;
 //for task func
 	struct work_struct work_frm_done;
 	wait_queue_head_t cmdq_wq;
@@ -131,6 +141,14 @@ struct ive_profiling_info {
 	uint32_t time_vld_diff_us[MAX_TILES];
 	uint32_t time_tile_diff_us;
 };
+
+struct ive_handler_ctx {
+    wait_queue_head_t wait;      // Wait queue for waking up threads
+    volatile int evt;            // Event flag
+    struct ive_device *ndev;     // Device pointer
+    int dev_id;                  // Core ID
+};
+
 typedef void (*ive_timer_cb)(void *data);
 void start_vld_time(int optype, struct ive_dev_core *core);
 void stop_vld_time(int optype, int tile_num, struct ive_dev_core *core);

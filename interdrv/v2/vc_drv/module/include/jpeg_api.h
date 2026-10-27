@@ -171,6 +171,8 @@ typedef struct {
     int iDataLen;
     int dst_type;
     DRVFRAMEBUF dec_buf;
+    /* Attached vb pool id for decode framebuffer, VB_INVALID_POOLID means not attached. */
+    unsigned int frame_buffer_vb_pool;
 } JPG_DecConfigParam;
 
 /* jpu config param */

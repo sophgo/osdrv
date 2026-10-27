@@ -4,6 +4,7 @@
 #define LDC_ADDR_ALIGN 64
 #define LDC_SIZE_ALIGN 64
 #define LDC_BASE_ADDR_SHIFT 6
+#define LDC_ADDR_EXT_MASK 0x7fff /* phyaddr bit[47:33] */
 #define LDC_MAX_WIDTH 4608
 #define LDC_MAX_HEIGHT 4608
 
@@ -51,7 +52,11 @@ struct ldc_cfg {
 
 	unsigned long long dst_y_base;
 	unsigned long long dst_c_base;
-	unsigned int extend_haddr;//dram bit[35:33]
+	unsigned int extend_haddr; /* dram bit[35:33]; CV84X6 W: dst bit[47:33] */
+#ifdef CV84X6
+	unsigned int extend_haddr_r;  /* R: src bit[47:33] */
+	unsigned int extend_haddr_r1; /* R1: map bit[47:33] */
+#endif
 	enum ldc_dst_mode dst_mode;
 	bool use_cmdq;
 

@@ -23,7 +23,7 @@ ifeq (${CHIP_ARCH}, CV180X)
 endif
 
 CC = $(CROSS_COMPILE)gcc
-CFLAG += -I ../../interdrv/v2/spacc/sophon/
+CFLAG += -I ../../interdrv/v2/spacc/88a2/
 
 source  = spacc_test.c
 object  = $(source:%.cc=%.o)

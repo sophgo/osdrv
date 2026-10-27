@@ -177,7 +177,7 @@ sw_float expf_poly[] = {
 };
 /* EXP */
 
-void float_raise(int8_t flags)
+static void float_raise(int8_t flags)
 {
     float_exception_flags |= flags;
 }
@@ -485,7 +485,7 @@ static inline int16_t extractFloat32Exp(sw_float a)
     return (a >> 23) & 0xFF;
 }
 
-flag float32_is_signaling_nan(sw_float a)
+static flag float32_is_signaling_nan(sw_float a)
 {
     return (((a >> 22) & 0x1FF) == 0x1FE) && (a & 0x003FFFFF);
 }
@@ -497,12 +497,12 @@ flag float32_is_signaling_nan(sw_float a)
  *  -------------------------------------------------------------------------------
  */
 
-flag float32_is_nan(sw_float a)
+static flag float32_is_nan(sw_float a)
 {
     return (0xFF000000 < (bits32)(a << 1));
 }
 
-void shift64RightJamming(bits64 a, int16_t count, bits64 *zPtr)
+static void shift64RightJamming(bits64 a, int16_t count, bits64 *zPtr)
 {
     bits64 z;
 
@@ -1138,7 +1138,7 @@ sw_float float32_round_to_int(struct roundingData *roundData, sw_float a)
     }
     return z;
 }
-
+#if 0
 void float32_extract_int_and_float(sw_float a, sw_float *int_a, sw_float *float_a)
 {
     struct roundingData roundData = {0};
@@ -1146,7 +1146,7 @@ void float32_extract_int_and_float(sw_float a, sw_float *int_a, sw_float *float_
     *int_a = float32_round_to_int(&roundData, a);
     *float_a = float32_sub(&roundData, a, *int_a);
 }
-
+#endif
 /*
  * -------------------------------------------------------------------------------
  * Returns the result of converting the 32-bit two's complement integer `a' to
@@ -1274,7 +1274,7 @@ sw_float float32_sqrt(struct roundingData *roundData, sw_float a)
     shift32RightJamming(zSig, 1, &zSig);
     return roundAndPackFloat32(roundData, 0, zExp, zSig);
 }
-
+#if 0
 sw_float float32_frexp(sw_float a, int *pw2)
 {
     uint32_t f = (uint32_t)a;
@@ -1286,7 +1286,7 @@ sw_float float32_frexp(sw_float a, int *pw2)
     f |= 0x3f000000; /* mantissa between 0.5 and 1 */
     return ((sw_float)f);
 }
-
+#endif
 static inline uint32_t top12(sw_float x)
 {
     return ((uint32_t)x) >> 20;
@@ -1354,7 +1354,7 @@ sw_float float32_exp(sw_float x_32)
     return y;
 }
 
-sw_float float32_exp2(sw_float xd, uint32_t sign_bias)
+static sw_float float32_exp2(sw_float xd, uint32_t sign_bias)
 {
     struct roundingData roundData;
     sw_float shift32 = 0x48c00000; //(0x1.8p+23 / N);
@@ -1381,7 +1381,7 @@ sw_float float32_exp2(sw_float xd, uint32_t sign_bias)
     return y;
 }
 
-sw_float float32_log2(uint32_t ix)
+static sw_float float32_log2(uint32_t ix)
 {
     struct roundingData roundData;
     /* double_t for better performance on targets with FLT_EVAL_METHOD==2.  */

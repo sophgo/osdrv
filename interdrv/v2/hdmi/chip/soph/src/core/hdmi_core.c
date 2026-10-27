@@ -3,6 +3,7 @@
 #include "api.h"
 #include "hdmi_reg.h"
 #include "core/irq.h"
+#include "core/audio.h"
 #include "phy/phy.h"
 #include "hdcp/hdcp.h"
 #include "bsp/i2cm.h"
@@ -11,6 +12,7 @@
 #include <uapi/linux/sched/types.h>
 #include <linux/sched.h>
 #include "common/hdmi_ioctl.h"
+#include "vb.h"
 #include "disp.h"
 #include "dsi_phy.h"
 #include <linux/compat.h>
@@ -983,6 +985,102 @@ int hdmitx_start(void)
 	return res;
 }
 
+/**
+ * @brief Send audio frame to driver queue for DMA playback
+ *
+ * @param seq: Frame sequence number
+ * @param len: Frame data length in bytes
+ * @param phy_addr: Physical address of audio data
+ * @param vb_blk: VB block handle (0 for Ion)
+ * @return 0 on success, negative error code on failure
+ */
+int hdmitx_send_audio_frame(unsigned int seq, unsigned int len,
+                            unsigned long long phy_addr, unsigned long long vb_blk)
+{
+	struct hdmi_audio_frame_node *node;
+	unsigned long flags;
+
+	/* Allocate new frame node */
+	node = kmalloc(sizeof(*node), GFP_KERNEL);
+	if (!node) {
+		pr_err("[HDMI-SEND] Failed to allocate frame node\n");
+		return -ENOMEM;
+	}
+
+	/* Fill frame data */
+	node->frame.seq = seq;
+	node->frame.len = len;
+	node->frame.phy_addr = phy_addr;
+	node->frame.vb_blk = vb_blk;
+
+	/* Hold VB ref while frame is queued/DMA; released in work (frame_done) */
+	if (vb_blk != VB_INVALID_HANDLE) {
+		struct vb_s *vb = (struct vb_s *)(uintptr_t)vb_blk;
+		atomic_inc(&vb->usr_cnt);
+	}
+
+	/* Add to queue */
+	spin_lock_irqsave(&dev_hdmi->audio_lock, flags);
+	list_add_tail(&node->list, &dev_hdmi->audio_frame_queue);
+	spin_unlock_irqrestore(&dev_hdmi->audio_lock, flags);
+
+	/* Trigger work to process frame */
+	schedule_work(&dev_hdmi->audio_work);
+
+	return 0;
+}
+
+/**
+ * @brief Work queue handler for processing audio frames
+ *
+ * Called from workqueue context to start DMA for the next audio frame.
+ * If DMA is already busy, this function will skip processing.
+ */
+static void hdmi_audio_work_handler(struct work_struct *work)
+{
+	struct hdmitx_dev *dev = container_of(work, struct hdmitx_dev, audio_work);
+	struct hdmi_audio_frame_node *node;
+	unsigned long flags;
+
+	/* Release previous frame (VB ref + node); must be in process context */
+	if (dev->frame_done) {
+		if (dev->frame_done->frame.vb_blk != VB_INVALID_HANDLE)
+			vb_release_block((vb_blk)dev->frame_done->frame.vb_blk);
+		kfree(dev->frame_done);
+		dev->frame_done = NULL;
+	}
+
+	spin_lock_irqsave(&dev->audio_lock, flags);
+
+	/* Check if DMA is already busy */
+	if (dev->audio_dma_busy) {
+		spin_unlock_irqrestore(&dev->audio_lock, flags);
+		return;
+	}
+
+	/* Check if queue is empty */
+	if (list_empty(&dev->audio_frame_queue)) {
+		spin_unlock_irqrestore(&dev->audio_lock, flags);
+		return;
+	}
+
+	/* Dequeue the first frame */
+	node = list_first_entry(&dev->audio_frame_queue,
+	                        struct hdmi_audio_frame_node, list);
+	list_del(&node->list);
+	dev->current_frame = node;
+	dev->audio_dma_busy = true;
+
+	spin_unlock_irqrestore(&dev->audio_lock, flags);
+
+	/* Update audio params and start DMA */
+	ctx->mode.paudio.start_addr = node->frame.phy_addr;
+	ctx->mode.paudio.stop_addr = node->frame.phy_addr + node->frame.len - 1;
+
+	/* Trigger audio DMA */
+	audio_ahbdma(&ctx->hdmi_tx, &ctx->mode.paudio);
+}
+
 int hdmitx_stop(void)
 {
 	if (!phy_hot_plug_state(&ctx->hdmi_tx)) {
@@ -996,25 +1094,54 @@ int hdmitx_stop(void)
 static irqreturn_t _hdmi_tx_handler(int irq, void *dev_id){
 	struct hdmitx_dev *dev = NULL;
 	u32 hdcp_irq = 0;
+	u32 decode;
+	u32 pending = 0;
+	unsigned long delay = 0;
+
+	/*
+	 * Debounce PHY/HPD related interrupts: hotplug / rx_sense is often noisy.
+	 * Other sources (packets/i2c) should be handled ASAP.
+	 */
+	const unsigned long debounce_jiffies = msecs_to_jiffies(20);
+	const u32 PENDING_HDCP = (1U << 31);
 
 	if(dev_id == NULL)
 		return IRQ_NONE;
 
 	dev = dev_id;
 
+	/*
+	 * Always read both decode and HDCP status here, then defer real work.
+	 * Avoid dropping causes by accumulating them into irq_pending.
+	 */
 	hdcp_irq = dev_read(A_APIINTSTAT);
-	dev->decode = dev_read(IH_DECODE);
+	decode = dev_read(IH_DECODE) & 0xFF;
 
-	if(dev->decode){
+	if (decode) {
+		pending |= decode;
+
+		/* Mute main IRQ line until work clears/handles sources. */
 		dev_write(IH_MUTE, 0x1);
-		return IRQ_WAKE_THREAD;
+
+		if (decode_is_phy(decode)) {
+			/* Only debounce if it's *only* PHY-related. */
+			if ((decode & ~IH_DECODE_IH_PHY_MASK) == 0)
+				delay = debounce_jiffies;
+		}
 	}
 
-	if(hdcp_irq != 0){
+	if (hdcp_irq != 0) {
+		pending |= PENDING_HDCP;
+		/* Mask HDCP interrupts until work handles them. */
 		dev_write(A_APIINTMSK, 0xff);
 	}
-	else{
-		return IRQ_HANDLED;
+
+	if (pending) {
+		atomic_or(pending, &dev->irq_pending);
+		/*
+		 * Use mod_delayed_work so repeated IRQs coalesce and PHY/HPD can debounce.
+		 */
+		mod_delayed_work(system_wq, &dev->hpd_work, delay);
 	}
 
 	return IRQ_HANDLED;
@@ -1031,19 +1158,38 @@ static irqreturn_t __maybe_unused _hdcp_handler(int irq, void *dev_id){
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
+static void dwc_hdmi_tx_handler(struct work_struct *work)
+{
 	u32 decode = 0;
 	u32 hdcp_irq = 0;
+	u32 pending;
 	u8 intr_stat;
 	u8 phy_decode = 0;
 	int execute = 0;
-	struct hdmitx_dev *dev = NULL;
+	struct hdmitx_dev *dev;
+	const u32 PENDING_HDCP = (1U << 31);
 
-	dev = dev_id;
-	decode = dev->decode;
-	hdcp_irq = hdcp_interrupt_status(&ctx->hdmi_tx);
-	if(hdcp_irq != 0){
-		hdcp_handler();
+	dev = container_of(work, struct hdmitx_dev, hpd_work.work);
+
+	/* Take and clear pending causes accumulated by the ISR. */
+	pending = (u32)atomic_xchg(&dev->irq_pending, 0);
+	decode = pending & 0xFF;
+
+	/*
+	 * Only run HDCP handler if we observed HDCP activity in the ISR.
+	 * hdcp_handler() clears status via hdcp_event_handler().
+	 */
+	if (pending & PENDING_HDCP) {
+		hdcp_irq = hdcp_interrupt_status(&ctx->hdmi_tx);
+		if (hdcp_irq != 0)
+			hdcp_handler();
+
+		/* Re-enable the HDCP interrupts we care about (we masked all in ISR). */
+		dev_write(A_APIINTMSK,
+				dev_read(A_APIINTMSK) &
+				~(A_APIINTMSK_HDCP_FAILED_MASK |
+				  A_APIINTMSK_HDCP_ENGAGED_MASK |
+				  A_APIINTSTAT_KSVSHA1CALCDONEINT_MASK));
 	}
 
 	if(decode_is_fc_stat0(decode)){
@@ -1113,6 +1259,44 @@ static irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
 		}
 	}
 
+	/* Handle AHBDMA interrupt */
+	if (decode & IH_DECODE_IH_AHBDMAAUD_STAT0_MASK) {
+		u8 dma_stat = dev_read(IH_AHBDMAAUD_STAT0);
+
+		if (dma_stat & 0x04) {  /* INTDONE */
+			/* Stop DMA hardware */
+			dev_write_mask(AHB_DMA_STOP, 0x1, 0x1);
+
+			/* Release current frame and trigger next frame */
+			if (dev->current_frame) {
+				unsigned long flags;
+
+				if (dev->frame_done)
+					pr_warn("[HDMI-IRQ] frame_done overwrite! leaked vb=0x%llx\n",
+						dev->frame_done->frame.vb_blk);
+
+				/* Defer VB release + kfree to work (vb_release_block may take mutex) */
+				dev->frame_done = dev->current_frame;
+				dev->current_frame = NULL;
+
+				/* Mark DMA as idle */
+				spin_lock_irqsave(&dev->audio_lock, flags);
+				dev->audio_dma_busy = false;
+				spin_unlock_irqrestore(&dev->audio_lock, flags);
+
+				/* Trigger work to release frame and process next */
+				schedule_work(&dev->audio_work);
+			}
+		}
+
+		if (dma_stat & 0x20) {  /* INTERROR */
+			pr_err("HDMI audio DMA error, stat=0x%02x\n", dma_stat);
+		}
+
+		/* Clear interrupt (Write-1-to-Clear) */
+		dev_write(IH_AHBDMAAUD_STAT0, dma_stat);
+	}
+
 	if(decode_is_i2c_stat0(decode)){
 		u8 state = 0;
 		irq_read_stat(&ctx->hdmi_tx, I2C_DDC, &state);
@@ -1132,10 +1316,8 @@ static irqreturn_t dwc_hdmi_tx_handler(int irq, void *dev_id){
 	intr_stat = dev_read(IH_PHY_STAT0);
 	dev_write(IH_PHY_STAT0, intr_stat);
 
+	/* Ensure interrupts are unmuted after handling. */
 	irq_hpd_sense_enable(&ctx->hdmi_tx);
-	// mutex_unlock(&(ctx->mutex));
-
-	return IRQ_HANDLED;
 }
 
 void hdcp_handler(void){
@@ -1883,8 +2065,11 @@ static int register_interrupts(struct hdmitx_dev *dev)
 {
 	int ret = 0;
 
-	ret = devm_request_threaded_irq(dev->parent_dev, dev->irq[0], _hdmi_tx_handler,
-									dwc_hdmi_tx_handler, IRQF_SHARED, "vo_dw_hdmi", dev);
+	INIT_DELAYED_WORK(&dev->hpd_work, dwc_hdmi_tx_handler);
+	atomic_set(&dev->irq_pending, 0);
+
+	ret = devm_request_irq(dev->parent_dev, dev->irq[0], _hdmi_tx_handler,
+							IRQF_SHARED, "vo_dw_hdmi", dev);
 	if (ret){
 		pr_err("%s:Could not register dwc_hdmi_tx interrupt\n", __func__);
 	}
@@ -1895,6 +2080,7 @@ static int register_interrupts(struct hdmitx_dev *dev)
 static void release_interrupts(struct hdmitx_dev *dev)
 {
 	int i = 0;
+	cancel_delayed_work_sync(&dev->hpd_work);
 	for(i = 0; i < (sizeof(dev->irq) / sizeof(dev->irq[0])); i++){
 		if(dev->irq[i]){
 			devm_free_irq(dev->parent_dev, dev->irq[i], dev);
@@ -2091,6 +2277,17 @@ static int hdmi_tx_probe(struct platform_device *pdev)
 						IH_MUTE_PHY_STAT0_RX_SENSE_3_MASK ));
 	irq_unmute(&ctx->hdmi_tx);
 
+	/* 📊 Print AHBDMA register status after probe initialization */
+	pr_err("[HDMI-PROBE] ===== After irq_mask_all & irq_unmute =====\n");
+	pr_err("[HDMI-PROBE]   AHB_DMA_MASK = 0x%02x (bit7=done_mask: 0=enable 1=mask)\n",
+	       dev_read(AHB_DMA_MASK));
+	pr_err("[HDMI-PROBE]   IH_MUTE_AHBDMAAUD_STAT0 = 0x%02x (bit2: 0=enable 1=mute)\n",
+	       dev_read(IH_MUTE_AHBDMAAUD_STAT0));
+	pr_err("[HDMI-PROBE]   IH_MUTE = 0x%02x (global: 0=enable 1=mute)\n",
+	       dev_read(IH_MUTE));
+	pr_err("[HDMI-PROBE]   IH_DECODE = 0x%02x\n",
+	       dev_read(IH_DECODE));
+
 	/*
 	* Read high and low time from device tree. If not available use
 	* the default timing scl clock rate is about 100KHz.
@@ -2102,6 +2299,16 @@ static int hdmi_tx_probe(struct platform_device *pdev)
 	if (of_property_read_u32(np, "ddc-i2c-scl-low-time-ns",
 		&ctx->hdmi_tx.i2c.scl_low_ns))
 		ctx->hdmi_tx.i2c.scl_low_ns = 5200;
+
+	/* Initialize audio frame queue */
+	INIT_LIST_HEAD(&dev_hdmi->audio_frame_queue);
+	spin_lock_init(&dev_hdmi->audio_lock);
+	dev_hdmi->current_frame = NULL;
+	dev_hdmi->frame_done = NULL;
+	INIT_WORK(&dev_hdmi->audio_work, hdmi_audio_work_handler);
+	dev_hdmi->audio_dma_busy = false;
+	dev_hdmi->current_frame = NULL;
+	pr_err("[HDMI-PROBE] Audio frame queue initialized\n");
 
 	register_interrupts(dev_hdmi);
 	hdmitx_create_proc(dev_hdmi);

@@ -52,7 +52,12 @@
 #define MAX_NUM_INSTANCE                32
 
 #define MAX_NUM_SOPHON_SOC             	1
-#define MAX_NUM_VPU_CORE_CHIP           3		    // cv186x has 3 cores: 1 encoder and 2 decoder
+#if defined(MEDIA_V3)
+#define MAX_NUM_VPU_CORE_CHIP           5           /* cv84x6 has 5 cores: 1 encoder and 4 decoder */
+#define MAX_NUM_MMU_ENTRY               4096
+#else
+#define MAX_NUM_VPU_CORE_CHIP           3		    /* cv186x has 3 cores: 1 encoder and 2 decoder */
+#endif
 #define MAX_NUM_VPU_CORE                (MAX_NUM_VPU_CORE_CHIP*MAX_NUM_SOPHON_SOC)
 #define MAX_NUM_VCORE                   1
 
@@ -170,6 +175,38 @@
 
 #define VE_TOP_EXT_ADDR             0x21000010
 
-#define VPU_STAT_CYCLES_CLK         575000000
+#if defined(MEDIA_V3)
+#define TOP_SET                  0x08
+#define TOP_ADDR_EXT             0x10
+#define TOP_MMU_CRTL             0x0C
+
+#define TOP_VE_BWC_R             0xB0
+#define TOP_VE_BWC_W             0xB4
+#define TOP_VD_BWC_R0            0xB0
+#define TOP_VD_BWC_R1            0xB4
+#define TOP_VD_BWC_W0            0xB8
+#define TOP_VD_BWC_W1            0xBC
+#define TOP_VD_BWC_W2            0xC0
+#define TOP_VD_BWL_AW            0x20
+#define TOP_VD_BWL_AR            0x24
+
+#define TOP_REG_CK_0            0x00
+#define TOP_REG_CK_1            0x04
+#endif
+
+/* Tick counter clock (Hz) = bclk of each core (wave517 spec: time of each stage
+ * "based on bclk"; wave511 ds: bclk = clock for BPU in V-CORE and V-CPU).
+ * X2 cv84x6 (MEDIA_V3), ND bin: VD bclk 800M (vd_src1; factory mpll3=2000
+ * runs 1000M, two-step PLL downshift to design/ND bin gives 1600/2 = 800M),
+ * VE bclk 650M (ve_src1, ND ACLK).
+ * A2 cv186x: VD/VE bclk 575M (clk_src1_*_sys, DE3.0-Athena2_Clock; 105 board
+ * tick regression VD 575.6M / VE 577.9M). time_us = cycles/(clock/1000000). */
+#if defined(MEDIA_V3)
+#define VDEC_STAT_CYCLES_CLK        800000000
+#define VENC_STAT_CYCLES_CLK        650000000
+#else
+#define VDEC_STAT_CYCLES_CLK        575000000
+#define VENC_STAT_CYCLES_CLK        575000000
+#endif
 #endif  /* _VPU_CONFIG_H_ */
 

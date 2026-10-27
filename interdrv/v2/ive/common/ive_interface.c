@@ -37,11 +37,26 @@
 
 #define IVE_CDEV_NAME "soph-ive"
 #define IVE_CLASS_NAME "soph-ive"
+#ifdef MEDIA_V3
+#define IVE_PROC_NAME "ive_hw_profiling"
+#define REG_VO_SYS_BASE 0x67000000
+#else
 #define IVE_PROC_NAME "soph/ive_hw_profiling"
+#endif
 
+static struct ive_handler_ctx g_ive_hdl_ctx[IVE_DEV_MAX];
+static struct task_struct *ive_thread_tasks[IVE_DEV_MAX];
+
+#ifdef MEDIA_V3
+static const char *const ive_clk_name[IVE_DEV_MAX][2] = {
+						{"clk_vo_sys3", "clk_ive0"},
+						{"clk_vo_sys3", "clk_ive1"},
+						{"clk_vo_sys3", "clk_ive2"}};
+#else
 static const char *const ive_clk_name[IVE_DEV_MAX][2] = {
 						{"clk_vi_sys3", "clk_ive0"},
 						{"clk_vi_sys3", "clk_ive1"}};
+#endif
 
 
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
@@ -77,7 +92,7 @@ u32 ive_log_lv = IVE_DBG_ERR;
 struct class *class_id;
 static dev_t cdev_id;
 static uint32_t g_enable_usage_profiling;
-static struct ive_profiling_info *g_time_infos;
+static struct ive_profiling_info g_time_infos[MOD_ALL][IVE_DEV_MAX] = {0};
 //update proc info
 static void ive_update_timer(struct timer_list *timer);
 DEFINE_TIMER(timer_proc, ive_update_timer);
@@ -87,7 +102,12 @@ static atomic_t g_timer_added = ATOMIC_INIT(0);
 static ive_timer_cb g_core_cb;
 static void *g_core_data;
 
+#ifdef MEDIA_V3
+const char * const ive_irq_name[IVE_DEV_MAX] = {"ive_irq0", "ive_irq1", "ive_irq2"};
+static u_int64_t vo_sys_base;
+#else
 const char * const ive_irq_name[IVE_DEV_MAX] = {"ive_irq0", "ive_irq1"};
+#endif
 
 // proc_operations function
 static int ive_proc_open(struct inode *inode, struct file *file);
@@ -143,6 +163,8 @@ static const struct file_operations ive_fops = {
 #endif
 };
 
+module_param(ive_log_lv, int, 0644);
+
 static void register_timer_fun(ive_timer_cb cb, void *data)
 {
 	g_core_cb = cb;
@@ -183,37 +205,40 @@ static void stop_ioctl_time(struct ive_profiling_info *pinfo)
 
 void start_vld_time(int optype, struct ive_dev_core* core)
 {
+	int core_id = (int)core->dev_type;
 	if (g_enable_usage_profiling && optype < MOD_ALL &&
 		optype >= MOD_BYP &&
-		strlen(g_time_infos[optype].op_name) > 0) {
+		strlen(g_time_infos[optype][core_id].op_name) > 0) {
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
-		ktime_get_real_ts64(&g_time_infos[optype].time_vld_start);
+		ktime_get_real_ts64(&g_time_infos[optype][core_id].time_vld_start);
 #else
-		getnstimeofday(&g_time_infos[optype].time_vld_start);
+		getnstimeofday(&g_time_infos[optype][core_id].time_vld_start);
 #endif
-		core->ts_start = g_time_infos[optype].time_vld_start;
+		core->ts_start = g_time_infos[optype][core_id].time_vld_start;
 	}
 }
 
 void stop_vld_time(int optype, int tile_num, struct ive_dev_core* core)
 {
+	int core_id = (int)core->dev_type;
 	if (tile_num > MAX_TILES)
 		return;
 	if (g_enable_usage_profiling && optype < MOD_ALL &&
 		optype >= MOD_BYP &&
-		strlen(g_time_infos[optype].op_name) > 0) {
+		strlen(g_time_infos[optype][core_id].op_name) > 0) {
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
-		ktime_get_real_ts64(&g_time_infos[optype].time_vld_end);
+		ktime_get_real_ts64(&g_time_infos[optype][core_id].time_vld_end);
 #else
-		getnstimeofday(&g_time_infos[optype].time_vld_end);
+		getnstimeofday(&g_time_infos[optype][core_id].time_vld_end);
 #endif
-		g_time_infos[optype].time_vld_diff_us[tile_num] =
-			get_duration_us(&g_time_infos[optype].time_vld_start,
-			&g_time_infos[optype].time_vld_end);
+		g_time_infos[optype][core_id].time_vld_diff_us[tile_num] =
+			get_duration_us(&g_time_infos[optype][core_id].time_vld_start,
+			&g_time_infos[optype][core_id].time_vld_end);
 	}
-	g_time_infos[optype].time_tile_diff_us +=
-		g_time_infos[optype].time_vld_diff_us[tile_num];
-	core->ts_end = g_time_infos[optype].time_vld_end;
+	if (tile_num == 0) g_time_infos[optype][core_id].time_tile_diff_us = 0;
+	g_time_infos[optype][core_id].time_tile_diff_us +=
+		g_time_infos[optype][core_id].time_vld_diff_us[tile_num];
+	core->ts_end = g_time_infos[optype][core_id].time_vld_end;
 	core->hw_duration = get_duration_us(&core->ts_start, &core->ts_end);
 	core->hw_duration_total += core->hw_duration;
 }
@@ -297,7 +322,6 @@ static irqreturn_t ive_irq_finish_thread_func(int irq, void *data)
 static irqreturn_t ive_irq_handler(int irq, void *data)
 {
 	struct ive_device *ndev = data;
-	irqreturn_t ret;
 	int i, dev_id = -1;
 
 	for (i = 0; i < IVE_DEV_MAX; i++) {
@@ -306,78 +330,91 @@ static irqreturn_t ive_irq_handler(int irq, void *data)
 			break;
 		}
 	}
+    if (dev_id == -1) {
+        return IRQ_NONE;
+    }
 
-	spin_lock(&ndev->core[dev_id].dev_lock);
-	//pr_info("[IVE] ive use_count %d\n", ndev->use_count);
-	if (ndev->use_count == 0) {
-		atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
-		spin_unlock(&ndev->core[dev_id].dev_lock);
-		return IRQ_HANDLED;
-	}
+    /* Complete in hard-IRQ context (was kthread-deferred, which coalesced tile IRQs). */
+    spin_lock(&ndev->core[dev_id].dev_lock);
+    if (ndev->use_count == 0) {
+        atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
+        spin_unlock(&ndev->core[dev_id].dev_lock);
+        return IRQ_HANDLED;
+    }
+    platform_ive_irq(ndev, dev_id);
+    atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
+    spin_unlock(&ndev->core[dev_id].dev_lock);
 
-	ret = platform_ive_irq(ndev, dev_id);
-	atomic_set(&dev_state[dev_id], IVE_CORE_STATE_END);
-	spin_unlock(&ndev->core[dev_id].dev_lock);
-
-	return ret;
+    return IRQ_HANDLED;
 }
 
 static int ive_proc_show(struct seq_file *m, void *v)
 {
-	int i = 0, tile = 0;
+	int i = 0, j = 0, tile = 0;
 	struct ive_device *ndev= (struct ive_device *)m->private;
 	if (g_enable_usage_profiling) {
-        char const *row_name[] = {"op name", "start(s)", "ioctl(us)",
-                    "tile0(us)", "tile1(us)", "tile2(us)", "tile3(us)",
-                    "tile4(us)", "tile5(us)", "tile6(us)", "tile7(us)", "tile8(us)", "tileSum(us)"};
-		int row_space[] = { -15, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
+        char const *row_name[] = {"op name", "core_id", "start(s)", "ioctl(us)",
+                    "tile0", "tile1", "tile2", "tile3", "tile4",
+					"tile5", "tile6", "tile7", "tile8", "tileSum"};
+		int row_space[] = { -15, 10, 10, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
         int table[] = { 20, 21, 22, 23, 24, 3, 2, 25, 26, 27,
 						28, 31, 33, 35, 1, 29, 30, 4, 6, 7,
 						8, 9, 10, 11, 15, 16, 17, 19, 18, 36,
 						12, 34, 13, 14, 32, 5};
 
 		seq_puts(m, "[IVE] ive time profiling\n");
-		seq_printf(m, "%*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s\n",
+		seq_printf(m, "%*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s| %*s\n",
 		row_space[0], row_name[0], row_space[1], row_name[1],
 		row_space[2], row_name[2], row_space[3], row_name[3],
 		row_space[4], row_name[4], row_space[5], row_name[5],
 		row_space[6], row_name[6], row_space[7], row_name[7],
-		row_space[8], row_name[8], row_space[9], row_name[9]);
+		row_space[8], row_name[8], row_space[9], row_name[9],
+		row_space[10], row_name[10], row_space[11], row_name[11],
+		row_space[12], row_name[12], row_space[13], row_name[13]);
 
 		for (i = 0; i < 36; i++) {
 			uint32_t second_vld_time[MAX_TILES] = {0};
 			uint32_t second_tile_time = 0;
 			uint32_t id = table[i];
 
-			if (strlen(g_time_infos[id].op_name) > 0) {
-				if (id == 10) {
-					for (tile = 0; tile < MAX_TILES; tile++) {
-						second_vld_time[tile] = g_time_infos[5].time_vld_diff_us[tile];
+			for (j = 0; j < IVE_DEV_MAX; j++) {
+				if (strlen(g_time_infos[id][j].op_name) > 0) {
+					if (id == 10) {
+						for (tile = 0; tile < MAX_TILES; tile++) {
+							second_vld_time[tile] = g_time_infos[5][j].time_vld_diff_us[tile];
+						}
+						second_tile_time = g_time_infos[5][j].time_tile_diff_us;
+					} else if (id == 5) {
+						continue;
 					}
-					second_tile_time = g_time_infos[5].time_tile_diff_us;
-				} else if (id == 5) {
-					continue;
+					seq_printf(
+						m, "%*s| %*d| %*lld| %*u| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d\n",
+						row_space[0], g_time_infos[id][j].op_name,
+						row_space[1], j,
+						row_space[2], g_time_infos[id][j].time_ioctl_start.tv_sec,
+						row_space[3], g_time_infos[id][j].time_ioctl_diff_us,
+						row_space[4], g_time_infos[id][j].time_vld_diff_us[0] + second_vld_time[0],
+						row_space[5], g_time_infos[id][j].time_vld_diff_us[1] + second_vld_time[1],
+						row_space[6], g_time_infos[id][j].time_vld_diff_us[2] + second_vld_time[2],
+						row_space[7], g_time_infos[id][j].time_vld_diff_us[3] + second_vld_time[3],
+						row_space[8], g_time_infos[id][j].time_vld_diff_us[4] + second_vld_time[4],
+						row_space[9], g_time_infos[id][j].time_vld_diff_us[5] + second_vld_time[5],
+						row_space[10], g_time_infos[id][j].time_vld_diff_us[6] + second_vld_time[6],
+						row_space[11], g_time_infos[id][j].time_vld_diff_us[7] + second_vld_time[7],
+						row_space[12], g_time_infos[id][j].time_vld_diff_us[8] + second_vld_time[8],
+						row_space[13], g_time_infos[id][j].time_tile_diff_us + second_tile_time
+					);
 				}
-                seq_printf(
-                    m, "%*s| %*lld| %*u| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d| %*d\n",
-                    row_space[0], g_time_infos[id].op_name,
-                    row_space[1], g_time_infos[id].time_ioctl_start.tv_sec,
-                    row_space[2], g_time_infos[id].time_ioctl_diff_us,
-                    row_space[3], g_time_infos[id].time_vld_diff_us[0] + second_vld_time[0],
-                    row_space[4], g_time_infos[id].time_vld_diff_us[1] + second_vld_time[1],
-                    row_space[5], g_time_infos[id].time_vld_diff_us[2] + second_vld_time[2],
-                    row_space[6], g_time_infos[id].time_vld_diff_us[3] + second_vld_time[3],
-                    row_space[7], g_time_infos[id].time_vld_diff_us[4] + second_vld_time[4],
-                    row_space[8], g_time_infos[id].time_vld_diff_us[5] + second_vld_time[5],
-                    row_space[9], g_time_infos[id].time_vld_diff_us[6] + second_vld_time[6],
-                    row_space[10], g_time_infos[id].time_vld_diff_us[7] + second_vld_time[7],
-                    row_space[11], g_time_infos[id].time_vld_diff_us[8] + second_vld_time[8],
-                    row_space[12], g_time_infos[id].time_tile_diff_us + second_tile_time
-                );
 			}
 		}
-		seq_printf(m, "[IVE CORE 0] duty_ratio = %d%%\n", ndev->core[DEV_IVE_0].duty_ratio);
-		seq_printf(m, "[IVE CORE 1] duty_ratio = %d%%\n", ndev->core[DEV_IVE_1].duty_ratio);
+		seq_printf(m, "[IVE CORE 0] duty_ratio = %d%%, start_cnt = %d, end_cnt = %d\n",
+			ndev->core[DEV_IVE_0].duty_ratio, ndev->core[DEV_IVE_0].start_count, ndev->core[DEV_IVE_0].end_count);
+		seq_printf(m, "[IVE CORE 1] duty_ratio = %d%%, start_cnt = %d, end_cnt = %d\n",
+			ndev->core[DEV_IVE_1].duty_ratio, ndev->core[DEV_IVE_1].start_count, ndev->core[DEV_IVE_1].end_count);
+#ifdef MEDIA_V3
+		seq_printf(m, "[IVE CORE 2] duty_ratio = %d%%, start_cnt = %d, end_cnt = %d\n",
+			ndev->core[DEV_IVE_2].duty_ratio, ndev->core[DEV_IVE_2].start_count, ndev->core[DEV_IVE_2].end_count);
+#endif
 	} else {
 		seq_puts(m, "[IVE] ive time profiling is disabled\n");
 	}
@@ -400,8 +437,8 @@ static ssize_t ive_proc_write(struct file *file, const char __user *user_buf,
 		pr_err("\n[IVE] Time profiling is ended\n");
 	} else if (user_input_param == 1) {
 		for (i = 0; i < MOD_ALL; i++) {
-			memset(&g_time_infos[i], 0,
-			       sizeof(struct ive_profiling_info));
+			memset(&g_time_infos[i][0], 0,
+			       sizeof(struct ive_profiling_info) * IVE_DEV_MAX);
 		}
 		g_enable_usage_profiling = 1;
 		pr_err("\n[IVE] Time profiling is started\n");
@@ -744,6 +781,8 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 		TRACE_IVE(IVE_DBG_ERR, "ive device hw busy, no idle core, drop this task!\n");
 		return ret;
 	}
+	TRACE_IVE(IVE_DBG_DEBUG, "ive_core_request_resource idx %d!\n", idle_coreid);
+	ndev->core[idle_coreid].start_count++;
 
 	switch (task_type) {
 	case IVE_IOC_QUERY: {
@@ -751,131 +790,149 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 		struct ive_query_arg *val =
 				(struct ive_query_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_QUERY], "QUERY");
+		start_ioctl_time(&g_time_infos[MOD_QUERY][idle_coreid], "QUERY");
 		ret = ive_query(ndev, &bFinish, val->bBlock, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_QUERY]);
+		stop_ioctl_time(&g_time_infos[MOD_QUERY][idle_coreid]);
 	} break;
 	case IVE_IOC_RESET: {
-		start_ioctl_time(&g_time_infos[MOD_RESET], "RESET");
+		start_ioctl_time(&g_time_infos[MOD_RESET][idle_coreid], "RESET");
 		ret = _ive_reset(ndev, *((int *) g_kdata), idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_RESET]);
+		stop_ioctl_time(&g_time_infos[MOD_RESET][idle_coreid]);
 	} break;
 	case IVE_IOC_DUMP: {
-		start_ioctl_time(&g_time_infos[MOD_DUMP], "DUMP");
+		start_ioctl_time(&g_time_infos[MOD_DUMP][idle_coreid], "DUMP");
 		ret = ive_dump_reg_state(true);    // not use dev_id ,use d_num
-		stop_ioctl_time(&g_time_infos[MOD_DUMP]);
+		stop_ioctl_time(&g_time_infos[MOD_DUMP][idle_coreid]);
 	} break;
 	case IVE_IOC_TEST: {
 		struct ive_test_arg *val =
 				(struct ive_test_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_TEST], "Test");
+		start_ioctl_time(&g_time_infos[MOD_TEST][idle_coreid], "Test");
 		ret = ive_test(ndev, val->addr, &val->width,
 					&val->height);
-		stop_ioctl_time(&g_time_infos[MOD_TEST]);
+		stop_ioctl_time(&g_time_infos[MOD_TEST][idle_coreid]);
 	} break;
 	case IVE_IOC_DMA: {
 		struct ive_ioctl_dma_arg *val =
 				(struct ive_ioctl_dma_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_DMA], "DMA");
+		start_ioctl_time(&g_time_infos[MOD_DMA][idle_coreid], "DMA");
 		ret = ive_dma(ndev, &val->src, &val->dst,
 					&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_DMA]);
+		stop_ioctl_time(&g_time_infos[MOD_DMA][idle_coreid]);
 	} break;
 	case IVE_IOC_AND: {
 		struct ive_ioctl_and_arg *val =
 				(struct ive_ioctl_and_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_AND], "And");
+		start_ioctl_time(&g_time_infos[MOD_AND][idle_coreid], "And");
 		ret = ive_and(ndev, &val->src1, &val->src2,
 					&val->dst, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_AND]);
+		stop_ioctl_time(&g_time_infos[MOD_AND][idle_coreid]);
 	} break;
 	case IVE_IOC_OR: {
 		struct ive_ioctl_or_arg *val =
 				(struct ive_ioctl_or_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_OR], "Or");
+		start_ioctl_time(&g_time_infos[MOD_OR][idle_coreid], "Or");
 		ret = ive_or(ndev, &val->src1, &val->src2,
 					&val->dst, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_OR]);
+		stop_ioctl_time(&g_time_infos[MOD_OR][idle_coreid]);
 	} break;
 	case IVE_IOC_XOR: {
 		struct ive_ioctl_xor_arg *val =
 				(struct ive_ioctl_xor_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_XOR], "Xor");
+		start_ioctl_time(&g_time_infos[MOD_XOR][idle_coreid], "Xor");
 		ret = ive_xor(ndev, &val->src1, &val->src2,
 					&val->dst, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_XOR]);
+		stop_ioctl_time(&g_time_infos[MOD_XOR][idle_coreid]);
 	} break;
 	case IVE_IOC_ADD: {
 		struct ive_ioctl_add_arg *val =
 				(struct ive_ioctl_add_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_ADD], "Add");
+		start_ioctl_time(&g_time_infos[MOD_ADD][idle_coreid], "Add");
 		ret = ive_add(ndev, &val->src1, &val->src2,
 					&val->dst, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_ADD]);
+		stop_ioctl_time(&g_time_infos[MOD_ADD][idle_coreid]);
 	} break;
 	case IVE_IOC_SUB: {
 		struct ive_ioctl_sub_arg *val =
 				(struct ive_ioctl_sub_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_SUB], "Sub");
+		start_ioctl_time(&g_time_infos[MOD_SUB][idle_coreid], "Sub");
 		ret = ive_sub(ndev, &val->src1, &val->src2,
 					&val->dst, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_SUB]);
+		stop_ioctl_time(&g_time_infos[MOD_SUB][idle_coreid]);
 	} break;
 	case IVE_IOC_THRESH: {
 		struct ive_ioctl_thresh_arg *val =
 				(struct ive_ioctl_thresh_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_THRESH], "Thresh");
+		start_ioctl_time(&g_time_infos[MOD_THRESH][idle_coreid], "Thresh");
 		ret = ive_thresh(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_THRESH]);
+		stop_ioctl_time(&g_time_infos[MOD_THRESH][idle_coreid]);
 	} break;
 	case IVE_IOC_DILATE: {
+#ifdef MEDIA_V3
+		struct ive_ioctl_dilate_ext_arg *val =
+				(struct ive_ioctl_dilate_ext_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_DILA][idle_coreid], "Dilate");
+		ret = ive_dilate_ext(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+#else
 		struct ive_ioctl_dilate_arg *val =
 				(struct ive_ioctl_dilate_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_DILA], "Dilate");
+		start_ioctl_time(&g_time_infos[MOD_DILA][idle_coreid], "Dilate");
 		ret = ive_dilate(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_DILA]);
+#endif
+		stop_ioctl_time(&g_time_infos[MOD_DILA][idle_coreid]);
 	} break;
 	case IVE_IOC_ERODE: {
+#ifdef MEDIA_V3
+		struct ive_ioctl_erode_ext_arg *val =
+				(struct ive_ioctl_erode_ext_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_ERO][idle_coreid], "Erode");
+		ret = ive_erode_ext(ndev, &val->src, &val->dst,
+					&val->ctrl, val->instant, idle_coreid);
+#else
 		struct ive_ioctl_erode_arg *val =
 				(struct ive_ioctl_erode_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_ERO], "Erode");
+		start_ioctl_time(&g_time_infos[MOD_ERO][idle_coreid], "Erode");
 		ret = ive_erode(ndev, &val->src, &val->dst,
 					&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_ERO]);
+#endif
+		stop_ioctl_time(&g_time_infos[MOD_ERO][idle_coreid]);
 	} break;
 	case IVE_IOC_MATCH_BGMODEM: {
 		struct ive_ioctl_match_bgmodel_arg *val =
 				(struct ive_ioctl_match_bgmodel_arg *) g_kdata;
 
 		buffer = (ive_bg_stat_data_s *)buffer;
-		start_ioctl_time(&g_time_infos[MOD_BGM], "MatchBgModel");
+		start_ioctl_time(&g_time_infos[MOD_BGM][idle_coreid], "MatchBgModel");
 		ret = ive_match_bg_model(ndev, &val->cur_img,
 						&val->bg_model,
 						&val->fg_flag, &val->stDiffFg,
 						buffer, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_BGM]);
+		stop_ioctl_time(&g_time_infos[MOD_BGM][idle_coreid]);
 	} break;
 	case IVE_IOC_UPDATE_BGMODEL: {
 		struct ive_ioctl_update_bgmodel_arg *val =
 				(struct ive_ioctl_update_bgmodel_arg *) g_kdata;
 
 		buffer = (ive_bg_stat_data_s *)buffer;
-		start_ioctl_time(&g_time_infos[MOD_BGU], "UpdateBgModel");
+		start_ioctl_time(&g_time_infos[MOD_BGU][idle_coreid], "UpdateBgModel");
 		ret = ive_update_bg_model(ndev, &val->cur_img,
 						&val->bg_model,
 						&val->fg_flag, &val->bg_img,
@@ -883,280 +940,308 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 						buffer,
 						&val->ctrl, val->instant,
 						idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_BGU]);
+		stop_ioctl_time(&g_time_infos[MOD_BGU][idle_coreid]);
 	} break;
 	case IVE_IOC_GMM: {
 		struct ive_ioctl_gmm_arg *val =
 				(struct ive_ioctl_gmm_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_GMM], "GMM");
+		start_ioctl_time(&g_time_infos[MOD_GMM][idle_coreid], "GMM");
 		ret = ive_gmm(ndev, &val->src, &val->fg,
 					&val->bg, &val->model, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_GMM]);
+		stop_ioctl_time(&g_time_infos[MOD_GMM][idle_coreid]);
 	} break;
 	case IVE_IOC_GMM2: {
 		struct ive_ioctl_gmm2_arg *val =
 				(struct ive_ioctl_gmm2_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_GMM2], "GMM2");
+		start_ioctl_time(&g_time_infos[MOD_GMM2][idle_coreid], "GMM2");
 		ret = ive_gmm2(ndev, &val->src, &val->factor,
 					&val->fg, &val->bg, &val->stInfo,
 					&val->model, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_GMM2]);
+		stop_ioctl_time(&g_time_infos[MOD_GMM2][idle_coreid]);
 	} break;
 
 	case IVE_IOC_BERNSEN: {
 		struct ive_ioctl_bernsen_arg *val =
 				(struct ive_ioctl_bernsen_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_BERNSEN], "Bernsen");
+		start_ioctl_time(&g_time_infos[MOD_BERNSEN][idle_coreid], "Bernsen");
 		ret = ive_bernsen(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_BERNSEN]);
+		stop_ioctl_time(&g_time_infos[MOD_BERNSEN][idle_coreid]);
 	} break;
 	case IVE_IOC_FILTER: {
+#ifdef MEDIA_V3
+		struct ive_ioctl_filter_ext_arg *val =
+				(struct ive_ioctl_filter_ext_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_FILTER3CH][idle_coreid], "Filter");
+		ret = ive_filter_ext(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+#else
 		struct ive_ioctl_filter_arg *val =
 				(struct ive_ioctl_filter_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_FILTER3CH], "Filter");
+		start_ioctl_time(&g_time_infos[MOD_FILTER3CH][idle_coreid], "Filter");
 		ret = ive_filter(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_FILTER3CH]);
+#endif
+		stop_ioctl_time(&g_time_infos[MOD_FILTER3CH][idle_coreid]);
 	} break;
 	case IVE_IOC_SOBEL: {
+#ifdef MEDIA_V3
+		struct ive_ioctl_sobel_ext_arg *val =
+				(struct ive_ioctl_sobel_ext_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_SOBEL][idle_coreid], "Sobel");
+		ret = ive_sobel_ext(ndev, &val->src, &val->dst_h,
+					&val->dst_v, &val->ctrl,
+					val->instant, idle_coreid);
+#else
 		struct ive_ioctl_sobel_arg *val =
 				(struct ive_ioctl_sobel_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_SOBEL], "Sobel");
+		start_ioctl_time(&g_time_infos[MOD_SOBEL][idle_coreid], "Sobel");
 		ret = ive_sobel(ndev, &val->src, &val->dst_h,
 					&val->dst_v, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_SOBEL]);
+#endif
+		stop_ioctl_time(&g_time_infos[MOD_SOBEL][idle_coreid]);
 	} break;
 	case IVE_IOC_MAG_AND_ANG: {
 		struct ive_ioctl_maganang_arg *val =
 				(struct ive_ioctl_maganang_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_MAG], "MagAndAng");
+		start_ioctl_time(&g_time_infos[MOD_MAG][idle_coreid], "MagAndAng");
 		ret = ive_mag_and_ang(ndev, &val->src, &val->dst_mag,
 					&val->dst_ang, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_MAG]);
+		stop_ioctl_time(&g_time_infos[MOD_MAG][idle_coreid]);
 	} break;
 	case IVE_IOC_CSC: {
 		struct ive_ioctl_csc_arg *val =
 				(struct ive_ioctl_csc_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_CSC], "CSC");
+		start_ioctl_time(&g_time_infos[MOD_CSC][idle_coreid], "CSC");
 		ret = ive_csc(ndev, &val->src, &val->dst,
 					&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_CSC]);
+		stop_ioctl_time(&g_time_infos[MOD_CSC][idle_coreid]);
 	} break;
 	case IVE_IOC_HIST: {
 		struct ive_ioctl_hist_arg *val =
 				(struct ive_ioctl_hist_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_HIST], "Hist");
+		start_ioctl_time(&g_time_infos[MOD_HIST][idle_coreid], "Hist");
 		ret = ive_hist(ndev, &val->src, &val->dst,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_HIST]);
+		stop_ioctl_time(&g_time_infos[MOD_HIST][idle_coreid]);
 	} break;
 	case IVE_IOC_FILTER_AND_CSC: {
+#ifdef MEDIA_V3
+		struct ive_ioctl_filter_and_csc_ext_arg *val =
+				(struct ive_ioctl_filter_and_csc_ext_arg *) g_kdata;
+
+		start_ioctl_time(&g_time_infos[MOD_FILTERCSC][idle_coreid], "FilterAndCSC");
+		ret = ive_filter_and_csc_ext(ndev, &val->src, &val->dst,
+						&val->ctrl, val->instant, idle_coreid);
+#else
 		struct ive_ioctl_filter_and_csc_arg *val =
 				(struct ive_ioctl_filter_and_csc_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_FILTERCSC], "FilterAndCSC");
+		start_ioctl_time(&g_time_infos[MOD_FILTERCSC][idle_coreid], "FilterAndCSC");
 		ret = ive_filter_and_csc(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_FILTERCSC]);
+#endif
+		stop_ioctl_time(&g_time_infos[MOD_FILTERCSC][idle_coreid]);
 	} break;
 	case IVE_IOC_MAP: {
 		struct ive_ioctl_map_arg *val =
 				(struct ive_ioctl_map_arg *) g_kdata;
 
 		buffer = (u16 *)buffer;
-		start_ioctl_time(&g_time_infos[MOD_MAP], "Map");
+		start_ioctl_time(&g_time_infos[MOD_MAP][idle_coreid], "Map");
 		ret = ive_map(ndev, &val->src, buffer,
 					&val->dst, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_MAP]);
+		stop_ioctl_time(&g_time_infos[MOD_MAP][idle_coreid]);
 	} break;
 	case IVE_IOC_NCC: {
 		struct ive_ioctl_ncc_arg *val =
 				(struct ive_ioctl_ncc_arg *) g_kdata;
 
 		buffer = (ive_ncc_dst_mem_s *)buffer;
-		start_ioctl_time(&g_time_infos[MOD_NCC], "NCC");
+		start_ioctl_time(&g_time_infos[MOD_NCC][idle_coreid], "NCC");
 		ret = ive_ncc(ndev, &val->src1, &val->src2,
 					buffer, val->instant, idle_coreid);
 
-		stop_ioctl_time(&g_time_infos[MOD_NCC]);
+		stop_ioctl_time(&g_time_infos[MOD_NCC][idle_coreid]);
 	} break;
 	case IVE_IOC_INTEG: {
 		struct ive_ioctl_integ_arg *val =
 				(struct ive_ioctl_integ_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_INTEG], "Integ");
+		start_ioctl_time(&g_time_infos[MOD_INTEG][idle_coreid], "Integ");
 		ret = ive_integ(ndev, &val->src, &val->dst,
 					&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_INTEG]);
+		stop_ioctl_time(&g_time_infos[MOD_INTEG][idle_coreid]);
 	} break;
 	case IVE_IOC_LBP: {
 		struct ive_ioctl_lbp_arg *val =
 				(struct ive_ioctl_lbp_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_LBP], "LBP");
+		start_ioctl_time(&g_time_infos[MOD_LBP][idle_coreid], "LBP");
 		ret = ive_lbp(ndev, &val->src, &val->dst,
 					&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_LBP]);
+		stop_ioctl_time(&g_time_infos[MOD_LBP][idle_coreid]);
 	} break;
 	case IVE_IOC_THRESH_S16: {
 		struct ive_ioctl_thresh_s16_arg *val =
 				(struct ive_ioctl_thresh_s16_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_THRS16], "Thresh_S16");
+		start_ioctl_time(&g_time_infos[MOD_THRS16][idle_coreid], "Thresh_S16");
 		ret = ive_thresh_s16(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_THRS16]);
+		stop_ioctl_time(&g_time_infos[MOD_THRS16][idle_coreid]);
 	} break;
 	case IVE_IOC_THRESH_U16: {
 		struct ive_ioctl_thresh_u16_arg *val =
 				(struct ive_ioctl_thresh_u16_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_THRU16], "Thresh_U16");
+		start_ioctl_time(&g_time_infos[MOD_THRU16][idle_coreid], "Thresh_U16");
 		ret = ive_thresh_u16(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_THRU16]);
+		stop_ioctl_time(&g_time_infos[MOD_THRU16][idle_coreid]);
 	} break;
 	case IVE_IOC_16BIT_TO_8BIT: {
 		struct ive_ioctl_16bit_to_8bit_arg *val =
 				(struct ive_ioctl_16bit_to_8bit_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_16To8], "16BitTo8Bit");
+		start_ioctl_time(&g_time_infos[MOD_16To8][idle_coreid], "16BitTo8Bit");
 		ret = ive_16bit_to_8bit(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_16To8]);
+		stop_ioctl_time(&g_time_infos[MOD_16To8][idle_coreid]);
 	} break;
 	case IVE_IOC_ORD_STAT_FILTER: {
 		struct ive_ioctl_ord_stat_filter_arg *val =
 				(struct ive_ioctl_ord_stat_filter_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_ORDSTAFTR], "OrdStatFilter");
+		start_ioctl_time(&g_time_infos[MOD_ORDSTAFTR][idle_coreid], "OrdStatFilter");
 		ret = ive_ord_stat_filter(ndev, &val->src,
 						&val->dst, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_ORDSTAFTR]);
+		stop_ioctl_time(&g_time_infos[MOD_ORDSTAFTR][idle_coreid]);
 	} break;
 	case IVE_IOC_CANNYHYSEDGE: {
 		struct ive_ioctl_canny_hys_edge_arg *val =
 				(struct ive_ioctl_canny_hys_edge_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_CANNY], "CannyHysEdge");
+		start_ioctl_time(&g_time_infos[MOD_CANNY][idle_coreid], "CannyHysEdge");
 		ret = ive_canny_hys_edge(ndev, &val->src, &val->dst,
 						&val->stack, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_CANNY]);
+		stop_ioctl_time(&g_time_infos[MOD_CANNY][idle_coreid]);
 	} break;
 	case IVE_IOC_NORMGRAD: {
 		struct ive_ioctl_norm_grad_arg *val =
 				(struct ive_ioctl_norm_grad_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_NORMG], "NormGrad");
+		start_ioctl_time(&g_time_infos[MOD_NORMG][idle_coreid], "NormGrad");
 		ret = ive_norm_grad(ndev, &val->src, &val->dst_h,
 						&val->dst_v, &val->dst_hv,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_NORMG]);
+		stop_ioctl_time(&g_time_infos[MOD_NORMG][idle_coreid]);
 	} break;
 	case IVE_IOC_GRADFG: {
 		struct ive_ioctl_grad_fg_arg *val =
 				(struct ive_ioctl_grad_fg_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_GRADFG], "GradFg");
+		start_ioctl_time(&g_time_infos[MOD_GRADFG][idle_coreid], "GradFg");
 		ret = ive_grad_fg(ndev, &val->bg_diff_fg,
 						&val->cur_grad, &val->bg_grad,
 						&val->grad_fg, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_GRADFG]);
+		stop_ioctl_time(&g_time_infos[MOD_GRADFG][idle_coreid]);
 	} break;
 	case IVE_IOC_SAD: {
 		struct ive_ioctl_sad_arg *val =
 				(struct ive_ioctl_sad_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_SAD], "SAD");
+		start_ioctl_time(&g_time_infos[MOD_SAD][idle_coreid], "SAD");
 		ret = ive_sad(ndev, &val->src1, &val->src2,
 					&val->sad, &val->thr, &val->ctrl,
 					val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_SAD]);
+		stop_ioctl_time(&g_time_infos[MOD_SAD][idle_coreid]);
 	} break;
 	case IVE_IOC_RESIZE: {
 		struct ive_ioctl_resize_arg *val =
 				(struct ive_ioctl_resize_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_RESIZE], "Resize");
+		start_ioctl_time(&g_time_infos[MOD_RESIZE][idle_coreid], "Resize");
 		ret = ive_resize(ndev, &val->src, &val->dst, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_RESIZE]);
+		stop_ioctl_time(&g_time_infos[MOD_RESIZE][idle_coreid]);
 	} break;
 	case IVE_IOC_CCL: {
 		struct ive_ioctl_ccl_arg *val =
 				(struct ive_ioctl_ccl_arg *) g_kdata;
 
 		val->blob.vir_addr = (uintptr_t)buffer;
-		start_ioctl_time(&g_time_infos[MOD_NORMG], "CCL");
+		start_ioctl_time(&g_time_infos[MOD_NORMG][idle_coreid], "CCL");
 		ret = ive_ccl(ndev, &val->src_dst,
 						&val->blob, &val->ccl_ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_NORMG]);
+		stop_ioctl_time(&g_time_infos[MOD_NORMG][idle_coreid]);
 	} break;
 	case IVE_IOC_IMGIN_To_ODMA: {
 		struct ive_ioctl_filter_arg *val =
 				(struct ive_ioctl_filter_arg *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_BYP], "imgInToOdma");
+		start_ioctl_time(&g_time_infos[MOD_BYP][idle_coreid], "imgInToOdma");
 		ret = ive_imgIn_to_odma(ndev, &val->src, &val->dst,
 						&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_BYP]);
+		stop_ioctl_time(&g_time_infos[MOD_BYP][idle_coreid]);
 	} break;
 	case IVE_IOC_RGBP2YUV2ERODE2DILATE: {
 		struct ive_ioctl_rgbPToYuvToErodeToDilate *val =
 				(struct ive_ioctl_rgbPToYuvToErodeToDilate *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_ED],
+		start_ioctl_time(&g_time_infos[MOD_ED][idle_coreid],
 				"rgbPToYuvToErodeToDilate");
 		ret = ive_rgbp_to_yuv_to_erode_to_dilate(
 			ndev, &val->src, &val->dst1, &val->dst2,
 			&val->ctrl, val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_ED]);
+		stop_ioctl_time(&g_time_infos[MOD_ED][idle_coreid]);
 	} break;
 	case IVE_IOC_ST_CANDI_CORNER: {
 		struct ive_ioctl_stcandicorner *val =
 				(struct ive_ioctl_stcandicorner *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_STCANDI], "STCandiCorner");
-		start_ioctl_time(&g_time_infos[MOD_STBOX], "STBox");
+		start_ioctl_time(&g_time_infos[MOD_STCANDI][idle_coreid], "STCandiCorner");
+		start_ioctl_time(&g_time_infos[MOD_STBOX][idle_coreid], "STBox");
 		ret = ive_stcandi_corner(ndev, &val->src,
 						&val->dst, &val->ctrl,
 						val->instant, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_STCANDI]);
-		stop_ioctl_time(&g_time_infos[MOD_STBOX]);
+		stop_ioctl_time(&g_time_infos[MOD_STCANDI][idle_coreid]);
+		stop_ioctl_time(&g_time_infos[MOD_STBOX][idle_coreid]);
 	} break;
 	case IVE_IOC_MD: {
 		struct ive_ioctl_md *val = (struct ive_ioctl_md *) g_kdata;
 
-		start_ioctl_time(&g_time_infos[MOD_MD], "FrameDiffDetect");
+		start_ioctl_time(&g_time_infos[MOD_MD][idle_coreid], "FrameDiffDetect");
 		ret = ive_frame_diff_motion(ndev, &val->src1,
 							&val->src2, &val->dst,
 							&val->ctrl,
 							val->instant,
 							idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_MD]);
+		stop_ioctl_time(&g_time_infos[MOD_MD][idle_coreid]);
 	} break;
 	case IVE_IOC_CMDQ: {
-		start_ioctl_time(&g_time_infos[MOD_CMDQ], "CmdQ");
+		start_ioctl_time(&g_time_infos[MOD_CMDQ][idle_coreid], "CmdQ");
 		ret = ive_cmdq(ndev, idle_coreid);
-		stop_ioctl_time(&g_time_infos[MOD_CMDQ]);
+		stop_ioctl_time(&g_time_infos[MOD_CMDQ][idle_coreid]);
 	} break;
 	default:
 		TRACE_IVE(IVE_DBG_ERR, "invalid ioctl cmd[%d]\n", task_type);
@@ -1167,6 +1252,7 @@ int ive_submit_hw(struct ive_device *ndev, char *g_kdata, void *buffer, unsigned
 			"[IVE] ioctl _IOC_NR(%d) fail\n", _IOC_NR(task_type));
 		return ret;
 	}
+	ndev->core[idle_coreid].end_count++;
 
 	ret = ive_core_release_resource(idle_coreid);
 	if (ret) {
@@ -1246,21 +1332,29 @@ err_sw_init:
 	return ret;
 }
 
+#ifdef MEDIA_V3
+void vo_sys_reg_write_mask(uintptr_t addr, u32 mask, u32 data)
+{
+	_reg_write_mask(vo_sys_base + addr, mask, data);
+}
+#endif
+
 static int ive_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct ive_device *ndev;
 	struct resource *res[IVE_DEV_MAX];
 	int i,ret;
+	char thread_name[32];
 
 	TRACE_IVE(IVE_DBG_INFO, "ive probe start\n");
-	// Alloc a zero ive_device struct, and it will auto free when remod
-	ndev = devm_kzalloc(&pdev->dev, sizeof(struct ive_device),
-			    GFP_KERNEL);
+	// 1. Alloc a zero ive_device struct, and it will auto free when remod
+	ndev = devm_kzalloc(&pdev->dev, sizeof(struct ive_device), GFP_KERNEL);
 	if (!ndev)
 		return -ENOMEM;
 	ndev->dev = dev;
 
+    // 2. Obtain hardware resources (IO memory and interrupt numbers)
 	for (i = 0; i < ARRAY_SIZE(ndev->ive_base); ++i) {
 		res[i] = platform_get_resource(pdev, IORESOURCE_MEM, i);
 		if (unlikely(res[i] == NULL)) {
@@ -1276,48 +1370,36 @@ static int ive_probe(struct platform_device *pdev)
 		ndev->ive_base[i] = devm_ioremap_nocache(&pdev->dev, res[i]->start,
 								res[i]->end - res[i]->start);
 #endif
-
-		//if (IS_ERR(ndev->ive_base[i]))
-			//return PTR_ERR(ndev->ive_base[i]);
-
-		if (assign_ive_block_addr(ndev->ive_base[i], i))
-			return PTR_ERR(ndev->ive_base[i]);
-
+#ifdef MEDIA_V3
+		vo_sys_base = (uintptr_t)ioremap(REG_VO_SYS_BASE, 0x8);
+#endif
+		if (assign_ive_block_addr(ndev->ive_base[i], i)) {
+            return PTR_ERR(ndev->ive_base[i]);
+        }
+        // Get Interrupt Number
 		ndev->ive_irq[i] = platform_get_irq_byname(pdev, ive_irq_name[i]);
 		if (ndev->ive_irq[i] <= 0) {
 			dev_err(&pdev->dev, "No IRQ resource for %s\n", ive_irq_name[i]);
 			return -EBUSY;
 		}
+
+        //Initialize locks and complete quantities
 		spin_lock_init(&ndev->core[i].dev_lock);
 		init_completion(&ndev->core[i].frame_done);
 		init_completion(&ndev->core[i].op_done);
 		atomic_set(&dev_state[i], IVE_CORE_STATE_END);
-#if 1
-		ret = devm_request_irq(&pdev->dev, ndev->ive_irq[i], ive_irq_handler,
-						IRQF_TRIGGER_NONE, ive_irq_name[i], ndev);
-#else
-		ret = devm_request_threaded_irq(&pdev->dev, irq_num[i], ive_irq_handler, ive_irq_finish_thread_func,
-						IRQF_TRIGGER_NONE, ive_irq_name[i], ndev)
-#endif
-		if (ret) {
-			dev_err(&pdev->dev,
-				"Unable to request interrupt for device (err=%d).\n",
-				ret);
-			return -ENXIO;
-		}
 
+        //Record the interrupt number to the core structure
 		ndev->core[i].irq_num =  ndev->ive_irq[i];
-
+		ndev->core[i].dev_type = (enum ive_dev_type)i;
 	}
+
+    //3. Initialize other device resources
 	ndev->use_count = 0;
 	spin_lock_init(&ndev->close_lock);
 	init_completion(&ndev->frame_done);
 	init_completion(&ndev->op_done);
 	atomic_set(&ndev->clk_flg, IVE_IDLE);
-
-	g_time_infos = devm_kzalloc(&pdev->dev,
-				  MOD_ALL * sizeof(struct ive_profiling_info),
-				  GFP_KERNEL);
 
 	ret = ive_register_cdev(ndev);
 	if (ret < 0) {
@@ -1328,12 +1410,13 @@ static int ive_probe(struct platform_device *pdev)
 	// Create drvdata(global variables)
 	platform_set_drvdata(pdev, ndev);
 	// Create ive proc descript
-	// ndev->proc_dir = proc_mkdir("soph", NULL);
-	if (proc_create_data(IVE_PROC_NAME, 0644, NULL,
-			     &ive_proc_ops, ndev) == NULL)
-		pr_err("[IVE] ive hw_profiling proc creation failed\n");
+	if (proc_create_data(IVE_PROC_NAME, 0644, NULL, &ive_proc_ops, ndev) == NULL) {
+        pr_err("[IVE] ive hw_profiling proc creation failed\n");
+    }
+
 	g_enable_usage_profiling = 1;
 
+#ifndef MEDIA_V3
 	//clk init
 	for (i = 0; i < IVE_DEV_MAX; i++) {
 		ndev->core[i].clk_src = devm_clk_get(dev, ive_clk_name[i][0]);
@@ -1348,10 +1431,55 @@ static int ive_probe(struct platform_device *pdev)
 			ndev->core[i].clk_ive = NULL;
 		}
 	}
+#endif
 
-	instance_init(pdev);
+	ret = instance_init(pdev);
+    if (ret) {
+        TRACE_IVE(IVE_DBG_ERR, "instance init failed\n");
+        goto err_instance;
+    }
 	// stcandicorner_workaround(ndev);
-	return 0;
+
+    // 4. Create an interrupt handling thread
+    for (i = 0; i < IVE_DEV_MAX; i++) {
+        init_waitqueue_head(&g_ive_hdl_ctx[i].wait);
+        g_ive_hdl_ctx[i].evt = 0;
+        g_ive_hdl_ctx[i].ndev = ndev; // Preset ndev pointer
+        g_ive_hdl_ctx[i].dev_id = i;
+
+        snprintf(thread_name, sizeof(thread_name), "ive_thread_%d", i);
+        ive_thread_tasks[i] = kthread_run(ive_event_handler, &g_ive_hdl_ctx[i], thread_name);
+
+        if (IS_ERR(ive_thread_tasks[i])) {
+            TRACE_IVE(IVE_DBG_ERR, "Failed to create thread for core %d\n", i);
+            ret = PTR_ERR(ive_thread_tasks[i]);
+            goto err_thread;
+        }
+    }
+
+    TRACE_IVE(IVE_DBG_INFO, "Separate IRQ mode\n");
+    for (i = 0; i < IVE_DEV_MAX; i++) {
+        // IRQF_SHARED prevents hardware routing conflicts
+        ret = devm_request_irq(&pdev->dev, ndev->ive_irq[i], ive_irq_handler,
+                                IRQF_SHARED, ive_irq_name[i], ndev);
+        if (ret) {
+            TRACE_IVE(IVE_DBG_ERR, "Failed to request IRQ %d (err=%d)\n", ndev->ive_irq[i], ret);
+            goto err_thread;
+        }
+    }
+    TRACE_IVE(IVE_DBG_INFO, "IVE probe success\n");
+    return 0;
+
+err_thread:
+    for (i = 0; i < IVE_DEV_MAX; i++) {
+        if (ive_thread_tasks[i] && !IS_ERR(ive_thread_tasks[i])) {
+            kthread_stop(ive_thread_tasks[i]);
+            ive_thread_tasks[i] = NULL;
+        }
+    }
+    ive_sw_deinit(ndev);
+err_instance:
+    return ret;
 }
 
 static void ive_remove(struct platform_device *pdev)
@@ -1360,7 +1488,9 @@ static void ive_remove(struct platform_device *pdev)
 	struct ive_device *ndev = platform_get_drvdata(pdev);
 
 	ive_sw_deinit(ndev);
-
+#ifdef MEDIA_V3
+	iounmap((void *)vo_sys_base);
+#endif
 	device_destroy(class_id, cdev_id);
 
 	cdev_del(&ndev->cdev);

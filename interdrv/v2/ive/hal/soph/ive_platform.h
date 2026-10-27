@@ -23,6 +23,8 @@ extern "C" {
 #include "ive_reg.h"
 #include "reg.h"
 
+extern atomic_t dev_state[IVE_DEV_MAX];
+
 enum filterop_mod {
 	MOD_BYP = 0,
 	MOD_FILTER3CH = 1,
@@ -296,6 +298,7 @@ s32 ive_go(struct ive_device *ndev, ive_top_c *ive_top_c,
 s32 assign_ive_block_addr(void __iomem *ive_phy_base, int dev_id);
 
 irqreturn_t platform_ive_irq(struct ive_device *ndev, int dev_id);
+int ive_event_handler(void *data);
 
 s32 ive_dump_hw_flow(void);
 s32 ive_dump_op1_op2_info(void);
@@ -347,8 +350,16 @@ s32 ive_dilate(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		       ive_dst_image_s *pstDst,
 		       ive_dilate_ctrl_s *pstDilateCtrl, bool instant, int dev_id);
 
+s32 ive_dilate_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+		       ive_dst_image_s *pstDst,
+		       ive_dilate_ext_ctrl *pstDilateCtrl, bool instant, int dev_id);
+
 s32 ive_erode(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		      ive_dst_image_s *pstDst, ive_erode_ctrl_s *pstErodeCtrl,
+		      bool instant, int dev_id);
+
+s32 ive_erode_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+		      ive_dst_image_s *pstDst, ive_erode_ext_ctrl *pstErodeCtrl,
 		      bool instant, int dev_id);
 
 s32 ive_match_bg_model(struct ive_device *ndev,
@@ -386,9 +397,17 @@ s32 ive_filter(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		       ive_dst_image_s *pstDst, ive_filter_ctrl_s *pstFltCtrl,
 		       bool instant, int dev_id);
 
+s32 ive_filter_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+		       ive_dst_image_s *pstDst, ive_filter_ext_ctrl *pstFltCtrl,
+		       bool instant, int dev_id);
+
 s32 ive_sobel(struct ive_device *ndev, ive_src_image_s *pstSrc,
 		      ive_dst_image_s *pstDstH, ive_dst_image_s *pstDstV,
 		      ive_sobel_ctrl_s *pstSobelCtrl, bool instant, int dev_id);
+
+s32 ive_sobel_ext(struct ive_device *ndev, ive_src_image_s *pstSrc,
+		      ive_dst_image_s *pstDstH, ive_dst_image_s *pstDstV,
+		      ive_sobel_ext_ctrl *pstSobelCtrl, bool instant, int dev_id);
 
 s32 ive_mag_and_ang(struct ive_device *ndev, ive_src_image_s *pstSrc,
 			  ive_dst_image_s *pstDstMag,
@@ -403,6 +422,11 @@ s32 ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 s32 ive_filter_and_csc(struct ive_device *ndev,
 			     ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
 			     ive_filter_and_csc_ctrl_s *pstFltCscCtrl,
+			     bool instant, int dev_id);
+
+s32 ive_filter_and_csc_ext(struct ive_device *ndev,
+			     ive_src_image_s *pstSrc, ive_dst_image_s *pstDst,
+			     ive_filter_and_csc_ext_ctrl *pstFltCscCtrl,
 			     bool instant, int dev_id);
 
 s32 ive_hist(struct ive_device *ndev, ive_src_image_s *pstSrc,

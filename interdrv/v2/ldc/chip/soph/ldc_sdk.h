@@ -55,8 +55,12 @@ int ldc_add_warp_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_add_affine_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_add_ldc_ldc_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
 int ldc_add_dwa_rot_task(struct ldc_vdev *wdev, struct gdc_task_attr *attr);
-int ldc_get_chn_frame(struct ldc_vdev *wdev, struct gdc_identity_attr *identity
+int ldc_get_chn_frame(struct ldc_vdev *wdev, struct ldc_file_ctx *ctx,
+	struct gdc_identity_attr *identity
 	, video_frame_info_s *pstvideo_frame, int s32milli_sec);
+int ldc_ctx_bind_job(struct ldc_file_ctx *ctx, unsigned long long handle);
+bool ldc_ctx_contains_job(struct ldc_file_ctx *ctx, unsigned long long handle);
+void ldc_file_ctx_release(struct ldc_file_ctx *ctx);
 
 int ldc_attach_vb_pool(struct ldc_vb_pool_cfg *cfg);
 int ldc_detach_vb_pool(struct ldc_vb_pool_cfg *cfg);

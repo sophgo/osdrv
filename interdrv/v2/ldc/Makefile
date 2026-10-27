@@ -23,6 +23,11 @@ ccflags-y += -I$(srctree)/drivers/staging/android
 
 ccflags-y +=-Wall -Wextra -Werror -Wno-unused-parameter -Wno-sign-compare
 
+# CV84X6 has a single LDC in VO SYS (0x67106000); BM1688/CV186X keep 2 LDC + 2 DWA in VI SYS
+ifeq ($(CHIP), cv84x6)
+ccflags-y += -DCV84X6
+endif
+
 KBUILD_EXTRA_SYMBOLS = $(PWD)/../base/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 #KBUILD_EXTRA_SYMBOLS += $(PWD)/../Module.symvers

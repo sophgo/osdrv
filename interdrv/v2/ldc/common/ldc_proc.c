@@ -46,7 +46,7 @@ static void _update_ldc_dutyratio(struct timer_list *timer)
 	if (duration > 2000000)
 		goto FIRSTTIME;
 
-	for (i = DEV_LDC_0; i < DEV_LDC_MAX; ++i) {
+	for (i = DEV_LDC_0; i < LDC_DEV_MAX_CNT; ++i) {
 		proc_ctx->gdc_core_status[i].duty_ratio = (proc_ctx->gdc_core_status[i].core_all_hw_time * 100) / duration;
 		proc_ctx->gdc_core_status[i].core_all_hw_time = 0;
 	}
@@ -281,7 +281,7 @@ static int ldc_proc_show(struct seq_file *m, void *v)
 	seq_puts(m, "\n-------------------------------LDC HW DUTY RATIO STATUS-----------------\n");
 	seq_printf(m, "%15s%15s%15s\n", "ID", "DEV", "DutyRatio");
 
-	for (i = DEV_LDC_0; i < DEV_LDC_MAX; ++i) {
+	for (i = DEV_LDC_0; i < LDC_DEV_MAX_CNT; ++i) {
 		seq_printf(m, "%14s%d%15s%15d\n",
 			"#",
 			i,
@@ -442,6 +442,10 @@ void ldc_proc_record_hw_tsk_done(struct ldc_job *job, struct ldc_task *tsk)
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].state = state;
 		proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time =
 			(u32)(end_time - proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_start_time);
+
+		if (proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].top_id < LDC_DEV_MAX_CNT)
+			proc_ctx->gdc_core_status[proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].top_id].core_all_hw_time
+				+= proc_ctx->job_info[idx].tsk_info[tsk->tsk_id].hw_time;
 
 		if (state == LDC_TASK_STATE_DONE)
 			proc_ctx->tsk_status.success++;

@@ -688,6 +688,17 @@ vb_blk vb_create_block(uint64_t phy_addr, void *vir_addr, vb_pool pool_id, bool 
 {
 	struct vb_s *p = NULL;
 
+	/* One-shot blocks: VB_STATIC_POOLID means the memory is framework-allocated
+	 * (ion) and must be ion-freed on release; VB_EXTERNAL_POOLID means the memory
+	 * is foreign and must NOT be ion-freed. The two fields must agree, otherwise
+	 * the release path cannot tell whose memory it is. */
+	if ((pool_id == VB_STATIC_POOLID && is_external) ||
+	    (pool_id == VB_EXTERNAL_POOLID && !is_external)) {
+		TRACE_BASE(DBG_ERR, "invalid pool_id(%d) external(%d) combo, addr(%#llx)\n",
+			pool_id, is_external, phy_addr);
+		return VB_INVALID_HANDLE;
+	}
+
 	p = vmalloc(sizeof(*p));
 	if (!p) {
 		TRACE_BASE(DBG_ERR, "vmalloc failed.\n");

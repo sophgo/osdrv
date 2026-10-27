@@ -78,6 +78,12 @@ struct ldc_vdev {
 	struct semaphore sem;
 };
 
+struct ldc_file_ctx {
+	struct ldc_vdev *wdev;
+	pid_t tgid;
+	struct list_head job_handles;
+};
+
 struct ldc_vdev *ldc_get_dev(void);
 struct fasync_struct *ldc_get_dev_fasync(void);
 void ldc_enable_dev_clk(int coreid, bool en);

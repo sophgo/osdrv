@@ -583,4 +583,11 @@ typedef struct _hdmi_hw_spec {
 	hdmi_hw_param hw_param[HDMI_HW_PARAM_NUM];
 } hdmi_hw_spec;
 
+typedef struct _hdmi_audio_frame {
+	unsigned int seq;
+	unsigned int len;
+	unsigned long long phy_addr;
+	unsigned long long vb_blk;
+} hdmi_audio_frame;
+
 #endif

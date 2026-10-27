@@ -130,6 +130,7 @@ struct vo_dev_ctx {
 	int bind_overlay_id[VO_MAX_GRAPHIC_LAYER_IN_DEV];
 	vo_lvds_attr_s lvds_param;
 	vo_bt_attr_s bt_param;
+	vo_rgb_attr_s rgb_param;
 	struct mutex dev_lock;
 };
 

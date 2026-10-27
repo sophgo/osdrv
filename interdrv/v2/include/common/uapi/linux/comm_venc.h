@@ -219,6 +219,9 @@ typedef struct _venc_pack_s {
 	int releasFrameIdx;
     uint64_t u64CustomMapPhyAddr; /* R; the physics address of custom map addr */
     unsigned int u32AvgCtuQp; /* R; The average value of CTU QPs */
+#ifdef MEDIA_V3
+    uint64_t u64RealPhyAddr; /* R; real DDR phys addr for mmap; 0 when MMU off (use u64PhyAddr) */
+#endif
 } venc_pack_s;
 
 /*Defines the frame type and reference attributes of the H.264 frame skipping reference streams*/
@@ -534,6 +537,9 @@ typedef struct _venc_attr_s {
 		venc_attr_jpeg_s stAttrJpege;	///< the attibute of JPEG encoder
 		venc_attr_prores_s stAttrProres;///< TODO VENC
 	};
+#ifdef MEDIA_V3
+    unsigned int u32MmuMode;
+#endif
 } venc_attr_s;
 
 /* the gop mode */

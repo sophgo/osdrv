@@ -32,5 +32,6 @@
 #define CVI_HDMI_GET_HW_SPEC _IOW('H', 0x0f, hdmi_hw_spec)
 #define CVI_HDMI_SET_AVMUTE _IOW('H', 0xa0, bool)
 #define CVI_HDMI_SET_AUDIO_MUTE _IOW('H', 0xa3, bool)
+#define CVI_HDMI_SEND_AUDIO_FRAME _IOW('H', 0xa4, hdmi_audio_frame)
 
 #endif /* _U_HDMI_UAPI_H_ */

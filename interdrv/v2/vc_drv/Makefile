@@ -45,6 +45,7 @@ MODULE_SOURCES = vc_drv.c 	\
 		module/src/jpeg_api.c \
 		module/src/venc_help.c \
 		module/src/vc_drv_proc.c \
+		module/src/vc_bw.c \
 		module/src/venc_rc.c \
 		common/rcKernel/float_point/float_point.c \
 		common/rcKernel/float_point/soft_float.c \
@@ -78,6 +79,10 @@ JPU_SOURCES =	cnm_driver/jpeg/jpuapi/jpuapi.c 	\
 				cnm_driver/jpeg/sample/helper/jpulog.c	\
 				cnm_driver/jpeg/sample/helper/jpuhelper.c
 
+ifeq (${CHIP_ARCH}, 84x6)
+ccflags-y += -DMEDIA_V3
+VPU_SOURCES += cnm_driver/vpu/vdi/linux/mmu.c
+endif
 
 MODULE_OBJS=$(patsubst %.c,%.o,$(MODULE_SOURCES))
 VPU_OBJS=$(patsubst %.c,%.o,$(VPU_SOURCES))
@@ -92,7 +97,7 @@ KBUILD_EXTRA_SYMBOLS += $(PWD)/../sys/Module.symvers
 
 ccflags-y += $(VC_DRV_HEADER) -DUSE_KERNEL_MODE -DKERNEL_MODE -DENABLE_DEC -DMJPEG_INTERFACE_API -DCNM_WAVE_SERIES
 ccflags-y += -DPLATFORM_SOC -DVC_SUPPORT_CLOCK_CONTROL
-ccflags-y += -Werror -Wno-missing-prototypes -Wno-missing-declarations
+
 ccflags-y += -DRV_TEST
 ifeq ($(CONFIG_TOOLCHAIN_GLIBC_ARM64_V1131), y)
 ccflags-y += -mno-outline-atomics

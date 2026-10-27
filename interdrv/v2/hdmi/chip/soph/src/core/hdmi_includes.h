@@ -27,7 +27,15 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/jiffies.h>
-#include <linux/signal.h>
+#include <linux/workqueue.h>
+#include <linux/atomic.h>
+#include <linux/comm_hdmi.h>
+
+/* Audio frame queue node structure */
+struct hdmi_audio_frame_node {
+	hdmi_audio_frame frame;  /* Audio frame data */
+	struct list_head list;          /* List linkage */
+};
 
 struct hdmitx_dev{
 	/** Device node */
@@ -67,7 +75,17 @@ struct hdmitx_dev{
 	struct task_struct *thread;
 
 	u8 hpd_flag;
-	u8 decode;
+	/* Accumulates interrupt causes until hpd_work runs. */
+	atomic_t irq_pending;
+	struct delayed_work hpd_work;
+
+	/* Audio frame queue management */
+	struct list_head audio_frame_queue;    /* Queue of pending audio frames */
+	spinlock_t audio_lock;                  /* Protect queue access */
+	struct work_struct audio_work;          /* Work queue for DMA processing */
+	bool audio_dma_busy;                    /* DMA busy flag */
+	struct hdmi_audio_frame_node *current_frame;  /* Currently playing frame */
+	struct hdmi_audio_frame_node *frame_done;    /* Frame just finished; VB release + kfree in work */
 };
 
 /**

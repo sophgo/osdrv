@@ -32,11 +32,15 @@
 #define VIP_64_ALIGN(x) (((x) + 0x3F) & ~0x3F)   // for 64byte alignment
 #define VIP_ALIGN(x) (((x) + 0xF) & ~0xF)   // for 16byte alignment
 
+#ifdef CV84X6
+#define LDC_DEV_MAX_CNT (1)
+#define LDC_IP_NUM      (1)
+#else
 #define LDC_DEV_MAX_CNT (4)
+#define LDC_IP_NUM      (2)
+#endif
 #define VIP_MAX_PLANES (3)
 #define END_JOB_MAX_LEN (16)
-
-#define LDC_IP_NUM                 (2)
 #define LDC_PROC_JOB_INFO_NUM      (16)
 #define LDC_MAX_JOB_NUM            (64)
 #define LDC_JOB_MAX_TSK_NUM        (16)
@@ -125,6 +129,7 @@ struct ldc_job {
 	struct ldc_data cap_data, out_data;
 	atomic_t job_state; //ldc_job_state
 	struct list_head node;//add to ldc_vdev job_list
+	struct list_head ctx_node;//add to ldc_file_ctx job_handles
 	struct list_head task_list;
 	atomic_t task_num;
 	gdc_identity_attr_s identity;
@@ -134,6 +139,7 @@ struct ldc_job {
 	bool job_done_evt;
 	enum ldc_job_devs_type devs_type; // job dev type
 	int proc_idx;
+	struct ldc_file_ctx *file_ctx;
 };
 
 struct ldc_vb_doneq {

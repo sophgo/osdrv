@@ -5,6 +5,8 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 #include "ive_core_res.h"
 #include "ive_interface.h"
 
@@ -17,6 +19,11 @@ typedef struct ive_drv_core_list_t {
 } ive_drv_core_list_t;
 
 static unsigned int s_max_num_core = 1;
+#ifdef MEDIA_V3
+static unsigned int hw_mask = 0x7;
+#else
+static unsigned int hw_mask = 0x3;
+#endif
 
 static DEFINE_SPINLOCK(ive_spinlock);
 
@@ -24,8 +31,11 @@ static DEFINE_MUTEX(ive_drv_core_list_lock);
 
 static DECLARE_WAIT_QUEUE_HEAD(ive_drv_core_wait_queue);
 static LIST_HEAD(ive_drv_core_resource_list_head);
-static int next_id = 1;
+static int next_id = 0;
 static bool isCoreIdle = false;
+
+module_param(hw_mask, int, 0644);
+
 int ive_core_request_resource(int timeout) {
     ive_drv_core_list_t *res;
     unsigned long flags;
@@ -39,7 +49,7 @@ int ive_core_request_resource(int timeout) {
     while (id == -1) {
         spin_lock_irqsave(&ive_spinlock, flags);
         list_for_each_entry(res, &ive_drv_core_resource_list_head, list) {
-            if (!res->is_used) {
+            if ((!res->is_used) && (hw_mask & BIT(res->id))) {
                 res->is_used = true;
                 id = res->id;
                 atomic_set(&dev_state[id], IVE_DEV_STATE_RUNNING);
@@ -100,7 +110,7 @@ int ive_core_init_resources(unsigned int core_num) {
             return -ENOMEM;
         }
 
-        res->id = next_id--;
+        res->id = next_id++;
         res->is_used = false;
         INIT_LIST_HEAD(&res->list);
 

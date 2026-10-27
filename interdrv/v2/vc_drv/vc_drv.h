@@ -13,6 +13,8 @@
 #include <linux/vc_uapi.h>
 #include "drv_venc.h"
 #include "drv_vdec.h"
+#include "vc_drv_proc.h"
+#include "jpu.h"
 
 #define DRV_VC_DRV_PLATFORM_DEVICE_NAME "vc_drv"
 #define DRV_VC_DRV_CLASS_NAME "vc_drv"

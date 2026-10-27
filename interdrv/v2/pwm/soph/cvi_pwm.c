@@ -9,6 +9,7 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/delay.h>
+#include <linux/arm-smccc.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/version.h>
@@ -43,6 +44,21 @@
 
 #define REG_GPIO0_PINCTRL	0x28104C64
 
+/* CVITEK OEM SMC: PWM secure register access */
+#define OPTEE_SMC_FUNID_CV_PWM_CTRL	0x14
+#define OPTEE_SMC_CALL_CV_PWM_CTRL \
+	ARM_SMCCC_CALL_VAL(ARM_SMCCC_STD_CALL, ARM_SMCCC_SMC_32, \
+			   ARM_SMCCC_OWNER_OEM, OPTEE_SMC_FUNID_CV_PWM_CTRL)
+
+#define CV_PWM_SMC_OP_READ	0
+#define CV_PWM_SMC_OP_WRITE	1
+#define CV_PWM_SMC_OP_RMW	2
+
+#define OPTEE_SMC_RETURN_RPC_PREFIX_MASK	0xFFFF0000UL
+#define OPTEE_SMC_RETURN_RPC_PREFIX		0xFFFF0000UL
+#define OPTEE_SMC_RETURN_RPC_FOREIGN_INTR	0xFFFF0004UL
+#define CV_PWM_SMC_MAX_RETRY			8
+
 struct cv_pwm_channel {
 	u32 period;
 	u32 hlperiod;
@@ -52,6 +68,8 @@ struct cv_pwm_channel {
 struct cv_pwm_chip {
 	struct pwm_chip chip;
 	void __iomem *base;
+	phys_addr_t secure_base;
+	bool secure_access;
 	struct clk *base_clk;
 	u8 polarity_mask;
 	bool no_polarity;
@@ -69,6 +87,8 @@ struct cv_pwm_chip {
 struct cv_pwm_chip_priv {
 	struct pwm_chip *chip;
 	void __iomem *base;
+	phys_addr_t secure_base;
+	bool secure_access;
 	struct clk *base_clk;
 	u8 polarity_mask;
 	bool no_polarity;
@@ -152,50 +172,108 @@ static u32 pwm_cv_shift_configured_mask(cv_pwm_chip *chip)
 	return mask;
 }
 
-static void pwm_cv_set_count_mode(cv_pwm_chip *chip, unsigned int ch, bool enable)
+static struct device *pwm_cv_dev(cv_pwm_chip *chip)
 {
-	u32 value;
-
-	value = readl(chip->base + REG_POLARITY);
-	if (enable)
-		value |= CVI_PWM_COUNTMODE_MASK(ch);
-	else
-		value &= ~CVI_PWM_COUNTMODE_MASK(ch);
-	writel(value, chip->base + REG_POLARITY);
+#if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
+	return chip->chip.dev;
+#else
+	return &chip->chip->dev;
+#endif
 }
 
-static void pwm_cv_set_pulse_count(cv_pwm_chip *chip, unsigned int ch, u32 count)
+static int pwm_cv_secure_call(cv_pwm_chip *chip, unsigned long op,
+			      unsigned long offset, u32 value, u32 mask,
+			      u32 *read_val)
 {
-	writel(count, chip->base + REG_PCOUNT + ch * 4);
+	struct arm_smccc_res res = { 0 };
+	long ret;
+	unsigned int i;
+
+	for (i = 0; i < CV_PWM_SMC_MAX_RETRY; i++) {
+		arm_smccc_smc(OPTEE_SMC_CALL_CV_PWM_CTRL, op, chip->secure_base,
+			      offset, value, mask, 0, 0, &res);
+
+		ret = (long)res.a0;
+		if (((unsigned long)ret & OPTEE_SMC_RETURN_RPC_PREFIX_MASK) !=
+		    OPTEE_SMC_RETURN_RPC_PREFIX)
+			break;
+	}
+
+	ret = (long)res.a0;
+	if (((unsigned long)ret & OPTEE_SMC_RETURN_RPC_PREFIX_MASK) ==
+	    OPTEE_SMC_RETURN_RPC_PREFIX) {
+		if ((unsigned long)ret == OPTEE_SMC_RETURN_RPC_FOREIGN_INTR)
+			return -EAGAIN;
+		return -EIO;
+	}
+	if (ret < 0)
+		return (int)ret;
+
+	if (read_val)
+		*read_val = (u32)res.a1;
+
+	return 0;
 }
 
-static void pwm_cv_set_shift_mode(cv_pwm_chip *chip, bool enable)
+static int pwm_cv_read_reg(cv_pwm_chip *chip, u32 offset, u32 *value)
 {
-	u32 value;
+	if (!chip->secure_access) {
+		*value = readl(chip->base + offset);
+		return 0;
+	}
 
-	value = readl(chip->base + REG_POLARITY);
-	if (enable)
-		value |= CVI_PWM_SHIFTMODE_MASK;
-	else
-		value &= ~CVI_PWM_SHIFTMODE_MASK;
-	writel(value, chip->base + REG_POLARITY);
+	return pwm_cv_secure_call(chip, CV_PWM_SMC_OP_READ, offset, 0, 0, value);
 }
 
-static void pwm_cv_set_shift_count(cv_pwm_chip *chip, unsigned int ch, u32 count)
+static int pwm_cv_write_reg(cv_pwm_chip *chip, u32 offset, u32 value)
 {
-	writel(count, chip->base + REG_SHIFTCOUNT + ch * 4);
+	if (!chip->secure_access) {
+		writel(value, chip->base + offset);
+		return 0;
+	}
+
+	return pwm_cv_secure_call(chip, CV_PWM_SMC_OP_WRITE, offset, value, 0, NULL);
 }
 
-static void pwm_cv_set_shift_start(cv_pwm_chip *chip, bool enable)
+static int pwm_cv_rmw_reg(cv_pwm_chip *chip, u32 offset, u32 mask, u32 value)
 {
-	u32 value;
+	if (!chip->secure_access) {
+		u32 tmp = readl(chip->base + offset);
 
-	value = readl(chip->base + REG_SHIFTSTART);
-	if (enable)
-		value |= 0x1;
-	else
-		value &= ~0x1;
-	writel(value, chip->base + REG_SHIFTSTART);
+		tmp &= ~mask;
+		tmp |= value & mask;
+		writel(tmp, chip->base + offset);
+		return 0;
+	}
+
+	return pwm_cv_secure_call(chip, CV_PWM_SMC_OP_RMW, offset, value, mask, NULL);
+}
+
+static int pwm_cv_set_count_mode(cv_pwm_chip *chip, unsigned int ch, bool enable)
+{
+	return pwm_cv_rmw_reg(chip, REG_POLARITY, CVI_PWM_COUNTMODE_MASK(ch),
+			      enable ? CVI_PWM_COUNTMODE_MASK(ch) : 0);
+}
+
+static int pwm_cv_set_pulse_count(cv_pwm_chip *chip, unsigned int ch, u32 count)
+{
+	return pwm_cv_write_reg(chip, REG_PCOUNT + ch * 4, count);
+}
+
+static int pwm_cv_set_shift_mode(cv_pwm_chip *chip, bool enable)
+{
+	return pwm_cv_rmw_reg(chip, REG_POLARITY, CVI_PWM_SHIFTMODE_MASK,
+			      enable ? CVI_PWM_SHIFTMODE_MASK : 0);
+}
+
+static int pwm_cv_set_shift_count(cv_pwm_chip *chip, unsigned int ch, u32 count)
+{
+	return pwm_cv_write_reg(chip, REG_SHIFTCOUNT + ch * 4, count);
+}
+
+static int pwm_cv_set_shift_start(cv_pwm_chip *chip, bool enable)
+{
+	return pwm_cv_rmw_reg(chip, REG_SHIFTSTART, 0x1, enable ? 0x1 : 0);
 }
 
 static int pwm_cv_ns_to_cycles(cv_pwm_chip *chip, u64 ns, u32 *cycles)
@@ -275,6 +353,7 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 	struct cv_pwm_channel *channel;
 	u64 cycles;
 	unsigned int ch = pwm_dev->hwpwm;
+	int ret;
 
 #if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	channel = pwm_get_chip_data(pwm_dev);
@@ -305,9 +384,16 @@ static int pwm_cv_config(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 	channel->hlperiod = channel->period - cycles;
 
 	if (pwm_cv_count_ch_valid(our_chip, ch)) {
-		writel(channel->period, our_chip->base + REG_GROUP * ch + REG_PERIOD);
-		if (channel->hlperiod != 0)
-			writel(channel->hlperiod, our_chip->base + REG_GROUP * ch + REG_HLPERIOD);
+		ret = pwm_cv_write_reg(our_chip, REG_GROUP * ch + REG_PERIOD, channel->period);
+		if (ret)
+			return ret;
+		if (channel->hlperiod != 0) {
+			ret = pwm_cv_write_reg(our_chip,
+					       REG_GROUP * ch + REG_HLPERIOD,
+					       channel->hlperiod);
+			if (ret)
+				return ret;
+		}
 	}
 
 	pr_debug("period_ns=%d, duty_ns=%d, period=%d, hlperiod=%d\n",
@@ -323,6 +409,7 @@ static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 	uint32_t pwm_start_value;
 	uint32_t value;
 	unsigned int ch = pwm_dev->hwpwm;
+	int ret;
 
 #if KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE
 	channel = pwm_get_chip_data(pwm_dev);
@@ -338,37 +425,59 @@ static int pwm_cv_enable(struct pwm_chip *chip, struct pwm_device *pwm_dev)
 	mutex_lock(&our_chip->lock);
 
 	if (pwm_cv_count_ch_valid(our_chip, ch)) {
-		pwm_cv_set_count_mode(our_chip, ch, our_chip->count_mode_en[ch]);
-		if (our_chip->count_mode_en[ch])
-			pwm_cv_set_pulse_count(our_chip, ch, our_chip->pulse_count[ch]);
+		ret = pwm_cv_set_count_mode(our_chip, ch, our_chip->count_mode_en[ch]);
+		if (ret)
+			goto out_unlock;
+		if (our_chip->count_mode_en[ch]) {
+			ret = pwm_cv_set_pulse_count(our_chip, ch, our_chip->pulse_count[ch]);
+			if (ret)
+				goto out_unlock;
+		}
 
 		if (our_chip->shift_mode_en) {
-			pwm_cv_set_shift_mode(our_chip, true);
-			pwm_cv_set_shift_count(our_chip, ch, our_chip->shift_count[ch]);
+			ret = pwm_cv_set_shift_mode(our_chip, true);
+			if (ret)
+				goto out_unlock;
+			ret = pwm_cv_set_shift_count(our_chip, ch, our_chip->shift_count[ch]);
+			if (ret)
+				goto out_unlock;
 		}
 	}
 
-	writel(channel->period, our_chip->base + REG_GROUP * ch + REG_PERIOD);
-	if (channel->hlperiod != 0)
-		writel(channel->hlperiod, our_chip->base + REG_GROUP * ch + REG_HLPERIOD);
-
-	if (our_chip->shift_mode_en) {
-		mutex_unlock(&our_chip->lock);
-		return 0;
+	ret = pwm_cv_write_reg(our_chip, REG_GROUP * ch + REG_PERIOD, channel->period);
+	if (ret)
+		goto out_unlock;
+	if (channel->hlperiod != 0) {
+		ret = pwm_cv_write_reg(our_chip, REG_GROUP * ch + REG_HLPERIOD,
+				       channel->hlperiod);
+		if (ret)
+			goto out_unlock;
 	}
 
-	pwm_start_value = readl(our_chip->base + REG_PWMSTART);
+	if (our_chip->shift_mode_en) {
+		ret = 0;
+		goto out_unlock;
+	}
 
-	writel(pwm_start_value & (~(1 << ch)), our_chip->base + REG_PWMSTART);
+	ret = pwm_cv_read_reg(our_chip, REG_PWMSTART, &pwm_start_value);
+	if (ret)
+		goto out_unlock;
+
+	ret = pwm_cv_write_reg(our_chip, REG_PWMSTART, pwm_start_value & (~(1 << ch)));
+	if (ret)
+		goto out_unlock;
 
 	value = pwm_start_value | (1 << ch);
 	pr_debug("pwm_cv_enable: value = %x\n", value);
 
-	writel(value, our_chip->base + REG_PWM_OE);
-	writel(value, our_chip->base + REG_PWMSTART);
+	ret = pwm_cv_write_reg(our_chip, REG_PWM_OE, value);
+	if (ret)
+		goto out_unlock;
+	ret = pwm_cv_write_reg(our_chip, REG_PWMSTART, value);
+out_unlock:
 	mutex_unlock(&our_chip->lock);
 
-	return 0;
+	return ret;
 }
 
 static void pwm_cv_disable(struct pwm_chip *chip,
@@ -381,12 +490,16 @@ static void pwm_cv_disable(struct pwm_chip *chip,
 
 	mutex_lock(&our_chip->lock);
 
-	value = readl(our_chip->base + REG_PWMSTART) & (~(1 << ch));
-	pr_debug("pwm_cv_disable: value = %x\n", value);
-	writel(value, our_chip->base + REG_PWMSTART);
+	if (!pwm_cv_read_reg(our_chip, REG_PWMSTART, &value)) {
+		value &= ~(1 << ch);
+		pr_debug("pwm_cv_disable: value = %x\n", value);
+		pwm_cv_write_reg(our_chip, REG_PWMSTART, value);
+	}
 
-	oe_value = readl(our_chip->base + REG_PWM_OE) & (~(1 << ch));
-	writel(oe_value, our_chip->base + REG_PWM_OE);
+	if (!pwm_cv_read_reg(our_chip, REG_PWM_OE, &oe_value)) {
+		oe_value &= ~(1 << ch);
+		pwm_cv_write_reg(our_chip, REG_PWM_OE, oe_value);
+	}
 
 	mutex_unlock(&our_chip->lock);
 }
@@ -409,13 +522,19 @@ static int pwm_cv_set_polarity(struct pwm_chip *chip,
 
 	mutex_lock(&our_chip->lock);
 
-	value = readl(our_chip->base + REG_POLARITY);
+	if (pwm_cv_read_reg(our_chip, REG_POLARITY, &value)) {
+		mutex_unlock(&our_chip->lock);
+		return -EIO;
+	}
 	if (polarity == PWM_POLARITY_NORMAL)
 		value &= ~(1 << pwm_dev->hwpwm);
 	else
 		value |= 1 << pwm_dev->hwpwm;
 
-	writel(value, our_chip->base + REG_POLARITY);
+	if (pwm_cv_write_reg(our_chip, REG_POLARITY, value)) {
+		mutex_unlock(&our_chip->lock);
+		return -EIO;
+	}
 	our_chip->polarity_mask = value & 0xff;
 
 	mutex_unlock(&our_chip->lock);
@@ -482,19 +601,34 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 	u64 cycles;
 	u64 cycle_cnt;
 	unsigned int hwpwm = pwm_dev->hwpwm;
+	int ret;
 
-	value = readl(our_chip->base + REG_PWM_OE) & (~(1 << hwpwm));
-	writel(value, our_chip->base + REG_PWM_OE);
+	ret = pwm_cv_read_reg(our_chip, REG_PWM_OE, &value);
+	if (ret)
+		return ret;
+	value &= ~(1 << hwpwm);
+	ret = pwm_cv_write_reg(our_chip, REG_PWM_OE, value);
+	if (ret)
+		return ret;
 	pr_debug("pwm_cv_capture: REG_PWM_OE = %x\n", value);
 
-	writel(1, our_chip->base + REG_GROUP * hwpwm + REG_FREQNUM);
-	writel(1 << hwpwm, our_chip->base + REG_FREQEN);
-	pr_debug("pwm_cv_capture: REG_FREQEN = %x\n", readl(our_chip->base + REG_FREQEN));
+	ret = pwm_cv_write_reg(our_chip, REG_GROUP * hwpwm + REG_FREQNUM, 1);
+	if (ret)
+		return ret;
+	ret = pwm_cv_write_reg(our_chip, REG_FREQEN, 1 << hwpwm);
+	if (ret)
+		return ret;
+	ret = pwm_cv_read_reg(our_chip, REG_FREQEN, &value);
+	if (ret)
+		return ret;
+	pr_debug("pwm_cv_capture: REG_FREQEN = %x\n", value);
 
 	while (timeout--) {
 		mdelay(1);
 		pr_debug("delay 1ms\n");
-		value = readl(our_chip->base + REG_FREQ_DONE_NUM + hwpwm * 4);
+		ret = pwm_cv_read_reg(our_chip, REG_FREQ_DONE_NUM + hwpwm * 4, &value);
+		if (ret)
+			return ret;
 		if (value != 0)
 			break;
 	}
@@ -503,7 +637,10 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 		result->period = 0;
 		result->duty_cycle = 0;
 	} else {
-		cycle_cnt = readl(our_chip->base + REG_GROUP * hwpwm + REG_FREQDATA) + 1;
+		ret = pwm_cv_read_reg(our_chip, REG_GROUP * hwpwm + REG_FREQDATA, &value);
+		if (ret)
+			return ret;
+		cycle_cnt = value + 1;
 		pr_debug("%s: cycle_cnt = %llu\n", __func__, cycle_cnt);
 
 		cycles = clk_get_rate(our_chip->base_clk);
@@ -514,8 +651,13 @@ static int pwm_cv_capture(struct pwm_chip *chip, struct pwm_device *pwm_dev,
 		result->duty_cycle = 0;
 	}
 
-	value = readl(our_chip->base + REG_FREQEN) & (~(1 << hwpwm));
-	writel(value, our_chip->base + REG_FREQEN);
+	ret = pwm_cv_read_reg(our_chip, REG_FREQEN, &value);
+	if (ret)
+		return ret;
+	value &= ~(1 << hwpwm);
+	ret = pwm_cv_write_reg(our_chip, REG_FREQEN, value);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -545,6 +687,7 @@ static ssize_t count_pulse_store(struct device *dev, struct device_attribute *at
 	cv_pwm_chip *chip = dev_get_drvdata(dev);
 	unsigned int ch;
 	u32 count_pulse;
+	int ret;
 
 	if (sscanf(buf, "%u %u", &ch, &count_pulse) != 2)
 		return -EINVAL;
@@ -554,9 +697,12 @@ static ssize_t count_pulse_store(struct device *dev, struct device_attribute *at
 	mutex_lock(&chip->lock);
 	chip->pulse_count[ch] = count_pulse;
 	chip->count_mode_en[ch] = (count_pulse != 0);
-	pwm_cv_set_pulse_count(chip, ch, count_pulse);
-	pwm_cv_set_count_mode(chip, ch, chip->count_mode_en[ch]);
+	ret = pwm_cv_set_pulse_count(chip, ch, count_pulse);
+	if (!ret)
+		ret = pwm_cv_set_count_mode(chip, ch, chip->count_mode_en[ch]);
 	mutex_unlock(&chip->lock);
+	if (ret)
+		return ret;
 
 	return count;
 }
@@ -604,8 +750,10 @@ static ssize_t shift_ns_store(struct device *dev, struct device_attribute *attr,
 	chip->shift_ns[ch] = shift_ns;
 	chip->shift_count[ch] = shift_cnt;
 	chip->shift_configured[ch] = true;
-	pwm_cv_set_shift_count(chip, ch, shift_cnt);
+	ret = pwm_cv_set_shift_count(chip, ch, shift_cnt);
 	mutex_unlock(&chip->lock);
+	if (ret)
+		return ret;
 
 	return count;
 }
@@ -617,6 +765,7 @@ static ssize_t shift_start_store(struct device *dev, struct device_attribute *at
 	unsigned int start;
 	u32 mask;
 	u32 value;
+	int ret = 0;
 
 	if (kstrtouint(buf, 0, &start))
 		return -EINVAL;
@@ -631,26 +780,51 @@ static ssize_t shift_start_store(struct device *dev, struct device_attribute *at
 	}
 
 	if (!start) {
-		pwm_cv_set_shift_start(chip, false);
-		value = readl(chip->base + REG_PWMSTART);
-		writel(value & ~mask, chip->base + REG_PWMSTART);
+		ret = pwm_cv_set_shift_start(chip, false);
+		if (ret)
+			goto out;
+		ret = pwm_cv_read_reg(chip, REG_PWMSTART, &value);
+		if (ret)
+			goto out;
+		ret = pwm_cv_write_reg(chip, REG_PWMSTART, value & ~mask);
+		if (ret)
+			goto out;
 		chip->shift_mode_en = false;
-		pwm_cv_set_shift_mode(chip, false);
+		ret = pwm_cv_set_shift_mode(chip, false);
 	} else {
 		chip->shift_mode_en = true;
-		pwm_cv_set_shift_mode(chip, true);
-		pwm_cv_set_shift_start(chip, false);
-		value = readl(chip->base + REG_PWMSTART);
-		writel(value & ~mask, chip->base + REG_PWMSTART);
+		ret = pwm_cv_set_shift_mode(chip, true);
+		if (ret)
+			goto out;
+		ret = pwm_cv_set_shift_start(chip, false);
+		if (ret)
+			goto out;
+		ret = pwm_cv_read_reg(chip, REG_PWMSTART, &value);
+		if (ret)
+			goto out;
+		ret = pwm_cv_write_reg(chip, REG_PWMSTART, value & ~mask);
+		if (ret)
+			goto out;
 
-		value = readl(chip->base + REG_PWM_OE);
-		writel(value | mask, chip->base + REG_PWM_OE);
+		ret = pwm_cv_read_reg(chip, REG_PWM_OE, &value);
+		if (ret)
+			goto out;
+		ret = pwm_cv_write_reg(chip, REG_PWM_OE, value | mask);
+		if (ret)
+			goto out;
 
-		value = readl(chip->base + REG_PWMSTART);
-		writel(value | mask, chip->base + REG_PWMSTART);
-		pwm_cv_set_shift_start(chip, true);
+		ret = pwm_cv_read_reg(chip, REG_PWMSTART, &value);
+		if (ret)
+			goto out;
+		ret = pwm_cv_write_reg(chip, REG_PWMSTART, value | mask);
+		if (ret)
+			goto out;
+		ret = pwm_cv_set_shift_start(chip, true);
 	}
+out:
 	mutex_unlock(&chip->lock);
+	if (ret)
+		return ret;
 
 	return count;
 }
@@ -665,13 +839,19 @@ static ssize_t pwm_status_show(struct device *dev,
 	u32 pwmstart;
 	u32 pwmoe;
 	u32 polarity;
+	u32 count_done;
+	u32 period;
+	u32 hlperiod;
 	u32 mask;
 
 	mutex_lock(&chip->lock);
-	shiftstart = readl(chip->base + REG_SHIFTSTART);
-	pwmstart = readl(chip->base + REG_PWMSTART);
-	pwmoe = readl(chip->base + REG_PWM_OE);
-	polarity = readl(chip->base + REG_POLARITY);
+	if (pwm_cv_read_reg(chip, REG_SHIFTSTART, &shiftstart) ||
+	    pwm_cv_read_reg(chip, REG_PWMSTART, &pwmstart) ||
+	    pwm_cv_read_reg(chip, REG_PWM_OE, &pwmoe) ||
+	    pwm_cv_read_reg(chip, REG_POLARITY, &polarity)) {
+		mutex_unlock(&chip->lock);
+		return scnprintf(buf, PAGE_SIZE, "failed to read pwm status\n");
+	}
 	mask = pwm_cv_shift_configured_mask(chip);
 	cnt = pwm_cv_valid_ch_count(chip);
 
@@ -698,6 +878,12 @@ static ssize_t pwm_status_show(struct device *dev,
 			 "+----+----------+------------+----------+------------+------------+----------+----------+---------+\n");
 
 	for (i = 0; i < cnt; i++) {
+		if (pwm_cv_read_reg(chip, REG_PCOUNT_STATUS + i * 4, &count_done) ||
+		    pwm_cv_read_reg(chip, REG_GROUP * i + REG_PERIOD, &period) ||
+		    pwm_cv_read_reg(chip, REG_GROUP * i + REG_HLPERIOD, &hlperiod)) {
+			mutex_unlock(&chip->lock);
+			return scnprintf(buf, PAGE_SIZE, "failed to read pwm ch%u status\n", i);
+		}
 		len += scnprintf(buf + len, PAGE_SIZE - len,
 				 "| %2u | %8u | %10llu | %8u | %10u | %10u | %8u | %8u | %7u |\n",
 				 i,
@@ -705,9 +891,9 @@ static ssize_t pwm_status_show(struct device *dev,
 				 (unsigned long long)chip->shift_ns[i],
 				 chip->count_mode_en[i] ? 1 : 0,
 				 chip->pulse_count[i],
-				 readl(chip->base + REG_PCOUNT_STATUS + i * 4),
-				 readl(chip->base + REG_GROUP * i + REG_PERIOD),
-				 readl(chip->base + REG_GROUP * i + REG_HLPERIOD),
+				 count_done,
+				 period,
+				 hlperiod,
 				 (pwmstart >> i) & 0x1);
 	}
 	len += scnprintf(buf + len, PAGE_SIZE - len,
@@ -805,11 +991,20 @@ static int pwm_cv_probe(struct platform_device *pdev)
 #endif
 	chip->polarity_mask = 0;
 	mutex_init(&chip->lock);
+	chip->secure_access = of_property_read_bool(pdev->dev.of_node, "cvitek,secure-smc");
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	chip->base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(chip->base))
-		return PTR_ERR(chip->base);
+	if (!res)
+		return -EINVAL;
+	chip->secure_base = res->start;
+	if (chip->secure_access) {
+		chip->base = NULL;
+		dev_info(dev, "use EL3 SMC access for PWM regs @%pa\n", &chip->secure_base);
+	} else {
+		chip->base = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(chip->base))
+			return PTR_ERR(chip->base);
+	}
 
 	chip->base_clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(chip->base_clk)) {
@@ -881,8 +1076,15 @@ static void pwm_cv_remove(struct platform_device *pdev)
 static int pwm_cv_suspend(struct device *dev)
 {
 	cv_pwm_chip *chip = dev_get_drvdata(dev);
+	u32 i;
 
-	memcpy_fromio(chip->pwm_saved_regs, chip->base, PWM_REG_NUM * 4);
+	if (!chip->secure_access) {
+		memcpy_fromio(chip->pwm_saved_regs, chip->base, PWM_REG_NUM * 4);
+		return 0;
+	}
+
+	for (i = 0; i < PWM_REG_NUM; i++)
+		pwm_cv_read_reg(chip, i * 4, &chip->pwm_saved_regs[i]);
 
 	return 0;
 }
@@ -890,8 +1092,15 @@ static int pwm_cv_suspend(struct device *dev)
 static int pwm_cv_resume(struct device *dev)
 {
 	cv_pwm_chip *chip = dev_get_drvdata(dev);
+	u32 i;
 
-	memcpy_toio(chip->base, chip->pwm_saved_regs, PWM_REG_NUM * 4);
+	if (!chip->secure_access) {
+		memcpy_toio(chip->base, chip->pwm_saved_regs, PWM_REG_NUM * 4);
+		return 0;
+	}
+
+	for (i = 0; i < PWM_REG_NUM; i++)
+		pwm_cv_write_reg(chip, i * 4, chip->pwm_saved_regs[i]);
 
 	return 0;
 }

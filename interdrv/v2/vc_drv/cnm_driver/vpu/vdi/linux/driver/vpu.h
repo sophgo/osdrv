@@ -12,7 +12,10 @@
 
 #ifndef __VPU_DRV_H__
 #define __VPU_DRV_H__
-
+#include <linux/interrupt.h>
+#include <linux/ioport.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/fs.h>
 #include <linux/types.h>
 #include "../../../vpuapi/vpuconfig.h"
@@ -111,5 +114,16 @@ int vpu_disp_lock(unsigned long core_idx);
 void vpu_disp_unlock(unsigned long core_idx);
 int vpu_mem_lock(unsigned long core_idx);
 void vpu_mem_unlock(unsigned long core_idx);
+void vpu_update_stat_cycles(int coreIdx, int hwCycles);
+void vpu_update_resolution(int coreIdx, int instance, int width, int height);
+void vpu_update_frame_status(int coreIdx, int instance, FrameStatus status, int frame_num);
+int vpu_monitor_thread(void *data);
+irqreturn_t vpu_irq_handler(int param, void *dev_id);
+#if defined(CONFIG_PM)
+int vpu_drv_suspend(struct platform_device *pdev, pm_message_t state);
+int vpu_drv_resume(struct platform_device *pdev);
+#endif
+int vpu_drv_platform_init(struct platform_device *pdev);
+int vpu_drv_platform_exit(void);
 #endif
 

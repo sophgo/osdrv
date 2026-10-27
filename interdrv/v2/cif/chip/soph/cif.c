@@ -919,9 +919,7 @@ static int _cif_set_clk_buffer(struct cif_ctx *ctx, int clk_port, int min_port, 
 		} else if (clk_port == 1) {
 			cif_set_clk_dir(ctx, CIF_CLK_P12P0);
 		} else if (clk_port == 2) {
-			if (max_port == 3 && min_port == 2) {
 				cif_set_clk_dir(ctx, CIF_CLK_P22P3);
-			}
 		} else if (clk_port == 3) {
 			cif_set_clk_dir(ctx, CIF_CLK_P32P2);
 		}

@@ -6,6 +6,7 @@
 #include <linux/version.h>
 #include <linux/slab.h>
 #include <linux/hashtable.h>
+#include <linux/list.h>
 #include <asm/cacheflush.h>
 #if (KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE)
 #include <linux/dma-map-ops.h>
@@ -27,6 +28,7 @@ struct mem_mapping {
 	void *dmabuf;
 	pid_t fd_pid;
 	struct hlist_node node;
+	struct list_head lnode;
 };
 
 static int ion_debug_alloc_free;
@@ -34,6 +36,42 @@ module_param(ion_debug_alloc_free, int, 0644);
 
 static DEFINE_SPINLOCK(ion_lock);
 static DEFINE_HASHTABLE(ion_hash, 8);
+
+void base_ion_cleanup_tgid(pid_t tgid)
+{
+	struct mem_mapping *obj;
+	struct hlist_node *tmp;
+	int bkt;
+	LIST_HEAD(to_free);
+
+	/*
+	 * NOTE: We must not call dma_buf_put()/end_cpu_access() under spinlock
+	 * because those paths may sleep. We only unlink objects here.
+	 */
+	spin_lock(&ion_lock);
+	hash_for_each_safe(ion_hash, bkt, tmp, obj, node) {
+		if (obj->fd_pid != tgid)
+			continue;
+		hash_del(&obj->node);
+		list_add(&obj->lnode, &to_free);
+	}
+	spin_unlock(&ion_lock);
+
+	while (!list_empty(&to_free)) {
+		struct dma_buf *dmabuf;
+
+		obj = list_first_entry(&to_free, struct mem_mapping, lnode);
+		list_del(&obj->lnode);
+
+		dmabuf = (struct dma_buf *)obj->dmabuf;
+		if (dmabuf) {
+			dma_buf_end_cpu_access(dmabuf, DMA_TO_DEVICE);
+			/* Drop base.ko's extra ref taken by dma_buf_get() */
+			dma_buf_put(dmabuf);
+		}
+		kfree(obj);
+	}
+}
 
 static int32_t mem_put(struct mem_mapping *mem_info)
 {
@@ -45,6 +83,7 @@ static int32_t mem_put(struct mem_mapping *mem_info)
 		return -1;
 	}
 	memcpy(p, mem_info, sizeof(*p));
+	INIT_LIST_HEAD(&p->lnode);
 
 	spin_lock(&ion_lock);
 	hash_add(ion_hash, &p->node, p->phy_addr);

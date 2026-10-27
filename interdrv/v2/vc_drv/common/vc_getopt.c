@@ -135,7 +135,7 @@ _getopt_initialize(int argc, char *const *argv, const char *optstring,
 }
 
 
-int _getopt_internal_r(int argc, char *const *argv, const char *optstring,
+static int _getopt_internal_r(int argc, char *const *argv, const char *optstring,
                const struct option *longopts, int *longind,
                int long_only, struct _getopt_data *d)
 {
@@ -491,12 +491,8 @@ int _getopt_internal_r(int argc, char *const *argv, const char *optstring,
     }
 }
 
-
-
-
 //static struct _getopt_data getopt_data;
-
-int _getopt_internal(int argc, char **argv, const char *optstring,
+static int _getopt_internal(int argc, char **argv, const char *optstring,
              const struct option *longopts, int *longind, int long_only)
 {
     int result;
@@ -530,8 +526,7 @@ void getopt_init(void)
     memset(&getopt_data, 0, sizeof(getopt_data));
 }
 
-
-char *drv_strchr(char *s, char c)
+static char *drv_strchr(char *s, char c)
 {
     while (*s != '\0' && *s != c) {
         ++s;
@@ -541,7 +536,7 @@ char *drv_strchr(char *s, char c)
 }
 
 
-char *drv_strpbrk(const char *cs, const char *ct)
+static char *drv_strpbrk(const char *cs, const char *ct)
 {
     const char *sc1, *sc2;
 
@@ -555,8 +550,7 @@ char *drv_strpbrk(const char *cs, const char *ct)
     return NULL;
 }
 
-
-int drv_strspn(const char *s, const char *accept)
+static int drv_strspn(const char *s, const char *accept)
 {
     const char *p;
     const char *a;
@@ -656,8 +650,7 @@ int drv_isdigit(int c)
 #define DRV_INT_MAX 2147483647
 #define DRV_INT_MIN -2147483678
 
-#if 0
-long long strtoi(const char *str, int minus)
+static long long strtoi(const char *str, int minus)
 {
     long long num = 0;
     int flag = minus ? -1 : 1;
@@ -673,8 +666,6 @@ long long strtoi(const char *str, int minus)
 
     return num;
 }
-#endif
-extern long long strtoi(const char *str, int minus);
 
 int atoi(const char *str)
 {

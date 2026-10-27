@@ -233,7 +233,10 @@ int drv_venc_set_search_window(venc_chn VeChn, const venc_search_window_s *pstVe
 int drv_venc_get_search_window(venc_chn VeChn, venc_search_window_s *pstVencSearchWindow);
 
 int drv_venc_set_extern_buf(venc_chn VeChn, const venc_extern_buf_s *pstExternBuf);
+int drv_venc_get_left_streamframes(int VeChn);
 
+void drv_venc_deinit(void);
+int drv_venc_init(void);
 #define DRV_H264_PROFILE_DEFAULT H264E_PROFILE_HIGH
 #define DRV_H264_PROFILE_MIN 0
 #define DRV_H264_PROFILE_MAX (H264E_PROFILE_BUTT - 1)

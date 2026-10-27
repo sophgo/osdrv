@@ -92,6 +92,9 @@ typedef union {
 		uint32_t rsv_3_3:1;
 		/*arbiter usage threshold;*/
 		uint32_t reg_arb_usage_th:4;
+#ifdef MEDIA_V3
+		uint32_t reg_arb_md:2;
+#endif
 	};
 	uint32_t val;
 } isp_rdma_ar_priority_sel_c;
@@ -1022,6 +1025,15 @@ static void isp_rdma_print(isp_rdma_c* p) {
 	}\
 };
 #else /* !ifdef __cplusplus */
+#ifdef MEDIA_V3
+#define _ISP_RDMA_ARB_PRIORITY_INIT \
+	.ar_priority_sel.reg_arb_usage_th = 0x2,\
+	.ar_priority_sel.reg_arb_md = 0x1,
+#else
+#define _ISP_RDMA_ARB_PRIORITY_INIT \
+	.ar_priority_sel.reg_arb_usage_th = 0x5,
+#endif
+
 #define _DEFINE_ISP_RDMA_C \
 {\
 	.shadow_rd_sel.reg_shadow_rd_sel = 0x1,\
@@ -1040,7 +1052,7 @@ static void isp_rdma_print(isp_rdma_c* p) {
 	.ar_priority_sel.reg_ar_priority_sel = 0x0,\
 	.ar_priority_sel.reg_qos_priority_sel = 0x0,\
 	.ar_priority_sel.reg_arb_hist_disable = 0x0,\
-	.ar_priority_sel.reg_arb_usage_th = 0x5,\
+	_ISP_RDMA_ARB_PRIORITY_INIT\
 	.ring_patch_enable.reg_ring_patch_enable = 0x0,\
 	.set_ring_base.reg_set_ring_base = 0x0,\
 	.ring_base_addr_l.reg_ring_base_l = 0x0,\

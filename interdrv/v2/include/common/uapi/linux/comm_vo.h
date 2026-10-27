@@ -175,6 +175,40 @@ typedef enum {
 }vo_mac_bt_mux_e;
 
 typedef enum {
+	VO_MUX_RGB_DATA0 = 0,
+	VO_MUX_RGB_DATA1,
+	VO_MUX_RGB_DATA2,
+	VO_MUX_RGB_DATA3,
+	VO_MUX_RGB_DATA4,
+	VO_MUX_RGB_DATA5,
+	VO_MUX_RGB_DATA6,
+	VO_MUX_RGB_DATA7,
+	VO_MUX_RGB_DATA8,
+	VO_MUX_RGB_DATA9,
+	VO_MUX_RGB_DATA10,
+	VO_MUX_RGB_DATA11,
+	VO_MUX_RGB_DATA12,
+	VO_MUX_RGB_DATA13,
+	VO_MUX_RGB_DATA14,
+	VO_MUX_RGB_DATA15,
+	VO_MUX_RGB_DATA16,
+	VO_MUX_RGB_DATA17,
+	VO_MUX_RGB_DATA18,
+	VO_MUX_RGB_DATA19,
+	VO_MUX_RGB_DATA20,
+	VO_MUX_RGB_DATA21,
+	VO_MUX_RGB_DATA22,
+	VO_MUX_RGB_DATA23,
+	VO_MUX_RGB_VS = 24,
+	VO_MUX_RGB_HS,
+	VO_MUX_RGB_HDE,
+	VO_MUX_RGB_TG_HS_TILE = 30,
+	VO_MUX_RGB_TG_VS_TILE,
+	VO_MUX_RGB_CLK,
+	VO_RGB_MUX_MAX,
+}vo_mac_rgb_mux_e;
+
+typedef enum {
 	VO_BT_MODE_656 = 0,
 	VO_BT_MODE_1120,
 	VO_BT_MODE_601,
@@ -201,6 +235,11 @@ typedef struct {
 	vo_bt_data_seq_e data_seq;
 	vo_d_remap_s d_pins[MAX_VO_PINS];
 } vo_bt_attr_s;
+
+typedef struct {
+	unsigned char pin_num;
+	vo_d_remap_s d_pins[MAX_VO_PINS];
+} vo_rgb_attr_s;
 
 /*
  * bgcolor: Background color of a device, in RGB format.

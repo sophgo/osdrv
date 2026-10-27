@@ -327,6 +327,12 @@ typedef struct _ive_filter_ctrl_s {
 	unsigned char norm; /*Normalization parameter, by right s_ft*/
 } ive_filter_ctrl_s;
 
+typedef struct ive_filter_ext_ctrl_s {
+	signed char mask[81]; /*Template parameter filter coefficient*/
+	unsigned char norm; /*Normalization parameter, by right s_ft*/
+    unsigned char ksize; /*Filter kernel size, only support 3,5,7,9*/
+} ive_filter_ext_ctrl;
+
 typedef enum _ive_csc_mode_e {
 	IVE_CSC_MODE_VIDEO_BT601_YUV2RGB =
 		0x0, /*CSC: YUV2RGB, video transfer mode, RGB value range [16, 235]*/
@@ -365,6 +371,13 @@ typedef struct _ive_csc_ctrl_s {
 	ive_csc_mode_e mode; /*Working mode*/
 } ive_csc_ctrl_s;
 
+typedef struct _ive_filter_and_csc_ext_ctrl_s {
+	ive_csc_mode_e mode; /*CSC working mode*/
+	signed char mask[81]; /*Template parameter filter coefficient*/
+	unsigned char norm; /*Normalization parameter, by right s_ft*/
+    unsigned char ksize; /*Filter kernel size, only support 3,5,7,9*/
+} ive_filter_and_csc_ext_ctrl;
+
 typedef struct _ive_filter_and_csc_ctrl_s {
 	ive_csc_mode_e mode; /*CSC working mode*/
 	signed char mask[25]; /*Template parameter filter coefficient*/
@@ -383,6 +396,12 @@ typedef struct _ive_sobel_ctrl_s {
 	signed char mask[25]; /*Template parameter*/
 } ive_sobel_ctrl_s;
 
+typedef struct _ive_sobel_ext_ctrl_s {
+	ive_sobel_out_ctrl_e out_ctrl; /*Output format*/
+	unsigned char ksize; /*Sobel kernel size, only support 3,5,7,9*/
+	signed char mask[81]; /*Template parameter*/
+} ive_sobel_ext_ctrl;
+
 typedef enum _ive_mag_and_ang_out_ctrl_e {
 	IVE_MAG_AND_ANG_OUT_CTRL_MAG = 0x0, /*Only the magnitude is output.*/
 	IVE_MAG_AND_ANG_OUT_CTRL_MAG_AND_ANG =
@@ -399,6 +418,17 @@ typedef struct _ive_mag_and_ang_ctrl_s {
 typedef struct _ive_dilate_ctrl_s {
 	unsigned char mask[25]; /*The template parameter value must be 0 or 255.*/
 } ive_dilate_ctrl_s;
+
+typedef struct ive_dilate_ext_ctrl_s {
+    unsigned char au8Mask[81];    /*The template parameter value must be 0 or 255.*/
+    unsigned char ksize;   /*dilate kernel size, only support 3,5,7,9*/
+} ive_dilate_ext_ctrl;
+
+typedef struct ive_erode_ext_ctrl_s {
+    unsigned char au8Mask[81]; /*The template parameter value must be 0 or 255.*/
+    unsigned char ksize;   /*erode kernel size, only support 3,5,7,9*/
+} ive_erode_ext_ctrl;
+
 typedef ive_dilate_ctrl_s ive_erode_ctrl_s;
 
 typedef enum _ive_thresh_mode_e {

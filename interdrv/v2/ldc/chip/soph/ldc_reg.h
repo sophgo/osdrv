@@ -2,18 +2,27 @@
 #define _LDC_REG_H_
 
 #if defined(ENVTEST) || defined(ENV_EMU)
+#ifdef CV84X6
+#define REG_LDC_TOP_BASE 0x67106000
+#else
 #define REG_LDC_TOP_BASE 0x680b0000//0x680b2000
 #define REG_DWA_BASE 0x680b4000//0x680b6000
+#endif
 #else
 #define REG_LDC_TOP_BASE 0
 #define REG_DWA_BASE 0
 #endif
 
 #define REG_LDC_REG_BASE                (REG_LDC_TOP_BASE)
+#ifdef CV84X6
+#define REG_LDC0_BASE_FOR_CMDQ          (0x67106000)
+#define REG_LDC1_BASE_FOR_CMDQ          (0x67106000)
+#else
 #define REG_LDC0_BASE_FOR_CMDQ          (0x680b0000)
 #define REG_LDC1_BASE_FOR_CMDQ          (0x680b2000)
 #define REG_DWA0_BASE_FOR_CMDQ (0x680b4000)
 #define REG_DWA1_BASE_FOR_CMDQ (0x680b6000)
+#endif
 
 #define REG_LDC_CMDQ_BASE (REG_LDC_TOP_BASE + 0x100)
 #define REG_DWA_CMDQ_BASE (REG_DWA_BASE + 0x1000)
@@ -68,6 +77,10 @@
 #define REG_LDC_PROB                    (REG_LDC_REG_BASE + 0xa8)
 #define REG_LDC_PROB_DATA               (REG_LDC_REG_BASE + 0xac)
 #define REG_LDC_EXTEND_HADDR            (REG_LDC_REG_BASE + 0xb4)
+#ifdef CV84X6
+#define REG_LDC_EXTEND_HADDR_R          (REG_LDC_REG_BASE + 0xb8) /* R: src bit[47:33] */
+#define REG_LDC_EXTEND_HADDR_R1         (REG_LDC_REG_BASE + 0xbc) /* R1: map bit[47:33] */
+#endif
 
 /* Command queue */
 #define REG_CMDQ_INT_EVENT              (REG_LDC_CMDQ_BASE + 0x00)

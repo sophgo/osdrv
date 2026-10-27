@@ -96,6 +96,11 @@ typedef union {
 		set1: wdma switch to gmm
 		set0: wdma switch to bg match + bg update   (default);*/
 		uint32_t reg_dma_share_mux_selgmm:1;
+#ifdef MEDIA_V3
+        uint32_t reg_reserved:1;
+        uint32_t reg_trig_1t_ip_num:8;
+        uint32_t reg_trig_1t_axi_num:8;
+#endif
 	};
 	uint32_t val;
 } ive_top_reg_3_c;
@@ -1320,6 +1325,11 @@ static void ive_top_print(ive_top_c* p) {
 	fprintf(stderr, "\tREG_3.reg_ive_rdma_eigval_en = 0x%x\n", p->reg_3.reg_ive_rdma_eigval_en);
 	fprintf(stderr, "\tREG_3.reg_muxsel_gradfg = 0x%x\n", p->reg_3.reg_muxsel_gradfg);
 	fprintf(stderr, "\tREG_3.reg_dma_share_mux_selgmm = 0x%x\n", p->reg_3.reg_dma_share_mux_selgmm);
+#ifdef MEDIA_V3
+    fprintf(stderr, "\tREG_3.reg_reserved = 0x%x\n", p->reg_3.reg_reserved);
+	fprintf(stderr, "\tREG_3.reg_trig_1t_ip_num = 0x%x\n", p->reg_3.reg_trig_1t_ip_num);
+    fprintf(stderr, "\tREG_3.reg_trig_1t_axi_num = 0x%x\n", p->reg_3.reg_trig_1t_axi_num);
+#endif
 	fprintf(stderr, "\treg_h10.reg_img_in_top_enable = 0x%x\n", p->reg_h10.reg_img_in_top_enable);
 	fprintf(stderr, "\treg_h10.reg_resize_top_enable = 0x%x\n", p->reg_h10.reg_resize_top_enable);
 	fprintf(stderr, "\treg_h10.reg_gmm_top_enable = 0x%x\n", p->reg_h10.reg_gmm_top_enable);

@@ -7,13 +7,18 @@
 #include <linux/delay.h>
 
 #include "jpulog.h"
+#include "jpu.h"
 typedef struct jpuvdrv_core_list_t {
     int id;
     bool is_used;
     struct list_head list;
 } jpuvdrv_core_list_t;
 
+#ifdef MEDIA_V3
+static unsigned int s_max_num_core = 3;
+#else
 static unsigned int s_max_num_core = 4;
+#endif
 //static spinlock_t jpeg_spinlock;
 
 static DEFINE_SPINLOCK(jpeg_spinlock);
@@ -24,6 +29,7 @@ static DECLARE_WAIT_QUEUE_HEAD(jpuvdrv_core_wait_queue);
 static LIST_HEAD(jpuvdrv_core_resource_list_head);
 static int next_id = 0;
 static bool isCoreIdle = false;
+
 int jpu_core_request_resource(int timeout) {
     jpuvdrv_core_list_t *res;
     unsigned long flags;
