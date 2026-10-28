@@ -20,6 +20,28 @@
 
 static const char *const CLK_SC_NAME[] = {"clk_sc_d", "clk_sc_v1", "clk_sc_v2", "clk_sc_v3"};
 
+int cvi_sc_check_buf(struct cvi_sc_vdev *vdev, const u8 grp_id, u64 phy_addr)
+{
+	int ret = 0;
+	unsigned long flags;
+	struct vpss_sc_buffer *b = NULL;
+
+	spin_lock_irqsave(&vdev->rdy_lock, flags);
+	if (vdev->num_rdy[grp_id] == 0) {
+		spin_unlock_irqrestore(&vdev->rdy_lock, flags);
+		return 0;
+	}
+	list_for_each_entry(b, &vdev->rdy_queue[grp_id], list) {
+		if (b->planes[0].addr == phy_addr) {
+			ret = 1;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&vdev->rdy_lock, flags);
+
+	return ret;
+}
+
 int cvi_sc_buf_queue(struct cvi_sc_vdev *vdev, struct vpss_sc_buffer *list_buf)
 {
 	unsigned long flags;

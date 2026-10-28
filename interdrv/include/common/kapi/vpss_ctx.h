@@ -60,6 +60,7 @@ struct cvi_vpss_ctx {
 	VPSS_CROP_INFO_S stGrpCropInfo;
 	CVI_U8 chnNum;
 	CVI_U8 u8DevId;
+	CVI_BOOL online_from_isp;
 	struct VPSS_CHN_CFG stChnCfgs[VPSS_MAX_CHN_NUM];
 	struct crop_size frame_crop;
 	struct mutex lock;

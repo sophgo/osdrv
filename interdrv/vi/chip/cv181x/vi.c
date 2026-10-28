@@ -64,6 +64,10 @@ module_param(stop_stream_en, int, 0644);
 bool ctrl_flow = false;
 module_param(ctrl_flow, bool, 0644);
 
+int vi_err_retry_max = 30;
+module_param(vi_err_retry_max, int, 0644);
+MODULE_PARM_DESC(vi_err_retry_max, "Max retry times for ISP error interrupt handler before giving up (default: 30)");
+
 VI_DEV_ATTR_S tmp_dev_attr;
 VI_PIPE_ATTR_S tmp_pipe_attr;
 VI_CHN_ATTR_S tmp_chn_attr;
@@ -6960,7 +6964,7 @@ static void _vi_err_retrig_preraw(struct cvi_vi_dev *vdev, const enum cvi_isp_ra
 		if (!ctx->isp_pipe_enable[wait_fe])
 			continue;
 
-		if (vdev->isp_err_times[wait_fe]++ > 30) {
+		if (vdev->isp_err_times[wait_fe]++ > vi_err_retry_max) {
 			vi_pr(VI_ERR, "raw_%d too much errors happened\n", wait_fe);
 			continue;
 		}

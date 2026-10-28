@@ -20,4 +20,6 @@ CVI_VOID vpss_sc_set_vc_sbm(struct cvi_vip_dev *dev, MMF_CHN_S chn, bool sb_vc_r
 void cvi_sc_buf_remove_all(struct cvi_sc_vdev *vdev, const u8 grp_id);
 CVI_VOID sc_set_vpss_chn_bind_fb(struct cvi_sc_vdev *sdev, bool bind_fb);
 
+int cvi_sc_check_buf(struct cvi_sc_vdev *vdev, const u8 grp_id, u64 phy_addr);
+
 #endif

@@ -15,6 +15,8 @@
 #include "vpss_grp_hw_cfg.h"
 #include "scaler.h"
 
+extern int cvi_sc_check_buf(struct cvi_sc_vdev *vdev, const u8 grp_id, u64 phy_addr);
+
 
 CVI_S32 vpss_get_rgn_hdls(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, CVI_U32 layer,
 			RGN_TYPE_E enType, RGN_HANDLE hdls[])
@@ -205,3 +207,67 @@ CVI_S32 vpss_get_rgn_ow_addr(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, CVI_U32 layer,
 
 	return CVI_SUCCESS;
 }
+
+CVI_S32 vpss_is_rgn_addr_in_use(VPSS_GRP VpssGrp, VPSS_CHN VpssChn, CVI_U32 layer,
+		RGN_HANDLE handle, CVI_U64 addr, CVI_BOOL *in_use, struct cvi_vip_dev *vdev)
+{
+	CVI_S32 ret, dev_idx, i;
+	CVI_U8 ow_inst;
+	CVI_U64 hw_addr;
+	MMF_CHN_S stChn;
+	struct cvi_vpss_ctx **pVpssCtx = vpss_get_shdw_ctx();
+	struct VPSS_GRP_HW_CFG *vpss_hw_cfgs;
+
+	ret = MOD_CHECK_NULL_PTR(CVI_ID_VPSS, in_use);
+	if (ret != CVI_SUCCESS)
+		return ret;
+
+	ret = check_vpss_id(VpssGrp, VpssChn);
+	if (ret != CVI_SUCCESS)
+		return ret;
+
+	mutex_lock(&pVpssCtx[VpssGrp]->lock);
+	stChn.enModId = CVI_ID_VPSS;
+	stChn.s32DevId = VpssGrp;
+	stChn.s32ChnId = VpssChn;
+	dev_idx = get_dev_info_by_chn(stChn, CHN_TYPE_OUT);
+
+	for (i = 0; i < RGN_MAX_NUM_VPSS; ++i) {
+		if (pVpssCtx[VpssGrp]->stChnCfgs[VpssChn].rgn_handle[layer][i] == handle) {
+			ow_inst = i;
+			break;
+		}
+	}
+	if (i == RGN_MAX_NUM_VPSS) {
+		mutex_unlock(&pVpssCtx[VpssGrp]->lock);
+		return 0;
+	}
+
+	sclr_gop_ow_get_addr(dev_idx, layer, ow_inst, &hw_addr);
+	if (hw_addr == addr) {
+		*in_use = 1;
+		mutex_unlock(&pVpssCtx[VpssGrp]->lock);
+		return 0;
+	}
+
+	vpss_hw_cfgs = (struct VPSS_GRP_HW_CFG *)pVpssCtx[VpssGrp]->hw_cfgs;
+
+	if (vpss_hw_cfgs->stChnCfgs[VpssChn].rgn_cfg[layer].param[ow_inst].phy_addr == addr) {
+		*in_use = 1;
+		mutex_unlock(&pVpssCtx[VpssGrp]->lock);
+		return 0;
+	}
+
+	// check all jobs in job_online_queue
+	if (cvi_sc_check_buf(&vdev->sc_vdev[dev_idx],
+		pVpssCtx[VpssGrp]->online_from_isp ? VpssGrp : 0, addr)) {
+		*in_use = 1;
+		mutex_unlock(&pVpssCtx[VpssGrp]->lock);
+		return 0;
+	}
+
+	mutex_unlock(&pVpssCtx[VpssGrp]->lock);
+
+	return CVI_SUCCESS;
+}
+

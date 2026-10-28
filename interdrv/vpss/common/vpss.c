@@ -3409,6 +3409,7 @@ CVI_S32 vpss_create_grp(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAttr)
 	vpssCtx[VpssGrp]->u8DevId = u8DevUsed;
 	vpssCtx[VpssGrp]->chnNum = (stVPSSMode.enMode == VPSS_MODE_SINGLE) ?
 		VPSS_MAX_CHN_NUM : (u8DevUsed == 0) ? 1 : VPSS_MAX_CHN_NUM - 1;
+	vpssCtx[VpssGrp]->online_from_isp = handler_ctx[u8DevUsed].online_from_isp;
 	//handler_ctx[u8DevUsed].online_from_isp = (enInput == VPSS_INPUT_ISP);
 
 	_vpss_GrpParamInit(VpssGrp);

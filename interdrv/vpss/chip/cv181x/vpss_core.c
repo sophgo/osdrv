@@ -1249,6 +1249,17 @@ int vpss_core_cb(void *dev, enum ENUM_MODULES_ID caller, u32 cmd, void *arg)
 		break;
 	}
 
+	case VPSS_CB_IS_RGN_ADDR_IN_USE:
+	{
+		struct _rgn_is_addr_in_use_cb_param *attr = (struct _rgn_is_addr_in_use_cb_param *)arg;
+		VPSS_GRP vpss_grp = attr->stChn.s32DevId;
+		VPSS_CHN vpss_chn = attr->stChn.s32ChnId;
+
+		rc = vpss_is_rgn_addr_in_use(vpss_grp, vpss_chn, attr->layer, attr->handle,
+				attr->addr, &attr->in_use, vdev);
+		break;
+	}
+
 	case VPSS_CB_GET_CHN_SIZE:
 	{
 		struct _rgn_chn_size_cb_param *attr = (struct _rgn_chn_size_cb_param *)arg;

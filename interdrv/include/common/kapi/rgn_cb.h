@@ -56,6 +56,14 @@ struct _rgn_get_ow_addr_cb_param {
 	CVI_BOOL ip_idle;
 };
 
+struct _rgn_is_addr_in_use_cb_param {
+	MMF_CHN_S stChn;
+	RGN_HANDLE handle;
+	__u32 layer;
+	__u64 addr;
+	CVI_BOOL in_use;   // [out] whether the address is currently in use
+};
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,5 +1,6 @@
 #include <linux/cvi_base_ctx.h>
 #include <linux/slab.h>
+#include <linux/rwsem.h>
 #include <base_cb.h>
 #include <base_ctx.h>
 
@@ -28,6 +29,12 @@ bool cviRcEn = 1;
 module_param(cviRcEn, bool, 0644);
 
 static struct semaphore vencSemArry[VENC_MAX_CHN_NUM];
+/*
+ * Per-channel lifecycle lock. RequestIDR (which bypasses vencSemArry) takes it for
+ * read; channel setup/teardown (Create/Destroy/Reset) takes it for write so it waits
+ * for any in-flight RequestIDR. Module-level so it outlives the channel handle.
+ */
+static struct rw_semaphore vencIdrLifeSem[VENC_MAX_CHN_NUM];
 #ifdef ENABLE_DEC
 static struct semaphore vdecSemArry[VDEC_MAX_CHN_NUM];
 #endif
@@ -89,10 +96,40 @@ static long cvi_vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
 {
 	unsigned int minor = iminor(file_inode(filp));
 	CVI_S32 s32Ret = CVI_FAILURE;
+	/*
+	 * RequestIDR only sets the IDR-request flag under its own chnMutex, which is
+	 * disjoint from GetStream's chnStatusMutex/sem_send. Skip the per-channel entry
+	 * semaphore for it so it is not queued behind a GetStream that is blocking-waiting
+	 * for the next encoded frame (that wait can hold the semaphore for tens of ms).
+	 *
+	 * Bypassing the entry semaphore would also stop serializing RequestIDR against
+	 * channel setup/teardown (Create/Destroy/Reset), letting it touch a channel handle
+	 * being freed. Guard that with a per-channel rw_semaphore that GetStream does NOT
+	 * take: RequestIDR holds it for read (so it never blocks on GetStream and concurrent
+	 * RequestIDRs are fine), while Create/Destroy/Reset hold it for write and thus wait
+	 * for any in-flight RequestIDR to finish.
+	 */
+	CVI_BOOL bNeedSem = (cmd != CVI_VC_VENC_REQUEST_IDR);
+	/* lifecycle lock: 0 = none, 1 = read (RequestIDR), 2 = write (Create/Destroy/Reset) */
+	int idrLifeLock = 0;
 
-	if (down_interruptible(&vencSemArry[minor])) {
-		return s32Ret;
+	if (cmd == CVI_VC_VENC_REQUEST_IDR)
+		idrLifeLock = 1;
+	else if (cmd == CVI_VC_VENC_CREATE_CHN ||
+		 cmd == CVI_VC_VENC_DESTROY_CHN ||
+		 cmd == CVI_VC_VENC_RESET_CHN)
+		idrLifeLock = 2;
+
+	if (bNeedSem) {
+		if (down_interruptible(&vencSemArry[minor])) {
+			return s32Ret;
+		}
 	}
+
+	if (idrLifeLock == 1)
+		down_read(&vencIdrLifeSem[minor]);
+	else if (idrLifeLock == 2)
+		down_write(&vencIdrLifeSem[minor]);
 
 	switch (cmd) {
 	case CVI_VC_VENC_CREATE_CHN: {
@@ -1031,7 +1068,13 @@ static long cvi_vc_drv_venc_ioctl(struct file *filp, u_int cmd, u_long arg)
 	} break;
 	}
 
-	up(&vencSemArry[minor]);
+	if (idrLifeLock == 1)
+		up_read(&vencIdrLifeSem[minor]);
+	else if (idrLifeLock == 2)
+		up_write(&vencIdrLifeSem[minor]);
+
+	if (bNeedSem)
+		up(&vencSemArry[minor]);
 	return s32Ret;
 }
 #ifdef ENABLE_DEC
@@ -1394,6 +1437,7 @@ static int cvi_vc_drv_register_cdev(struct cvi_vc_drv_device *vdev)
 			device_create(vdev->cvi_vc_class, NULL, subDevice, NULL, "%s",
 					devName);
 			sema_init(&vencSemArry[i], 1);
+			init_rwsem(&vencIdrLifeSem[i]);
 		}
 	} else {
 		printk("Venc Chn is zero\n");

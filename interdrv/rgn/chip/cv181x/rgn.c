@@ -1797,8 +1797,8 @@ CVI_S32 rgn_get_canvas_info(RGN_HANDLE Handle, RGN_CANVAS_INFO_S *pstCanvasInfo)
 	CVI_U32 proc_idx;
 	CVI_U32 canvasNum;
 	CVI_S32 s32Ret;
-	struct _rgn_get_ow_addr_cb_param cb_param;
 	CVI_S32 cnt = 0;
+	int ret = 0;
 
 	s32Ret = CHECK_RGN_HANDLE(&ctx, Handle);
 	if (s32Ret != CVI_SUCCESS)
@@ -1830,39 +1830,37 @@ CVI_S32 rgn_get_canvas_info(RGN_HANDLE Handle, RGN_CANVAS_INFO_S *pstCanvasInfo)
 		, Handle, pstCanvasInfo->enPixelFormat, pstCanvasInfo->stSize.u32Width
 		, pstCanvasInfo->stSize.u32Height, pstCanvasInfo->u32Stride, pstCanvasInfo->bCompressed);
 
-	if ((canvasNum > 1) && (ctx->stChn.enModId == CVI_ID_VPSS) && pstCanvasInfo->bCompressed) {
-		CVI_TRACE_RGN(RGN_INFO, "canvas p_addr(%llx) v_addr(%lx).\n"
-			, pstCanvasInfo->u64PhyAddr, (uintptr_t)pstCanvasInfo->pu8VirtAddr);
+	if ((canvasNum > 1) && (ctx->stChn.enModId == CVI_ID_VPSS)) {
+		struct _rgn_is_addr_in_use_cb_param in_use_param;
+		u32 osd_layer = pstCanvasInfo->enOSDCompressMode ? RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
 
-		cb_param.stChn = ctx->stChn;
-		cb_param.handle = Handle;
-		cb_param.layer = (ctx->stCanvasInfo[ctx->canvas_idx].bCompressed) ?
-					RGN_ODEC_LAYER_VPSS : RGN_NORMAL_LAYER_VPSS;
+		in_use_param.stChn = ctx->stChn;
+		in_use_param.handle = Handle;
+		in_use_param.layer = osd_layer;
+		in_use_param.addr = pstCanvasInfo->u64PhyAddr;
 
-		if (ctx->odec_data_valid) {
-			do {
-				if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_GET_RGN_OW_ADDR, &cb_param) != 0) {
-					CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_GET_RGN_OW_ADDR is failed\n");
-						return CVI_ERR_RGN_ILLEGAL_PARAM;
-				}
-				cnt++;
-				usleep_range(1000, 2000);
-			} while ((cb_param.ip_idle != 1) && (cb_param.addr == pstCanvasInfo->u64PhyAddr)
-				 && (cnt <= 500));
-
-			CVI_TRACE_RGN(RGN_INFO, "VPSS_CB_GET_RGN_OW_ADDR PhyAaddr:%llx cnt:%d.\n",
-				cb_param.addr, cnt);
-			if ((cb_param.addr == pstCanvasInfo->u64PhyAddr) && ((cb_param.ip_idle != 1))) {
-				CVI_TRACE_RGN(RGN_WARN, "get a using canvas!\n");
-				ctx->canvas_idx = rgn_prc_ctx[proc_idx].canvas_idx = 1 - ctx->canvas_idx;
-				return CVI_ERR_RGN_BUSY;
+		do {
+			in_use_param.in_use = CVI_FALSE;
+			if (_rgn_call_cb(E_MODULE_VPSS, VPSS_CB_IS_RGN_ADDR_IN_USE, &in_use_param) != 0) {
+				CVI_TRACE_RGN(RGN_ERR, "VPSS_CB_IS_RGN_ADDR_IN_USE is failed\n");
+				return CVI_ERR_RGN_ILLEGAL_PARAM;
 			}
-		}
+			cnt++;
+			msleep(4);
+		} while (in_use_param.in_use && (cnt <= 100) && ctx->stChnAttr.bShow);
 	}
 
-	ctx->canvas_get = CVI_TRUE;
+	if (cnt > 100) {
+		CVI_TRACE_RGN(RGN_ERR, "rgn_handle(%d) wait canvas[%d] hw_ref timeout.\n",
+			Handle, ctx->canvas_idx);
+		ret = CVI_ERR_RGN_BUSY;
+		ctx->canvas_get = 0;
+	} else {
+		ctx->canvas_get = 1;
+		ret = 0;
+	}
 
-	return CVI_SUCCESS;
+	return ret;
 }
 
 CVI_S32 rgn_update_canvas(RGN_HANDLE Handle)
