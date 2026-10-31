@@ -3,10 +3,10 @@
 #
 # Internal build (driver sources present):
 # Step 1: Compile sources and link the module with Kbuild.
-# Step 2: Save three basic objects to obj/device or obj/edge.
+# Step 2: Save three basic objects to obj/<PROJECT_FULLNAME>.
 #
 # SDK build (driver sources absent):
-# Step 1: Copy objects from obj/<SIDE_TYPE> to the working directory.
+# Step 1: Copy objects from obj/<PROJECT_FULLNAME> to the working directory.
 # Step 2: Create temporary .cmd files and relink the module with Kbuild.
 #
 # Module clean: Remove build outputs, but preserve obj/.
@@ -18,7 +18,8 @@ include $(tde_dir)/../Makefile.interdrv.param
 tde_objects := vg_lite_hal.o vg_lite_kernel.o vg_lite_platform_bm1688.o
 tde_sources := $(tde_objects:.o=.c)
 tde_present := $(notdir $(wildcard $(addprefix $(tde_dir)/,$(tde_sources))))
-tde_object_dir := $(tde_dir)/obj/$(SIDE_TYPE)
+# Objects are tied to the board kernel .config (e.g. CONFIG_TRACING), so keep one set per board.
+tde_object_dir := $(tde_dir)/obj/$(PROJECT_FULLNAME)
 
 ifneq ($(KERNELRELEASE),)
 $(CVIARCH_L)_2d_engine-y := $(tde_objects)
@@ -46,6 +47,8 @@ else
 all:
 ifeq ($(filter $(SIDE_TYPE),device edge),)
 	@echo "ERROR: SIDE_TYPE must be device or edge" >&2; exit 1
+else ifeq ($(strip $(PROJECT_FULLNAME)),)
+	@echo "ERROR: PROJECT_FULLNAME is required for 2D objects" >&2; exit 1
 else ifneq ($(words $(tde_present)),0)
 ifneq ($(words $(tde_present)),3)
 	@echo "ERROR: incomplete 2D sources: $(tde_present)" >&2; exit 1

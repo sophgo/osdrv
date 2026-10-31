@@ -6317,6 +6317,16 @@ ive_frame_diff_motion(struct ive_device *ndev, ive_src_image_s *pstSrc1,
 		ctrl->dilate_mask[24];
 	writel(ive_filterop_c.reg_27.val,
 		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_27));
+
+	/*
+	 * CV84X6 (MEDIA_V3) uses a 9x9 kernel bank but only a 5x5 mask is
+	 * filled into the center sub-block. Force op1/op2 window to 5x5
+	 * so the 56 zeroed outer taps don't suppress dilated edges.
+	 */
+	ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op1 = 1; /* 5x5 */
+	ive_filterop_c.reg_crop_odma_ctl.reg_window_size_choose_erodila_op2 = 1; /* 5x5 */
+	writel(ive_filterop_c.reg_crop_odma_ctl.val,
+		   (IVE_BLK_BA[dev_id].FILTEROP + IVE_FILTEROP_REG_CROP_ODMA_CTL));
 #else
 	ive_filterop_c.reg_4.reg_filterop_h_coef00 = ctrl->erode_mask[0];
 	ive_filterop_c.reg_4.reg_filterop_h_coef01 = ctrl->erode_mask[1];
@@ -8270,8 +8280,13 @@ static s32 _ive_csc(struct ive_device *ndev, ive_src_image_s *pstSrc,
 	//	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	//};
 
-	if (isEmit)
+	if (isEmit){
+#ifdef MEDIA_V3
+		/* CV84X6: soft register rewrite cannot clear a stuck IMG_IN pipeline. */
+		_ive_reset(ndev, 0, dev_id);
+#endif
 		ive_reset(ndev, ive_top_c, dev_id);
+	}
 	ive_set_wh(ive_top_c, pstDst->width, pstDst->height, "CSC", dev_id);
 
 	ive_filterop_c->reg_h10.reg_filterop_mode = 1;
